@@ -1,129 +1,164 @@
 /**
- * OpenAI Client Module
- * Handles all interactions with the OpenAI API
+ * OpenAI Client Module - Chat based orchestration for Lock-in conversations
  */
 
 const OpenAI = require("openai");
+
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const MAX_HISTORY_MESSAGES = 30;
 
 // Initialize OpenAI client with API key from environment
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-/**
- * Call OpenAI with the given system and user prompts
- * @param {string} systemPrompt - The system message defining AI behavior
- * @param {string} userPrompt - The user's input text
- * @param {string} model - The OpenAI model to use (default: gpt-4o-mini as closest to gpt-5-nano)
- * @returns {Promise<string>} - The AI's response
- */
-async function callOpenAI(systemPrompt, userPrompt, model = "gpt-4o-mini") {
-  try {
-    // Note: GPT-5 nano is not yet available. Using gpt-4o-mini as the most efficient alternative.
-    // Update this when gpt-5-nano becomes available.
-    const completion = await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 500, // Reasonable limit for quick responses
-    });
+const LANGUAGE_LABELS = {
+  en: "English",
+  es: "Spanish",
+  zh: "Chinese",
+  fr: "French",
+  de: "German",
+  ja: "Japanese",
+  ko: "Korean",
+  pt: "Portuguese",
+  it: "Italian",
+  ru: "Russian",
+};
 
-    return completion.choices[0].message.content.trim();
-  } catch (error) {
-    console.error("OpenAI API Error:", error.message);
-    throw new Error("Failed to generate AI response");
+function toLanguageName(code = "en") {
+  return LANGUAGE_LABELS[code.toLowerCase()] || code;
+}
+
+function buildModeDirective(mode, targetLanguage) {
+  switch (mode) {
+    case "simplify":
+      return "Simplify the passage using short sentences and accessible vocabulary suitable for early university students.";
+    case "translate":
+      return `Translate the passage into ${toLanguageName(
+        targetLanguage
+      )} and include a short explanation in that language tying the translation back to the source.`;
+    case "explain":
+    default:
+      return "Explain the passage clearly, connect the main idea to the reader's studies, and provide at most one short example when helpful.";
   }
 }
 
-/**
- * Process "explain" mode request
- * @param {string} text - The text to explain
- * @returns {Promise<Object>} - Response with answer and example
- */
-async function explainText(text) {
-  const systemPrompt =
-    "You are a friendly study tutor. Explain the user's text clearly in plain English, with a short example. Format your response as JSON with two fields: 'answer' (the explanation) and 'example' (a short concrete example).";
+function buildSystemMessage({ mode, difficultyLevel, targetLanguage }) {
+  const directive = buildModeDirective(mode, targetLanguage);
+  const content = [
+    "You are Lock-in, an AI study helper that replies as a concise, friendly tutor.",
+    `Match the student's ${difficultyLevel} level and keep answers grounded in the provided conversation and original text.`,
+    directive,
+    "Maintain academic integrity, cite the source text implicitly, and never introduce unrelated facts.",
+  ].join(" ");
 
-  const userPrompt = `Please explain this text:\n\n${text}`;
-
-  const response = await callOpenAI(systemPrompt, userPrompt);
-
-  // Try to parse JSON response, fallback to structured text
-  try {
-    return JSON.parse(response);
-  } catch {
-    // If AI doesn't return JSON, structure the response ourselves
-    const parts = response.split(/example:/i);
-    return {
-      answer: parts[0].trim(),
-      example: parts[1] ? parts[1].trim() : "No specific example provided.",
-    };
-  }
+  return { role: "system", content };
 }
 
-/**
- * Process "simplify" mode request
- * @param {string} text - The text to simplify
- * @returns {Promise<Object>} - Response with simplified answer
- */
-async function simplifyText(text) {
-  const systemPrompt =
-    "You simplify academic text for high school / first-year university students. Use short sentences and avoid jargon. Return only the simplified version of the text.";
+function buildInitialHistory({
+  selection,
+  mode,
+  difficultyLevel,
+  targetLanguage,
+}) {
+  const systemMessage = buildSystemMessage({
+    mode,
+    difficultyLevel,
+    targetLanguage,
+  });
 
-  const userPrompt = `Please simplify this text:\n\n${text}`;
+  const userMessage = {
+    role: "user",
+    content: `Original text:\n${selection}`,
+  };
 
-  const response = await callOpenAI(systemPrompt, userPrompt);
+  return [systemMessage, userMessage];
+}
+
+function sanitizeHistory(history = []) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .filter(
+      (message) =>
+        message &&
+        typeof message.role === "string" &&
+        typeof message.content === "string" &&
+        message.content.trim().length > 0
+    )
+    .map((message) => ({
+      role: message.role,
+      content: message.content.trim(),
+    }));
+}
+
+function clampHistory(messages) {
+  if (messages.length <= MAX_HISTORY_MESSAGES) {
+    return messages;
+  }
+
+  const systemMessage = messages.find((msg) => msg.role === "system");
+  const withoutSystem = messages.filter((msg) => msg.role !== "system");
+  const recent = withoutSystem.slice(-1 * (MAX_HISTORY_MESSAGES - 1));
+  return systemMessage ? [systemMessage, ...recent] : recent;
+}
+
+async function requestCompletion(messages) {
+  const completion = await openai.chat.completions.create({
+    model: DEFAULT_MODEL,
+    messages,
+    temperature: 0.4,
+    max_tokens: 700,
+  });
+
+  const choice = completion.choices[0]?.message;
+  return {
+    role: choice?.role || "assistant",
+    content: (choice?.content || "").trim(),
+  };
+}
+
+async function generateLockInResponse(options) {
+  const {
+    selection,
+    mode,
+    difficultyLevel,
+    targetLanguage,
+    chatHistory = [],
+    newUserMessage,
+  } = options;
+
+  const baseHistory = sanitizeHistory(chatHistory);
+  let messages = baseHistory.length
+    ? baseHistory
+    : buildInitialHistory({ selection, mode, difficultyLevel, targetLanguage });
+
+  if (!messages.some((msg) => msg.role === "system")) {
+    messages = [
+      buildSystemMessage({ mode, difficultyLevel, targetLanguage }),
+      ...messages,
+    ];
+  }
+
+  let workingHistory = messages;
+
+  if (newUserMessage && newUserMessage.trim().length) {
+    workingHistory = [
+      ...messages,
+      { role: "user", content: newUserMessage.trim() },
+    ];
+  }
+
+  workingHistory = clampHistory(workingHistory);
+
+  const assistantMessage = await requestCompletion(workingHistory);
+  const updatedHistory = [...workingHistory, assistantMessage];
 
   return {
-    answer: response,
+    answer: assistantMessage.content,
+    chatHistory: updatedHistory,
   };
-}
-
-/**
- * Process "translate" mode request
- * @param {string} text - The text to translate
- * @param {string} targetLanguage - Target language code (e.g., 'es', 'zh', 'en')
- * @returns {Promise<Object>} - Response with translation and explanation
- */
-async function translateText(text, targetLanguage = "en") {
-  const languageNames = {
-    en: "English",
-    es: "Spanish",
-    zh: "Chinese",
-    fr: "French",
-    de: "German",
-    ja: "Japanese",
-    ko: "Korean",
-    pt: "Portuguese",
-    it: "Italian",
-    ru: "Russian",
-  };
-
-  const langName = languageNames[targetLanguage] || targetLanguage;
-
-  const systemPrompt = `You are a translator and tutor. Translate the text into ${langName}, then briefly explain the meaning in that language (1-3 sentences). Format your response as JSON with two fields: 'answer' (the translation) and 'explanation' (brief explanation in the target language).`;
-
-  const userPrompt = `Please translate this text to ${langName}:\n\n${text}`;
-
-  const response = await callOpenAI(systemPrompt, userPrompt);
-
-  // Try to parse JSON response, fallback to structured text
-  try {
-    return JSON.parse(response);
-  } catch {
-    // If AI doesn't return JSON, use the response as the translation
-    return {
-      answer: response,
-      explanation: "Translation completed.",
-    };
-  }
 }
 
 module.exports = {
-  explainText,
-  simplifyText,
-  translateText,
+  generateLockInResponse,
 };

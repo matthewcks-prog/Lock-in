@@ -3,7 +3,14 @@
   "name": "Lock-in",
   "version": "1.0.0",
   "description": "AI-powered study assistant - Explain, Simplify, and Translate text on any webpage",
-  "permissions": ["activeTab", "scripting", "storage", "contextMenus"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "contextMenus",
+    "tabs",
+    "webNavigation"
+  ],
   "host_permissions": ["http://localhost:3000/*"],
   "action": {
     "default_popup": "popup.html",

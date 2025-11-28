@@ -6,10 +6,12 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const { explainText, simplifyText, translateText } = require("./openaiClient");
+const { generateLockInResponse } = require("./openaiClient");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MAX_SELECTION_LENGTH = 5000;
+const MAX_USER_MESSAGE_LENGTH = 1500;
 
 // Middleware
 app.use(express.json());
@@ -35,11 +37,18 @@ app.use(
 
 // Request logging middleware (production-safe)
 app.use((req, res, next) => {
-  if (req.body.text) {
+  const selection = req.body?.selection || req.body?.text;
+  const chatLength = Array.isArray(req.body?.chatHistory)
+    ? req.body.chatHistory.length
+    : 0;
+
+  if (selection || chatLength) {
     console.log(
       `[${new Date().toISOString()}] ${req.method} ${req.path} - Mode: ${
-        req.body.mode
-      }, Text length: ${req.body.text.length}`
+        req.body?.mode || "n/a"
+      }, Selection length: ${
+        selection ? selection.length : 0
+      }, Chat messages: ${chatLength}`
     );
   }
   next();
@@ -58,15 +67,17 @@ app.get("/health", (req, res) => {
  */
 app.post("/api/lockin", async (req, res) => {
   try {
-    const { text, mode, targetLanguage } = req.body;
+    const {
+      selection: selectionFromBody,
+      text: legacyText,
+      mode,
+      targetLanguage = "en",
+      difficultyLevel = "highschool",
+      chatHistory = [],
+      newUserMessage,
+    } = req.body;
 
-    // Validation: text is required
-    if (!text || text.trim().length === 0) {
-      return res.status(400).json({
-        error: "Bad Request",
-        message: "Text is required and cannot be empty",
-      });
-    }
+    const selection = (selectionFromBody || legacyText || "").trim();
 
     // Validation: mode must be valid
     const validModes = ["explain", "simplify", "translate"];
@@ -77,49 +88,52 @@ app.post("/api/lockin", async (req, res) => {
       });
     }
 
-    // Prevent abuse: limit text length
-    if (text.length > 5000) {
+    const sanitizedHistory = Array.isArray(chatHistory) ? chatHistory : [];
+    const isInitialRequest = sanitizedHistory.length === 0;
+
+    if (isInitialRequest && selection.length === 0) {
       return res.status(400).json({
         error: "Bad Request",
-        message: "Text is too long. Maximum 5000 characters.",
+        message: "Selection is required for the first message.",
       });
     }
 
-    let result;
-
-    // Process based on mode
-    switch (mode) {
-      case "explain":
-        const explainResult = await explainText(text);
-        result = {
-          mode: "explain",
-          answer: explainResult.answer,
-          example: explainResult.example,
-        };
-        break;
-
-      case "simplify":
-        const simplifyResult = await simplifyText(text);
-        result = {
-          mode: "simplify",
-          answer: simplifyResult.answer,
-        };
-        break;
-
-      case "translate":
-        const translateResult = await translateText(
-          text,
-          targetLanguage || "en"
-        );
-        result = {
-          mode: "translate",
-          answer: translateResult.answer,
-          explanation: translateResult.explanation,
-        };
-        break;
+    if (selection && selection.length > MAX_SELECTION_LENGTH) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: `Selection is too long. Maximum ${MAX_SELECTION_LENGTH} characters.`,
+      });
     }
 
-    res.json(result);
+    const trimmedUserMessage =
+      typeof newUserMessage === "string" ? newUserMessage.trim() : "";
+
+    if (
+      trimmedUserMessage &&
+      trimmedUserMessage.length > MAX_USER_MESSAGE_LENGTH
+    ) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: `Follow-up questions are too long. Maximum ${MAX_USER_MESSAGE_LENGTH} characters.`,
+      });
+    }
+
+    const aiResponse = await generateLockInResponse({
+      selection,
+      mode,
+      targetLanguage,
+      difficultyLevel,
+      chatHistory: sanitizedHistory,
+      newUserMessage: trimmedUserMessage,
+    });
+
+    res.json({
+      mode,
+      targetLanguage,
+      difficultyLevel,
+      answer: aiResponse.answer,
+      chatHistory: aiResponse.chatHistory,
+    });
   } catch (error) {
     console.error("Error processing request:", error.message);
 
