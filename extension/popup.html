@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lock-in Settings</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="popup-container">
+      <div class="header">
+        <h1>Lock-in</h1>
+        <p class="subtitle">Study Assistant</p>
+      </div>
+
+      <!-- Enable/Disable Toggle -->
+      <div class="settings-section">
+        <div class="toggle-container">
+          <div class="toggle-label-group">
+            <span class="label-text">Highlight Assistant</span>
+            <span class="label-description"
+              >Enable Ctrl+Select highlighting</span
+            >
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="highlighting-toggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Mode Preferences Section -->
+      <div class="settings-section">
+        <label>
+          <span class="label-text">Mode Preferences</span>
+          <span class="label-description"
+            >How Lock-in should remember your choice</span
+          >
+        </label>
+
+        <div class="mode-preference-group">
+          <label class="radio-label">
+            <input type="radio" name="modePreference" value="fixed" checked />
+            <span>Always use this mode:</span>
+          </label>
+
+          <div class="segmented-control" id="default-mode-control">
+            <button class="segment-btn active" data-mode="explain">
+              <span class="icon">💡</span>
+              <span>Explain</span>
+            </button>
+            <button class="segment-btn" data-mode="simplify">
+              <span class="icon">✂️</span>
+              <span>Simplify</span>
+            </button>
+            <button class="segment-btn" data-mode="translate">
+              <span class="icon">🌍</span>
+              <span>Translate</span>
+            </button>
+          </div>
+
+          <label class="radio-label" style="margin-top: 12px">
+            <input type="radio" name="modePreference" value="lastUsed" />
+            <span>Remember my last used mode</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Difficulty Level Section -->
+      <div class="settings-section">
+        <label>
+          <span class="label-text">Difficulty Level</span>
+          <span class="label-description">Adjust explanation complexity</span>
+        </label>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="difficulty" value="highschool" checked />
+            <span>High School</span>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="difficulty" value="university" />
+            <span>First-Year University</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Translation Language Section -->
+      <div class="settings-section">
+        <label for="language-select">
+          <span class="label-text">Preferred Translation Language</span>
+          <span class="label-description">Language for translations</span>
+        </label>
+        <select id="language-select" class="input-field">
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="zh">Chinese</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="pt">Portuguese</option>
+          <option value="it">Italian</option>
+          <option value="ru">Russian</option>
+        </select>
+      </div>
+
+      <div id="status-message" class="status-message"></div>
+
+      <div class="footer">
+        <p>Highlight text on any page to get started</p>
+        <p class="version">v1.0.0</p>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
