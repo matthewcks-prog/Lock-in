@@ -99,8 +99,8 @@
   background: white;
   font-size: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   cursor: pointer;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
@@ -113,6 +113,109 @@
 .lockin-history-item.active {
   border-color: #6366f1;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4);
+}
+
+.lockin-history-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.lockin-history-item-menu {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 4px 4px;
+  cursor: pointer;
+  font-size: 18px;
+  color: #9ca3af;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  width: 24px;
+  border-radius: 4px;
+}
+
+.lockin-history-item:hover .lockin-history-item-menu {
+  opacity: 1;
+}
+
+.lockin-history-item-menu:hover {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.1);
+}
+
+.lockin-menu-dots {
+  letter-spacing: 2px;
+}
+
+/* === DELETE DROPDOWN MENU === */
+.lockin-delete-dropdown {
+  position: fixed;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10001;
+  min-width: 140px;
+  animation: slideUpDropdown 0.15s ease;
+  pointer-events: auto;
+}
+
+@keyframes slideUpDropdown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lockin-delete-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.lockin-delete-dropdown-item:hover {
+  background: #fef2f2;
+}
+
+.lockin-delete-dropdown-item:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.lockin-delete-dropdown-item:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.lockin-delete-dropdown-item:only-child {
+  border-radius: 8px;
+}
+
+.lockin-delete-dropdown-icon {
+  font-size: 16px;
+}
+
+.lockin-delete-dropdown-text {
+  color: #ef4444;
 }
 
 .lockin-history-title {
@@ -561,10 +664,499 @@
   background: #9ca3af;
 }
 
+/* === MINIMIZED PILL === */
+.lockin-bubble.lockin-minimized-pill {
+  width: auto;
+  height: auto;
+  background: linear-gradient(135deg, var(--lockin-accent, #667eea) 0%, #667eea 100%);
+  border-radius: 24px;
+  padding: 0;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  min-width: auto;
+  min-height: auto;
+}
+
+.lockin-pill-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: white;
+  border-radius: 24px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.lockin-pill-toggle:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.lockin-pill-icon {
+  font-size: 14px;
+}
+
+.lockin-pill-label {
+  display: none;
+}
+
+.lockin-pill-toggle:hover .lockin-pill-label {
+  display: inline;
+}
+
+/* === MODE SELECTOR (EXPANDABLE) === */
+.lockin-mode-selector-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.lockin-mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid var(--lockin-border, #e5e7eb);
+  background: var(--lockin-bg-soft, #f9fafb);
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lockin-text, #1f2937);
+  transition: all 0.15s ease;
+}
+
+.lockin-mode-pill:hover {
+  background: var(--lockin-bg, #ffffff);
+  border-color: var(--lockin-accent, #667eea);
+}
+
+.lockin-mode-pill .lockin-mode-icon {
+  font-size: 14px;
+}
+
+.lockin-mode-chevron {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.lockin-mode-pill:active .lockin-mode-chevron {
+  transform: rotate(180deg);
+}
+
+.lockin-mode-expandable {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  background: var(--lockin-bg, #ffffff);
+  border: 1px solid var(--lockin-border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: max-content;
+}
+
+.lockin-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--lockin-text, #1f2937);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.lockin-mode-option:hover {
+  background: var(--lockin-bg-soft, #f9fafb);
+}
+
+.lockin-mode-option-icon {
+  font-size: 14px;
+}
+
+/* === USER PROFILE SECTION === */
+.lockin-profile-section {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--lockin-border, #e5e7eb);
+  position: relative;
+}
+
+.lockin-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-profile-card:hover {
+  background: var(--lockin-bg-soft, #f9fafb);
+}
+
+.lockin-profile-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--lockin-accent, #667eea) 0%, #667eea 100%);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.lockin-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lockin-profile-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lockin-text, #1f2937);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lockin-profile-plan {
+  font-size: 10px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.lockin-profile-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  background: var(--lockin-bg, #ffffff);
+  border: 1px solid var(--lockin-border, #e5e7eb);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+  min-width: 160px;
+}
+
+.lockin-profile-menu-item {
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--lockin-text, #1f2937);
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+  border-radius: 0;
+}
+
+.lockin-profile-menu-item:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.lockin-profile-menu-item:hover {
+  background: var(--lockin-bg-soft, #f9fafb);
+}
+
+.lockin-profile-menu-divider {
+  height: 1px;
+  background: var(--lockin-border, #e5e7eb);
+  margin: 4px 0;
+}
+
+.lockin-profile-menu-logout {
+  color: #dc2626;
+  border-radius: 0 0 8px 8px;
+}
+
+.lockin-profile-menu-logout:hover {
+  background: #fef2f2;
+}
+
+/* === PERSONALISATION PANEL === */
+.lockin-personalisation-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 400px;
+  background: var(--lockin-bg, #ffffff);
+  border: 1px solid var(--lockin-border, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1002;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.lockin-personalisation-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--lockin-text, #1f2937);
+  margin: 0;
+}
+
+.lockin-personalisation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lockin-personalisation-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lockin-theme-options {
+  display: flex;
+  gap: 8px;
+}
+
+.lockin-theme-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--lockin-border, #e5e7eb);
+  background: var(--lockin-bg-soft, #f9fafb);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lockin-text, #1f2937);
+  transition: all 0.15s ease;
+}
+
+.lockin-theme-btn.active {
+  border-color: var(--lockin-accent, #667eea);
+  background: var(--lockin-accent, #667eea);
+  color: white;
+}
+
+.lockin-theme-btn:hover:not(.active) {
+  border-color: var(--lockin-accent, #667eea);
+}
+
+.lockin-color-palette {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.lockin-color-swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-color-swatch:hover {
+  transform: scale(1.1);
+}
+
+.lockin-color-swatch.active {
+  border-color: var(--lockin-text, #1f2937);
+  box-shadow: 0 0 0 2px var(--lockin-bg, #ffffff);
+}
+
+.lockin-custom-color-input {
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--lockin-border, #e5e7eb);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.lockin-personalisation-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.lockin-personalisation-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-personalisation-btn-apply {
+  background: var(--lockin-accent, #667eea);
+  color: white;
+}
+
+.lockin-personalisation-btn-apply:hover {
+  opacity: 0.9;
+}
+
+.lockin-personalisation-btn-cancel {
+  background: var(--lockin-bg-soft, #f9fafb);
+  color: var(--lockin-text, #1f2937);
+  border: 1px solid var(--lockin-border, #e5e7eb);
+}
+
+.lockin-personalisation-btn-cancel:hover {
+  background: var(--lockin-border, #e5e7eb);
+}
+
+/* === DELETE DIALOG === */
+.lockin-delete-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.15s ease;
+}
+
+.lockin-delete-dialog {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 380px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.lockin-delete-icon {
+  font-size: 40px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.lockin-delete-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+  text-align: center;
+}
+
+.lockin-delete-message {
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+  margin: 0 0 24px 0;
+}
+
+.lockin-delete-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.lockin-delete-cancel,
+.lockin-delete-confirm {
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-delete-cancel {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.lockin-delete-cancel:hover {
+  background: #e5e7eb;
+}
+
+.lockin-delete-confirm {
+  background: #ef4444;
+  color: white;
+}
+
+.lockin-delete-confirm:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.lockin-delete-confirm:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
 /* === RESPONSIVE === */
 @media (max-width: 768px) {
   .lockin-bubble {
     width: 320px !important;
+    max-width: calc(100vw - 40px);
+  }
+
+  .lockin-delete-dialog {
     max-width: calc(100vw - 40px);
   }
 }

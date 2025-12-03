@@ -26,8 +26,14 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["config.js", "supabaseAuth.js", "contentScript.js"],
-      "css": ["contentScript.css"],
+      "js": [
+        "config.js",
+        "supabaseAuth.js",
+        "lockin-widget.js",
+        "chatHistoryUtils.js",
+        "contentScript.js"
+      ],
+      "css": ["lockin-widget.css", "contentScript.css"],
       "run_at": "document_end"
     }
   ],

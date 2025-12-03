@@ -19,14 +19,59 @@ const CHAT_ID_STORAGE_KEY = "lockinCurrentChatId";
 const RECENT_CHAT_LIMIT = 10;
 
 // ===================================
+// Modes Configuration (easy to extend)
+// ===================================
+const MODES = {
+  EXPLAIN: "explain",
+  SIMPLIFY: "simplify",
+  TRANSLATE: "translate",
+};
+
+const MODE_CONFIG = {
+  [MODES.EXPLAIN]: { icon: "&#128161;", label: "Explain" },
+  [MODES.SIMPLIFY]: { icon: "&#9986;", label: "Simplify" },
+  [MODES.TRANSLATE]: { icon: "&#127757;", label: "Translate" },
+};
+
+// ===================================
+// Theme & Personalisation Configuration
+// ===================================
+const THEMES = {
+  LIGHT: "light",
+  DARK: "dark",
+  SYSTEM: "system",
+};
+
+const ACCENT_COLORS = {
+  BLUE: { name: "Blue", hex: "#667eea" },
+  PURPLE: { name: "Purple", hex: "#a78bfa" },
+  TEAL: { name: "Teal", hex: "#14b8a6" },
+  GREEN: { name: "Green", hex: "#10b981" },
+  ORANGE: { name: "Orange", hex: "#f59e0b" },
+};
+
+// Storage keys for chrome.storage.sync
+const STORAGE_KEYS = {
+  BUBBLE_OPEN: "lockinBubbleOpen",
+  ACTIVE_MODE: "lockinActiveMode",
+  THEME: "lockinTheme",
+  ACCENT_COLOR: "lockinAccentColor",
+  BUBBLE_POSITION: "lockinBubblePosition",
+  BUBBLE_SIZE: "lockinBubbleSize",
+  USER_PROFILE: "lockinUserProfile",
+};
+
+// ===================================
 // State Management
 // ===================================
 let highlightingEnabled = true; // Toggle state from popup
-let currentMode = "explain"; // Current active mode
+let currentMode = MODES.EXPLAIN; // Current active mode
+let isBubbleOpen = true; // Bubble visibility state (persisted)
 let cachedSelection = ""; // Selected text
 let cachedRect = null; // Selection bounding box
-let activeBubble = null; // Current bubble element
-let isDraggingBubble = false; // Flag to track dragging state
+let activeBubble = null; // Current bubble element (widget-based)
+let activePill = null; // Legacy pill element (unused with LockinWidget, kept for safety)
+let isDraggingBubble = false; // Legacy drag flag (no longer used with LockinWidget)
 let chatHistory = []; // Conversation history for the current selection
 let pendingInputValue = ""; // Value inside the follow-up input
 let isChatLoading = false; // Whether we are waiting on the backend
@@ -44,36 +89,418 @@ let isHistoryLoading = false;
 let hasLoadedChats = false;
 const isMac = navigator.platform.toUpperCase().includes("MAC");
 
-// ===================================
-// Initialization
-// ===================================
-function init() {
-  loadToggleState();
-  listenToStorageChanges();
-  setupEventListeners();
-  loadStoredChatId();
-  listenToAuthChanges();
-  // Get tab ID and restore session if available
-  getTabId().then(() => {
-    setTimeout(loadSessionForCurrentTab, 500); // Small delay to ensure page is ready
-  });
-}
+// Theme & personalisation state
+let currentTheme = THEMES.LIGHT;
+let currentAccentColor = "#667eea";
+let userProfile = {
+  name: "User",
+  email: "user@example.com",
+  plan: "Free",
+};
+let isPersonalisationPanelOpen = false;
 
-/**
- * Load highlighting enabled state from storage
- */
+// ===================================
+// Global Widget & Shared Utilities
+// ===================================
+let lockinWidget = null;
+
+// Optional shared utilities loaded from chatHistoryUtils.js.
+// The content script must continue to work even if this file fails to load.
+const LockInChatHistoryUtils = window.LockInChatHistoryUtils || null;
+
+// ===================================
+// Load persisted UI preferences
+// ===================================
 function loadToggleState() {
   if (typeof chrome === "undefined" || !chrome.storage) {
     return;
   }
 
   chrome.storage.sync.get(["highlightingEnabled"], (data) => {
-    highlightingEnabled = data.highlightingEnabled !== false; // Default to true
+    // Default to true when not explicitly disabled
+    highlightingEnabled = data.highlightingEnabled !== false;
+  });
+}
+
+function loadThemeAndPersonalisation() {
+  if (typeof chrome === "undefined" || !chrome.storage) {
+    return;
+  }
+
+  chrome.storage.sync.get(
+    [
+      STORAGE_KEYS.THEME,
+      STORAGE_KEYS.ACCENT_COLOR,
+      STORAGE_KEYS.ACTIVE_MODE,
+      STORAGE_KEYS.USER_PROFILE,
+    ],
+    (data) => {
+      currentTheme = data[STORAGE_KEYS.THEME] || THEMES.LIGHT;
+      currentAccentColor = data[STORAGE_KEYS.ACCENT_COLOR] || "#667eea";
+      currentMode = data[STORAGE_KEYS.ACTIVE_MODE] || MODES.EXPLAIN;
+      if (data[STORAGE_KEYS.USER_PROFILE]) {
+        userProfile = data[STORAGE_KEYS.USER_PROFILE];
+      }
+      applyTheme();
+    }
+  );
+}
+
+// ===================================
+// Initialization
+// ===================================
+function init() {
+  loadToggleState();
+  loadThemeAndPersonalisation();
+  listenToStorageChanges();
+  setupEventListeners();
+  loadStoredChatId();
+  listenToAuthChanges();
+
+  // Initialize widget system
+  if (typeof LockinWidget !== "undefined") {
+    initializeWidget();
+  }
+
+  // Get tab ID and restore session if available
+  getTabId().then(() => {
+    setTimeout(loadSessionForCurrentTab, 500);
   });
 }
 
 /**
- * Listen for storage changes (when user toggles in popup)
+ * Initialize the Lock-in widget
+ */
+function initializeWidget() {
+  lockinWidget = new LockinWidget({
+    autoOpenOnSelection: false,
+  });
+  lockinWidget.init();
+
+  // Listen to widget events
+  window.addEventListener("lockin:open", handleWidgetOpen);
+  window.addEventListener("lockin:close", handleWidgetClose);
+}
+
+/**
+ * Handle widget open event
+ */
+function handleWidgetOpen() {
+  isBubbleOpen = true;
+  chrome.storage.sync.set({ [STORAGE_KEYS.BUBBLE_OPEN]: true });
+  renderBubbleContent();
+}
+
+/**
+ * Handle widget close event
+ */
+function handleWidgetClose() {
+  isBubbleOpen = false;
+  chrome.storage.sync.set({ [STORAGE_KEYS.BUBBLE_OPEN]: false });
+}
+
+/**
+ * Render bubble content into widget
+ */
+function renderBubbleContent() {
+  if (!lockinWidget) {
+    return;
+  }
+
+  const bubbleElement = lockinWidget.getBubbleElement();
+  // Keep a reference so legacy helpers (scrollChatToBottom, etc.) can work
+  // with the widget-based bubble element.
+  activeBubble = bubbleElement;
+  const chatHtml = buildChatMessagesHtml(chatHistory);
+  const sendDisabled = isChatLoading || pendingInputValue.trim().length === 0;
+  const layoutClass = isHistoryPanelOpen
+    ? "lockin-history-open"
+    : "lockin-history-collapsed";
+
+  if (!hasLoadedChats && !isHistoryLoading) {
+    loadRecentChats({ silent: true });
+  }
+
+  bubbleElement.innerHTML = `
+    <div class="lockin-bubble-layout ${layoutClass}">
+      ${buildHistoryPanelHtml()}
+      <div class="lockin-chat-panel">
+        <div class="lockin-bubble-header lockin-drag-handle">
+          <div class="lockin-header-left">
+            <button class="lockin-history-toggle" title="Toggle chat history">
+              ${isHistoryPanelOpen ? "&lt;" : "&gt;"}
+            </button>
+            ${buildModeSelector()}
+          </div>
+          <div class="lockin-header-right">
+            <button class="lockin-set-default" title="Set as default mode">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
+            <button class="lockin-minimize-bubble" title="Minimize">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+            <button class="lockin-close-bubble">&times;</button>
+          </div>
+        </div>
+        <div class="lockin-chat-body">
+          <div class="lockin-chat-messages">${chatHtml}</div>
+          <div class="lockin-chat-input">
+            <textarea class="lockin-chat-textarea" rows="2" placeholder="Ask a follow-up question..." ${
+              isChatLoading ? "disabled" : ""
+            }></textarea>
+            <button class="lockin-send-btn" ${
+              sendDisabled ? "disabled" : ""
+            }>Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  attachBubbleEventListeners(bubbleElement);
+  scrollChatToBottom();
+}
+
+/**
+ * Attach event listeners to bubble content
+ */
+function attachBubbleEventListeners(bubbleElement) {
+  // Close button
+  const closeBtn = bubbleElement.querySelector(".lockin-close-bubble");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      lockinWidget.close();
+    });
+  }
+
+  // Minimize button
+  const minimizeBtn = bubbleElement.querySelector(".lockin-minimize-bubble");
+  if (minimizeBtn) {
+    minimizeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      lockinWidget.close();
+    });
+  }
+
+  // History toggle
+  const historyToggle = bubbleElement.querySelector(".lockin-history-toggle");
+  if (historyToggle) {
+    historyToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      isHistoryPanelOpen = !isHistoryPanelOpen;
+      renderBubbleContent();
+    });
+  }
+
+  // Chat input and send button
+  const textarea = bubbleElement.querySelector(".lockin-chat-textarea");
+  const sendBtn = bubbleElement.querySelector(".lockin-send-btn");
+
+  if (textarea) {
+    textarea.value = pendingInputValue;
+    textarea.addEventListener("input", (e) => {
+      pendingInputValue = e.target.value;
+      if (sendBtn) {
+        sendBtn.disabled =
+          isChatLoading || pendingInputValue.trim().length === 0;
+      }
+    });
+
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey && !isChatLoading) {
+        e.preventDefault();
+        if (sendBtn) sendBtn.click();
+      }
+    });
+  }
+
+  if (sendBtn) {
+    sendBtn.addEventListener("click", () => handleFollowUpSubmit());
+  }
+
+  // Set default mode button
+  const setDefaultBtn = bubbleElement.querySelector(".lockin-set-default");
+  if (setDefaultBtn) {
+    setDefaultBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      chrome.storage.sync.set(
+        { [STORAGE_KEYS.ACTIVE_MODE]: currentMode },
+        () => {
+          setDefaultBtn.style.filter = "brightness(0.8)";
+          setTimeout(() => {
+            setDefaultBtn.style.filter = "";
+          }, 200);
+        }
+      );
+    });
+  }
+
+  // Mode selector
+  const modePill = bubbleElement.querySelector(".lockin-mode-pill");
+  const modeExpandable = bubbleElement.querySelector(".lockin-mode-expandable");
+  if (modePill && modeExpandable) {
+    modePill.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isVisible = modeExpandable.style.display !== "none";
+      modeExpandable.style.display = isVisible ? "none" : "flex";
+    });
+
+    modeExpandable.querySelectorAll(".lockin-mode-option").forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const newMode = btn.dataset.mode;
+        if (newMode && newMode !== currentMode) {
+          currentMode = newMode;
+          chrome.storage.sync.set({ [STORAGE_KEYS.ACTIVE_MODE]: newMode });
+          modeExpandable.style.display = "none";
+          startNewChat();
+        }
+      });
+    });
+
+    document.addEventListener(
+      "click",
+      () => {
+        modeExpandable.style.display = "none";
+      },
+      { once: true }
+    );
+  }
+
+  // History items and delete buttons
+  bubbleElement
+    .querySelectorAll(".lockin-history-item-content")
+    .forEach((item) => {
+      item.addEventListener("click", () => {
+        const chatId = item
+          .closest(".lockin-history-item")
+          ?.getAttribute("data-chat-id");
+        if (!chatId || chatId === currentChatId) {
+          return;
+        }
+        handleHistorySelection(chatId);
+      });
+    });
+
+  bubbleElement
+    .querySelectorAll(".lockin-history-item-menu")
+    .forEach((menuBtn) => {
+      menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const chatId = menuBtn
+          .closest(".lockin-history-item")
+          ?.getAttribute("data-chat-id");
+        if (chatId) {
+          showDeleteDropdown(menuBtn, chatId);
+        }
+      });
+    });
+
+  // New chat button
+  const newChatBtn = bubbleElement.querySelector(".lockin-new-chat-btn");
+  if (newChatBtn) {
+    newChatBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await handleNewChatRequest();
+    });
+  }
+
+  // Profile card and menu
+  const profileCard = bubbleElement.querySelector(".lockin-profile-card");
+  const profileMenu = bubbleElement.querySelector(".lockin-profile-menu");
+
+  if (profileCard && profileMenu) {
+    const toggleProfileMenu = (e) => {
+      e.stopPropagation();
+      const isVisible = profileMenu.style.display !== "none";
+      profileMenu.style.display = isVisible ? "none" : "block";
+    };
+
+    profileCard.addEventListener("click", toggleProfileMenu);
+
+    // Close the menu when clicking outside the profile section
+    const closeOnOutsideClick = (event) => {
+      if (
+        !profileMenu.contains(event.target) &&
+        !profileCard.contains(event.target)
+      ) {
+        profileMenu.style.display = "none";
+        document.removeEventListener("click", closeOnOutsideClick);
+      }
+    };
+
+    // Register the outside‑click listener once the menu is opened
+    profileCard.addEventListener("click", () => {
+      document.addEventListener("click", closeOnOutsideClick);
+    });
+
+    // Profile menu item actions
+    profileMenu
+      .querySelectorAll(".lockin-profile-menu-item")
+      .forEach((item) => {
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const action = item.getAttribute("data-action");
+          if (action) {
+            handleProfileMenuAction(action);
+          }
+          profileMenu.style.display = "none";
+        });
+      });
+  }
+
+  // Allow dragging the entire widget by the bubble header.
+  const dragHandle = bubbleElement.querySelector(".lockin-drag-handle");
+  if (dragHandle && lockinWidget && typeof lockinWidget.startDrag === "function") {
+    dragHandle.style.cursor = "grab";
+    dragHandle.addEventListener("mousedown", (e) => {
+      e.stopPropagation();
+      // Only drag on left or middle click
+      if (e.button !== 0 && e.button !== 1) {
+        return;
+      }
+      lockinWidget.startDrag(e);
+    });
+  }
+}
+
+/**
+ * Apply theme by updating CSS variables
+ */
+function applyTheme() {
+  // Get root element or create one if needed
+  let root = document.documentElement;
+
+  // Set CSS variables
+  const isDark =
+    currentTheme === THEMES.DARK ||
+    (currentTheme === THEMES.SYSTEM &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  const bgColor = isDark ? "#1a1a1a" : "#ffffff";
+  const bgSoft = isDark ? "#2d2d2d" : "#f9fafb";
+  const textColor = isDark ? "#e5e5e5" : "#1f2937";
+  const borderColor = isDark ? "#404040" : "#e5e7eb";
+
+  root.style.setProperty("--lockin-bg", bgColor);
+  root.style.setProperty("--lockin-bg-soft", bgSoft);
+  root.style.setProperty("--lockin-text", textColor);
+  root.style.setProperty("--lockin-accent", currentAccentColor);
+  root.style.setProperty("--lockin-border", borderColor);
+
+  // Re-render bubble if the widget is open
+  if (lockinWidget && lockinWidget.isOpen) {
+    renderBubbleContent();
+  }
+}
+
+/**
+ * Listen for storage changes (when user toggles in popup or changes settings)
  */
 function listenToStorageChanges() {
   if (typeof chrome === "undefined" || !chrome.storage) {
@@ -83,8 +510,25 @@ function listenToStorageChanges() {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "sync" && changes.highlightingEnabled) {
       highlightingEnabled = changes.highlightingEnabled.newValue;
-      if (!highlightingEnabled) {
-        removeExistingBubble();
+    }
+
+    // Theme changes
+    if (areaName === "sync" && changes[STORAGE_KEYS.THEME]) {
+      currentTheme = changes[STORAGE_KEYS.THEME].newValue;
+      applyTheme();
+    }
+
+    // Accent color changes
+    if (areaName === "sync" && changes[STORAGE_KEYS.ACCENT_COLOR]) {
+      currentAccentColor = changes[STORAGE_KEYS.ACCENT_COLOR].newValue;
+      applyTheme();
+    }
+
+    // Active mode changes
+    if (areaName === "sync" && changes[STORAGE_KEYS.ACTIVE_MODE]) {
+      currentMode = changes[STORAGE_KEYS.ACTIVE_MODE].newValue;
+      if (lockinWidget && lockinWidget.isOpen) {
+        renderBubbleContent();
       }
     }
 
@@ -94,8 +538,8 @@ function listenToStorageChanges() {
       if (!currentChatId) {
         chatHistory = [];
       }
-      if (activeBubble) {
-        renderChatBubble();
+      if (lockinWidget && lockinWidget.isOpen) {
+        renderBubbleContent();
       }
     }
   });
@@ -124,14 +568,7 @@ function handleMouseUp(event) {
   }
 
   // Ignore if we just finished dragging the bubble
-  if (isDraggingBubble) {
-    return;
-  }
-
-  // Ignore clicks inside the bubble
-  if (activeBubble && activeBubble.contains(event.target)) {
-    return;
-  }
+  // (widget handles its own drag state; no legacy drag flag needed)
 
   // Check if required modifier key is pressed
   const hasModifierKey = isMac ? event.metaKey : event.ctrlKey;
@@ -234,31 +671,44 @@ function handleKeyPress(event) {
 async function determineDefaultMode() {
   return new Promise((resolve) => {
     if (typeof chrome === "undefined" || !chrome.storage) {
-      currentMode = "explain";
+      currentMode = MODES.EXPLAIN;
       resolve();
       return;
     }
 
     try {
       chrome.storage.sync.get(
-        ["modePreference", "defaultMode", "lastUsedMode"],
+        [
+          "modePreference",
+          "defaultMode",
+          "lastUsedMode",
+          STORAGE_KEYS.ACTIVE_MODE,
+        ],
         (data) => {
           if (chrome.runtime.lastError) {
             console.log(
               "Lock-in: Mode preference error:",
               chrome.runtime.lastError
             );
-            currentMode = "explain";
+            currentMode = MODES.EXPLAIN;
             resolve();
             return;
           }
 
+          // First, check if there's a stored active mode from new system
+          if (data[STORAGE_KEYS.ACTIVE_MODE]) {
+            currentMode = data[STORAGE_KEYS.ACTIVE_MODE];
+            resolve();
+            return;
+          }
+
+          // Fall back to old system
           const modePref = data.modePreference || "fixed";
 
           if (modePref === "lastUsed" && data.lastUsedMode) {
             currentMode = data.lastUsedMode;
           } else {
-            currentMode = data.defaultMode || "explain";
+            currentMode = data.defaultMode || MODES.EXPLAIN;
           }
 
           resolve();
@@ -266,7 +716,7 @@ async function determineDefaultMode() {
       );
     } catch (error) {
       console.log("Lock-in: Mode determination error:", error);
-      currentMode = "explain";
+      currentMode = MODES.EXPLAIN;
       resolve();
     }
   });
@@ -309,12 +759,8 @@ async function runMode(mode) {
   };
 
   const baseHistory = Array.isArray(chatHistory) ? [...chatHistory] : [];
-  const selectionMessage = cachedSelection
-    ? `Original text:\n${cachedSelection}`
-    : "";
-  const optimisticHistory = selectionMessage
-    ? [...baseHistory, { role: "user", content: selectionMessage }]
-    : baseHistory;
+  // Don't add original text to local history - just send selection to API
+  const optimisticHistory = baseHistory;
 
   chatHistory = optimisticHistory;
   pendingInputValue = "";
@@ -331,8 +777,7 @@ async function runMode(mode) {
       targetLanguage: sessionPreferences.preferredLanguage,
       difficultyLevel: sessionPreferences.difficultyLevel,
       chatHistory: baseHistory,
-      newUserMessage:
-        currentChatId && selectionMessage ? selectionMessage : undefined,
+      newUserMessage: cachedSelection ? `${cachedSelection}` : undefined,
     });
 
     chatHistory = data.chatHistory || [];
@@ -367,7 +812,10 @@ async function runMode(mode) {
       renderChatBubble();
       saveSessionForCurrentTab();
     } else {
-      showErrorBubble(getAssistantErrorMessage(error));
+      // No existing selection context to attach a chat bubble to.
+      // Surface a friendly error message in the console instead of
+      // attempting to render a separate legacy error bubble.
+      console.error("Lock-in error (no selection):", getAssistantErrorMessage(error));
     }
   }
 }
@@ -592,183 +1040,30 @@ async function sendFollowUpMessage(messageText) {
 }
 
 // ===================================
-// Bubble Display Functions
+// Bubble Display Helpers (LockinWidget-based)
 // ===================================
 
+/**
+ * Ensure the widget bubble is open and ready to render content.
+ */
 function ensureChatBubble() {
-  if (activeBubble) {
+  if (!lockinWidget) {
     return;
   }
 
-  activeBubble = document.createElement("div");
-  activeBubble.className = "lockin-bubble";
-  positionBubble(activeBubble);
-  document.body.appendChild(activeBubble);
+  if (!lockinWidget.isOpen) {
+    lockinWidget.open();
+  }
 
-  activeBubble.addEventListener("mousedown", (e) => {
-    e.stopPropagation();
-  });
-
-  activeBubble.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
-
-  requestAnimationFrame(() => {
-    activeBubble.classList.add("lockin-visible");
-  });
+  activeBubble = lockinWidget.getBubbleElement();
 }
 
+/**
+ * Backwards-compatible helper used throughout older code paths.
+ * Delegates to the new widget-based renderer.
+ */
 function renderChatBubble() {
-  if (!activeBubble) {
-    ensureChatBubble();
-  }
-
-  const modeInfo = getModeInfo(currentMode);
-  const chatHtml = buildChatMessagesHtml(chatHistory);
-  const sendDisabled = isChatLoading || pendingInputValue.trim().length === 0;
-  const layoutClass = isHistoryPanelOpen
-    ? "lockin-history-open"
-    : "lockin-history-collapsed";
-
-  if (!hasLoadedChats && !isHistoryLoading) {
-    loadRecentChats({ silent: true });
-  }
-
-  activeBubble.innerHTML = getBubbleHTML(`
-    <div class="lockin-bubble-layout ${layoutClass}">
-      ${buildHistoryPanelHtml()}
-      <div class="lockin-chat-panel">
-        <div class="lockin-bubble-header lockin-drag-handle" style="cursor: move;">
-          <div class="lockin-header-left">
-            <button class="lockin-history-toggle" title="Toggle chat history">
-              ${isHistoryPanelOpen ? "&lt;" : "&gt;"}
-            </button>
-            <span class="lockin-mode-icon">${modeInfo.icon}</span>
-            <span class="lockin-mode-label">${modeInfo.label}</span>
-          </div>
-          <div class="lockin-header-right">
-            <button class="lockin-set-default" title="Set as default mode">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-              </svg>
-            </button>
-            <button class="lockin-close-bubble">&times;</button>
-          </div>
-        </div>
-        <div class="lockin-bubble-modes">
-          <button class="lockin-mode-btn ${
-            currentMode === "explain" ? "active" : ""
-          }" data-mode="explain" ${isChatLoading ? "disabled" : ""}>
-            <span>&#128161;</span> Explain
-          </button>
-          <button class="lockin-mode-btn ${
-            currentMode === "simplify" ? "active" : ""
-          }" data-mode="simplify" ${isChatLoading ? "disabled" : ""}>
-            <span>&#9986;</span> Simplify
-          </button>
-          <button class="lockin-mode-btn ${
-            currentMode === "translate" ? "active" : ""
-          }" data-mode="translate" ${isChatLoading ? "disabled" : ""}>
-            <span>&#127757;</span> Translate
-          </button>
-        </div>
-        <div class="lockin-chat-body">
-          <div class="lockin-chat-messages">${chatHtml}</div>
-          <div class="lockin-chat-input">
-            <textarea class="lockin-chat-textarea" rows="2" placeholder="Ask a follow-up question..." ${
-              isChatLoading ? "disabled" : ""
-            }></textarea>
-            <button class="lockin-send-btn" ${
-              sendDisabled ? "disabled" : ""
-            }>Send</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `);
-
-  makeDraggable(activeBubble);
-  makeResizable(activeBubble);
-
-  const closeButton = activeBubble.querySelector(".lockin-close-bubble");
-  if (closeButton) {
-    closeButton.addEventListener("click", closeBubble);
-  }
-
-  const defaultButton = activeBubble.querySelector(".lockin-set-default");
-  if (defaultButton) {
-    defaultButton.addEventListener("click", () => setAsDefault(currentMode));
-  }
-
-  activeBubble.querySelectorAll(".lockin-mode-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (btn.disabled) {
-        return;
-      }
-
-      if (btn.dataset.mode && btn.dataset.mode !== currentMode) {
-        runMode(btn.dataset.mode);
-      }
-    });
-  });
-
-  const textarea = activeBubble.querySelector(".lockin-chat-textarea");
-  if (textarea) {
-    textarea.value = pendingInputValue;
-    textarea.addEventListener("input", (event) => {
-      pendingInputValue = event.target.value;
-      const sendButton = activeBubble.querySelector(".lockin-send-btn");
-      if (sendButton) {
-        sendButton.disabled =
-          isChatLoading || event.target.value.trim().length === 0;
-      }
-    });
-    textarea.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        handleFollowUpSubmit();
-      }
-    });
-
-    if (!pendingInputValue) {
-      textarea.focus();
-    }
-  }
-
-  const sendButton = activeBubble.querySelector(".lockin-send-btn");
-  if (sendButton) {
-    sendButton.addEventListener("click", handleFollowUpSubmit);
-  }
-
-  const historyToggle = activeBubble.querySelector(".lockin-history-toggle");
-  if (historyToggle) {
-    historyToggle.addEventListener("click", () => {
-      isHistoryPanelOpen = !isHistoryPanelOpen;
-      if (isHistoryPanelOpen) {
-        loadRecentChats({ silent: false });
-      }
-      renderChatBubble();
-    });
-  }
-
-  const newChatBtn = activeBubble.querySelector(".lockin-new-chat-btn");
-  if (newChatBtn) {
-    newChatBtn.addEventListener("click", () => {
-      handleNewChatRequest();
-    });
-  }
-
-  activeBubble.querySelectorAll(".lockin-history-item").forEach((item) => {
-    item.addEventListener("click", () => {
-      const chatId = item.getAttribute("data-chat-id");
-      if (!chatId || chatId === currentChatId) {
-        return;
-      }
-      handleHistorySelection(chatId);
-    });
-  });
-
-  scrollChatToBottom();
+  renderBubbleContent();
 }
 
 function buildChatMessagesHtml(messages) {
@@ -815,6 +1110,42 @@ function buildChatMessagesHtml(messages) {
   return rendered;
 }
 
+/**
+ * Build the mode selector UI (expandable)
+ * Shows current mode with chevron, expandable to show other modes
+ */
+function buildModeSelector() {
+  const modeInfo = MODE_CONFIG[currentMode];
+  const otherModes = Object.keys(MODES)
+    .map((key) => MODES[key])
+    .filter((mode) => mode !== currentMode);
+
+  const otherModesHtml = otherModes
+    .map((mode) => {
+      const info = MODE_CONFIG[mode];
+      return `
+      <button class="lockin-mode-option" data-mode="${mode}" title="Switch to ${info.label}">
+        <span class="lockin-mode-option-icon">${info.icon}</span>
+        <span class="lockin-mode-option-label">${info.label}</span>
+      </button>
+    `;
+    })
+    .join("");
+
+  return `
+    <div class="lockin-mode-selector-container">
+      <button class="lockin-mode-pill" title="Current mode">
+        <span class="lockin-mode-icon">${modeInfo.icon}</span>
+        <span class="lockin-mode-label">${modeInfo.label}</span>
+        <span class="lockin-mode-chevron">&#9660;</span>
+      </button>
+      <div class="lockin-mode-expandable" style="display: none;">
+        ${otherModesHtml}
+      </div>
+    </div>
+  `;
+}
+
 function buildHistoryPanelHtml() {
   const panelState = isHistoryPanelOpen ? "open" : "collapsed";
   const statusHtml = historyStatusMessage
@@ -825,16 +1156,25 @@ function buildHistoryPanelHtml() {
         .map((chat) => {
           const isActive = chat.id === currentChatId;
           return `
-            <button class="lockin-history-item ${
+            <div class="lockin-history-item ${
               isActive ? "active" : ""
             }" data-chat-id="${chat.id}">
-              <span class="lockin-history-title">${escapeHtml(
-                chat.title || buildFallbackHistoryTitle(chat)
-              )}</span>
-              <span class="lockin-history-meta">${escapeHtml(
-                formatHistoryTimestamp(chat.last_message_at || chat.created_at)
-              )}</span>
-            </button>
+              <div class="lockin-history-item-content">
+                <span class="lockin-history-title">${escapeHtml(
+                  chat.title || buildFallbackHistoryTitle(chat)
+                )}</span>
+                <span class="lockin-history-meta">${escapeHtml(
+                  formatHistoryTimestamp(
+                    chat.last_message_at || chat.created_at
+                  )
+                )}</span>
+              </div>
+              <button class="lockin-history-item-menu" data-chat-id="${
+                chat.id
+              }" title="Delete chat" aria-label="Delete chat menu">
+                <span class="lockin-menu-dots">&#8230;</span>
+              </button>
+            </div>
           `;
         })
         .join("")
@@ -852,11 +1192,71 @@ function buildHistoryPanelHtml() {
       </div>
       ${statusHtml}
       <div class="lockin-history-list">${listHtml}</div>
+      ${buildUserProfileBlock()}
     </aside>
   `;
 }
 
+/**
+ * Build user profile card at the bottom of the sidebar
+ */
+function buildUserProfileBlock() {
+  const initials = userProfile.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  return `
+    <div class="lockin-profile-section">
+      <button class="lockin-profile-card" title="User settings">
+        <div class="lockin-profile-avatar">${escapeHtml(initials)}</div>
+        <div class="lockin-profile-info">
+          <div class="lockin-profile-name">${escapeHtml(userProfile.name)}</div>
+          <div class="lockin-profile-plan">${escapeHtml(userProfile.plan)}</div>
+        </div>
+      </button>
+      <div class="lockin-profile-menu" style="display: none;">
+        ${buildProfileMenu()}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Build profile menu options
+ */
+function buildProfileMenu() {
+  return `
+    <button class="lockin-profile-menu-item" data-action="upgrade">
+      Upgrade plan
+    </button>
+    <button class="lockin-profile-menu-item" data-action="personalisation">
+      Personalisation
+    </button>
+    <button class="lockin-profile-menu-item" data-action="settings">
+      Settings
+    </button>
+    <button class="lockin-profile-menu-item" data-action="help">
+      Help
+    </button>
+    <div class="lockin-profile-menu-divider"></div>
+    <button class="lockin-profile-menu-item lockin-profile-menu-logout" data-action="logout">
+      Log out
+    </button>
+  `;
+}
+
 function buildFallbackHistoryTitle(chat) {
+  // Prefer shared utility if available for easier testing.
+  if (
+    LockInChatHistoryUtils &&
+    typeof LockInChatHistoryUtils.buildFallbackHistoryTitle === "function"
+  ) {
+    return LockInChatHistoryUtils.buildFallbackHistoryTitle(chat);
+  }
+
   if (!chat) {
     return "Untitled chat";
   }
@@ -872,6 +1272,13 @@ function buildFallbackHistoryTitle(chat) {
 }
 
 function formatHistoryTimestamp(timestamp) {
+  if (
+    LockInChatHistoryUtils &&
+    typeof LockInChatHistoryUtils.formatHistoryTimestamp === "function"
+  ) {
+    return LockInChatHistoryUtils.formatHistoryTimestamp(timestamp);
+  }
+
   if (!timestamp) {
     return "Just now";
   }
@@ -938,6 +1345,91 @@ async function handleHistorySelection(chatId) {
     renderChatBubble();
   }
 }
+function showDeleteDropdown(menuBtn, chatId) {
+  // Remove any existing dropdown
+  const existingDropdown = document.querySelector(".lockin-delete-dropdown");
+  if (existingDropdown) {
+    existingDropdown.remove();
+  }
+
+  // Create dropdown menu
+  const dropdown = document.createElement("div");
+  dropdown.className = "lockin-delete-dropdown";
+  dropdown.innerHTML = `
+    <button class="lockin-delete-dropdown-item" data-chat-id="${chatId}">
+      <span class="lockin-delete-dropdown-icon">🗑️</span>
+      <span class="lockin-delete-dropdown-text">Delete</span>
+    </button>
+  `;
+
+  // Position dropdown near the menu button
+  const rect = menuBtn.getBoundingClientRect();
+  dropdown.style.top = rect.bottom + 4 + "px";
+  dropdown.style.left = rect.right - 140 + "px";
+  dropdown.style.zIndex = "10001";
+
+  document.body.appendChild(dropdown);
+
+  // Handle delete click
+  dropdown
+    .querySelector(".lockin-delete-dropdown-item")
+    .addEventListener("click", (e) => {
+      e.stopPropagation();
+      dropdown.remove();
+      handleDeleteChat(chatId);
+    });
+
+  // Close dropdown when clicking outside
+  const closeDropdown = (e) => {
+    if (!dropdown.contains(e.target) && !menuBtn.contains(e.target)) {
+      dropdown.remove();
+      document.removeEventListener("click", closeDropdown);
+    }
+  };
+
+  setTimeout(() => {
+    document.addEventListener("click", closeDropdown);
+  }, 0);
+}
+
+async function handleDeleteChat(chatId) {
+  try {
+    const auth = window.LockInAuth;
+    if (!auth || typeof auth.getValidAccessToken !== "function") {
+      alert("Please sign in to delete chats.");
+      return;
+    }
+
+    const accessToken = await auth.getValidAccessToken();
+    if (!accessToken) {
+      alert("Unable to verify your identity. Please sign in again.");
+      return;
+    }
+
+    // Call backend to delete chat
+    const response = await fetch(`${BACKEND_URL}/api/chats/${chatId}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Delete failed: ${response.status}`);
+    }
+
+    // If deleted chat is currently open, switch to new chat
+    if (currentChatId === chatId) {
+      await startNewChat("Chat deleted. Starting new chat.");
+    }
+
+    loadRecentChats({ silent: true });
+  } catch (error) {
+    console.error("Error deleting chat:", error);
+    alert("Failed to delete chat. Please try again.");
+  }
+}
 
 async function loadRecentChats(options = {}) {
   if (isHistoryLoading) {
@@ -950,8 +1442,8 @@ async function loadRecentChats(options = {}) {
   if (!auth || typeof auth.getValidAccessToken !== "function") {
     if (!silent) {
       historyStatusMessage = "Sign in via the popup to see your chats.";
-      if (activeBubble) {
-        renderChatBubble();
+      if (lockinWidget && lockinWidget.isOpen) {
+        renderBubbleContent();
       }
     }
     return;
@@ -960,8 +1452,8 @@ async function loadRecentChats(options = {}) {
   isHistoryLoading = true;
   if (!silent) {
     historyStatusMessage = "Loading chats...";
-    if (activeBubble) {
-      renderChatBubble();
+    if (lockinWidget && lockinWidget.isOpen) {
+      renderBubbleContent();
     }
   }
 
@@ -1002,8 +1494,8 @@ async function loadRecentChats(options = {}) {
   } finally {
     isHistoryLoading = false;
     hasLoadedChats = true;
-    if (activeBubble) {
-      renderChatBubble();
+    if (lockinWidget && lockinWidget.isOpen) {
+      renderBubbleContent();
     }
   }
 }
@@ -1033,6 +1525,13 @@ async function fetchChatMessagesFromApi(chatId) {
 }
 
 function convertRowsToChatHistory(rows = []) {
+  if (
+    LockInChatHistoryUtils &&
+    typeof LockInChatHistoryUtils.convertRowsToChatHistory === "function"
+  ) {
+    return LockInChatHistoryUtils.convertRowsToChatHistory(rows);
+  }
+
   return rows
     .map((row) => {
       const role = row.role || "assistant";
@@ -1049,290 +1548,24 @@ function convertRowsToChatHistory(rows = []) {
 }
 
 function scrollChatToBottom() {
-  if (!activeBubble) {
+  if (!lockinWidget) {
+    return;
+  }
+
+  const bubbleElement = lockinWidget.getBubbleElement();
+  if (!bubbleElement) {
     return;
   }
 
   requestAnimationFrame(() => {
-    const messagesEl = activeBubble.querySelector(".lockin-chat-messages");
+    const messagesEl = bubbleElement.querySelector(".lockin-chat-messages");
     if (messagesEl) {
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
   });
 }
 
-function getBubbleHTML(content) {
-  return `
-    <div class="lockin-resize-handle lockin-resize-n" data-direction="n"></div>
-    <div class="lockin-resize-handle lockin-resize-s" data-direction="s"></div>
-    <div class="lockin-resize-handle lockin-resize-e" data-direction="e"></div>
-    <div class="lockin-resize-handle lockin-resize-w" data-direction="w"></div>
-    <div class="lockin-resize-handle lockin-resize-ne" data-direction="ne"></div>
-    <div class="lockin-resize-handle lockin-resize-nw" data-direction="nw"></div>
-    <div class="lockin-resize-handle lockin-resize-se" data-direction="se"></div>
-    <div class="lockin-resize-handle lockin-resize-sw" data-direction="sw"></div>
-    ${content}
-  `;
-}
-
-/**
- * Show error bubble
- */
-function showErrorBubble(message) {
-  removeExistingBubble();
-
-  activeBubble = document.createElement("div");
-  activeBubble.className = "lockin-bubble lockin-error";
-
-  activeBubble.innerHTML = `
-    <div class="lockin-bubble-header lockin-drag-handle" style="cursor: move;">
-      <div class="lockin-header-left">
-        <span class="lockin-mode-label">Error</span>
-      </div>
-      <div class="lockin-header-right">
-        <button class="lockin-close-bubble">&times;</button>
-      </div>
-    </div>
-    <div class="lockin-bubble-body">
-      <p class="lockin-error-message">${escapeHtml(message)}</p>
-    </div>
-  `;
-
-  positionBubble(activeBubble);
-  document.body.appendChild(activeBubble);
-  makeDraggable(activeBubble);
-
-  // Prevent bubble from closing when clicking inside it
-  activeBubble.addEventListener("mousedown", (e) => {
-    e.stopPropagation();
-  });
-
-  activeBubble.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
-
-  activeBubble
-    .querySelector(".lockin-close-bubble")
-    .addEventListener("click", closeBubble);
-
-  requestAnimationFrame(() => {
-    activeBubble.classList.add("lockin-visible");
-  });
-}
-
-function removeExistingBubble() {
-  if (activeBubble) {
-    activeBubble.remove();
-    activeBubble = null;
-  }
-}
-
-// ===================================
-// Bubble Positioning & Dragging
-// ===================================
-
-/**
- * Position bubble near the selected text
- * Prioritizes positioning that doesn't block nearby content
- */
-function positionBubble(bubble) {
-  if (!cachedRect) return;
-
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
-  const bubbleWidth = 360;
-  const padding = 20;
-
-  let left, top;
-
-  // Calculate space available on each side
-  const spaceRight = viewportWidth - (cachedRect.right + padding);
-  const spaceLeft = cachedRect.left - padding;
-  const spaceAbove = cachedRect.top - padding;
-  const spaceBelow = viewportHeight - cachedRect.bottom - padding;
-
-  // Priority 1: Position to the right if there's enough space
-  if (spaceRight >= bubbleWidth) {
-    left = cachedRect.right + BUBBLE_OFFSET;
-    top = cachedRect.top;
-  }
-  // Priority 2: Position to the left if there's enough space
-  else if (spaceLeft >= bubbleWidth) {
-    left = cachedRect.left - bubbleWidth - BUBBLE_OFFSET;
-    top = cachedRect.top;
-  }
-  // Priority 3: Position above if there's space
-  else if (spaceAbove >= 200) {
-    left = cachedRect.left + cachedRect.width / 2 - bubbleWidth / 2;
-    top = cachedRect.top - BUBBLE_OFFSET;
-  }
-  // Priority 4: Position below
-  else {
-    left = cachedRect.left + cachedRect.width / 2 - bubbleWidth / 2;
-    top = cachedRect.bottom + BUBBLE_OFFSET;
-  }
-
-  // Clamp horizontally to stay in viewport
-  const minLeft = padding;
-  const maxLeft = viewportWidth - bubbleWidth - padding;
-  left = Math.max(minLeft, Math.min(left, maxLeft));
-
-  bubble.style.position = "fixed";
-  bubble.style.left = `${left}px`;
-  bubble.style.top = `${top}px`;
-  // Set initial width, but allow resizing
-  if (!bubble.style.width) {
-    bubble.style.width = `${bubbleWidth}px`;
-  }
-  bubble.style.zIndex = "999999";
-}
-
-/**
- * Make bubble draggable by the header
- */
-function makeDraggable(bubble) {
-  const header = bubble.querySelector(".lockin-drag-handle");
-  if (!header) return;
-
-  let isDragging = false;
-  let startX;
-  let startY;
-  let startLeft;
-  let startTop;
-
-  header.addEventListener("mousedown", dragStart);
-
-  function dragStart(e) {
-    // Don't drag if clicking on buttons
-    if (e.target.closest("button")) return;
-
-    isDragging = true;
-    isDraggingBubble = true;
-    startX = e.clientX;
-    startY = e.clientY;
-
-    const computedStyle = window.getComputedStyle(bubble);
-    startLeft = parseInt(computedStyle.left, 10);
-    startTop = parseInt(computedStyle.top, 10);
-
-    // Fallback if parseInt returns NaN (e.g. if left is "auto")
-    if (isNaN(startLeft)) {
-      const rect = bubble.getBoundingClientRect();
-      startLeft = rect.left;
-    }
-    if (isNaN(startTop)) {
-      const rect = bubble.getBoundingClientRect();
-      startTop = rect.top;
-    }
-
-    bubble.style.transition = "none";
-
-    document.addEventListener("mousemove", drag);
-    document.addEventListener("mouseup", dragEnd);
-
-    e.preventDefault();
-  }
-
-  function drag(e) {
-    if (!isDragging) return;
-
-    e.preventDefault();
-
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-
-    bubble.style.left = `${startLeft + dx}px`;
-    bubble.style.top = `${startTop + dy}px`;
-  }
-
-  function dragEnd() {
-    isDragging = false;
-    // Reset flag after a short delay to ensure handleMouseUp sees it as true
-    setTimeout(() => {
-      isDraggingBubble = false;
-    }, 50);
-
-    bubble.style.transition = "";
-    document.removeEventListener("mousemove", drag);
-    document.removeEventListener("mouseup", dragEnd);
-
-    // Save new position
-    updateSessionPosition();
-  }
-}
-
-/**
- * Make bubble resizable from all sides
- */
-function makeResizable(bubble) {
-  const handles = bubble.querySelectorAll(".lockin-resize-handle");
-  let isResizing = false;
-  let currentHandle = null;
-  let startX, startY, startWidth, startHeight, startLeft, startTop;
-
-  handles.forEach((handle) => {
-    handle.addEventListener("mousedown", (e) => {
-      e.preventDefault();
-      e.stopPropagation(); // Prevent dragging
-      isResizing = true;
-      isDraggingBubble = true; // Reuse this flag to prevent other interactions
-      currentHandle = handle.dataset.direction;
-      startX = e.clientX;
-      startY = e.clientY;
-
-      const rect = bubble.getBoundingClientRect();
-      startWidth = rect.width;
-      startHeight = rect.height;
-      startLeft = rect.left;
-      startTop = rect.top;
-
-      document.addEventListener("mousemove", resize);
-      document.addEventListener("mouseup", stopResize);
-    });
-  });
-
-  function resize(e) {
-    if (!isResizing) return;
-
-    const dx = e.clientX - startX;
-    const dy = e.clientY - startY;
-
-    if (currentHandle.includes("e")) {
-      bubble.style.width = `${Math.max(300, startWidth + dx)}px`;
-    }
-    if (currentHandle.includes("s")) {
-      bubble.style.height = `${Math.max(150, startHeight + dy)}px`;
-    }
-    if (currentHandle.includes("w")) {
-      const newWidth = Math.max(300, startWidth - dx);
-      bubble.style.width = `${newWidth}px`;
-      // Only update left if width actually changed (wasn't clamped)
-      if (newWidth !== 300 || startWidth - dx > 300) {
-        bubble.style.left = `${startLeft + dx}px`;
-      }
-    }
-    if (currentHandle.includes("n")) {
-      const newHeight = Math.max(150, startHeight - dy);
-      bubble.style.height = `${newHeight}px`;
-      // Only update top if height actually changed
-      if (newHeight !== 150 || startHeight - dy > 150) {
-        bubble.style.top = `${startTop + dy}px`;
-      }
-    }
-  }
-
-  function stopResize() {
-    isResizing = false;
-    setTimeout(() => {
-      isDraggingBubble = false;
-    }, 50);
-    document.removeEventListener("mousemove", resize);
-    document.removeEventListener("mouseup", stopResize);
-
-    // Save new size/position
-    updateSessionPosition();
-  }
-}
+// Legacy standalone error bubble and manual positioning have been removed.
 
 // ===================================
 // Per-Tab Session Management
@@ -1412,13 +1645,6 @@ async function loadSessionForCurrentTab() {
     if (chatHistory.length) {
       ensureChatBubble();
       renderChatBubble();
-
-      if (activeBubble && session.position) {
-        activeBubble.style.left = session.position.left;
-        activeBubble.style.top = session.position.top;
-        activeBubble.style.width = session.position.width;
-        activeBubble.style.height = session.position.height;
-      }
     }
   } catch (error) {
     console.error("Lock-in: Failed to load session:", error);
@@ -1477,8 +1703,8 @@ function listenToAuthChanges() {
     historyStatusMessage = "";
     hasLoadedChats = false;
     setStoredChatId(null);
-    if (activeBubble) {
-      renderChatBubble();
+    if (lockinWidget && lockinWidget.isOpen) {
+      renderBubbleContent();
     }
   });
 }
@@ -1518,9 +1744,8 @@ function setStoredChatId(chatId) {
  * Save session for current tab
  */
 async function saveSessionForCurrentTab(options = {}) {
-  if (!chrome.runtime || !currentTabId || !activeBubble) return;
+  if (!chrome.runtime || !currentTabId) return;
 
-  const computedStyle = window.getComputedStyle(activeBubble);
   const sessionData = {
     tabId: currentTabId,
     origin: currentOrigin,
@@ -1537,12 +1762,6 @@ async function saveSessionForCurrentTab(options = {}) {
     chatId: currentChatId,
     targetLanguage: sessionPreferences.preferredLanguage,
     difficultyLevel: sessionPreferences.difficultyLevel,
-    position: {
-      left: computedStyle.left,
-      top: computedStyle.top,
-      width: computedStyle.width,
-      height: computedStyle.height,
-    },
   };
 
   try {
@@ -1559,7 +1778,7 @@ async function saveSessionForCurrentTab(options = {}) {
  * Update just the position/size in the current session
  */
 async function updateSessionPosition() {
-  if (!chrome.runtime || !currentTabId || !activeBubble) return;
+  if (!chrome.runtime || !currentTabId) return;
 
   try {
     // Get current session
@@ -1567,14 +1786,6 @@ async function updateSessionPosition() {
     const session = response.session;
 
     if (session) {
-      const computedStyle = window.getComputedStyle(activeBubble);
-      session.position = {
-        left: computedStyle.left,
-        top: computedStyle.top,
-        width: computedStyle.width,
-        height: computedStyle.height,
-      };
-
       await chrome.runtime.sendMessage({
         action: "saveSession",
         sessionData: session,
@@ -1602,46 +1813,8 @@ async function clearSessionForCurrentTab() {
  * Close bubble and mark session as closed
  */
 async function closeBubble() {
-  if (activeBubble) {
-    await saveSessionForCurrentTab({ isLoadingOverride: false });
-    activeBubble.remove();
-    activeBubble = null;
-  }
-
-  // Mark session as closed (user explicitly closed it)
-  if (chrome.runtime && currentTabId) {
-    try {
-      const response = await chrome.runtime.sendMessage({
-        action: "getSession",
-      });
-      const session = response.session || {};
-      session.tabId = currentTabId;
-      session.origin = currentOrigin;
-      session.selection = cachedSelection;
-      session.mode = currentMode;
-      session.chatHistory = chatHistory;
-      session.chatId = currentChatId;
-      session.targetLanguage = sessionPreferences.preferredLanguage;
-      session.difficultyLevel = sessionPreferences.difficultyLevel;
-      if (!session.position && activeBubble) {
-        const computedStyle = window.getComputedStyle(activeBubble);
-        session.position = {
-          left: computedStyle.left,
-          top: computedStyle.top,
-          width: computedStyle.width,
-          height: computedStyle.height,
-        };
-      }
-      session.isClosed = true;
-      session.isActive = false;
-
-      await chrome.runtime.sendMessage({
-        action: "saveSession",
-        sessionData: session,
-      });
-    } catch (error) {
-      console.error("Lock-in: Failed to mark session as closed:", error);
-    }
+  if (lockinWidget) {
+    lockinWidget.close();
   }
 }
 
@@ -1650,15 +1823,56 @@ async function closeBubble() {
 // ===================================
 
 /**
+ * Handle profile menu actions
+ */
+function handleProfileMenuAction(action) {
+  switch (action) {
+    case "upgrade":
+      console.log("TODO: Handle upgrade plan action");
+      break;
+    case "personalisation":
+      isPersonalisationPanelOpen = !isPersonalisationPanelOpen;
+      renderPersonalisationPanel();
+      break;
+    case "settings":
+      console.log("TODO: Handle settings action");
+      break;
+    case "help":
+      console.log("TODO: Handle help action");
+      break;
+    case "logout":
+      handleLogout();
+      break;
+    default:
+      console.log(`Unknown profile action: ${action}`);
+  }
+}
+
+/**
+ * Handle logout
+ */
+function handleLogout() {
+  // Call existing auth logout if available
+  if (window.LockInAuth && typeof window.LockInAuth.logout === "function") {
+    window.LockInAuth.logout();
+  } else {
+    console.log("Logout handler not available");
+  }
+}
+
+/**
+ * Render personalisation panel
+ */
+function renderPersonalisationPanel() {
+  // TODO: Implement personalisation panel UI
+  console.log("Opening personalisation panel");
+}
+
+/**
  * Get mode info (icon and label)
  */
 function getModeInfo(mode) {
-  const modeMap = {
-    explain: { icon: "&#128161;", label: "Explain" },
-    simplify: { icon: "&#9986;", label: "Simplify" },
-    translate: { icon: "&#127757;", label: "Translate" },
-  };
-  return modeMap[mode] || modeMap["explain"];
+  return MODE_CONFIG[mode] || MODE_CONFIG[MODES.EXPLAIN];
 }
 
 /**
@@ -1672,7 +1886,12 @@ function setAsDefault(mode) {
   chrome.storage.sync.set(
     { defaultMode: mode, modePreference: "fixed" },
     () => {
-      const btn = activeBubble.querySelector(".lockin-set-default");
+      const btn =
+        lockinWidget && lockinWidget.getBubbleElement()
+          ? lockinWidget
+              .getBubbleElement()
+              .querySelector(".lockin-set-default")
+          : null;
       if (!btn) return;
 
       const originalHTML = btn.innerHTML;
@@ -1690,6 +1909,13 @@ function setAsDefault(mode) {
  * Escape HTML to prevent XSS
  */
 function escapeHtml(text) {
+  if (
+    LockInChatHistoryUtils &&
+    typeof LockInChatHistoryUtils.escapeHtml === "function"
+  ) {
+    return LockInChatHistoryUtils.escapeHtml(text);
+  }
+
   const div = document.createElement("div");
   div.textContent = text;
   return div.innerHTML;
