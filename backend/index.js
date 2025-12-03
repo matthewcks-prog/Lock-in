@@ -7,11 +7,25 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { generateLockInResponse } = require("./openaiClient");
+const { requireSupabaseUser } = require("./authMiddleware");
+const { checkDailyLimit } = require("./rateLimiter");
+const { supabase } = require("./supabaseClient");
+const {
+  createChat,
+  getChatById,
+  insertChatMessage,
+  touchChat,
+  getRecentChats,
+  getChatMessages,
+} = require("./chatRepository");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MAX_SELECTION_LENGTH = 5000;
 const MAX_USER_MESSAGE_LENGTH = 1500;
+const DAILY_REQUEST_LIMIT =
+  parseInt(process.env.DAILY_REQUEST_LIMIT, 10) || 100;
+const DEFAULT_CHAT_LIST_LIMIT = parseInt(process.env.CHAT_LIST_LIMIT, 10) || 5;
 
 // Middleware
 app.use(express.json());
@@ -65,7 +79,7 @@ app.get("/health", (req, res) => {
  * Main API endpoint for Lock-in extension
  * POST /api/lockin
  */
-app.post("/api/lockin", async (req, res) => {
+app.post("/api/lockin", requireSupabaseUser, async (req, res) => {
   try {
     const {
       selection: selectionFromBody,
@@ -75,6 +89,7 @@ app.post("/api/lockin", async (req, res) => {
       difficultyLevel = "highschool",
       chatHistory = [],
       newUserMessage,
+      chatId: incomingChatId,
     } = req.body;
 
     const selection = (selectionFromBody || legacyText || "").trim();
@@ -118,6 +133,50 @@ app.post("/api/lockin", async (req, res) => {
       });
     }
 
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(500).json({
+        error: "Internal Server Error",
+        message: "User context missing for authenticated request.",
+      });
+    }
+
+    const limitCheck = await checkDailyLimit(userId, DAILY_REQUEST_LIMIT);
+
+    if (!limitCheck.allowed) {
+      return res.status(429).json({
+        error: "Daily limit reached",
+        limit: DAILY_REQUEST_LIMIT,
+      });
+    }
+
+    let chatRecord;
+    if (incomingChatId) {
+      chatRecord = await getChatById(userId, incomingChatId);
+      if (!chatRecord) {
+        return res.status(404).json({
+          error: "Chat not found",
+          message: "The requested chat does not exist for this user.",
+        });
+      }
+    } else {
+      chatRecord = await createChat(userId);
+    }
+
+    const chatId = chatRecord.id;
+    const userInputText = trimmedUserMessage || selection;
+
+    await insertChatMessage({
+      chat_id: chatId,
+      user_id: userId,
+      role: "user",
+      mode,
+      source: "highlight",
+      input_text: userInputText,
+      output_text: null,
+    });
+
     const aiResponse = await generateLockInResponse({
       selection,
       mode,
@@ -127,12 +186,44 @@ app.post("/api/lockin", async (req, res) => {
       newUserMessage: trimmedUserMessage,
     });
 
+    const promptTokens = aiResponse.usage?.prompt_tokens ?? 0;
+    const completionTokens = aiResponse.usage?.completion_tokens ?? 0;
+
+    await insertChatMessage({
+      chat_id: chatId,
+      user_id: userId,
+      role: "assistant",
+      mode,
+      source: "highlight",
+      input_text: null,
+      output_text: aiResponse.answer,
+    });
+
+    await touchChat(chatId);
+
+    supabase
+      .from("ai_requests")
+      .insert([
+        {
+          user_id: userId,
+          mode,
+          tokens_in: promptTokens,
+          tokens_out: completionTokens,
+        },
+      ])
+      .then(() => {})
+      .catch((logError) => {
+        console.error("Failed to log ai_requests row:", logError.message);
+      });
+
     res.json({
+      chatId,
       mode,
       targetLanguage,
       difficultyLevel,
       answer: aiResponse.answer,
       chatHistory: aiResponse.chatHistory,
+      usage: aiResponse.usage,
     });
   } catch (error) {
     console.error("Error processing request:", error.message);
@@ -145,6 +236,58 @@ app.post("/api/lockin", async (req, res) => {
   }
 });
 
+/**
+ * List recent chats for the authenticated user.
+ */
+app.get("/api/chats", requireSupabaseUser, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const requestedLimit = parseInt(req.query.limit, 10);
+    const limit = Number.isFinite(requestedLimit)
+      ? requestedLimit
+      : DEFAULT_CHAT_LIST_LIMIT;
+
+    const chats = await getRecentChats(userId, limit);
+
+    const response = chats.map((chat) => ({
+      ...chat,
+      title:
+        chat.title ||
+        `Chat from ${new Date(chat.created_at).toISOString().split("T")[0]}`,
+    }));
+
+    res.json(response);
+  } catch (error) {
+    console.error("Error fetching chats:", error.message);
+    res.status(500).json({ error: "Failed to load chats" });
+  }
+});
+
+/**
+ * List all messages for a chat owned by the authenticated user.
+ */
+app.get(
+  "/api/chats/:chatId/messages",
+  requireSupabaseUser,
+  async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const { chatId } = req.params;
+
+      const chat = await getChatById(userId, chatId);
+      if (!chat) {
+        return res.status(404).json({ error: "Chat not found" });
+      }
+
+      const messages = await getChatMessages(userId, chatId);
+      res.json(messages);
+    } catch (error) {
+      console.error("Error fetching chat messages:", error.message);
+      res.status(500).json({ error: "Failed to load chat messages" });
+    }
+  }
+);
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
@@ -155,13 +298,11 @@ app.use((req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`🚀 Lock-in backend server running on http://localhost:${PORT}`);
-  console.log(`📚 Ready to help students learn!`);
+  console.log(`Lock-in backend server running on http://localhost:${PORT}`);
+  console.log(`Ready to help students learn!`);
 
   if (!process.env.OPENAI_API_KEY) {
-    console.warn(
-      "⚠️  WARNING: OPENAI_API_KEY not found in environment variables!"
-    );
+    console.warn("WARNING: OPENAI_API_KEY not found in environment variables!");
     console.warn("   Please create a .env file with your OpenAI API key.");
   }
 });

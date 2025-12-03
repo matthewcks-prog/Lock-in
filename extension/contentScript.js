@@ -10,9 +10,13 @@
 // ===================================
 // Configuration
 // ===================================
-const BACKEND_URL = "http://localhost:3000";
+const BACKEND_URL =
+  (window.LOCKIN_CONFIG && window.LOCKIN_CONFIG.BACKEND_URL) ||
+  "http://localhost:3000";
 const MIN_SELECTION_LENGTH = 3; // Minimum characters to trigger
 const BUBBLE_OFFSET = 10; // Pixels offset from selection
+const CHAT_ID_STORAGE_KEY = "lockinCurrentChatId";
+const RECENT_CHAT_LIMIT = 10;
 
 // ===================================
 // State Management
@@ -32,6 +36,12 @@ let sessionPreferences = {
 };
 let currentTabId = null; // Current tab ID
 let currentOrigin = window.location.origin; // Current origin
+let currentChatId = null; // Active chat identifier shared across popup/content
+let recentChats = [];
+let isHistoryPanelOpen = false;
+let historyStatusMessage = "";
+let isHistoryLoading = false;
+let hasLoadedChats = false;
 const isMac = navigator.platform.toUpperCase().includes("MAC");
 
 // ===================================
@@ -41,6 +51,8 @@ function init() {
   loadToggleState();
   listenToStorageChanges();
   setupEventListeners();
+  loadStoredChatId();
+  listenToAuthChanges();
   // Get tab ID and restore session if available
   getTabId().then(() => {
     setTimeout(loadSessionForCurrentTab, 500); // Small delay to ensure page is ready
@@ -73,6 +85,17 @@ function listenToStorageChanges() {
       highlightingEnabled = changes.highlightingEnabled.newValue;
       if (!highlightingEnabled) {
         removeExistingBubble();
+      }
+    }
+
+    if (areaName === "local" && changes[CHAT_ID_STORAGE_KEY]) {
+      currentChatId = changes[CHAT_ID_STORAGE_KEY].newValue || null;
+      historyStatusMessage = "";
+      if (!currentChatId) {
+        chatHistory = [];
+      }
+      if (activeBubble) {
+        renderChatBubble();
       }
     }
   });
@@ -279,7 +302,21 @@ async function runMode(mode) {
     }
   }
 
-  chatHistory = [];
+  const settings = await getSettings();
+  sessionPreferences = {
+    preferredLanguage: settings.preferredLanguage || "en",
+    difficultyLevel: settings.difficultyLevel || "highschool",
+  };
+
+  const baseHistory = Array.isArray(chatHistory) ? [...chatHistory] : [];
+  const selectionMessage = cachedSelection
+    ? `Original text:\n${cachedSelection}`
+    : "";
+  const optimisticHistory = selectionMessage
+    ? [...baseHistory, { role: "user", content: selectionMessage }]
+    : baseHistory;
+
+  chatHistory = optimisticHistory;
   pendingInputValue = "";
   isChatLoading = true;
 
@@ -288,22 +325,25 @@ async function runMode(mode) {
   saveSessionForCurrentTab({ isLoadingOverride: true });
 
   try {
-    const settings = await getSettings();
-    sessionPreferences = {
-      preferredLanguage: settings.preferredLanguage || "en",
-      difficultyLevel: settings.difficultyLevel || "highschool",
-    };
-
     const data = await callLockInApi({
       selection: cachedSelection,
       mode,
       targetLanguage: sessionPreferences.preferredLanguage,
       difficultyLevel: sessionPreferences.difficultyLevel,
-      chatHistory: [],
+      chatHistory: baseHistory,
+      newUserMessage:
+        currentChatId && selectionMessage ? selectionMessage : undefined,
     });
 
     chatHistory = data.chatHistory || [];
     isChatLoading = false;
+    pendingInputValue = "";
+    if (data.chatId) {
+      currentChatId = data.chatId;
+      await setStoredChatId(currentChatId);
+    }
+    historyStatusMessage = "";
+    loadRecentChats({ silent: true });
     renderChatBubble();
     saveSessionForCurrentTab();
   } catch (error) {
@@ -311,18 +351,23 @@ async function runMode(mode) {
     isChatLoading = false;
 
     if (cachedSelection) {
-      chatHistory = buildFallbackHistory();
-      chatHistory.push({
-        role: "assistant",
-        content:
-          "I had trouble reaching Lock-in. Please check your connection and try again.",
-      });
+      const friendlyMessage = getAssistantErrorMessage(error);
+      if (!baseHistory.length) {
+        chatHistory = buildFallbackHistory();
+      } else {
+        chatHistory = baseHistory;
+      }
+      chatHistory = [
+        ...chatHistory,
+        {
+          role: "assistant",
+          content: friendlyMessage,
+        },
+      ];
       renderChatBubble();
       saveSessionForCurrentTab();
     } else {
-      showErrorBubble(
-        "Something went wrong. Please check your connection or try again."
-      );
+      showErrorBubble(getAssistantErrorMessage(error));
     }
   }
 }
@@ -360,6 +405,25 @@ function getSettings() {
 }
 
 async function callLockInApi(payload) {
+  const auth = window.LockInAuth;
+  if (!auth || typeof auth.getValidAccessToken !== "function") {
+    const setupError = new Error(
+      "Authentication is not configured. Please update the extension settings."
+    );
+    setupError.code = "AUTH_NOT_CONFIGURED";
+    throw setupError;
+  }
+
+  const accessToken = await auth.getValidAccessToken();
+
+  if (!accessToken) {
+    const authError = new Error(
+      "Please sign in via the Lock-in popup before using the assistant."
+    );
+    authError.code = "AUTH_REQUIRED";
+    throw authError;
+  }
+
   const historyForRequest = payload.chatHistory ?? chatHistory ?? [];
   const normalizedHistory = historyForRequest
     .filter(
@@ -389,17 +453,55 @@ async function callLockInApi(payload) {
     body.newUserMessage = payload.newUserMessage;
   }
 
+  const chatIdToSend =
+    typeof payload.chatId !== "undefined" ? payload.chatId : currentChatId;
+  if (chatIdToSend) {
+    body.chatId = chatIdToSend;
+  }
+
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${accessToken}`,
+  };
+
   const response = await fetch(`${BACKEND_URL}/api/lockin`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
+  }).catch((networkError) => {
+    const err = new Error(
+      "Unable to reach Lock-in. Please check your connection."
+    );
+    err.cause = networkError;
+    throw err;
   });
 
+  if (response.status === 401 || response.status === 403) {
+    if (typeof auth.signOut === "function") {
+      await auth.signOut();
+    }
+  }
+
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(errorText || "API request failed");
+    let errorMessage = "API request failed";
+    try {
+      const errorBody = await response.json();
+      errorMessage =
+        errorBody?.message || errorBody?.error || JSON.stringify(errorBody);
+    } catch (_) {
+      const fallbackText = await response.text();
+      if (fallbackText) {
+        errorMessage = fallbackText;
+      }
+    }
+
+    const apiError = new Error(errorMessage || "API request failed");
+    if (response.status === 429) {
+      apiError.code = "RATE_LIMIT";
+    } else if (response.status === 401 || response.status === 403) {
+      apiError.code = "AUTH_REQUIRED";
+    }
+    throw apiError;
   }
 
   return response.json();
@@ -416,6 +518,20 @@ function buildFallbackHistory() {
       content: `Original text:\n${cachedSelection}`,
     },
   ];
+}
+
+function getAssistantErrorMessage(error) {
+  const code = error?.code;
+  if (code === "AUTH_REQUIRED" || code === "AUTH_NOT_CONFIGURED") {
+    return "Please open the Lock-in popup and sign in to your account before trying again.";
+  }
+  if (code === "RATE_LIMIT") {
+    return "You reached today's request limit. Please try again tomorrow.";
+  }
+  return (
+    error?.message ||
+    "I had trouble reaching Lock-in. Please check your connection and try again."
+  );
 }
 
 function handleFollowUpSubmit() {
@@ -447,10 +563,17 @@ async function sendFollowUpMessage(messageText) {
       difficultyLevel: sessionPreferences.difficultyLevel,
       chatHistory: historyForRequest,
       newUserMessage: messageText,
+      chatId: currentChatId,
     });
 
     chatHistory = data.chatHistory || [];
     isChatLoading = false;
+    if (data.chatId) {
+      currentChatId = data.chatId;
+      await setStoredChatId(currentChatId);
+    }
+    historyStatusMessage = "";
+    loadRecentChats({ silent: true });
     renderChatBubble();
     saveSessionForCurrentTab();
   } catch (error) {
@@ -460,8 +583,7 @@ async function sendFollowUpMessage(messageText) {
       ...chatHistory,
       {
         role: "assistant",
-        content:
-          "I couldn't finish that request. Please try again in a moment.",
+        content: getAssistantErrorMessage(error),
       },
     ];
     renderChatBubble();
@@ -504,48 +626,63 @@ function renderChatBubble() {
   const modeInfo = getModeInfo(currentMode);
   const chatHtml = buildChatMessagesHtml(chatHistory);
   const sendDisabled = isChatLoading || pendingInputValue.trim().length === 0;
+  const layoutClass = isHistoryPanelOpen
+    ? "lockin-history-open"
+    : "lockin-history-collapsed";
+
+  if (!hasLoadedChats && !isHistoryLoading) {
+    loadRecentChats({ silent: true });
+  }
 
   activeBubble.innerHTML = getBubbleHTML(`
-    <div class="lockin-bubble-header lockin-drag-handle" style="cursor: move;">
-      <div class="lockin-header-left">
-        <span class="lockin-mode-icon">${modeInfo.icon}</span>
-        <span class="lockin-mode-label">${modeInfo.label}</span>
-      </div>
-      <div class="lockin-header-right">
-        <button class="lockin-set-default" title="Set as default mode">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-          </svg>
-        </button>
-        <button class="lockin-close-bubble">&times;</button>
-      </div>
-    </div>
-    <div class="lockin-bubble-modes">
-      <button class="lockin-mode-btn ${
-        currentMode === "explain" ? "active" : ""
-      }" data-mode="explain" ${isChatLoading ? "disabled" : ""}>
-        <span>&#128161;</span> Explain
-      </button>
-      <button class="lockin-mode-btn ${
-        currentMode === "simplify" ? "active" : ""
-      }" data-mode="simplify" ${isChatLoading ? "disabled" : ""}>
-        <span>&#9986;</span> Simplify
-      </button>
-      <button class="lockin-mode-btn ${
-        currentMode === "translate" ? "active" : ""
-      }" data-mode="translate" ${isChatLoading ? "disabled" : ""}>
-        <span>&#127757;</span> Translate
-      </button>
-    </div>
-    <div class="lockin-chat-body">
-      <div class="lockin-chat-messages">${chatHtml}</div>
-      <div class="lockin-chat-input">
-        <textarea class="lockin-chat-textarea" rows="2" placeholder="Ask a follow-up question..." ${
-          isChatLoading ? "disabled" : ""
-        }></textarea>
-        <button class="lockin-send-btn" ${
-          sendDisabled ? "disabled" : ""
-        }>Send</button>
+    <div class="lockin-bubble-layout ${layoutClass}">
+      ${buildHistoryPanelHtml()}
+      <div class="lockin-chat-panel">
+        <div class="lockin-bubble-header lockin-drag-handle" style="cursor: move;">
+          <div class="lockin-header-left">
+            <button class="lockin-history-toggle" title="Toggle chat history">
+              ${isHistoryPanelOpen ? "&lt;" : "&gt;"}
+            </button>
+            <span class="lockin-mode-icon">${modeInfo.icon}</span>
+            <span class="lockin-mode-label">${modeInfo.label}</span>
+          </div>
+          <div class="lockin-header-right">
+            <button class="lockin-set-default" title="Set as default mode">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+              </svg>
+            </button>
+            <button class="lockin-close-bubble">&times;</button>
+          </div>
+        </div>
+        <div class="lockin-bubble-modes">
+          <button class="lockin-mode-btn ${
+            currentMode === "explain" ? "active" : ""
+          }" data-mode="explain" ${isChatLoading ? "disabled" : ""}>
+            <span>&#128161;</span> Explain
+          </button>
+          <button class="lockin-mode-btn ${
+            currentMode === "simplify" ? "active" : ""
+          }" data-mode="simplify" ${isChatLoading ? "disabled" : ""}>
+            <span>&#9986;</span> Simplify
+          </button>
+          <button class="lockin-mode-btn ${
+            currentMode === "translate" ? "active" : ""
+          }" data-mode="translate" ${isChatLoading ? "disabled" : ""}>
+            <span>&#127757;</span> Translate
+          </button>
+        </div>
+        <div class="lockin-chat-body">
+          <div class="lockin-chat-messages">${chatHtml}</div>
+          <div class="lockin-chat-input">
+            <textarea class="lockin-chat-textarea" rows="2" placeholder="Ask a follow-up question..." ${
+              isChatLoading ? "disabled" : ""
+            }></textarea>
+            <button class="lockin-send-btn" ${
+              sendDisabled ? "disabled" : ""
+            }>Send</button>
+          </div>
+        </div>
       </div>
     </div>
   `);
@@ -603,6 +740,34 @@ function renderChatBubble() {
     sendButton.addEventListener("click", handleFollowUpSubmit);
   }
 
+  const historyToggle = activeBubble.querySelector(".lockin-history-toggle");
+  if (historyToggle) {
+    historyToggle.addEventListener("click", () => {
+      isHistoryPanelOpen = !isHistoryPanelOpen;
+      if (isHistoryPanelOpen) {
+        loadRecentChats({ silent: false });
+      }
+      renderChatBubble();
+    });
+  }
+
+  const newChatBtn = activeBubble.querySelector(".lockin-new-chat-btn");
+  if (newChatBtn) {
+    newChatBtn.addEventListener("click", () => {
+      handleNewChatRequest();
+    });
+  }
+
+  activeBubble.querySelectorAll(".lockin-history-item").forEach((item) => {
+    item.addEventListener("click", () => {
+      const chatId = item.getAttribute("data-chat-id");
+      if (!chatId || chatId === currentChatId) {
+        return;
+      }
+      handleHistorySelection(chatId);
+    });
+  });
+
   scrollChatToBottom();
 }
 
@@ -648,6 +813,239 @@ function buildChatMessagesHtml(messages) {
   }
 
   return rendered;
+}
+
+function buildHistoryPanelHtml() {
+  const panelState = isHistoryPanelOpen ? "open" : "collapsed";
+  const statusHtml = historyStatusMessage
+    ? `<p class="lockin-history-status">${escapeHtml(historyStatusMessage)}</p>`
+    : "";
+  const listHtml = recentChats.length
+    ? recentChats
+        .map((chat) => {
+          const isActive = chat.id === currentChatId;
+          return `
+            <button class="lockin-history-item ${
+              isActive ? "active" : ""
+            }" data-chat-id="${chat.id}">
+              <span class="lockin-history-title">${escapeHtml(
+                chat.title || buildFallbackHistoryTitle(chat)
+              )}</span>
+              <span class="lockin-history-meta">${escapeHtml(
+                formatHistoryTimestamp(chat.last_message_at || chat.created_at)
+              )}</span>
+            </button>
+          `;
+        })
+        .join("")
+    : `<p class="lockin-history-empty">${escapeHtml(
+        isHistoryLoading ? "Loading chats..." : "No chats yet."
+      )}</p>`;
+
+  return `
+    <aside class="lockin-history-panel ${panelState}">
+      <div class="lockin-history-actions">
+        <span class="lockin-history-label">Chats</span>
+        <button class="lockin-new-chat-btn" ${
+          isChatLoading ? "disabled" : ""
+        }>+ New Chat</button>
+      </div>
+      ${statusHtml}
+      <div class="lockin-history-list">${listHtml}</div>
+    </aside>
+  `;
+}
+
+function buildFallbackHistoryTitle(chat) {
+  if (!chat) {
+    return "Untitled chat";
+  }
+  const timestamp = chat.created_at || chat.updated_at;
+  if (!timestamp) {
+    return "Untitled chat";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "Untitled chat";
+  }
+  return `Chat from ${date.toISOString().split("T")[0]}`;
+}
+
+function formatHistoryTimestamp(timestamp) {
+  if (!timestamp) {
+    return "Just now";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const diff = Date.now() - date.getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 60) {
+    return minutes <= 1 ? "Just now" : `${minutes} min ago`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} hr${hours > 1 ? "s" : ""} ago`;
+  }
+  return date.toLocaleDateString();
+}
+
+async function handleNewChatRequest() {
+  await startNewChat("New chat ready. Highlight text to start.");
+}
+
+async function startNewChat(statusMessage) {
+  currentChatId = null;
+  chatHistory = [];
+  pendingInputValue = "";
+  await setStoredChatId(null);
+  historyStatusMessage = statusMessage || "";
+  isChatLoading = false;
+  renderChatBubble();
+  saveSessionForCurrentTab({ isLoadingOverride: false });
+}
+
+async function handleHistorySelection(chatId) {
+  if (!chatId) {
+    return;
+  }
+  historyStatusMessage = "Loading chat...";
+  renderChatBubble();
+  try {
+    const rows = await fetchChatMessagesFromApi(chatId);
+    const restoredHistory = convertRowsToChatHistory(rows);
+    chatHistory = restoredHistory.length
+      ? restoredHistory
+      : [
+          {
+            role: "assistant",
+            content: "This chat is empty. Highlight text to add a message.",
+          },
+        ];
+    currentChatId = chatId;
+    pendingInputValue = "";
+    await setStoredChatId(chatId);
+    historyStatusMessage = "";
+    isChatLoading = false;
+    renderChatBubble();
+    saveSessionForCurrentTab({ isLoadingOverride: false });
+    loadRecentChats({ silent: true });
+  } catch (error) {
+    console.error("Lock-in chat load error:", error);
+    historyStatusMessage =
+      error?.message || "Unable to load that chat. Please try again.";
+    renderChatBubble();
+  }
+}
+
+async function loadRecentChats(options = {}) {
+  if (isHistoryLoading) {
+    return;
+  }
+
+  const silent = options.silent === true;
+  const auth = window.LockInAuth;
+
+  if (!auth || typeof auth.getValidAccessToken !== "function") {
+    if (!silent) {
+      historyStatusMessage = "Sign in via the popup to see your chats.";
+      if (activeBubble) {
+        renderChatBubble();
+      }
+    }
+    return;
+  }
+
+  isHistoryLoading = true;
+  if (!silent) {
+    historyStatusMessage = "Loading chats...";
+    if (activeBubble) {
+      renderChatBubble();
+    }
+  }
+
+  try {
+    const token = await auth.getValidAccessToken();
+    if (!token) {
+      throw new Error("Sign in to view chats.");
+    }
+    const params = new URLSearchParams({ limit: String(RECENT_CHAT_LIMIT) });
+    const response = await fetch(
+      `${BACKEND_URL}/api/chats?${params.toString()}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Failed to load chats");
+    }
+
+    const data = await response.json();
+    recentChats = Array.isArray(data) ? data : [];
+    hasLoadedChats = true;
+    if (!silent) {
+      historyStatusMessage = recentChats.length
+        ? ""
+        : "Start a new chat to see it here.";
+    }
+  } catch (error) {
+    console.error("Lock-in recent chats error:", error);
+    if (!silent) {
+      historyStatusMessage =
+        error?.message || "Unable to load chats right now.";
+    }
+  } finally {
+    isHistoryLoading = false;
+    hasLoadedChats = true;
+    if (activeBubble) {
+      renderChatBubble();
+    }
+  }
+}
+
+async function fetchChatMessagesFromApi(chatId) {
+  const auth = window.LockInAuth;
+  if (!auth || typeof auth.getValidAccessToken !== "function") {
+    throw new Error("Sign in to open chats.");
+  }
+  const token = await auth.getValidAccessToken();
+  if (!token) {
+    throw new Error("Sign in to open chats.");
+  }
+
+  const response = await fetch(`${BACKEND_URL}/api/chats/${chatId}/messages`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || "Failed to load chat messages");
+  }
+
+  return response.json();
+}
+
+function convertRowsToChatHistory(rows = []) {
+  return rows
+    .map((row) => {
+      const role = row.role || "assistant";
+      const text =
+        role === "assistant"
+          ? row.output_text || ""
+          : row.input_text || row.output_text || "";
+      if (!text) {
+        return null;
+      }
+      return { role, content: text };
+    })
+    .filter(Boolean);
 }
 
 function scrollChatToBottom() {
@@ -1001,6 +1399,10 @@ async function loadSessionForCurrentTab() {
     chatHistory = restoredHistory;
     pendingInputValue = "";
     isChatLoading = !!session.isLoading;
+    if (session.chatId) {
+      currentChatId = session.chatId;
+      setStoredChatId(session.chatId);
+    }
 
     if (!chatHistory.length && isChatLoading && cachedSelection) {
       runMode(currentMode);
@@ -1058,6 +1460,60 @@ function migrateLegacySession(session) {
   return legacyHistory;
 }
 
+function listenToAuthChanges() {
+  if (
+    !window.LockInAuth ||
+    typeof window.LockInAuth.onSessionChanged !== "function"
+  ) {
+    return;
+  }
+
+  window.LockInAuth.onSessionChanged((session) => {
+    if (session && session.accessToken) {
+      return;
+    }
+    currentChatId = null;
+    recentChats = [];
+    historyStatusMessage = "";
+    hasLoadedChats = false;
+    setStoredChatId(null);
+    if (activeBubble) {
+      renderChatBubble();
+    }
+  });
+}
+
+async function loadStoredChatId() {
+  if (!chrome?.storage?.local) {
+    currentChatId = null;
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    chrome.storage.local.get([CHAT_ID_STORAGE_KEY], (data) => {
+      currentChatId = data?.[CHAT_ID_STORAGE_KEY] || null;
+      resolve(currentChatId);
+    });
+  });
+}
+
+function setStoredChatId(chatId) {
+  if (!chrome?.storage?.local) {
+    currentChatId = chatId || null;
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    if (!chatId) {
+      chrome.storage.local.remove([CHAT_ID_STORAGE_KEY], () => resolve());
+    } else {
+      chrome.storage.local.set({ [CHAT_ID_STORAGE_KEY]: chatId }, () =>
+        resolve()
+      );
+    }
+  });
+}
+
 /**
  * Save session for current tab
  */
@@ -1078,6 +1534,7 @@ async function saveSessionForCurrentTab(options = {}) {
     selection: cachedSelection,
     mode: currentMode,
     chatHistory: chatHistory,
+    chatId: currentChatId,
     targetLanguage: sessionPreferences.preferredLanguage,
     difficultyLevel: sessionPreferences.difficultyLevel,
     position: {
@@ -1163,6 +1620,7 @@ async function closeBubble() {
       session.selection = cachedSelection;
       session.mode = currentMode;
       session.chatHistory = chatHistory;
+      session.chatId = currentChatId;
       session.targetLanguage = sessionPreferences.preferredLanguage;
       session.difficultyLevel = sessionPreferences.difficultyLevel;
       if (!session.position && activeBubble) {
