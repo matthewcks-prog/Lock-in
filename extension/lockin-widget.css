@@ -1,0 +1,560 @@
+/**
+ * Lock-in Widget Styles
+ * 
+ * Pill + Bubble unified component with smooth animations,
+ * intelligent orientation, and drag interactions
+ */
+
+/* === ROOT WIDGET CONTAINER === */
+#lockin-widget {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 999999;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans',
+    Helvetica, Arial, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Dragging state - add subtle visual feedback */
+#lockin-widget.lockin-dragging {
+  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.2));
+}
+
+/* === PILL BUTTON === */
+#lockin-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 999px;
+  background: white;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+}
+
+/* Pill hover state */
+#lockin-pill:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+/* Pill active (open) state */
+#lockin-widget.lockin-open #lockin-pill {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4), 0 0 0 1px rgba(102, 126, 234, 0.2);
+}
+
+#lockin-widget.lockin-open #lockin-pill:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5), 0 0 0 1px rgba(102, 126, 234, 0.2);
+}
+
+/* Pill elements */
+.lockin-pill-icon {
+  font-size: 18px;
+}
+
+.lockin-pill-text {
+  letter-spacing: 0.3px;
+}
+
+.lockin-pill-status {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #9ca3af;
+  margin-left: 2px;
+  transition: background 180ms ease;
+}
+
+#lockin-widget.lockin-open .lockin-pill-status {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+/* === BUBBLE CONTAINER === */
+#lockin-bubble {
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  min-width: 360px;
+  min-height: 420px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  transform-origin: top right;
+  z-index: 9;
+}
+
+/* Default bubble styles when closed */
+#lockin-widget.lockin-closed #lockin-bubble {
+  transform: scale(0.2);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Bubble animation transitions */
+#lockin-bubble {
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms ease-out, visibility 0s linear 180ms;
+}
+
+/* When opening, adjust transition timing */
+#lockin-widget.lockin-open #lockin-bubble {
+  transform: scale(1);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms ease-out, visibility 0s linear 0ms;
+}
+
+/* === ORIENTATION LOGIC === */
+
+/* Orient Down: Bubble expands downward from pill */
+#lockin-widget.lockin-orient-down {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+#lockin-widget.lockin-orient-down #lockin-bubble {
+  transform-origin: top right;
+}
+
+/* Orient Up: Bubble expands upward, appears above pill */
+#lockin-widget.lockin-orient-up {
+  flex-direction: column-reverse;
+  align-items: flex-end;
+}
+
+#lockin-widget.lockin-orient-up #lockin-bubble {
+  transform-origin: bottom right;
+}
+
+/* === BUBBLE CONTENT LAYOUT === */
+#lockin-bubble {
+  display: flex;
+  flex-direction: column;
+}
+
+.lockin-bubble-layout {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.lockin-chat-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* === HEADER === */
+.lockin-bubble-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.lockin-bubble-header.lockin-drag-handle:active {
+  cursor: grabbing;
+}
+
+.lockin-bubble-header.lockin-drag-handle {
+  cursor: grab;
+}
+
+.lockin-header-left,
+.lockin-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* === CHAT BODY === */
+.lockin-chat-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lockin-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lockin-chat-input {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+
+.lockin-chat-textarea {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+  transition: border-color 150ms ease;
+}
+
+.lockin-chat-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+/* === BUTTONS === */
+.lockin-send-btn,
+.lockin-minimize-bubble,
+.lockin-close-bubble,
+.lockin-history-toggle,
+.lockin-set-default {
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #1f2937;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 150ms ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.lockin-send-btn:hover:not(:disabled),
+.lockin-minimize-bubble:hover,
+.lockin-close-bubble:hover,
+.lockin-history-toggle:hover,
+.lockin-set-default:hover {
+  background: #f0f1f3;
+  border-color: #d1d5db;
+}
+
+.lockin-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockin-send-btn:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+/* === MODE SELECTOR === */
+.lockin-mode-pill {
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  color: #1f2937;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 150ms ease;
+  white-space: nowrap;
+}
+
+.lockin-mode-pill:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.lockin-mode-expandable {
+  position: absolute;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: none;
+  flex-direction: column;
+  gap: 0;
+  z-index: 10001;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+}
+
+.lockin-mode-option {
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #1f2937;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  transition: all 150ms ease;
+}
+
+.lockin-mode-option:hover {
+  background: #f0f1f3;
+}
+
+.lockin-mode-option.active {
+  background: #e0e7ff;
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* === HISTORY PANEL === */
+.lockin-history-panel {
+  width: 220px;
+  border-right: 1px solid #e5e7eb;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+  transition: width 200ms ease, padding 200ms ease;
+}
+
+.lockin-bubble-layout.lockin-history-collapsed .lockin-history-panel {
+  width: 0;
+  padding: 12px 0;
+  border-right: none;
+}
+
+.lockin-history-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+
+.lockin-history-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lockin-history-item:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.lockin-history-item.active {
+  background: #e0e7ff;
+  border-color: #667eea;
+}
+
+.lockin-history-item-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lockin-history-title {
+  font-weight: 600;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lockin-history-meta {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* === DELETE DROPDOWN MENU === */
+.lockin-delete-dropdown {
+  position: fixed;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 10001;
+  min-width: 140px;
+  animation: slideUpDropdown 150ms ease;
+  pointer-events: auto;
+}
+
+@keyframes slideUpDropdown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.lockin-delete-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: all 150ms ease;
+}
+
+.lockin-delete-dropdown-item:hover {
+  background: #fef2f2;
+}
+
+.lockin-delete-dropdown-item:first-child {
+  border-radius: 8px 8px 0 0;
+}
+
+.lockin-delete-dropdown-item:last-child {
+  border-radius: 0 0 8px 8px;
+}
+
+.lockin-delete-dropdown-item:only-child {
+  border-radius: 8px;
+}
+
+.lockin-delete-dropdown-icon {
+  font-size: 16px;
+}
+
+.lockin-delete-dropdown-text {
+  color: #ef4444;
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 768px) {
+  #lockin-bubble {
+    min-width: 300px;
+    min-height: 400px;
+  }
+
+  #lockin-pill {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+
+  .lockin-pill-icon {
+    font-size: 16px;
+  }
+
+  .lockin-history-panel {
+    width: 160px;
+  }
+}
+
+@media (max-width: 480px) {
+  #lockin-widget {
+    right: 8px;
+    top: 8px;
+  }
+
+  #lockin-bubble {
+    min-width: 280px;
+    min-height: 350px;
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .lockin-history-panel {
+    display: none;
+  }
+
+  .lockin-bubble-layout.lockin-history-open {
+    width: 100%;
+  }
+}
+
+/* === SCROLLBAR STYLING === */
+.lockin-chat-messages::-webkit-scrollbar,
+.lockin-history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lockin-chat-messages::-webkit-scrollbar-track,
+.lockin-history-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lockin-chat-messages::-webkit-scrollbar-thumb,
+.lockin-history-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.lockin-chat-messages::-webkit-scrollbar-thumb:hover,
+.lockin-history-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* === ACCESSIBILITY === */
+#lockin-pill:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+.lockin-chat-textarea:focus {
+  outline: none;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  #lockin-bubble,
+  #lockin-pill {
+    transition: none !important;
+  }
+}
