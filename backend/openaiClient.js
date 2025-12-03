@@ -111,9 +111,14 @@ async function requestCompletion(messages) {
   });
 
   const choice = completion.choices[0]?.message;
-  return {
+  const assistantMessage = {
     role: choice?.role || "assistant",
     content: (choice?.content || "").trim(),
+  };
+
+  return {
+    assistantMessage,
+    usage: completion.usage || null,
   };
 }
 
@@ -150,12 +155,13 @@ async function generateLockInResponse(options) {
 
   workingHistory = clampHistory(workingHistory);
 
-  const assistantMessage = await requestCompletion(workingHistory);
+  const { assistantMessage, usage } = await requestCompletion(workingHistory);
   const updatedHistory = [...workingHistory, assistantMessage];
 
   return {
     answer: assistantMessage.content,
     chatHistory: updatedHistory,
+    usage,
   };
 }
 

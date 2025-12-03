@@ -15,11 +15,153 @@
   flex-direction: column;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 32px);
-  min-width: 300px;
+  min-width: 380px;
   min-height: 150px;
   overflow: hidden;
   contain: layout paint;
   position: fixed; /* Ensure fixed positioning */
+}
+
+.lockin-bubble-layout {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.lockin-chat-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.lockin-history-panel {
+  width: 220px;
+  border-right: 1px solid #e5e7eb;
+  background: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+  transition: width 0.2s ease, padding 0.2s ease;
+}
+
+.lockin-bubble-layout.lockin-history-collapsed .lockin-history-panel {
+  width: 0;
+  padding: 12px 0;
+  border-right: none;
+}
+
+.lockin-bubble-layout.lockin-history-collapsed .lockin-history-panel > * {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.lockin-history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lockin-history-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #475569;
+}
+
+.lockin-history-status {
+  margin: 0;
+  font-size: 12px;
+  color: #475569;
+  background: #e0e7ff;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.lockin-history-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.lockin-history-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+  background: white;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lockin-history-item:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 1px 3px rgba(102, 126, 234, 0.15);
+}
+
+.lockin-history-item.active {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4);
+}
+
+.lockin-history-title {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.lockin-history-meta {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.lockin-history-empty {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.lockin-new-chat-btn {
+  border: none;
+  background: #111827;
+  color: white;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lockin-new-chat-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lockin-history-toggle {
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #1f2937;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lockin-history-toggle:hover {
+  background: #eef2ff;
+  border-color: #c7d2fe;
 }
 
 /* Resize Handles */

@@ -68,6 +68,48 @@ label {
 }
 
 /* === MODERN TOGGLE SWITCH === */
+.toggle-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+}
+
+.toggle-label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 24px;
+  background: #d1d5db;
+  border-radius: 24px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-label input[type="checkbox"]::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.2s ease;
+}
+
+.toggle-label input[type="checkbox"]:checked {
+  background: #667eea;
+}
+
+.toggle-label input[type="checkbox"]:checked::before {
+  transform: translateX(20px);
+}
+
 .toggle-container {
   display: flex;
   justify-content: space-between;
@@ -254,6 +296,211 @@ label {
   background: #fee2e2;
   color: #991b1b;
   display: block;
+}
+
+.auth-section {
+  background: #fefefe;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.auth-input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.primary-button,
+.secondary-button {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.primary-button {
+  background: #667eea;
+  color: white;
+}
+
+.primary-button:hover {
+  background: #5563c1;
+}
+
+.secondary-button {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.secondary-button:hover {
+  background: #e5e7eb;
+}
+
+.auth-status-text {
+  font-size: 14px;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+
+.auth-message {
+  margin-top: 12px;
+  font-size: 12px;
+  min-height: 16px;
+}
+
+.auth-message.error {
+  color: #b91c1c;
+}
+
+.auth-message.success {
+  color: #047857;
+}
+
+.auth-intro {
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: white;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: #4b5563;
+  transition: all 0.2s ease;
+}
+
+.auth-tab.active {
+  background: #eef2ff;
+  border-color: #667eea;
+  color: #3730a3;
+}
+
+.auth-tab:hover {
+  border-color: #667eea;
+}
+
+.auth-hint {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 6px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.text-button {
+  background: transparent;
+  border: none;
+  color: #4f46e5;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.text-button:hover {
+  background: rgba(79, 70, 229, 0.1);
+}
+
+.chat-section {
+  background: #fefefe;
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: white;
+  cursor: pointer;
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+.chat-item:hover {
+  border-color: #6366f1;
+}
+
+.chat-item.active {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+
+.chat-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.chat-meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.chat-empty-state {
+  font-size: 13px;
+  color: #6b7280;
+  text-align: left;
+}
+
+.chat-message {
+  font-size: 12px;
+  margin-top: 10px;
+  min-height: 16px;
+}
+
+.chat-message.success {
+  color: #047857;
+}
+
+.chat-message.error {
+  color: #b91c1c;
+}
+
+.hidden {
+  display: none;
 }
 
 @keyframes slideDown {

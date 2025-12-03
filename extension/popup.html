@@ -13,20 +13,15 @@
         <p class="subtitle">Study Assistant</p>
       </div>
 
-      <!-- Enable/Disable Toggle -->
+      <!-- Highlighting Toggle Section -->
       <div class="settings-section">
-        <div class="toggle-container">
-          <div class="toggle-label-group">
-            <span class="label-text">Highlight Assistant</span>
-            <span class="label-description"
-              >Enable Ctrl+Select highlighting</span
-            >
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="highlighting-toggle" checked />
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
+        <label class="toggle-label">
+          <span>
+            <span class="label-text">Text Highlighting</span>
+            <span class="label-description">Enable Lock-in on all pages</span>
+          </span>
+          <input type="checkbox" id="highlighting-toggle" checked />
+        </label>
       </div>
 
       <!-- Mode Preferences Section -->
@@ -106,12 +101,70 @@
 
       <div id="status-message" class="status-message"></div>
 
+      <div class="settings-section auth-section">
+        <label>
+          <span class="label-text">Lock-in Account</span>
+          <span class="label-description"
+            >Sign in to save your history across highlights.</span
+          >
+        </label>
+
+        <div id="auth-view-logged-out">
+          <p class="auth-intro" id="auth-intro-message">
+            Sign in to use Lock-in and keep your conversations in sync.
+          </p>
+          <div class="auth-tabs">
+            <button class="auth-tab active" data-mode="login">Log in</button>
+            <button class="auth-tab" data-mode="signup">Sign up</button>
+          </div>
+          <form id="auth-form" class="auth-form">
+            <input
+              type="email"
+              id="auth-email"
+              class="auth-input"
+              placeholder="Email"
+              autocomplete="email"
+              required
+            />
+            <input
+              type="password"
+              id="auth-password"
+              class="auth-input"
+              placeholder="Password"
+              autocomplete="current-password"
+              required
+            />
+            <button
+              type="submit"
+              class="primary-button"
+              id="auth-submit-button"
+            >
+              Log in
+            </button>
+            <p class="auth-hint" id="auth-mode-hint">
+              Use your Lock-in account email and password.
+            </p>
+          </form>
+        </div>
+
+        <div id="auth-view-logged-in" class="hidden">
+          <p class="auth-status-text">
+            Signed in as <span id="auth-user-email">user@example.com</span>
+          </p>
+          <button id="logout-button" class="secondary-button">Sign Out</button>
+        </div>
+
+        <div id="auth-message" class="auth-message"></div>
+      </div>
+
       <div class="footer">
         <p>Highlight text on any page to get started</p>
         <p class="version">v1.0.0</p>
       </div>
     </div>
 
+    <script src="config.js"></script>
+    <script src="supabaseAuth.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

@@ -54,28 +54,42 @@ Chrome extension component of the Lock-in study assistant.
 
 ## Configuration
 
-### Backend URL
+### `config.js`
 
-Update the backend URL in `contentScript.js`:
-
-```javascript
-const BACKEND_URL = "http://localhost:3000"; // Change for production
-```
-
-For production, change to your deployed backend:
+All runtime URLs live in `extension/config.js`:
 
 ```javascript
-const BACKEND_URL = "https://your-backend.com";
+window.LOCKIN_CONFIG = {
+  BACKEND_URL: "http://localhost:3000",
+  SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
+  SUPABASE_ANON_KEY: "public-anon-key",
+};
 ```
+
+Update these values before loading the extension:
+
+- `BACKEND_URL`: your deployed Lock-in backend.
+- `SUPABASE_URL`: the Supabase project URL (copy from Settings -> API).
+- `SUPABASE_ANON_KEY`: the public anon key (same settings page).
+
+### Authentication Flow
+
+1. Load the extension, then open the popup.
+2. Enter your email/password in the **Lock-in Account** section and click **Sign In**. If the email is new, we create an account automatically.
+3. The popup stores the session (access + refresh tokens) in Chrome Sync.
+4. The content script automatically attaches `Authorization: Bearer <token>` to every `/api/lockin` call and refreshes when needed.
+5. Use **Sign Out** in the popup to clear the session.
+
+If you see "Configure SUPABASE_URL and SUPABASE_ANON_KEY", update `config.js` with real values.
 
 ### Host Permissions
 
-Update `manifest.json` to allow your backend domain:
+`manifest.json` must include both the backend and Supabase domains:
 
 ```json
 "host_permissions": [
   "http://localhost:3000/*",
-  "https://your-backend.com/*"
+  "https://*.supabase.co/*"
 ]
 ```
 
@@ -95,8 +109,8 @@ Edit `contentScript.css` to change:
 Add more languages in `popup.html`:
 
 ```html
-<option value="hi">Hindi (हिन्दी)</option>
-<option value="ar">Arabic (العربية)</option>
+<option value="hi">Hindi (Hindi)</option>
+<option value="ar">Arabic (Arabic)</option>
 ```
 
 ### Keyboard Shortcuts
@@ -124,7 +138,7 @@ Add to `manifest.json`:
 
 ### 2. Check Console Logs
 
-1. Right-click on page → "Inspect"
+1. Right-click on page -> "Inspect"
 2. Go to "Console" tab
 3. Look for any errors
 
