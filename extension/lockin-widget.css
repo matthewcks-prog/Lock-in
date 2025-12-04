@@ -8,8 +8,8 @@
 /* === ROOT WIDGET CONTAINER === */
 #lockin-widget {
   position: fixed;
-  top: 16px;
-  left: 16px;
+  top: 24px;
+  right: 24px;
   z-index: 999999;
   display: inline-flex;
   flex-direction: column;
@@ -28,22 +28,26 @@
 
 /* === PILL BUTTON === */
 #lockin-pill {
-  position: relative;
-  display: flex;
+  /* Position pill absolutely to overlay on the header button */
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  
+  /* Show the pill button as the visible control */
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 14px;
+  gap: 6px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
   border: none;
-  border-radius: 999px;
-  background: white;
-  color: #1f2937;
+  border-radius: 20px;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  transition: all 180ms ease;
+  white-space: nowrap;
   z-index: 10;
 }
 
@@ -53,19 +57,17 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
-/* Pill active (open) state */
+/* Hide the header button text/branding when widget is closed so pill appears as the only control.
+ * When open, hide the pill so the header shows normally */
+#lockin-widget.lockin-closed .lockin-header-brand {
+  visibility: hidden;
+}
+
 #lockin-widget.lockin-open #lockin-pill {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4), 0 0 0 1px rgba(102, 126, 234, 0.2);
+  display: none;
 }
 
-#lockin-widget.lockin-open #lockin-pill:hover {
-  transform: scale(1.06);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5), 0 0 0 1px rgba(102, 126, 234, 0.2);
-}
-
-/* Pill elements */
+/* Pill icon, text, and status indicator */
 .lockin-pill-icon {
   font-size: 18px;
 }
@@ -91,6 +93,7 @@
 
 /* === BUBBLE CONTAINER === */
 #lockin-bubble {
+  position: relative; /* anchor for resize handles */
   background: white;
   border-radius: 14px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -105,28 +108,34 @@
   z-index: 9;
 }
 
-/* Default bubble styles when closed */
+/* Inner content wrapper so resize handles can sit on top without
+ * interfering with layout or being removed by scripts that render
+ * bubble content.
+ */
+.lockin-bubble-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* Closed state: show only the compact header area so the Lock-in
+ * button appears as a pill pinned in the top-right. The rest of the
+ * bubble content is hidden.
+ */
 #lockin-widget.lockin-closed #lockin-bubble {
-  transform: scale(0.2);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+  max-height: 64px;
 }
 
-/* Bubble animation transitions */
-#lockin-bubble {
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 180ms ease-out, visibility 0s linear 180ms;
+#lockin-widget.lockin-closed .lockin-chat-body,
+#lockin-widget.lockin-closed .lockin-history-panel {
+  display: none;
 }
 
-/* When opening, adjust transition timing */
+/* Open state: allow the bubble to expand to full height. */
 #lockin-widget.lockin-open #lockin-bubble {
-  transform: scale(1);
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 180ms ease-out, visibility 0s linear 0ms;
+  max-height: calc(100vh - 32px);
 }
 
 /* === ORIENTATION LOGIC === */
@@ -152,11 +161,6 @@
 }
 
 /* === BUBBLE CONTENT LAYOUT === */
-#lockin-bubble {
-  display: flex;
-  flex-direction: column;
-}
-
 .lockin-bubble-layout {
   display: flex;
   height: 100%;
@@ -192,8 +196,7 @@
   cursor: grab;
 }
 
-.lockin-header-left,
-.lockin-header-right {
+.lockin-header-left {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -557,4 +560,80 @@
   #lockin-pill {
     transition: none !important;
   }
+}
+
+/* === RESIZE HANDLES === */
+
+.lockin-resize-handle {
+  position: absolute;
+  background: transparent;
+  z-index: 10;
+}
+
+/* Corner handles – slightly larger square for easier grabbing */
+.lockin-resize-ne,
+.lockin-resize-nw,
+.lockin-resize-se,
+.lockin-resize-sw {
+  width: 12px;
+  height: 12px;
+}
+
+.lockin-resize-ne {
+  top: -2px;
+  right: -2px;
+  cursor: nesw-resize;
+}
+
+.lockin-resize-nw {
+  top: -2px;
+  left: -2px;
+  cursor: nwse-resize;
+}
+
+.lockin-resize-se {
+  bottom: -2px;
+  right: -2px;
+  cursor: nwse-resize;
+}
+
+.lockin-resize-sw {
+  bottom: -2px;
+  left: -2px;
+  cursor: nesw-resize;
+}
+
+/* Edge handles – thin hit areas along each edge */
+.lockin-resize-n,
+.lockin-resize-s {
+  left: 12px;
+  right: 12px;
+  height: 6px;
+}
+
+.lockin-resize-n {
+  top: -3px;
+  cursor: ns-resize;
+}
+
+.lockin-resize-s {
+  bottom: -3px;
+  cursor: ns-resize;
+}
+
+.lockin-resize-e,
+.lockin-resize-w {
+  top: 12px;
+  bottom: 12px;
+  width: 6px;
+}
+
+.lockin-resize-e {
+  right: -3px;
+  cursor: ew-resize;
+}
+
+.lockin-resize-w {
+  left: -3px;
+  cursor: ew-resize;
 }

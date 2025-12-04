@@ -327,6 +327,28 @@
   gap: 8px;
 }
 
+/* Brand area in the top‑right of the bubble header */
+.lockin-header-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.04);
+}
+
+.lockin-header-logo {
+  font-size: 16px;
+}
+
+.lockin-header-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #111827;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
 .lockin-set-default {
   padding: 6px;
   background: transparent;
