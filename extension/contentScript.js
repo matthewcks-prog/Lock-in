@@ -159,7 +159,10 @@ function init() {
 
   // Initialize widget system
   if (typeof LockinWidget !== "undefined") {
+    console.log("Lock-in: LockinWidget class found, initializing...");
     initializeWidget();
+  } else {
+    console.warn("Lock-in: LockinWidget class not found!");
   }
 
   // Get tab ID and restore session if available
@@ -172,14 +175,21 @@ function init() {
  * Initialize the Lock-in widget
  */
 function initializeWidget() {
+  console.log("Lock-in: initializeWidget called");
   lockinWidget = new LockinWidget({
     autoOpenOnSelection: false,
   });
+  console.log("Lock-in: LockinWidget instance created:", lockinWidget);
   lockinWidget.init();
+  console.log(
+    "Lock-in: Widget init() called, widget.isOpen:",
+    lockinWidget.isOpen
+  );
 
   // Listen to widget events
   window.addEventListener("lockin:open", handleWidgetOpen);
   window.addEventListener("lockin:close", handleWidgetClose);
+  console.log("Lock-in: Widget event listeners attached");
 }
 
 /**
@@ -227,32 +237,19 @@ function renderBubbleContent() {
       <div class="lockin-chat-panel">
         <div class="lockin-bubble-header lockin-drag-handle">
           <div class="lockin-header-left">
-            <button class="lockin-history-toggle" title="Toggle chat history">
+            <button class="lockin-history-toggle" type="button" title="Toggle chat history">
               ${isHistoryPanelOpen ? "&lt;" : "&gt;"}
             </button>
             ${buildModeSelector()}
-          </div>
-          <div class="lockin-header-right">
-            <button class="lockin-set-default" title="Set as default mode">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
-              </svg>
-            </button>
-            <button class="lockin-minimize-bubble" title="Minimize">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
-            <button class="lockin-close-bubble">&times;</button>
           </div>
         </div>
         <div class="lockin-chat-body">
           <div class="lockin-chat-messages">${chatHtml}</div>
           <div class="lockin-chat-input">
-            <textarea class="lockin-chat-textarea" rows="2" placeholder="Ask a follow-up question..." ${
+            <textarea class="lockin-chat-textarea" id="lockin-chat-input" name="lockin-chat-input" rows="2" placeholder="Ask a follow-up question..." ${
               isChatLoading ? "disabled" : ""
             }></textarea>
-            <button class="lockin-send-btn" ${
+            <button class="lockin-send-btn" type="button" ${
               sendDisabled ? "disabled" : ""
             }>Send</button>
           </div>
@@ -269,24 +266,6 @@ function renderBubbleContent() {
  * Attach event listeners to bubble content
  */
 function attachBubbleEventListeners(bubbleElement) {
-  // Close button
-  const closeBtn = bubbleElement.querySelector(".lockin-close-bubble");
-  if (closeBtn) {
-    closeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      lockinWidget.close();
-    });
-  }
-
-  // Minimize button
-  const minimizeBtn = bubbleElement.querySelector(".lockin-minimize-bubble");
-  if (minimizeBtn) {
-    minimizeBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      lockinWidget.close();
-    });
-  }
-
   // History toggle
   const historyToggle = bubbleElement.querySelector(".lockin-history-toggle");
   if (historyToggle) {
@@ -456,7 +435,11 @@ function attachBubbleEventListeners(bubbleElement) {
 
   // Allow dragging the entire widget by the bubble header.
   const dragHandle = bubbleElement.querySelector(".lockin-drag-handle");
-  if (dragHandle && lockinWidget && typeof lockinWidget.startDrag === "function") {
+  if (
+    dragHandle &&
+    lockinWidget &&
+    typeof lockinWidget.startDrag === "function"
+  ) {
     dragHandle.style.cursor = "grab";
     dragHandle.addEventListener("mousedown", (e) => {
       e.stopPropagation();
@@ -558,7 +541,7 @@ function setupEventListeners() {
 // ===================================
 
 /**
- * Handle mouse up events - check for modifier key + valid selection
+ * Handle mouse up events - require Ctrl/Cmd + valid text selection
  */
 function handleMouseUp(event) {
   // Check if highlighting is enabled
@@ -567,10 +550,7 @@ function handleMouseUp(event) {
     return;
   }
 
-  // Ignore if we just finished dragging the bubble
-  // (widget handles its own drag state; no legacy drag flag needed)
-
-  // Check if required modifier key is pressed
+  // Require modifier key (Ctrl on Windows/Linux, Cmd on macOS)
   const hasModifierKey = isMac ? event.metaKey : event.ctrlKey;
 
   console.log("Lock-in: Mouse up detected", {
@@ -815,7 +795,10 @@ async function runMode(mode) {
       // No existing selection context to attach a chat bubble to.
       // Surface a friendly error message in the console instead of
       // attempting to render a separate legacy error bubble.
-      console.error("Lock-in error (no selection):", getAssistantErrorMessage(error));
+      console.error(
+        "Lock-in error (no selection):",
+        getAssistantErrorMessage(error)
+      );
     }
   }
 }
@@ -1124,7 +1107,7 @@ function buildModeSelector() {
     .map((mode) => {
       const info = MODE_CONFIG[mode];
       return `
-      <button class="lockin-mode-option" data-mode="${mode}" title="Switch to ${info.label}">
+      <button class="lockin-mode-option" type="button" data-mode="${mode}" title="Switch to ${info.label}">
         <span class="lockin-mode-option-icon">${info.icon}</span>
         <span class="lockin-mode-option-label">${info.label}</span>
       </button>
@@ -1134,7 +1117,7 @@ function buildModeSelector() {
 
   return `
     <div class="lockin-mode-selector-container">
-      <button class="lockin-mode-pill" title="Current mode">
+      <button class="lockin-mode-pill" type="button" title="Current mode">
         <span class="lockin-mode-icon">${modeInfo.icon}</span>
         <span class="lockin-mode-label">${modeInfo.label}</span>
         <span class="lockin-mode-chevron">&#9660;</span>
@@ -1169,7 +1152,7 @@ function buildHistoryPanelHtml() {
                   )
                 )}</span>
               </div>
-              <button class="lockin-history-item-menu" data-chat-id="${
+              <button class="lockin-history-item-menu" type="button" data-chat-id="${
                 chat.id
               }" title="Delete chat" aria-label="Delete chat menu">
                 <span class="lockin-menu-dots">&#8230;</span>
@@ -1186,7 +1169,7 @@ function buildHistoryPanelHtml() {
     <aside class="lockin-history-panel ${panelState}">
       <div class="lockin-history-actions">
         <span class="lockin-history-label">Chats</span>
-        <button class="lockin-new-chat-btn" ${
+        <button class="lockin-new-chat-btn" type="button" ${
           isChatLoading ? "disabled" : ""
         }>+ New Chat</button>
       </div>
@@ -1210,7 +1193,7 @@ function buildUserProfileBlock() {
 
   return `
     <div class="lockin-profile-section">
-      <button class="lockin-profile-card" title="User settings">
+      <button class="lockin-profile-card" type="button" title="User settings">
         <div class="lockin-profile-avatar">${escapeHtml(initials)}</div>
         <div class="lockin-profile-info">
           <div class="lockin-profile-name">${escapeHtml(userProfile.name)}</div>
@@ -1229,20 +1212,20 @@ function buildUserProfileBlock() {
  */
 function buildProfileMenu() {
   return `
-    <button class="lockin-profile-menu-item" data-action="upgrade">
+    <button class="lockin-profile-menu-item" type="button" data-action="upgrade">
       Upgrade plan
     </button>
-    <button class="lockin-profile-menu-item" data-action="personalisation">
+    <button class="lockin-profile-menu-item" type="button" data-action="personalisation">
       Personalisation
     </button>
-    <button class="lockin-profile-menu-item" data-action="settings">
+    <button class="lockin-profile-menu-item" type="button" data-action="settings">
       Settings
     </button>
-    <button class="lockin-profile-menu-item" data-action="help">
+    <button class="lockin-profile-menu-item" type="button" data-action="help">
       Help
     </button>
     <div class="lockin-profile-menu-divider"></div>
-    <button class="lockin-profile-menu-item lockin-profile-menu-logout" data-action="logout">
+    <button class="lockin-profile-menu-item lockin-profile-menu-logout" type="button" data-action="logout">
       Log out
     </button>
   `;
@@ -1356,7 +1339,7 @@ function showDeleteDropdown(menuBtn, chatId) {
   const dropdown = document.createElement("div");
   dropdown.className = "lockin-delete-dropdown";
   dropdown.innerHTML = `
-    <button class="lockin-delete-dropdown-item" data-chat-id="${chatId}">
+    <button class="lockin-delete-dropdown-item" type="button" data-chat-id="${chatId}">
       <span class="lockin-delete-dropdown-icon">🗑️</span>
       <span class="lockin-delete-dropdown-text">Delete</span>
     </button>
@@ -1888,9 +1871,7 @@ function setAsDefault(mode) {
     () => {
       const btn =
         lockinWidget && lockinWidget.getBubbleElement()
-          ? lockinWidget
-              .getBubbleElement()
-              .querySelector(".lockin-set-default")
+          ? lockinWidget.getBubbleElement().querySelector(".lockin-set-default")
           : null;
       if (!btn) return;
 

@@ -26,6 +26,8 @@ const ALLOWED_ORIGINS = [
   /^chrome-extension:\/\//,
   // Local development
   /localhost/,
+  // Monash learning environment (e.g. https://learning.monash.edu)
+  /^https:\/\/learning\.monash\.edu$/,
 ];
 
 function isOriginAllowed(origin) {
