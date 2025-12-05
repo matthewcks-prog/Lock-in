@@ -102,7 +102,12 @@ const LockInChatHistoryUtils = window.LockInChatHistoryUtils || null;
 const Storage = window.LockInStorage || null;
 const API = window.LockInAPI || null;
 const Messaging = window.LockInMessaging || null;
-const Logger = window.LockInLogger || { debug: () => {}, info: () => {}, warn: console.warn, error: console.error };
+const Logger = window.LockInLogger || {
+  debug: () => {},
+  info: () => {},
+  warn: console.warn,
+  error: console.error,
+};
 
 // STORAGE_KEYS is loaded globally by libs/storage.js
 // which is loaded before this script in manifest.json
@@ -771,7 +776,8 @@ async function callLockInApi(payload) {
         "highschool",
       chatHistory: payload.chatHistory ?? chatHistory ?? [],
       newUserMessage: payload.newUserMessage,
-      chatId: typeof payload.chatId !== "undefined" ? payload.chatId : currentChatId,
+      chatId:
+        typeof payload.chatId !== "undefined" ? payload.chatId : currentChatId,
     });
   } catch (error) {
     // Re-throw with original error code
@@ -1386,7 +1392,9 @@ async function loadSessionForCurrentTab() {
   if (!Messaging || !chrome.runtime || !currentTabId) return;
 
   try {
-    const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.GET_SESSION);
+    const message = Messaging.createMessage(
+      Messaging.MESSAGE_TYPES.GET_SESSION
+    );
     const response = await Messaging.sendMessage(message);
     if (!response.ok) {
       return;
@@ -1586,7 +1594,9 @@ async function updateSessionPosition() {
 
   try {
     // Get current session
-    const getMessage = Messaging.createMessage(Messaging.MESSAGE_TYPES.GET_SESSION);
+    const getMessage = Messaging.createMessage(
+      Messaging.MESSAGE_TYPES.GET_SESSION
+    );
     const getResponse = await Messaging.sendMessage(getMessage);
     if (getResponse.ok && getResponse.data?.session) {
       const session = getResponse.data.session;
@@ -1608,7 +1618,9 @@ async function clearSessionForCurrentTab() {
   if (!Messaging || !chrome.runtime || !currentTabId) return;
 
   try {
-    const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.CLEAR_SESSION);
+    const message = Messaging.createMessage(
+      Messaging.MESSAGE_TYPES.CLEAR_SESSION
+    );
     await Messaging.sendMessage(message);
   } catch (error) {
     Logger.error("Failed to clear session:", error);
