@@ -7,6 +7,24 @@
  * - On/off toggle via popup
  */
 
+/**
+ * @typedef {Object} StudyResponse
+ * @property {string} mode - The mode used ("explain" | "simplify" | "translate" | "general")
+ * @property {string} explanation - The main answer/explanation for the user
+ * @property {Array<{title: string, content: string, type: string}>} notes - Array of possible notes to save
+ * @property {Array<{title: string, description: string}>} todos - Array of possible tasks
+ * @property {string[]} tags - Array of topic tags
+ * @property {"easy" | "medium" | "hard"} difficulty - Estimated difficulty of the selected text
+ */
+
+/**
+ * @typedef {Object} LockInApiResponse
+ * @property {boolean} success - Whether the request was successful
+ * @property {StudyResponse} [data] - Response data if success is true
+ * @property {{message: string}} [error] - Error information if success is false
+ * @property {string} [chatId] - Chat ID if available
+ */
+
 // ===================================
 // Configuration
 // ===================================
@@ -687,7 +705,7 @@ async function runMode(mode) {
   saveSessionForCurrentTab({ isLoadingOverride: true });
 
   try {
-    const data = await callLockInApi({
+    const response = await callLockInApi({
       selection: cachedSelection,
       mode,
       targetLanguage: sessionPreferences.preferredLanguage,
@@ -701,11 +719,54 @@ async function runMode(mode) {
           : undefined,
     });
 
-    chatHistory = data.chatHistory || [];
+    // Handle new response format: { success: boolean, data?: {...}, error?: {...} }
+    if (!response.success) {
+      throw new Error(response.error?.message || "Request failed");
+    }
+
+    const data = response.data;
+    if (!data || !data.explanation) {
+      throw new Error("Invalid response format: missing explanation");
+    }
+
+    // Build chat history from structured response
+    // Add user message if this is initial request
+    if (baseHistory.length === 0 && cachedSelection) {
+      chatHistory = [
+        {
+          role: "user",
+          content: `Original text:\n${cachedSelection}`,
+        },
+      ];
+    } else {
+      chatHistory = [...baseHistory];
+    }
+
+    // Add assistant response
+    chatHistory = [
+      ...chatHistory,
+      {
+        role: "assistant",
+        content: data.explanation,
+      },
+    ];
+
+    // Log notes, todos, tags, and difficulty for now (can be used later)
+    if (data.notes && data.notes.length > 0) {
+      Logger.debug("Notes received:", data.notes);
+    }
+    if (data.todos && data.todos.length > 0) {
+      Logger.debug("Todos received:", data.todos);
+    }
+    if (data.tags && data.tags.length > 0) {
+      Logger.debug("Tags received:", data.tags);
+    }
+    Logger.debug("Difficulty:", data.difficulty);
+
     isChatLoading = false;
     pendingInputValue = "";
-    if (data.chatId) {
-      currentChatId = data.chatId;
+    if (response.chatId) {
+      currentChatId = response.chatId;
       await setStoredChatId(currentChatId);
     }
     historyStatusMessage = "";
@@ -834,7 +895,7 @@ async function sendFollowUpMessage(messageText) {
 
   try {
     const historyForRequest = chatHistory.slice(0, -1);
-    const data = await callLockInApi({
+    const response = await callLockInApi({
       selection: cachedSelection,
       mode: currentMode,
       targetLanguage: sessionPreferences.preferredLanguage,
@@ -844,10 +905,40 @@ async function sendFollowUpMessage(messageText) {
       chatId: currentChatId,
     });
 
-    chatHistory = data.chatHistory || [];
+    // Handle new response format: { success: boolean, data?: {...}, error?: {...} }
+    if (!response.success) {
+      throw new Error(response.error?.message || "Request failed");
+    }
+
+    const data = response.data;
+    if (!data || !data.explanation) {
+      throw new Error("Invalid response format: missing explanation");
+    }
+
+    // Build chat history: user message is already added, now add assistant response
+    chatHistory = [
+      ...chatHistory,
+      {
+        role: "assistant",
+        content: data.explanation,
+      },
+    ];
+
+    // Log notes, todos, tags, and difficulty for now (can be used later)
+    if (data.notes && data.notes.length > 0) {
+      Logger.debug("Notes received:", data.notes);
+    }
+    if (data.todos && data.todos.length > 0) {
+      Logger.debug("Todos received:", data.todos);
+    }
+    if (data.tags && data.tags.length > 0) {
+      Logger.debug("Tags received:", data.tags);
+    }
+    Logger.debug("Difficulty:", data.difficulty);
+
     isChatLoading = false;
-    if (data.chatId) {
-      currentChatId = data.chatId;
+    if (response.chatId) {
+      currentChatId = response.chatId;
       await setStoredChatId(currentChatId);
     }
     historyStatusMessage = "";
