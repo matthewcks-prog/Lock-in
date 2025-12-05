@@ -4,7 +4,10 @@
  * These controllers contain no Express wiring so they are easy to unit test.
  */
 
-const { generateLockInResponse } = require("../openaiClient");
+const {
+  generateLockInResponse,
+  generateStructuredStudyResponse,
+} = require("../openaiClient");
 const { supabase } = require("../supabaseClient");
 const {
   createChat,
@@ -33,6 +36,39 @@ const {
 /**
  * POST /api/lockin
  * Main endpoint used by the Chrome extension for AI assistance.
+ *
+ * GOAL
+ * ----
+ * Update this controller to call generateStructuredStudyResponse instead of the old
+ * explain/simplify/translate helpers.
+ *
+ * - Read from req.body:
+ *    - mode: "explain" | "simplify" | "translate" | "general"
+ *    - selection: string (required)
+ *    - pageContext?: string
+ *    - pageUrl?: string
+ *    - courseCode?: string
+ *    - language?: string
+ *    - targetLanguage?: string (for translate)
+ *
+ * - Call openaiClient.generateStructuredStudyResponse({ ...options })
+ *   and wait for the result.
+ *
+ * - Return a JSON response like:
+ *   {
+ *     success: true,
+ *     data: { mode, explanation, notes, todos, tags, difficulty }
+ *   }
+ *
+ * - On error, log the error and return:
+ *   {
+ *     success: false,
+ *     error: { message: "User-friendly message" }
+ *   }
+ *
+ * - Keep auth + rate limiting behavior exactly the same as before.
+ * - For now, do NOT persist notes/todos yet; just pass them back to the extension.
+ *   We will hook up database persistence in a later step.
  */
 async function handleLockinRequest(req, res) {
   try {
@@ -45,14 +81,18 @@ async function handleLockinRequest(req, res) {
       chatHistory = [],
       newUserMessage,
       chatId: incomingChatId,
+      pageContext,
+      pageUrl,
+      courseCode,
+      language = "en",
     } = req.body || {};
 
     // Validate mode
     const modeValidation = validateMode(mode);
     if (!modeValidation.valid) {
       return res.status(400).json({
-        error: "Bad Request",
-        message: modeValidation.error,
+        success: false,
+        error: { message: modeValidation.error },
       });
     }
 
@@ -60,8 +100,8 @@ async function handleLockinRequest(req, res) {
     const langValidation = validateLanguageCode(targetLanguage);
     if (!langValidation.valid) {
       return res.status(400).json({
-        error: "Bad Request",
-        message: langValidation.error,
+        success: false,
+        error: { message: langValidation.error },
       });
     }
     const normalizedLanguage = langValidation.normalized;
@@ -70,8 +110,8 @@ async function handleLockinRequest(req, res) {
     const difficultyValidation = validateDifficultyLevel(difficultyLevel);
     if (!difficultyValidation.valid) {
       return res.status(400).json({
-        error: "Bad Request",
-        message: difficultyValidation.error,
+        success: false,
+        error: { message: difficultyValidation.error },
       });
     }
     const normalizedDifficulty = difficultyValidation.normalized;
@@ -80,21 +120,30 @@ async function handleLockinRequest(req, res) {
     const historyValidation = validateChatHistory(chatHistory);
     if (!historyValidation.valid) {
       return res.status(400).json({
-        error: "Bad Request",
-        message: historyValidation.error,
+        success: false,
+        error: { message: historyValidation.error },
       });
     }
     const sanitizedHistory = historyValidation.sanitized;
     const isInitialRequest = sanitizedHistory.length === 0;
 
+    // Use the selected mode for the first answer, then general chat for follow-ups
+    const effectiveMode = isInitialRequest ? mode : "general";
+
     // Validate selection (required for initial request)
     const selection = selectionFromBody || legacyText || "";
     if (isInitialRequest) {
+      if (!selection || selection.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: { message: "Selection is required for initial requests" },
+        });
+      }
       const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, "Selection");
       if (!selectionValidation.valid) {
         return res.status(400).json({
-          error: "Bad Request",
-          message: selectionValidation.error,
+          success: false,
+          error: { message: selectionValidation.error },
         });
       }
     } else if (selection) {
@@ -102,10 +151,18 @@ async function handleLockinRequest(req, res) {
       const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, "Selection");
       if (!selectionValidation.valid) {
         return res.status(400).json({
-          error: "Bad Request",
-          message: selectionValidation.error,
+          success: false,
+          error: { message: selectionValidation.error },
         });
       }
+    }
+
+    // Validate mode exists
+    if (!mode) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "Mode is required" },
+      });
     }
 
     // Validate new user message if provided
@@ -114,8 +171,8 @@ async function handleLockinRequest(req, res) {
       const messageValidation = validateText(newUserMessage, MAX_USER_MESSAGE_LENGTH, "Follow-up message");
       if (!messageValidation.valid) {
         return res.status(400).json({
-          error: "Bad Request",
-          message: messageValidation.error,
+          success: false,
+          error: { message: messageValidation.error },
         });
       }
       trimmedUserMessage = messageValidation.sanitized;
@@ -126,8 +183,8 @@ async function handleLockinRequest(req, res) {
       const chatIdValidation = validateUUID(incomingChatId);
       if (!chatIdValidation.valid) {
         return res.status(400).json({
-          error: "Bad Request",
-          message: chatIdValidation.error,
+          success: false,
+          error: { message: chatIdValidation.error },
         });
       }
     }
@@ -137,8 +194,8 @@ async function handleLockinRequest(req, res) {
     if (!userId) {
       // This should not happen if requireSupabaseUser is working correctly
       return res.status(500).json({
-        error: "Internal Server Error",
-        message: "User context missing for authenticated request.",
+        success: false,
+        error: { message: "User context missing for authenticated request." },
       });
     }
 
@@ -146,8 +203,8 @@ async function handleLockinRequest(req, res) {
 
     if (!limitCheck.allowed) {
       return res.status(429).json({
-        error: "Daily limit reached",
-        limit: DAILY_REQUEST_LIMIT,
+        success: false,
+        error: { message: "Daily limit reached" },
       });
     }
 
@@ -156,8 +213,8 @@ async function handleLockinRequest(req, res) {
       chatRecord = await getChatById(userId, incomingChatId);
       if (!chatRecord) {
         return res.status(404).json({
-          error: "Chat not found",
-          message: "The requested chat does not exist for this user.",
+          success: false,
+          error: { message: "The requested chat does not exist for this user." },
         });
       }
     } else {
@@ -171,68 +228,81 @@ async function handleLockinRequest(req, res) {
       chat_id: chatId,
       user_id: userId,
       role: "user",
-      mode,
+      mode: effectiveMode,
       source: "highlight",
       input_text: userInputText,
       output_text: null,
     });
 
-    const aiResponse = await generateLockInResponse({
-      selection: selection.trim(),
-      mode,
-      targetLanguage: normalizedLanguage,
-      difficultyLevel: normalizedDifficulty,
-      chatHistory: sanitizedHistory,
-      newUserMessage: trimmedUserMessage,
-    });
+    // Use structured response for initial requests (no chat history or new selection)
+    // For follow-up messages with existing chat history, we still use the structured response
+    // but the model will generate based on the selection and context
+    // Selection is required for generateStructuredStudyResponse (even for follow-ups, it's the original selection)
+    const trimmedSelection = selection.trim();
+    if (!trimmedSelection) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "Selection is required. Please provide the original selected text." },
+      });
+    }
 
-    const promptTokens = aiResponse.usage?.prompt_tokens ?? 0;
-    const completionTokens = aiResponse.usage?.completion_tokens ?? 0;
+    let structuredResponse;
+    try {
+      structuredResponse = await generateStructuredStudyResponse({
+        mode: effectiveMode,
+        selection: trimmedSelection,
+        pageContext,
+        pageUrl,
+        courseCode,
+        language,
+        targetLanguage: effectiveMode === "translate" ? (targetLanguage || language) : undefined,
+        difficultyLevel: normalizedDifficulty,
+        chatHistory: sanitizedHistory,
+        newUserMessage: trimmedUserMessage || undefined,
+      });
+    } catch (error) {
+      console.error("Error generating structured study response:", error);
+      return res.status(500).json({
+        success: false,
+        error: { message: error.message || "Failed to generate study response. Please try again." },
+      });
+    }
 
+    // Store the explanation as the output text (for now, we don't persist notes/todos yet)
     await insertChatMessage({
       chat_id: chatId,
       user_id: userId,
       role: "assistant",
-      mode,
+      mode: effectiveMode,
       source: "highlight",
       input_text: null,
-      output_text: aiResponse.answer,
+      output_text: structuredResponse.explanation,
     });
 
     await touchChat(chatId);
 
-    // Fire‑and‑forget logging – we don't want failures here to break the flow
-    supabase
-      .from("ai_requests")
-      .insert([
-        {
-          user_id: userId,
-          mode,
-          tokens_in: promptTokens,
-          tokens_out: completionTokens,
-        },
-      ])
-      .then(() => {})
-      .catch((logError) => {
-        console.error("Failed to log ai_requests row:", logError.message);
-      });
+    // For now, we don't log token usage from structured responses
+    // This can be added later if needed
 
     return res.json({
+      success: true,
+      data: {
+        mode: structuredResponse.mode,
+        explanation: structuredResponse.explanation,
+        notes: structuredResponse.notes,
+        todos: structuredResponse.todos,
+        tags: structuredResponse.tags,
+        difficulty: structuredResponse.difficulty,
+      },
       chatId,
-      mode,
-      targetLanguage: normalizedLanguage,
-      difficultyLevel: normalizedDifficulty,
-      answer: aiResponse.answer,
-      chatHistory: aiResponse.chatHistory,
-      usage: aiResponse.usage,
     });
   } catch (error) {
     console.error("Error processing /api/lockin request:", error);
 
     // Don't expose internal errors to client
     return res.status(500).json({
-      error: "Internal Server Error",
-      message: "Failed to process your request. Please try again.",
+      success: false,
+      error: { message: "Failed to process your request. Please try again." },
     });
   }
 }

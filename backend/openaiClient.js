@@ -171,6 +171,226 @@ async function generateLockInResponse(options) {
   };
 }
 
+/**
+ * @typedef {Object} StudyResponse
+ * @property {string} mode - The mode used ("explain" | "simplify" | "translate" | "general")
+ * @property {string} explanation - The main answer/explanation for the user
+ * @property {Array<{title: string, content: string, type: string}>} notes - Array of possible notes to save
+ * @property {Array<{title: string, description: string}>} todos - Array of possible tasks
+ * @property {string[]} tags - Array of topic tags
+ * @property {"easy" | "medium" | "hard"} difficulty - Estimated difficulty of the selected text
+ */
+
+/**
+ * Generate a structured study response with explanation, notes, todos, tags, and difficulty
+ * @param {Object} options - Request options
+ * @param {string} options.mode - Mode: "explain" | "simplify" | "translate" | "general"
+ * @param {string} options.selection - The highlighted text (required)
+ * @param {string} [options.pageContext] - Optional extra surrounding text or page summary
+ * @param {string} [options.pageUrl] - Optional page URL
+ * @param {string} [options.courseCode] - Optional course code (e.g. "FIT2101")
+ * @param {string} [options.language] - UI language (e.g. "en")
+ * @param {string} [options.targetLanguage] - Target language for translate mode
+ * @param {string} [options.difficultyLevel] - Difficulty level (e.g. "highschool", "university")
+ * @param {Array<{role: string, content: string}>} [options.chatHistory] - Previous messages
+ * @param {string} [options.newUserMessage] - Follow-up question from the user
+ * @returns {Promise<StudyResponse>}
+ */
+async function generateStructuredStudyResponse(options) {
+  const {
+    mode = "explain",
+    selection,
+    pageContext,
+    pageUrl,
+    courseCode,
+    language = "en",
+    targetLanguage,
+    difficultyLevel = "university",
+    chatHistory = [],
+    newUserMessage,
+  } = options;
+
+  if (!selection || typeof selection !== "string" || selection.trim().length === 0) {
+    throw new Error("Selection is required and must be a non-empty string");
+  }
+
+  // Build system prompt that adapts by mode
+  let modeInstruction = "";
+  switch (mode) {
+    case "explain":
+      modeInstruction =
+        "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
+      break;
+    case "simplify":
+      modeInstruction =
+        "Provide a simpler explanation in the 'explanation' field aimed at a university student. Use accessible vocabulary and short sentences.";
+      break;
+    case "translate":
+      modeInstruction = `Translate the selection into ${toLanguageName(
+        targetLanguage || language
+      )} in the 'explanation' field. Still extract notes if sensible for the translated content.`;
+      break;
+    case "general":
+      modeInstruction =
+        "Treat this as general Q&A about the selection/context. Provide a helpful explanation in the 'explanation' field.";
+      break;
+    default:
+      modeInstruction =
+        "Provide a clear explanation in the 'explanation' field. Create notes and todos if relevant.";
+  }
+
+  const contextParts = [];
+  if (pageContext) {
+    contextParts.push(`Page context: ${pageContext}`);
+  }
+  if (pageUrl) {
+    contextParts.push(`Page URL: ${pageUrl}`);
+  }
+  if (courseCode) {
+    contextParts.push(`Course code: ${courseCode}`);
+  }
+  const contextInfo = contextParts.length > 0 ? `\n\n${contextParts.join("\n")}` : "";
+
+  // Build difficulty instruction
+  const difficultyInstruction = difficultyLevel 
+    ? `Match the student's ${difficultyLevel} level in your explanation.`
+    : "";
+
+  const systemPrompt = `You are Lock-in, a helpful AI study assistant. Your task is to analyze the selected text and return a structured JSON response.
+
+${modeInstruction}
+${difficultyInstruction ? `\n${difficultyInstruction}` : ""}
+
+Use the provided context (page context, course code, page URL) to improve the quality of tags and notes.
+
+IMPORTANT: You MUST return ONLY a valid JSON object with this exact structure:
+{
+  "explanation": "string - the main answer/explanation for the user",
+  "notes": [{"title": "string", "content": "string", "type": "string"}],
+  "todos": [{"title": "string", "description": "string"}],
+  "tags": ["string"],
+  "difficulty": "easy" | "medium" | "hard"
+}
+
+Do NOT include any markdown, code blocks, or extra text. Return ONLY the JSON object.
+
+Guidelines:
+- explanation: The main answer based on the mode (explain/simplify/translate/general)
+- notes: Array of study notes that could be saved (title, content, type like "definition", "formula", "concept", etc.)
+- todos: Array of study tasks (title, description)
+- tags: Array of topic tags relevant to the content
+- difficulty: Estimate the difficulty level of the selected text
+
+Selected text:
+${selection}${contextInfo}`;
+
+  // Build messages array starting with system prompt
+  const messages = [{ role: "system", content: systemPrompt }];
+
+  // Append sanitized chat history if available
+  if (Array.isArray(chatHistory) && chatHistory.length > 0) {
+    const safeHistory = sanitizeHistory(chatHistory);
+    messages.push(...safeHistory);
+  }
+
+  // Add final user message (either follow-up or initial request)
+  let userContent;
+  if (newUserMessage && newUserMessage.trim().length > 0) {
+    userContent = `The student has asked a follow-up question about the selected text and the previous explanation:
+
+"${newUserMessage.trim()}"
+
+Using the selected text, the previous conversation, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
+  } else {
+    userContent = "Analyze the selected text and return the structured JSON response described in the system message.";
+  }
+
+  messages.push({ role: "user", content: userContent });
+
+  // Clamp history before sending to OpenAI
+  const finalMessages = clampHistory(messages);
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: DEFAULT_MODEL,
+      messages: finalMessages,
+      temperature: 0.4,
+      max_tokens: 1500,
+      response_format: { type: "json_object" },
+    });
+
+    const content = completion.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("No response content from OpenAI");
+    }
+
+    // Parse JSON response
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch (parseError) {
+      throw new Error(
+        `Failed to parse JSON response: ${parseError.message}. Response: ${content.substring(0, 200)}`
+      );
+    }
+
+    // Validate required fields
+    if (typeof parsed.explanation !== "string") {
+      throw new Error("Response missing or invalid 'explanation' field");
+    }
+    if (!Array.isArray(parsed.notes)) {
+      parsed.notes = [];
+    }
+    if (!Array.isArray(parsed.todos)) {
+      parsed.todos = [];
+    }
+    if (!Array.isArray(parsed.tags)) {
+      parsed.tags = [];
+    }
+    if (!["easy", "medium", "hard"].includes(parsed.difficulty)) {
+      parsed.difficulty = "medium";
+    }
+
+    // Validate notes structure
+    parsed.notes = parsed.notes
+      .filter((note) => note && typeof note.title === "string" && typeof note.content === "string")
+      .map((note) => ({
+        title: note.title,
+        content: note.content,
+        type: typeof note.type === "string" ? note.type : "general",
+      }));
+
+    // Validate todos structure
+    parsed.todos = parsed.todos
+      .filter(
+        (todo) => todo && typeof todo.title === "string" && typeof todo.description === "string"
+      )
+      .map((todo) => ({
+        title: todo.title,
+        description: todo.description,
+      }));
+
+    // Validate tags
+    parsed.tags = parsed.tags.filter((tag) => typeof tag === "string" && tag.trim().length > 0);
+
+    // Add mode to response
+    return {
+      mode,
+      explanation: parsed.explanation,
+      notes: parsed.notes,
+      todos: parsed.todos,
+      tags: parsed.tags,
+      difficulty: parsed.difficulty,
+    };
+  } catch (error) {
+    if (error.message && error.message.includes("JSON")) {
+      throw error;
+    }
+    throw new Error(`Failed to generate structured study response: ${error.message}`);
+  }
+}
+
 module.exports = {
   generateLockInResponse,
+  generateStructuredStudyResponse,
 };

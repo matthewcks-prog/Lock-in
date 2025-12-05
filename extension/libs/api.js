@@ -6,6 +6,24 @@
  */
 
 /**
+ * @typedef {Object} StudyResponse
+ * @property {string} mode - The mode used ("explain" | "simplify" | "translate" | "general")
+ * @property {string} explanation - The main answer/explanation for the user
+ * @property {Array<{title: string, content: string, type: string}>} notes - Array of possible notes to save
+ * @property {Array<{title: string, description: string}>} todos - Array of possible tasks
+ * @property {string[]} tags - Array of topic tags
+ * @property {"easy" | "medium" | "hard"} difficulty - Estimated difficulty of the selected text
+ */
+
+/**
+ * @typedef {Object} LockInApiResponse
+ * @property {boolean} success - Whether the request was successful
+ * @property {StudyResponse} [data] - Response data if success is true
+ * @property {{message: string}} [error] - Error information if success is false
+ * @property {string} [chatId] - Chat ID if available
+ */
+
+/**
  * Get the backend URL from config
  * @returns {string}
  */
@@ -43,7 +61,13 @@ async function createApiError(response, originalError = null) {
   
   try {
     const errorBody = await response.json();
-    errorMessage = errorBody?.message || errorBody?.error || errorMessage;
+    // Handle new format: { success: false, error: { message } }
+    // Also handle legacy format: { message, error }
+    errorMessage =
+      errorBody?.error?.message ||
+      errorBody?.message ||
+      (typeof errorBody?.error === "string" ? errorBody.error : null) ||
+      errorMessage;
     
     // Map status codes to error codes
     if (response.status === 401 || response.status === 403) {
@@ -128,15 +152,26 @@ async function apiRequest(endpoint, options = {}) {
     }
   }
   
-  // Handle errors
+  // Handle HTTP errors
   if (!response.ok) {
     throw await createApiError(response);
   }
   
   // Parse and return response
   try {
-    return await response.json();
+    const data = await response.json();
+    // Check for success: false in response body (even if HTTP status is 200)
+    if (data && data.success === false) {
+      const error = new Error(data.error?.message || "Request failed");
+      error.code = data.error?.code || "API_ERROR";
+      throw error;
+    }
+    return data;
   } catch (parseError) {
+    // If it's already an Error we threw, re-throw it
+    if (parseError instanceof Error && parseError.code) {
+      throw parseError;
+    }
     const error = new Error("Failed to parse API response");
     error.code = "PARSE_ERROR";
     error.cause = parseError;
@@ -148,13 +183,17 @@ async function apiRequest(endpoint, options = {}) {
  * Process text with Lock-in AI
  * @param {Object} params - Request parameters
  * @param {string} params.selection - Selected text
- * @param {string} params.mode - Mode: "explain" | "simplify" | "translate"
+ * @param {string} params.mode - Mode: "explain" | "simplify" | "translate" | "general"
  * @param {string} [params.targetLanguage] - Target language code
  * @param {string} [params.difficultyLevel] - Difficulty level
  * @param {Array} [params.chatHistory] - Previous chat messages
  * @param {string} [params.newUserMessage] - New user message
  * @param {string} [params.chatId] - Existing chat ID
- * @returns {Promise<Object>}
+ * @param {string} [params.pageContext] - Optional page context
+ * @param {string} [params.pageUrl] - Optional page URL
+ * @param {string} [params.courseCode] - Optional course code
+ * @param {string} [params.language] - UI language
+ * @returns {Promise<LockInApiResponse>}
  */
 async function processText(params) {
   const {
@@ -165,6 +204,10 @@ async function processText(params) {
     chatHistory = [],
     newUserMessage,
     chatId,
+    pageContext,
+    pageUrl,
+    courseCode,
+    language = "en",
   } = params;
   
   // Normalize chat history
@@ -194,6 +237,22 @@ async function processText(params) {
   
   if (chatId) {
     body.chatId = chatId;
+  }
+
+  if (pageContext) {
+    body.pageContext = pageContext;
+  }
+
+  if (pageUrl) {
+    body.pageUrl = pageUrl;
+  }
+
+  if (courseCode) {
+    body.courseCode = courseCode;
+  }
+
+  if (language) {
+    body.language = language;
   }
   
   return apiRequest("/api/lockin", {
