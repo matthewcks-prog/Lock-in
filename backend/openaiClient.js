@@ -67,12 +67,16 @@ function buildInitialHistory({
     targetLanguage,
   });
 
-  const userMessage = {
-    role: "user",
-    content: `Original text:\n${selection}`,
-  };
+  // Include the original text only if we have a selection
+  // This provides context for the system message
+  const userMessage = selection
+    ? {
+        role: "user",
+        content: `Original text:\n${selection}`,
+      }
+    : null;
 
-  return [systemMessage, userMessage];
+  return userMessage ? [systemMessage, userMessage] : [systemMessage];
 }
 
 function sanitizeHistory(history = []) {
@@ -137,12 +141,14 @@ async function generateLockInResponse(options) {
     ? baseHistory
     : buildInitialHistory({ selection, mode, difficultyLevel, targetLanguage });
 
-  if (!messages.some((msg) => msg.role === "system")) {
-    messages = [
-      buildSystemMessage({ mode, difficultyLevel, targetLanguage }),
-      ...messages,
-    ];
-  }
+  // Always replace or add the system message to ensure the current mode directive is used
+  const systemMessage = buildSystemMessage({
+    mode,
+    difficultyLevel,
+    targetLanguage,
+  });
+  const messagesWithoutSystem = messages.filter((msg) => msg.role !== "system");
+  messages = [systemMessage, ...messagesWithoutSystem];
 
   let workingHistory = messages;
 

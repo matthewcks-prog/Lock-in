@@ -1,128 +1,199 @@
-## Lock-in Code Overview
+# Lock-in Code Overview
 
-This document gives a **minimal technical map of the code** so you can quickly understand how the system works.
-
----
+This document provides a technical overview of the Lock-in codebase architecture and structure.
 
 ## High-Level Architecture
 
-- **Chrome extension** (`extension/`) runs in the browser, renders the Lock-in UI, and calls the backend.
+- **Chrome Extension** (`extension/`) runs in the browser, renders the Lock-in sidebar UI, and communicates with the backend
 - **Backend API** (`backend/`) is a Node.js/Express server that:
   - Handles authentication and rate limiting
-  - Talks to Supabase for persistence
-  - Calls OpenAI for Explain/Simplify/Translate
+  - Persists chat data to Supabase
+  - Calls OpenAI for Explain/Simplify/Translate responses
 
-Data flow:
-
-1. User highlights text in the page → extension captures selection.
-2. Extension builds a payload (mode, text, user/session info, chat state).
-3. Request goes to the backend (`/api/lockin` and related chat endpoints).
-4. Backend validates/authenticates, calls OpenAI, stores/loads chat, and returns JSON.
-5. Extension updates the in-page bubble and history UI.
-
----
-
-## Backend Structure (`backend/`)
-
-- `app.js`  
-  - Builds and configures the Express app: JSON parsing, CORS, logging, error handling.
-  - Wires up routes from `routes/lockinRoutes.js`.
-
-- `index.js`  
-  - Entry point used by `npm start` / `npm run dev`.  
-  - Loads config, creates the HTTP server, and starts listening on the configured port.
-
-- `config.js`  
-  - Central place for environment variables and configuration (OpenAI keys, Supabase URLs, CORS origins, port, rate limits).
-
-- `routes/lockinRoutes.js`  
-  - Defines the HTTP routes (e.g. `/api/lockin`, chat history, delete chat).  
-  - Attaches middleware like auth and rate limiting, then delegates to `lockinController`.
-
-- `controllers/lockinController.js`  
-  - Core request handlers:
-    - Reads request body (text, mode, targetLanguage, chatId, etc.).
-    - Uses `chatRepository` to load/store chats.
-    - Uses `openaiClient` to get Explain/Simplify/Translate responses.
-    - Shapes the JSON that the extension consumes.
-
-- `authMiddleware.js`  
-  - Validates the Supabase (or JWT-style) `Authorization: Bearer <token>` header.
-  - Attaches the authenticated user (e.g. `req.user`) for downstream handlers.
-
-- `rateLimiter.js`  
-  - Express middleware to guard endpoints against abusive usage.
-  - Configured using values from `config.js`.
-
-- `supabaseClient.js`  
-  - Creates and exports a configured Supabase client instance.
-  - Used wherever database access is required.
-
-- `chatRepository.js`  
-  - Small data-access layer wrapping Supabase:
-    - Create/read/update/delete chats.
-    - Store and fetch chat messages.
-    - Ensure operations are scoped to the authenticated user.
-
-- `openaiClient.js`  
-  - Wraps the OpenAI SDK.
-  - Exposes functions that accept mode + text (+ language, difficulty, history) and return structured results.
-
----
+**Data Flow:**
+1. User highlights text (Ctrl/Cmd + select) → extension captures selection
+2. Extension builds payload (mode, text, user/session info, chat state)
+3. Request goes to backend (`/api/lockin` and related chat endpoints)
+4. Backend validates/authenticates, calls OpenAI, stores/loads chat, returns JSON
+5. Extension updates sidebar with response and chat history
 
 ## Extension Structure (`extension/`)
 
-- `manifest.json`  
-  - Chrome Extension manifest (permissions, content scripts, background service worker, icons).
+### Core Files
 
-- `config.js`  
-  - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key).
-  - Single source of truth for runtime URLs used by the extension.
+- **`manifest.json`**
+  - Chrome Extension manifest (permissions, content scripts, background service worker, icons)
+  - Declares minimal required permissions
 
-- `contentScript.js`  
-  - Injected into webpages; owns the **in-page UI**:
-    - Detects text selection and shows the Lock-in bubble.
-    - Manages modes (Explain/Simplify/Translate) and the minimized pill / expanded bubble.
-    - Renders chat history list and attaches delete/select handlers.
-    - Builds requests to the backend and handles responses.
-  - This is the primary place to look for client-side logic and UI behavior.
+- **`config.js`**
+  - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key)
+  - Single source of truth for runtime URLs
 
-- `contentScript.css`  
-  - Styling for everything drawn inside the page:
-    - Bubble, overlay, minimized pill, mode selector, history list, dialogs, animations.
+- **`contentScript.js`**
+  - Main orchestrator injected into webpages
+  - Handles text selection detection (Ctrl/Cmd + select)
+  - Manages sidebar state and rendering
+  - Coordinates API calls and chat history
+  - Uses messaging system for communication
 
-- `lockin-widget.js` / `lockin-widget.css`  
-  - Encapsulated “widget” logic and styles used by the content script to render the modern, refactored UI.
+- **`lockin-sidebar.js`**
+  - Sidebar component class
+  - Handles open/close, resize functionality
+  - Manages responsive behavior (desktop vs mobile)
+  - Dispatches custom events for content script
 
-- `background.js`  
-  - Service worker:
-    - Registers context menu items (e.g. “Lock-in: Explain/Simplify/Translate”).
-    - Bridges context menu actions to the content script.
+- **`background.js`**
+  - Service worker for background tasks
+  - Registers context menu items
+  - Manages per-tab session storage
+  - Handles extension lifecycle events
 
-- `popup.html`, `popup.js`, `popup.css`  
-  - Toolbar popup UI:
-    - Sign in / sign out via Supabase.
-    - User preferences (language, difficulty, theme, etc.).
-    - Stores settings and sessions in Chrome storage.
+- **`popup.js`**
+  - Toolbar popup UI logic
+  - Sign in / sign out via Supabase
+  - User preferences (language, difficulty, theme)
+  - Settings persistence
 
-- `supabaseAuth.js`  
-  - Handles Supabase auth from the extension:
-    - Sign-in / sign-up flows.
-    - Token storage/refresh.
-    - Exposes helpers the content script and popup can call.
+### Shared Modules
 
-- `chatHistoryUtils.js`  
-  - Utility helpers for chat history:
-    - Formatting entries.
-    - Sorting / limiting lists.
-    - Mapping raw backend responses into the structures the UI expects.
+- **`messaging.js`**
+  - Typed message system for extension communication
+  - Defines message types and response shapes
+  - Validates messages and handles errors
 
----
+- **`storage.js`**
+  - Wrapper for chrome.storage operations
+  - Provides async/await interface
+  - Handles errors and defaults
 
-## Where to Start Reading the Code
+- **`api.js`**
+  - Backend API client wrapper
+  - Handles authentication tokens
+  - Error handling and retries
+  - Request/response transformation
 
-- **Extension behavior & UI**: start with `extension/contentScript.js` and `extension/lockin-widget.js`, then open `contentScript.css`.
-- **Backend request flow**: start with `backend/routes/lockinRoutes.js`, then `controllers/lockinController.js`, and follow into `chatRepository.js` and `openaiClient.js`.
-- **Auth & persistence**: read `supabaseAuth.js` (extension) alongside `authMiddleware.js` and `supabaseClient.js` (backend).
+- **`supabaseAuth.js`**
+  - Supabase authentication handling
+  - Sign-in / sign-up flows
+  - Token storage/refresh
+  - Session management
 
+- **`chatHistoryUtils.js`**
+  - Utility helpers for chat history
+  - Formatting, sorting, limiting
+  - HTML escaping for XSS prevention
 
+### Styling
+
+- **`contentScript.css`**
+  - All sidebar and UI styling
+  - Responsive breakpoints
+  - Theme variables
+  - Resize handle styles
+
+## Backend Structure (`backend/`)
+
+### Entry Point
+
+- **`index.js`**
+  - Server entry point
+  - Loads config, creates HTTP server
+  - Starts listening on configured port
+
+### Application Setup
+
+- **`app.js`**
+  - Express application factory
+  - Configures middleware (CORS, JSON parsing, logging)
+  - Wires up routes
+  - Error handling
+
+- **`config.js`**
+  - Centralized configuration
+  - Environment variables
+  - Request limits, rate limits
+  - CORS origin validation
+
+### Routes & Controllers
+
+- **`routes/lockinRoutes.js`**
+  - HTTP route definitions
+  - Attaches middleware (auth, rate limiting)
+  - Delegates to controllers
+
+- **`controllers/lockinController.js`**
+  - Request handlers:
+    - `handleLockinRequest` - Main AI processing endpoint
+    - `listChats` - Get recent chats
+    - `deleteChat` - Delete a chat
+    - `listChatMessages` - Get messages for a chat
+  - Input validation
+  - Error handling
+
+### Data Layer
+
+- **`chatRepository.js`**
+  - Database access layer
+  - Create/read/update/delete chats
+  - Store and fetch chat messages
+  - User-scoped operations
+
+- **`supabaseClient.js`**
+  - Configured Supabase client instance
+  - Used for all database operations
+
+### External Services
+
+- **`openaiClient.js`**
+  - OpenAI SDK wrapper
+  - Exposes functions for Explain/Simplify/Translate
+  - Handles prompt construction
+  - Response formatting
+
+### Middleware
+
+- **`authMiddleware.js`**
+  - Validates Supabase JWT tokens
+  - Attaches user context to requests
+  - Handles token refresh
+
+- **`rateLimiter.js`**
+  - Per-user rate limiting
+  - Daily request limits
+  - Uses Supabase for persistence
+
+## Key Design Patterns
+
+### Extension
+
+1. **Messaging Pattern**: All communication between background, content, and popup uses typed messages
+2. **Event-Driven**: Sidebar dispatches custom events for content script to handle
+3. **Storage Abstraction**: All chrome.storage access goes through storage.js wrapper
+4. **API Abstraction**: All backend calls go through api.js wrapper
+
+### Backend
+
+1. **Layered Architecture**: Routes → Controllers → Repository → Database
+2. **Middleware Chain**: Auth → Rate Limit → Validation → Handler
+3. **Error Handling**: Consistent error responses, no internal details exposed
+4. **Configuration**: All env vars accessed through config.js
+
+## Security Considerations
+
+- **Extension**: Never stores API keys, uses Supabase auth tokens
+- **Backend**: Validates all inputs, rate limits per user, authenticates all requests
+- **Storage**: Sensitive data encrypted by Chrome, user-scoped in database
+- **CORS**: Restricted to Chrome extensions and configured origins
+
+## Testing Strategy
+
+- **Extension**: Unit test utilities (chatHistoryUtils, storage, api)
+- **Backend**: Unit test controllers and repositories (mock Supabase/OpenAI)
+- **Integration**: Test full request flow with test database
+
+## Where to Start Reading
+
+- **Extension behavior & UI**: Start with `extension/contentScript.js`, then `lockin-sidebar.js`
+- **Backend request flow**: Start with `backend/routes/lockinRoutes.js`, then `controllers/lockinController.js`
+- **Auth & persistence**: Read `supabaseAuth.js` (extension) alongside `authMiddleware.js` (backend)
+- **API communication**: Check `api.js` (extension) and `openaiClient.js` (backend)

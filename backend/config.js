@@ -16,7 +16,7 @@ const MAX_USER_MESSAGE_LENGTH = 1500;
 const DAILY_REQUEST_LIMIT =
   parseInt(process.env.DAILY_REQUEST_LIMIT, 10) || 100;
 
-// Number of chats returned in the sidebar by default
+// Number of chats returned in the sidebar by default``
 const DEFAULT_CHAT_LIST_LIMIT =
   parseInt(process.env.CHAT_LIST_LIMIT, 10) || 5;
 

@@ -5,25 +5,20 @@ Express.js backend server that powers the Lock-in Chrome extension.
 ## Quick Start
 
 1. **Install dependencies:**
-
    ```bash
    npm install
    ```
 
 2. **Set up environment:**
-
-   ```bash
-   cp .env.example .env
-   ```
-
-   Then edit `.env` and add your OpenAI API key:
-
-   ```
-   OPENAI_API_KEY=sk-your-key-here
+   Create a `.env` file:
+   ```env
+   OPENAI_API_KEY=your_openai_api_key_here
+   PORT=3000
+   DAILY_REQUEST_LIMIT=100
+   CHAT_LIST_LIMIT=5
    ```
 
 3. **Run development server:**
-
    ```bash
    npm run dev
    ```
@@ -32,6 +27,25 @@ Express.js backend server that powers the Lock-in Chrome extension.
    ```bash
    npm start
    ```
+
+## Project Structure
+
+```
+backend/
+├── index.js              # Server entry point
+├── app.js                # Express application setup
+├── config.js             # Centralized configuration
+├── routes/
+│   └── lockinRoutes.js   # API route definitions
+├── controllers/
+│   └── lockinController.js  # Request handlers
+├── openaiClient.js       # OpenAI API integration
+├── chatRepository.js     # Database operations
+├── supabaseClient.js     # Supabase client
+├── authMiddleware.js     # Authentication middleware
+├── rateLimiter.js        # Rate limiting
+└── package.json          # Dependencies
+```
 
 ## API Documentation
 
@@ -44,11 +58,14 @@ GET /health
 Returns the status of the API.
 
 **Response:**
-
 ```json
 {
   "status": "ok",
-  "message": "Lock-in API is running"
+  "message": "Lock-in API is running",
+  "limits": {
+    "maxSelectionLength": 5000,
+    "maxUserMessageLength": 1500
+  }
 }
 ```
 
@@ -61,95 +78,73 @@ POST /api/lockin
 Process text with AI assistance.
 
 **Request Body:**
-
 ```json
 {
-  "text": "Your selected text here",
+  "selection": "The text to process",
   "mode": "explain",
-  "targetLanguage": "en"
+  "targetLanguage": "en",
+  "difficultyLevel": "highschool",
+  "chatHistory": [],
+  "newUserMessage": "Optional follow-up question",
+  "chatId": "optional-existing-chat-id"
 }
 ```
 
-**Parameters:**
-
-- `text` (required): The text to process (max 5000 characters)
-- `mode` (required): One of `explain`, `simplify`, or `translate`
-- `targetLanguage` (optional): Language code for translations (e.g., 'en', 'es', 'zh')
-
-**Response Examples:**
-
-Explain mode:
-
+**Response:**
 ```json
 {
+  "chatId": "uuid",
   "mode": "explain",
-  "answer": "This is the explanation...",
-  "example": "For example, if you..."
+  "answer": "AI-generated response",
+  "chatHistory": [],
+  "usage": {
+    "prompt_tokens": 100,
+    "completion_tokens": 50
+  }
 }
 ```
 
-Simplify mode:
+### List Chats
 
-```json
-{
-  "mode": "simplify",
-  "answer": "The simplified text..."
-}
+```
+GET /api/chats?limit=10
 ```
 
-Translate mode:
+Get recent chats for authenticated user.
 
-```json
-{
-  "mode": "translate",
-  "answer": "La traducción...",
-  "explanation": "Una breve explicación..."
-}
+### Delete Chat
+
+```
+DELETE /api/chats/:chatId
 ```
 
-**Error Responses:**
+Delete a chat and all its messages.
 
-400 Bad Request:
+### Get Chat Messages
 
-```json
-{
-  "error": "Bad Request",
-  "message": "Text is required and cannot be empty"
-}
+```
+GET /api/chats/:chatId/messages
 ```
 
-500 Internal Server Error:
-
-```json
-{
-  "error": "Internal Server Error",
-  "message": "Failed to process your request. Please try again."
-}
-```
+Get all messages for a specific chat.
 
 ## Environment Variables
 
-| Variable          | Description                    | Default             |
-| ----------------- | ------------------------------ | ------------------- |
-| `OPENAI_API_KEY`  | Your OpenAI API key (required) | -                   |
-| `PORT`            | Server port                    | 3000                |
-| `ALLOWED_ORIGINS` | CORS allowed origins           | chrome-extension:// |
+| Variable              | Description                    | Default |
+| --------------------- | ------------------------------ | ------- |
+| `OPENAI_API_KEY`      | Your OpenAI API key (required) | -       |
+| `PORT`                | Server port                    | 3000    |
+| `DAILY_REQUEST_LIMIT` | Requests per user per day      | 100     |
+| `CHAT_LIST_LIMIT`     | Default chat list size         | 5       |
 
-## Project Structure
+## Security
 
-```
-backend/
-├── index.js          # Main Express application
-├── openaiClient.js   # OpenAI API wrapper
-├── package.json      # Dependencies and scripts
-├── .env.example      # Environment template
-└── .gitignore        # Git ignore rules
-```
-
-## Scripts
-
-- `npm start` - Run production server
-- `npm run dev` - Run development server with auto-reload (nodemon)
+- ✅ All endpoints require authentication (Supabase JWT)
+- ✅ Rate limiting per user (configurable daily limit)
+- ✅ Input validation and sanitization
+- ✅ CORS restricted to Chrome extensions
+- ✅ No sensitive data in logs
+- ✅ Error messages don't expose internal details
 
 ## Dependencies
 
@@ -157,131 +152,26 @@ backend/
 - **cors**: Cross-origin resource sharing
 - **dotenv**: Environment variable management
 - **openai**: Official OpenAI API client
+- **@supabase/supabase-js**: Supabase client library
 
-## Development Dependencies
-
-- **nodemon**: Auto-restart server on file changes
-
-## OpenAI Configuration
-
-The backend uses OpenAI's API with the following configuration:
-
-- **Model**: `gpt-4o-mini` (will be updated to `gpt-5-nano` when available)
-- **Temperature**: 0.7 (balanced creativity)
-- **Max Tokens**: 500 (quick, concise responses)
-
-### Model Notes
-
-Currently using `gpt-4o-mini` as it provides:
-
-- Fast response times
-- Cost-effective for student use cases
-- High-quality explanations
-
-When GPT-5 nano becomes available, update the model name in `openaiClient.js`:
-
-```javascript
-const model = "gpt-5-nano"; // Update this line
-```
-
-## Security Considerations
-
-1. **API Key Protection**: Never commit `.env` file
-2. **Request Validation**: All inputs are validated before processing
-3. **Rate Limiting**: Consider adding rate limiting in production
-4. **CORS**: Configured to accept Chrome extension requests
-5. **Logging**: Production logs don't include full text content
-
-## Deployment
-
-### Local Development
+## Development
 
 ```bash
-npm run dev
+npm run dev  # Starts with nodemon for auto-reload
+npm start    # Production server
 ```
-
-### Production Deployment
-
-#### Option 1: Traditional Hosting
-
-1. Set environment variables on your server
-2. Run `npm install --production`
-3. Start with `npm start`
-
-#### Option 2: Docker
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --production
-COPY . .
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-#### Option 3: Cloud Platforms
-
-- **Heroku**: Add `Procfile` with `web: node index.js`
-- **AWS Lambda**: Use with API Gateway
-- **Google Cloud Run**: Deploy with Docker
-- **Azure App Service**: Deploy directly from GitHub
-
-## Monitoring
-
-Consider adding:
-
-- Request/response logging
-- Error tracking (Sentry)
-- Performance monitoring (New Relic)
-- API usage analytics
 
 ## Testing
-
-To test the API:
 
 ```bash
 # Health check
 curl http://localhost:3000/health
 
-# Test explain mode
+# Test explain mode (requires auth token)
 curl -X POST http://localhost:3000/api/lockin \
   -H "Content-Type: application/json" \
-  -d '{"text":"Photosynthesis is the process by which plants make food","mode":"explain"}'
-
-# Test simplify mode
-curl -X POST http://localhost:3000/api/lockin \
-  -H "Content-Type: application/json" \
-  -d '{"text":"The mitochondria is the powerhouse of the cell","mode":"simplify"}'
-
-# Test translate mode
-curl -X POST http://localhost:3000/api/lockin \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Hello, how are you?","mode":"translate","targetLanguage":"es"}'
-```
-
-## Troubleshooting
-
-### "Cannot find module 'openai'"
-
-Run `npm install` to install dependencies.
-
-### "OPENAI_API_KEY not found"
-
-1. Create `.env` file from `.env.example`
-2. Add your actual API key
-
-### Port already in use
-
-Change the PORT in `.env` or kill the process:
-
-```bash
-# Windows
-netstat -ano | findstr :3000
-taskkill /PID <PID> /F
-
-# Mac/Linux
-lsof -ti:3000 | xargs kill
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"selection":"Photosynthesis is the process","mode":"explain"}'
 ```
 
 ## License

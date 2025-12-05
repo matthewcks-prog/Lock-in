@@ -7,78 +7,66 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 - **Explain**: Get clear, plain-English explanations with concrete examples
 - **Simplify**: Convert complex academic text into easy-to-understand language
 - **Translate**: Translate text into your preferred language with contextual explanations
+- **Sidebar Interface**: Modern right-hand sidebar with chat history and persistent conversations
+- **Resizable Sidebar**: Customize sidebar width (280-500px) with drag-to-resize
+- **Chat History**: Persistent chat sessions saved to Supabase
+- **Authentication**: Secure user authentication via Supabase
 
-## Project Structure
+## Architecture
 
-```
-Lock-in/
-├── backend/              # Node.js + Express API server
-│   ├── index.js         # Main Express application
-│   ├── openaiClient.js  # OpenAI API integration
-│   ├── package.json     # Dependencies and scripts
-│   └── .env.example     # Environment variables template
-│
-├── extension/           # Chrome Extension (Manifest V3)
-│   ├── manifest.json    # Extension configuration
-│   ├── contentScript.js # Text selection and UI
-│   ├── contentScript.css# Styling for UI elements
-│   ├── background.js    # Service worker and context menu
-│   ├── popup.html       # Settings popup UI
-│   ├── popup.js         # Settings logic
-│   ├── popup.css        # Settings styling
-│   └── icons/           # Extension icons
-│
-└── README.md           # This file
-```
+### Extension (`extension/`)
 
-## Tech Stack
+**Core Components:**
+- `contentScript.js` - Main content script orchestrating UI and API calls
+- `lockin-sidebar.js` - Sidebar component with resize functionality
+- `background.js` - Service worker for context menus and session management
+- `popup.js` - Settings and authentication UI
+- `supabaseAuth.js` - Authentication handling
+- `chatHistoryUtils.js` - Chat history utilities
 
-### Backend
+**Shared Modules:**
+- `config.js` - Runtime configuration (backend URL, Supabase credentials)
+- `messaging.js` - Typed message system for extension communication
+- `storage.js` - Wrapper for chrome.storage operations
+- `api.js` - Backend API client wrapper
 
-- **Node.js** with Express
-- **OpenAI API** (GPT-4o-mini, upgradeable to GPT-5 nano when available)
-- **CORS** enabled for extension communication
-- **dotenv** for environment configuration
+### Backend (`backend/`)
 
-### Frontend (Chrome Extension)
-
-- **Manifest V3** (latest Chrome extension format)
-- **Content Scripts** for webpage interaction
-- **Service Worker** for background tasks
-- **Chrome Storage API** for settings persistence
-- **Vanilla JavaScript** (no framework dependencies)
+**Structure:**
+- `index.js` - Server entry point
+- `app.js` - Express application setup
+- `config.js` - Centralized configuration
+- `routes/lockinRoutes.js` - API route definitions
+- `controllers/lockinController.js` - Request handlers
+- `openaiClient.js` - OpenAI API integration
+- `chatRepository.js` - Database operations
+- `supabaseClient.js` - Supabase client
+- `authMiddleware.js` - Authentication middleware
+- `rateLimiter.js` - Rate limiting
 
 ## Setup Instructions
 
 ### 1. Backend Setup
 
 1. Navigate to the backend directory:
-
    ```bash
    cd backend
    ```
 
 2. Install dependencies:
-
    ```bash
    npm install
    ```
 
-3. Create a `.env` file from the template:
-
-   ```bash
-   cp .env.example .env
-   ```
-
-4. Add your OpenAI API key to `.env`:
-
-   ```
-   OPENAI_API_KEY=your_actual_api_key_here
+3. Create a `.env` file:
+   ```env
+   OPENAI_API_KEY=your_openai_api_key_here
    PORT=3000
+   DAILY_REQUEST_LIMIT=100
+   CHAT_LIST_LIMIT=5
    ```
 
-5. Start the development server:
-
+4. Start the development server:
    ```bash
    npm run dev
    ```
@@ -87,38 +75,43 @@ Lock-in/
 
 ### 2. Chrome Extension Setup
 
-1. Open Chrome and navigate to `chrome://extensions/`
+1. Configure `extension/config.js`:
+   ```javascript
+   window.LOCKIN_CONFIG = {
+     BACKEND_URL: "http://localhost:3000",
+     SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
+     SUPABASE_ANON_KEY: "your-anon-key",
+   };
+   ```
 
-2. Enable "Developer mode" (toggle in top-right corner)
+2. Open Chrome and navigate to `chrome://extensions/`
 
-3. Click "Load unpacked"
+3. Enable "Developer mode" (toggle in top-right corner)
 
-4. Select the `extension` folder from this project
+4. Click "Load unpacked"
 
-5. The Lock-in extension should now appear in your extensions list!
+5. Select the `extension` folder
+
+6. The Lock-in extension should now appear in your extensions list!
 
 ### 3. Usage
 
-#### Method 1: Selection Bubble
-
-1. Highlight any text on any webpage
-2. A small bubble will appear with three options: **Explain**, **Simplify**, **Translate**
-3. Click your desired action
-4. View the AI-generated result in an overlay
+#### Method 1: Keyboard Selection
+1. Hold **Ctrl** (Windows/Linux) or **Cmd** (Mac) and highlight any text
+2. The sidebar will open automatically
+3. Choose your mode: **Explain**, **Simplify**, or **Translate**
+4. View the AI-generated result in the sidebar
 
 #### Method 2: Right-Click Context Menu
-
 1. Highlight any text on any webpage
 2. Right-click and select "Lock-in: Explain/Simplify/Translate"
-3. The selection bubble will appear
-4. Choose your desired action
+3. The sidebar will open with the selected mode
 
 #### Customizing Settings
-
 1. Click the Lock-in extension icon in Chrome's toolbar
 2. Adjust your preferred language for translations
 3. Set your difficulty level (High School or First-Year University)
-4. Click "Save Settings"
+4. Settings are automatically saved
 
 ## API Endpoints
 
@@ -127,43 +120,56 @@ Lock-in/
 Main endpoint for processing text.
 
 **Request Body:**
-
 ```json
 {
-  "text": "The text to process",
+  "selection": "The text to process",
   "mode": "explain | simplify | translate",
-  "targetLanguage": "en" // Optional, for translate mode
+  "targetLanguage": "en",
+  "difficultyLevel": "highschool | university",
+  "chatHistory": [],
+  "newUserMessage": "Optional follow-up question",
+  "chatId": "optional-existing-chat-id"
 }
 ```
 
-**Response for "explain" mode:**
-
+**Response:**
 ```json
 {
+  "chatId": "uuid",
   "mode": "explain",
-  "answer": "Clear explanation of the text",
-  "example": "A concrete example"
+  "answer": "AI-generated response",
+  "chatHistory": [],
+  "usage": {
+    "prompt_tokens": 100,
+    "completion_tokens": 50
+  }
 }
 ```
 
-**Response for "simplify" mode:**
+### `GET /api/chats`
 
-```json
-{
-  "mode": "simplify",
-  "answer": "Simplified version of the text"
-}
-```
+List recent chats for authenticated user.
 
-**Response for "translate" mode:**
+**Query Parameters:**
+- `limit` (optional): Number of chats to return (default: 5)
 
-```json
-{
-  "mode": "translate",
-  "answer": "Translated text",
-  "explanation": "Brief explanation in target language"
-}
-```
+### `DELETE /api/chats/:chatId`
+
+Delete a chat and all its messages.
+
+### `GET /api/chats/:chatId/messages`
+
+Get all messages for a specific chat.
+
+## Security
+
+- ✅ API key stored only on backend server
+- ✅ Extension never directly calls OpenAI
+- ✅ All requests authenticated via Supabase JWT
+- ✅ Rate limiting per user (configurable daily limit)
+- ✅ Input validation and sanitization
+- ✅ CORS configured for Chrome extensions only
+- ✅ Text content not logged in production
 
 ## Development
 
@@ -182,67 +188,39 @@ After making changes to the extension:
 2. Click the refresh icon on the Lock-in extension card
 3. Reload any open webpages to see changes
 
-### Environment Variables
+### Code Structure
 
-Create a `.env` file in the `backend` directory:
+The extension follows best practices:
 
-```env
-# Required
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Optional
-PORT=3000
-ALLOWED_ORIGINS=chrome-extension://,http://localhost:3000
-```
-
-## Security Notes
-
-- ✅ API key is **only** stored on the backend server
-- ✅ Extension **never** directly calls OpenAI
-- ✅ All requests go through your controlled backend
-- ✅ Text content is not logged in production (only length and mode)
-- ✅ CORS configured to accept requests from Chrome extensions
-
-## Future Enhancements
-
-- [ ] Add support for multiple AI models
-- [ ] Implement user authentication
-- [ ] Add history/favorites feature
-- [ ] Support for batch processing
-- [ ] Offline mode with cached responses
-- [ ] Browser extension for Firefox and Edge
-- [ ] Dark mode toggle
-- [ ] Export/save responses
-- [ ] Keyboard shortcuts
+- **Separation of Concerns**: Background, content, and popup scripts are clearly separated
+- **Messaging System**: Typed messages for communication between contexts
+- **Storage Wrapper**: Centralized chrome.storage operations
+- **API Client**: Reusable backend communication layer
+- **Error Handling**: Comprehensive error handling throughout
 
 ## Troubleshooting
 
 ### Backend Issues
 
 **Problem**: "OPENAI_API_KEY not found"
-
 - **Solution**: Make sure you created a `.env` file with your API key
 
 **Problem**: "Port 3000 already in use"
-
 - **Solution**: Change the PORT in `.env` or stop other services using port 3000
 
 ### Extension Issues
 
 **Problem**: Extension not loading
-
-- **Solution**: Make sure all files are present, especially `manifest.json`
+- **Solution**: Check that all files are present, especially `manifest.json`
 
 **Problem**: No response when clicking buttons
-
 - **Solution**:
   1. Check that backend is running on `http://localhost:3000`
   2. Check Chrome DevTools Console for errors (F12)
-  3. Verify `BACKEND_URL` in `contentScript.js` matches your backend
+  3. Verify `BACKEND_URL` in `config.js` matches your backend
 
-**Problem**: Context menu not appearing
-
-- **Solution**: Reload the extension at `chrome://extensions/`
+**Problem**: Authentication not working
+- **Solution**: Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `config.js`
 
 ## License
 
@@ -251,10 +229,6 @@ MIT License - See LICENSE file for details
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-## Support
-
-For issues and questions, please open an issue on GitHub.
 
 ---
 
