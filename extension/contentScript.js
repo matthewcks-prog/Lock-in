@@ -50,16 +50,6 @@ const ACCENT_COLORS = {
   ORANGE: { name: "Orange", hex: "#f59e0b" },
 };
 
-// Storage keys for chrome.storage.sync
-const STORAGE_KEYS = {
-  BUBBLE_OPEN: "lockinBubbleOpen",
-  ACTIVE_MODE: "lockinActiveMode",
-  THEME: "lockinTheme",
-  ACCENT_COLOR: "lockinAccentColor",
-  BUBBLE_POSITION: "lockinBubblePosition",
-  BUBBLE_SIZE: "lockinBubbleSize",
-  USER_PROFILE: "lockinUserProfile",
-};
 
 // ===================================
 // State Management
@@ -108,61 +98,84 @@ let lockinWidget = null;
 // The content script must continue to work even if this file fails to load.
 const LockInChatHistoryUtils = window.LockInChatHistoryUtils || null;
 
+// Shared modules (must be loaded before this script)
+const Storage = window.LockInStorage || null;
+const API = window.LockInAPI || null;
+const Messaging = window.LockInMessaging || null;
+const Logger = window.LockInLogger || { debug: () => {}, info: () => {}, warn: console.warn, error: console.error };
+
+// STORAGE_KEYS is loaded globally by libs/storage.js
+// which is loaded before this script in manifest.json
+// Fallback to local definition if not available
+if (typeof STORAGE_KEYS === "undefined") {
+  window.STORAGE_KEYS = {
+    BUBBLE_OPEN: "lockinBubbleOpen",
+    ACTIVE_MODE: "lockinActiveMode",
+    THEME: "lockinTheme",
+    ACCENT_COLOR: "lockinAccentColor",
+    BUBBLE_POSITION: "lockinBubblePosition",
+    BUBBLE_SIZE: "lockinBubbleSize",
+    USER_PROFILE: "lockinUserProfile",
+  };
+}
+
 // ===================================
 // Load persisted UI preferences
 // ===================================
-function loadToggleState() {
-  if (typeof chrome === "undefined" || !chrome.storage) {
+async function loadToggleState() {
+  if (!Storage) {
     return;
   }
 
-  chrome.storage.sync.get(["highlightingEnabled"], (data) => {
-    // Default to true when not explicitly disabled
+  try {
+    const data = await Storage.get("highlightingEnabled");
     highlightingEnabled = data.highlightingEnabled !== false;
-  });
+  } catch (error) {
+    Logger.warn("Failed to load toggle state:", error);
+  }
 }
 
-function loadThemeAndPersonalisation() {
-  if (typeof chrome === "undefined" || !chrome.storage) {
+async function loadThemeAndPersonalisation() {
+  if (!Storage) {
     return;
   }
 
-  chrome.storage.sync.get(
-    [
+  try {
+    const data = await Storage.get([
       STORAGE_KEYS.THEME,
       STORAGE_KEYS.ACCENT_COLOR,
       STORAGE_KEYS.ACTIVE_MODE,
       STORAGE_KEYS.USER_PROFILE,
-    ],
-    (data) => {
-      currentTheme = data[STORAGE_KEYS.THEME] || THEMES.LIGHT;
-      currentAccentColor = data[STORAGE_KEYS.ACCENT_COLOR] || "#667eea";
-      currentMode = data[STORAGE_KEYS.ACTIVE_MODE] || MODES.EXPLAIN;
-      if (data[STORAGE_KEYS.USER_PROFILE]) {
-        userProfile = data[STORAGE_KEYS.USER_PROFILE];
-      }
-      applyTheme();
+    ]);
+    currentTheme = data[STORAGE_KEYS.THEME] || THEMES.LIGHT;
+    currentAccentColor = data[STORAGE_KEYS.ACCENT_COLOR] || "#667eea";
+    currentMode = data[STORAGE_KEYS.ACTIVE_MODE] || MODES.EXPLAIN;
+    if (data[STORAGE_KEYS.USER_PROFILE]) {
+      userProfile = data[STORAGE_KEYS.USER_PROFILE];
     }
-  );
+    applyTheme();
+  } catch (error) {
+    Logger.warn("Failed to load theme and personalisation:", error);
+  }
 }
 
 // ===================================
 // Initialization
 // ===================================
-function init() {
-  loadToggleState();
-  loadThemeAndPersonalisation();
+async function init() {
+  await loadToggleState();
+  await loadThemeAndPersonalisation();
   listenToStorageChanges();
   setupEventListeners();
-  loadStoredChatId();
+  await loadStoredChatId();
   listenToAuthChanges();
 
-  // Initialize widget system
-  if (typeof LockinWidget !== "undefined") {
-    console.log("Lock-in: LockinWidget class found, initializing...");
-    initializeWidget();
+  // Initialize sidebar system (replaces LockinWidget)
+  if (typeof LockinSidebar !== "undefined") {
+    Logger.debug("LockinSidebar class found, initializing...");
+    initializeSidebar();
   } else {
-    console.warn("Lock-in: LockinWidget class not found!");
+    Logger.warn("LockinSidebar class not found!");
   }
 
   // Get tab ID and restore session if available
@@ -172,113 +185,148 @@ function init() {
 }
 
 /**
- * Initialize the Lock-in widget
+ * Initialize the Lock-in sidebar
  */
-function initializeWidget() {
-  console.log("Lock-in: initializeWidget called");
-  lockinWidget = new LockinWidget({
-    autoOpenOnSelection: false,
+function initializeSidebar() {
+  Logger.debug("initializeSidebar called");
+  lockinWidget = new LockinSidebar({
+    sidebarWidth: 380,
   });
-  console.log("Lock-in: LockinWidget instance created:", lockinWidget);
+  Logger.debug("LockinSidebar instance created");
   lockinWidget.init();
-  console.log(
-    "Lock-in: Widget init() called, widget.isOpen:",
-    lockinWidget.isOpen
-  );
+  Logger.debug("Sidebar init() called, sidebar.isOpen:", lockinWidget.isOpen);
 
-  // Listen to widget events
-  window.addEventListener("lockin:open", handleWidgetOpen);
-  window.addEventListener("lockin:close", handleWidgetClose);
-  console.log("Lock-in: Widget event listeners attached");
+  // Listen to sidebar events
+  window.addEventListener("lockin:open", handleSidebarOpen);
+  window.addEventListener("lockin:close", handleSidebarClose);
+  window.addEventListener("lockin:selectChat", handleSelectChat);
+  window.addEventListener("lockin:newChat", handleNewChatEvent);
+  window.addEventListener("lockin:switchMode", handleSwitchModeEvent);
+  window.addEventListener("lockin:sendMessage", handleSendMessageEvent);
+  window.addEventListener("lockin:deleteChat", handleDeleteChatEvent);
+  Logger.debug("Sidebar event listeners attached");
 }
 
 /**
- * Handle widget open event
+ * Handle sidebar open event
  */
-function handleWidgetOpen() {
+async function handleSidebarOpen() {
   isBubbleOpen = true;
-  chrome.storage.sync.set({ [STORAGE_KEYS.BUBBLE_OPEN]: true });
-  renderBubbleContent();
+  if (Storage) {
+    try {
+      await Storage.set(STORAGE_KEYS.BUBBLE_OPEN, true);
+    } catch (error) {
+      Logger.warn("Failed to save sidebar state:", error);
+    }
+  }
+  renderSidebarContent();
 }
 
 /**
- * Handle widget close event
+ * Handle sidebar close event
  */
-function handleWidgetClose() {
+async function handleSidebarClose() {
   isBubbleOpen = false;
-  chrome.storage.sync.set({ [STORAGE_KEYS.BUBBLE_OPEN]: false });
+  if (Storage) {
+    try {
+      await Storage.set(STORAGE_KEYS.BUBBLE_OPEN, false);
+    } catch (error) {
+      Logger.warn("Failed to save sidebar state:", error);
+    }
+  }
 }
 
 /**
- * Render bubble content into widget
+ * Handle select chat event
  */
-function renderBubbleContent() {
+function handleSelectChat(event) {
+  const { chatId } = event.detail;
+  handleHistorySelection(chatId);
+}
+
+/**
+ * Handle new chat event
+ */
+function handleNewChatEvent() {
+  handleNewChatRequest();
+}
+
+/**
+ * Handle switch mode event
+ */
+async function handleSwitchModeEvent(event) {
+  const { mode } = event.detail;
+  if (mode && MODES[Object.keys(MODES).find((k) => MODES[k] === mode)]) {
+    // Only trigger API call if we have a cached selection (active chat context)
+    if (cachedSelection) {
+      currentMode = mode;
+      if (Storage) {
+        try {
+          await Storage.set(STORAGE_KEYS.ACTIVE_MODE, mode);
+        } catch (error) {
+          Logger.warn("Failed to save active mode:", error);
+        }
+      }
+      // Reset chat history to get fresh response for the new mode
+      chatHistory = [];
+      // Make a new API call with the new mode
+      runMode(mode);
+    }
+  }
+}
+
+/**
+ * Handle send message event
+ */
+function handleSendMessageEvent() {
+  handleFollowUpSubmit();
+}
+
+/**
+ * Handle delete chat event
+ */
+function handleDeleteChatEvent(event) {
+  const { chatId } = event.detail;
+  handleDeleteChat(chatId);
+}
+
+/**
+ * Render sidebar content
+ */
+function renderSidebarContent() {
   if (!lockinWidget) {
     return;
   }
 
-  const bubbleElement = lockinWidget.getBubbleElement();
-  // Keep a reference so legacy helpers (scrollChatToBottom, etc.) can work
-  // with the widget-based bubble element.
-  activeBubble = bubbleElement;
-  const chatHtml = buildChatMessagesHtml(chatHistory);
-  const sendDisabled = isChatLoading || pendingInputValue.trim().length === 0;
-  const layoutClass = isHistoryPanelOpen
-    ? "lockin-history-open"
-    : "lockin-history-collapsed";
-
-  if (!hasLoadedChats && !isHistoryLoading) {
-    loadRecentChats({ silent: true });
+  const sidebarElement = lockinWidget.getSidebarElement();
+  if (!sidebarElement) {
+    return;
   }
 
-  bubbleElement.innerHTML = `
-    <div class="lockin-bubble-layout ${layoutClass}">
-      ${buildHistoryPanelHtml()}
-      <div class="lockin-chat-panel">
-        <div class="lockin-bubble-header lockin-drag-handle">
-          <div class="lockin-header-left">
-            <button class="lockin-history-toggle" type="button" title="Toggle chat history">
-              ${isHistoryPanelOpen ? "&lt;" : "&gt;"}
-            </button>
-            ${buildModeSelector()}
-          </div>
-        </div>
-        <div class="lockin-chat-body">
-          <div class="lockin-chat-messages">${chatHtml}</div>
-          <div class="lockin-chat-input">
-            <textarea class="lockin-chat-textarea" id="lockin-chat-input" name="lockin-chat-input" rows="2" placeholder="Ask a follow-up question..." ${
-              isChatLoading ? "disabled" : ""
-            }></textarea>
-            <button class="lockin-send-btn" type="button" ${
-              sendDisabled ? "disabled" : ""
-            }>Send</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+  // Build each section separately
+  const modesHtml = buildModeSelector();
+  const chatHtml = buildChatSection();
+  const historyHtml = buildHistorySection();
 
-  attachBubbleEventListeners(bubbleElement);
+  // Render using sidebar's renderContent method
+  lockinWidget.renderContent({
+    modes: modesHtml,
+    chat: chatHtml,
+    history: historyHtml,
+  });
+
+  // Attach textarea and input listeners after rendering
+  attachSidebarInputListeners(sidebarElement);
+
   scrollChatToBottom();
 }
 
 /**
- * Attach event listeners to bubble content
+ * Attach event listeners to sidebar input elements
  */
-function attachBubbleEventListeners(bubbleElement) {
-  // History toggle
-  const historyToggle = bubbleElement.querySelector(".lockin-history-toggle");
-  if (historyToggle) {
-    historyToggle.addEventListener("click", (e) => {
-      e.stopPropagation();
-      isHistoryPanelOpen = !isHistoryPanelOpen;
-      renderBubbleContent();
-    });
-  }
-
-  // Chat input and send button
-  const textarea = bubbleElement.querySelector(".lockin-chat-textarea");
-  const sendBtn = bubbleElement.querySelector(".lockin-send-btn");
+function attachSidebarInputListeners(sidebarElement) {
+  const textarea = sidebarElement.querySelector(".lockin-chat-textarea");
+  const sendBtn = sidebarElement.querySelector(".lockin-send-btn");
 
   if (textarea) {
     textarea.value = pendingInputValue;
@@ -297,159 +345,77 @@ function attachBubbleEventListeners(bubbleElement) {
       }
     });
   }
+}
 
-  if (sendBtn) {
-    sendBtn.addEventListener("click", () => handleFollowUpSubmit());
+/**
+ * Build the chat section HTML
+ */
+function buildChatSection() {
+  const chatHtml = buildChatMessagesHtml(chatHistory);
+  const sendDisabled = isChatLoading || pendingInputValue.trim().length === 0;
+
+  return `
+    <div class="lockin-chat-messages">${chatHtml}</div>
+    <div class="lockin-chat-input">
+      <textarea class="lockin-chat-textarea" id="lockin-chat-input" name="lockin-chat-input" rows="2" placeholder="Ask a follow-up question..." ${
+        isChatLoading ? "disabled" : ""
+      }></textarea>
+      <button class="lockin-send-btn" type="button" ${
+        sendDisabled ? "disabled" : ""
+      }>Send</button>
+    </div>
+  `;
+}
+
+/**
+ * Build the history section HTML
+ */
+function buildHistorySection() {
+  // Load chats if not already loaded
+  if (!hasLoadedChats && !isHistoryLoading) {
+    loadRecentChats({ silent: true });
   }
 
-  // Set default mode button
-  const setDefaultBtn = bubbleElement.querySelector(".lockin-set-default");
-  if (setDefaultBtn) {
-    setDefaultBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      chrome.storage.sync.set(
-        { [STORAGE_KEYS.ACTIVE_MODE]: currentMode },
-        () => {
-          setDefaultBtn.style.filter = "brightness(0.8)";
-          setTimeout(() => {
-            setDefaultBtn.style.filter = "";
-          }, 200);
-        }
-      );
-    });
-  }
+  const listHtml = recentChats.length
+    ? recentChats
+        .map((chat) => {
+          const isActive = chat.id === currentChatId;
+          return `
+            <div class="lockin-history-item ${
+              isActive ? "active" : ""
+            }" data-chat-id="${chat.id}">
+              <div class="lockin-history-item-content">
+                <span class="lockin-history-title">${escapeHtml(
+                  chat.title || buildFallbackHistoryTitle(chat)
+                )}</span>
+                <span class="lockin-history-meta">${escapeHtml(
+                  formatHistoryTimestamp(
+                    chat.last_message_at || chat.created_at
+                  )
+                )}</span>
+              </div>
+              <button class="lockin-history-item-menu" type="button" data-chat-id="${
+                chat.id
+              }" title="Delete chat" aria-label="Delete chat menu">
+                <span class="lockin-menu-dots">&#8230;</span>
+              </button>
+            </div>
+          `;
+        })
+        .join("")
+    : `<p class="lockin-history-empty">${escapeHtml(
+        isHistoryLoading ? "Loading chats..." : "No chats yet."
+      )}</p>`;
 
-  // Mode selector
-  const modePill = bubbleElement.querySelector(".lockin-mode-pill");
-  const modeExpandable = bubbleElement.querySelector(".lockin-mode-expandable");
-  if (modePill && modeExpandable) {
-    modePill.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const isVisible = modeExpandable.style.display !== "none";
-      modeExpandable.style.display = isVisible ? "none" : "flex";
-    });
-
-    modeExpandable.querySelectorAll(".lockin-mode-option").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const newMode = btn.dataset.mode;
-        if (newMode && newMode !== currentMode) {
-          currentMode = newMode;
-          chrome.storage.sync.set({ [STORAGE_KEYS.ACTIVE_MODE]: newMode });
-          modeExpandable.style.display = "none";
-          startNewChat();
-        }
-      });
-    });
-
-    document.addEventListener(
-      "click",
-      () => {
-        modeExpandable.style.display = "none";
-      },
-      { once: true }
-    );
-  }
-
-  // History items and delete buttons
-  bubbleElement
-    .querySelectorAll(".lockin-history-item-content")
-    .forEach((item) => {
-      item.addEventListener("click", () => {
-        const chatId = item
-          .closest(".lockin-history-item")
-          ?.getAttribute("data-chat-id");
-        if (!chatId || chatId === currentChatId) {
-          return;
-        }
-        handleHistorySelection(chatId);
-      });
-    });
-
-  bubbleElement
-    .querySelectorAll(".lockin-history-item-menu")
-    .forEach((menuBtn) => {
-      menuBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const chatId = menuBtn
-          .closest(".lockin-history-item")
-          ?.getAttribute("data-chat-id");
-        if (chatId) {
-          showDeleteDropdown(menuBtn, chatId);
-        }
-      });
-    });
-
-  // New chat button
-  const newChatBtn = bubbleElement.querySelector(".lockin-new-chat-btn");
-  if (newChatBtn) {
-    newChatBtn.addEventListener("click", async (e) => {
-      e.stopPropagation();
-      await handleNewChatRequest();
-    });
-  }
-
-  // Profile card and menu
-  const profileCard = bubbleElement.querySelector(".lockin-profile-card");
-  const profileMenu = bubbleElement.querySelector(".lockin-profile-menu");
-
-  if (profileCard && profileMenu) {
-    const toggleProfileMenu = (e) => {
-      e.stopPropagation();
-      const isVisible = profileMenu.style.display !== "none";
-      profileMenu.style.display = isVisible ? "none" : "block";
-    };
-
-    profileCard.addEventListener("click", toggleProfileMenu);
-
-    // Close the menu when clicking outside the profile section
-    const closeOnOutsideClick = (event) => {
-      if (
-        !profileMenu.contains(event.target) &&
-        !profileCard.contains(event.target)
-      ) {
-        profileMenu.style.display = "none";
-        document.removeEventListener("click", closeOnOutsideClick);
-      }
-    };
-
-    // Register the outside‑click listener once the menu is opened
-    profileCard.addEventListener("click", () => {
-      document.addEventListener("click", closeOnOutsideClick);
-    });
-
-    // Profile menu item actions
-    profileMenu
-      .querySelectorAll(".lockin-profile-menu-item")
-      .forEach((item) => {
-        item.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const action = item.getAttribute("data-action");
-          if (action) {
-            handleProfileMenuAction(action);
-          }
-          profileMenu.style.display = "none";
-        });
-      });
-  }
-
-  // Allow dragging the entire widget by the bubble header.
-  const dragHandle = bubbleElement.querySelector(".lockin-drag-handle");
-  if (
-    dragHandle &&
-    lockinWidget &&
-    typeof lockinWidget.startDrag === "function"
-  ) {
-    dragHandle.style.cursor = "grab";
-    dragHandle.addEventListener("mousedown", (e) => {
-      e.stopPropagation();
-      // Only drag on left or middle click
-      if (e.button !== 0 && e.button !== 1) {
-        return;
-      }
-      lockinWidget.startDrag(e);
-    });
-  }
+  return `
+    <div class="lockin-history-actions">
+      <span class="lockin-history-label">Chats</span>
+      <button class="lockin-new-chat-btn" type="button" ${
+        isChatLoading ? "disabled" : ""
+      }>+ New Chat</button>
+    </div>
+    <div class="lockin-history-list">${listHtml}</div>
+  `;
 }
 
 /**
@@ -476,9 +442,9 @@ function applyTheme() {
   root.style.setProperty("--lockin-accent", currentAccentColor);
   root.style.setProperty("--lockin-border", borderColor);
 
-  // Re-render bubble if the widget is open
+  // Re-render sidebar if open
   if (lockinWidget && lockinWidget.isOpen) {
-    renderBubbleContent();
+    renderSidebarContent();
   }
 }
 
@@ -486,11 +452,11 @@ function applyTheme() {
  * Listen for storage changes (when user toggles in popup or changes settings)
  */
 function listenToStorageChanges() {
-  if (typeof chrome === "undefined" || !chrome.storage) {
+  if (!Storage) {
     return;
   }
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
+  Storage.onChanged((changes, areaName) => {
     if (areaName === "sync" && changes.highlightingEnabled) {
       highlightingEnabled = changes.highlightingEnabled.newValue;
     }
@@ -511,7 +477,7 @@ function listenToStorageChanges() {
     if (areaName === "sync" && changes[STORAGE_KEYS.ACTIVE_MODE]) {
       currentMode = changes[STORAGE_KEYS.ACTIVE_MODE].newValue;
       if (lockinWidget && lockinWidget.isOpen) {
-        renderBubbleContent();
+        renderSidebarContent();
       }
     }
 
@@ -522,7 +488,7 @@ function listenToStorageChanges() {
         chatHistory = [];
       }
       if (lockinWidget && lockinWidget.isOpen) {
-        renderBubbleContent();
+        renderSidebarContent();
       }
     }
   });
@@ -546,14 +512,14 @@ function setupEventListeners() {
 function handleMouseUp(event) {
   // Check if highlighting is enabled
   if (!highlightingEnabled) {
-    console.log("Lock-in: Highlighting is disabled");
+    Logger.debug("Highlighting is disabled");
     return;
   }
 
   // Require modifier key (Ctrl on Windows/Linux, Cmd on macOS)
   const hasModifierKey = isMac ? event.metaKey : event.ctrlKey;
 
-  console.log("Lock-in: Mouse up detected", {
+  Logger.debug("Mouse up detected", {
     isMac,
     metaKey: event.metaKey,
     ctrlKey: event.ctrlKey,
@@ -561,27 +527,24 @@ function handleMouseUp(event) {
   });
 
   if (!hasModifierKey) {
-    console.log("Lock-in: Modifier key not pressed - ignoring selection");
+    Logger.debug("Modifier key not pressed - ignoring selection");
     return;
   }
 
-  console.log("Lock-in: Modifier key pressed - processing selection");
+  Logger.debug("Modifier key pressed - processing selection");
 
   setTimeout(() => {
     const validationResult = validateSelection();
     if (!validationResult.valid) {
-      console.log("Lock-in: Selection validation failed");
+      Logger.debug("Selection validation failed");
       return;
     }
 
-    console.log("Lock-in: Valid selection detected, triggering AI");
+    Logger.debug("Valid selection detected, triggering AI");
 
     // Store selection info
     cachedSelection = validationResult.text;
     cachedRect = validationResult.rect;
-
-    // If bubble exists, we don't remove it, we just update it
-    // removeExistingBubble(); // Removed this line
 
     determineDefaultMode().then(() => {
       runMode(currentMode);
@@ -649,57 +612,37 @@ function handleKeyPress(event) {
  * Determine which mode to use based on user preferences
  */
 async function determineDefaultMode() {
-  return new Promise((resolve) => {
-    if (typeof chrome === "undefined" || !chrome.storage) {
-      currentMode = MODES.EXPLAIN;
-      resolve();
+  if (!Storage) {
+    currentMode = MODES.EXPLAIN;
+    return;
+  }
+
+  try {
+    const data = await Storage.get([
+      "modePreference",
+      "defaultMode",
+      "lastUsedMode",
+      STORAGE_KEYS.ACTIVE_MODE,
+    ]);
+
+    // First, check if there's a stored active mode from new system
+    if (data[STORAGE_KEYS.ACTIVE_MODE]) {
+      currentMode = data[STORAGE_KEYS.ACTIVE_MODE];
       return;
     }
 
-    try {
-      chrome.storage.sync.get(
-        [
-          "modePreference",
-          "defaultMode",
-          "lastUsedMode",
-          STORAGE_KEYS.ACTIVE_MODE,
-        ],
-        (data) => {
-          if (chrome.runtime.lastError) {
-            console.log(
-              "Lock-in: Mode preference error:",
-              chrome.runtime.lastError
-            );
-            currentMode = MODES.EXPLAIN;
-            resolve();
-            return;
-          }
+    // Fall back to old system
+    const modePref = data.modePreference || "fixed";
 
-          // First, check if there's a stored active mode from new system
-          if (data[STORAGE_KEYS.ACTIVE_MODE]) {
-            currentMode = data[STORAGE_KEYS.ACTIVE_MODE];
-            resolve();
-            return;
-          }
-
-          // Fall back to old system
-          const modePref = data.modePreference || "fixed";
-
-          if (modePref === "lastUsed" && data.lastUsedMode) {
-            currentMode = data.lastUsedMode;
-          } else {
-            currentMode = data.defaultMode || MODES.EXPLAIN;
-          }
-
-          resolve();
-        }
-      );
-    } catch (error) {
-      console.log("Lock-in: Mode determination error:", error);
-      currentMode = MODES.EXPLAIN;
-      resolve();
+    if (modePref === "lastUsed" && data.lastUsedMode) {
+      currentMode = data.lastUsedMode;
+    } else {
+      currentMode = data.defaultMode || MODES.EXPLAIN;
     }
-  });
+  } catch (error) {
+    Logger.warn("Mode determination error:", error);
+    currentMode = MODES.EXPLAIN;
+  }
 }
 
 /**
@@ -709,26 +652,14 @@ async function runMode(mode) {
   currentMode = mode;
 
   // Update lastUsedMode if preference is 'lastUsed'
-  if (typeof chrome !== "undefined" && chrome.storage) {
+  if (Storage) {
     try {
-      chrome.storage.sync.get(["modePreference"], (data) => {
-        if (chrome.runtime.lastError) {
-          console.log("Lock-in: Storage get error:", chrome.runtime.lastError);
-          return;
-        }
-        if (data.modePreference === "lastUsed") {
-          chrome.storage.sync.set({ lastUsedMode: mode }, () => {
-            if (chrome.runtime.lastError) {
-              console.log(
-                "Lock-in: Storage set error:",
-                chrome.runtime.lastError
-              );
-            }
-          });
-        }
-      });
+      const data = await Storage.get("modePreference");
+      if (data.modePreference === "lastUsed") {
+        await Storage.set("lastUsedMode", mode);
+      }
     } catch (error) {
-      console.log("Lock-in: Storage access error:", error);
+      Logger.warn("Storage access error:", error);
     }
   }
 
@@ -757,7 +688,12 @@ async function runMode(mode) {
       targetLanguage: sessionPreferences.preferredLanguage,
       difficultyLevel: sessionPreferences.difficultyLevel,
       chatHistory: baseHistory,
-      newUserMessage: cachedSelection ? `${cachedSelection}` : undefined,
+      // Only send newUserMessage if we have existing chat history
+      // For initial requests, the selection is sent to buildInitialHistory
+      newUserMessage:
+        baseHistory.length > 0 && cachedSelection
+          ? `${cachedSelection}`
+          : undefined,
     });
 
     chatHistory = data.chatHistory || [];
@@ -772,7 +708,7 @@ async function runMode(mode) {
     renderChatBubble();
     saveSessionForCurrentTab();
   } catch (error) {
-    console.error("Lock-in error:", error);
+    Logger.error("Error processing request:", error);
     isChatLoading = false;
 
     if (cachedSelection) {
@@ -789,16 +725,11 @@ async function runMode(mode) {
           content: friendlyMessage,
         },
       ];
-      renderChatBubble();
+      renderSidebarContent();
       saveSessionForCurrentTab();
     } else {
-      // No existing selection context to attach a chat bubble to.
-      // Surface a friendly error message in the console instead of
-      // attempting to render a separate legacy error bubble.
-      console.error(
-        "Lock-in error (no selection):",
-        getAssistantErrorMessage(error)
-      );
+      // No existing selection context. Surface error in console.
+      Logger.error("Error (no selection):", getAssistantErrorMessage(error));
     }
   }
 }
@@ -806,136 +737,46 @@ async function runMode(mode) {
 /**
  * Get settings from storage
  */
-function getSettings() {
-  return new Promise((resolve) => {
-    if (typeof chrome === "undefined" || !chrome.storage) {
-      resolve({ preferredLanguage: "en", difficultyLevel: "highschool" });
-      return;
-    }
+async function getSettings() {
+  if (!Storage) {
+    return { preferredLanguage: "en", difficultyLevel: "highschool" };
+  }
 
-    try {
-      chrome.storage.sync.get(
-        ["preferredLanguage", "difficultyLevel"],
-        (data) => {
-          if (chrome.runtime.lastError) {
-            console.log(
-              "Lock-in: Settings get error:",
-              chrome.runtime.lastError
-            );
-            resolve({ preferredLanguage: "en", difficultyLevel: "highschool" });
-            return;
-          }
-          resolve(data);
-        }
-      );
-    } catch (error) {
-      console.log("Lock-in: Settings access error:", error);
-      resolve({ preferredLanguage: "en", difficultyLevel: "highschool" });
-    }
-  });
+  try {
+    const data = await Storage.get(["preferredLanguage", "difficultyLevel"]);
+    return {
+      preferredLanguage: data.preferredLanguage || "en",
+      difficultyLevel: data.difficultyLevel || "highschool",
+    };
+  } catch (error) {
+    Logger.warn("Settings access error:", error);
+    return { preferredLanguage: "en", difficultyLevel: "highschool" };
+  }
 }
 
 async function callLockInApi(payload) {
-  const auth = window.LockInAuth;
-  if (!auth || typeof auth.getValidAccessToken !== "function") {
-    const setupError = new Error(
-      "Authentication is not configured. Please update the extension settings."
-    );
-    setupError.code = "AUTH_NOT_CONFIGURED";
-    throw setupError;
+  if (!API) {
+    throw new Error("API module not available");
   }
 
-  const accessToken = await auth.getValidAccessToken();
-
-  if (!accessToken) {
-    const authError = new Error(
-      "Please sign in via the Lock-in popup before using the assistant."
-    );
-    authError.code = "AUTH_REQUIRED";
-    throw authError;
+  try {
+    return await API.processText({
+      selection: payload.selection ?? cachedSelection,
+      mode: payload.mode ?? currentMode,
+      targetLanguage:
+        payload.targetLanguage || sessionPreferences.preferredLanguage || "en",
+      difficultyLevel:
+        payload.difficultyLevel ||
+        sessionPreferences.difficultyLevel ||
+        "highschool",
+      chatHistory: payload.chatHistory ?? chatHistory ?? [],
+      newUserMessage: payload.newUserMessage,
+      chatId: typeof payload.chatId !== "undefined" ? payload.chatId : currentChatId,
+    });
+  } catch (error) {
+    // Re-throw with original error code
+    throw error;
   }
-
-  const historyForRequest = payload.chatHistory ?? chatHistory ?? [];
-  const normalizedHistory = historyForRequest
-    .filter(
-      (message) =>
-        message &&
-        typeof message.role === "string" &&
-        typeof message.content === "string"
-    )
-    .map((message) => ({
-      role: message.role,
-      content: message.content,
-    }));
-
-  const body = {
-    selection: payload.selection ?? cachedSelection,
-    mode: payload.mode ?? currentMode,
-    targetLanguage:
-      payload.targetLanguage || sessionPreferences.preferredLanguage || "en",
-    difficultyLevel:
-      payload.difficultyLevel ||
-      sessionPreferences.difficultyLevel ||
-      "highschool",
-    chatHistory: normalizedHistory,
-  };
-
-  if (payload.newUserMessage) {
-    body.newUserMessage = payload.newUserMessage;
-  }
-
-  const chatIdToSend =
-    typeof payload.chatId !== "undefined" ? payload.chatId : currentChatId;
-  if (chatIdToSend) {
-    body.chatId = chatIdToSend;
-  }
-
-  const headers = {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${accessToken}`,
-  };
-
-  const response = await fetch(`${BACKEND_URL}/api/lockin`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  }).catch((networkError) => {
-    const err = new Error(
-      "Unable to reach Lock-in. Please check your connection."
-    );
-    err.cause = networkError;
-    throw err;
-  });
-
-  if (response.status === 401 || response.status === 403) {
-    if (typeof auth.signOut === "function") {
-      await auth.signOut();
-    }
-  }
-
-  if (!response.ok) {
-    let errorMessage = "API request failed";
-    try {
-      const errorBody = await response.json();
-      errorMessage =
-        errorBody?.message || errorBody?.error || JSON.stringify(errorBody);
-    } catch (_) {
-      const fallbackText = await response.text();
-      if (fallbackText) {
-        errorMessage = fallbackText;
-      }
-    }
-
-    const apiError = new Error(errorMessage || "API request failed");
-    if (response.status === 429) {
-      apiError.code = "RATE_LIMIT";
-    } else if (response.status === 401 || response.status === 403) {
-      apiError.code = "AUTH_REQUIRED";
-    }
-    throw apiError;
-  }
-
-  return response.json();
 }
 
 function buildFallbackHistory() {
@@ -1008,7 +849,7 @@ async function sendFollowUpMessage(messageText) {
     renderChatBubble();
     saveSessionForCurrentTab();
   } catch (error) {
-    console.error("Lock-in follow-up error:", error);
+    Logger.error("Follow-up error:", error);
     isChatLoading = false;
     chatHistory = [
       ...chatHistory,
@@ -1023,11 +864,11 @@ async function sendFollowUpMessage(messageText) {
 }
 
 // ===================================
-// Bubble Display Helpers (LockinWidget-based)
+// Bubble Display Helpers (LockinSidebar-based)
 // ===================================
 
 /**
- * Ensure the widget bubble is open and ready to render content.
+ * Ensure the sidebar is open and ready to render content.
  */
 function ensureChatBubble() {
   if (!lockinWidget) {
@@ -1037,16 +878,32 @@ function ensureChatBubble() {
   if (!lockinWidget.isOpen) {
     lockinWidget.open();
   }
-
-  activeBubble = lockinWidget.getBubbleElement();
 }
 
 /**
  * Backwards-compatible helper used throughout older code paths.
- * Delegates to the new widget-based renderer.
+ * Delegates to the new sidebar-based renderer.
  */
 function renderChatBubble() {
-  renderBubbleContent();
+  renderSidebarContent();
+}
+
+function scrollChatToBottom() {
+  if (!lockinWidget) {
+    return;
+  }
+
+  const sidebarElement = lockinWidget.getSidebarElement();
+  if (!sidebarElement) {
+    return;
+  }
+
+  requestAnimationFrame(() => {
+    const messagesEl = sidebarElement.querySelector(".lockin-chat-messages");
+    if (messagesEl) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+  });
 }
 
 function buildChatMessagesHtml(messages) {
@@ -1322,7 +1179,7 @@ async function handleHistorySelection(chatId) {
     saveSessionForCurrentTab({ isLoadingOverride: false });
     loadRecentChats({ silent: true });
   } catch (error) {
-    console.error("Lock-in chat load error:", error);
+    Logger.error("Chat load error:", error);
     historyStatusMessage =
       error?.message || "Unable to load that chat. Please try again.";
     renderChatBubble();
@@ -1340,7 +1197,7 @@ function showDeleteDropdown(menuBtn, chatId) {
   dropdown.className = "lockin-delete-dropdown";
   dropdown.innerHTML = `
     <button class="lockin-delete-dropdown-item" type="button" data-chat-id="${chatId}">
-      <span class="lockin-delete-dropdown-icon">🗑️</span>
+      <span class="lockin-delete-dropdown-icon">&#128465;</span>
       <span class="lockin-delete-dropdown-text">Delete</span>
     </button>
   `;
@@ -1376,31 +1233,13 @@ function showDeleteDropdown(menuBtn, chatId) {
 }
 
 async function handleDeleteChat(chatId) {
+  if (!API) {
+    alert("Please sign in to delete chats.");
+    return;
+  }
+
   try {
-    const auth = window.LockInAuth;
-    if (!auth || typeof auth.getValidAccessToken !== "function") {
-      alert("Please sign in to delete chats.");
-      return;
-    }
-
-    const accessToken = await auth.getValidAccessToken();
-    if (!accessToken) {
-      alert("Unable to verify your identity. Please sign in again.");
-      return;
-    }
-
-    // Call backend to delete chat
-    const response = await fetch(`${BACKEND_URL}/api/chats/${chatId}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Delete failed: ${response.status}`);
-    }
+    await API.deleteChat(chatId);
 
     // If deleted chat is currently open, switch to new chat
     if (currentChatId === chatId) {
@@ -1409,7 +1248,7 @@ async function handleDeleteChat(chatId) {
 
     loadRecentChats({ silent: true });
   } catch (error) {
-    console.error("Error deleting chat:", error);
+    Logger.error("Error deleting chat:", error);
     alert("Failed to delete chat. Please try again.");
   }
 }
@@ -1420,13 +1259,12 @@ async function loadRecentChats(options = {}) {
   }
 
   const silent = options.silent === true;
-  const auth = window.LockInAuth;
 
-  if (!auth || typeof auth.getValidAccessToken !== "function") {
+  if (!API) {
     if (!silent) {
       historyStatusMessage = "Sign in via the popup to see your chats.";
       if (lockinWidget && lockinWidget.isOpen) {
-        renderBubbleContent();
+        renderSidebarContent();
       }
     }
     return;
@@ -1436,31 +1274,12 @@ async function loadRecentChats(options = {}) {
   if (!silent) {
     historyStatusMessage = "Loading chats...";
     if (lockinWidget && lockinWidget.isOpen) {
-      renderBubbleContent();
+      renderSidebarContent();
     }
   }
 
   try {
-    const token = await auth.getValidAccessToken();
-    if (!token) {
-      throw new Error("Sign in to view chats.");
-    }
-    const params = new URLSearchParams({ limit: String(RECENT_CHAT_LIMIT) });
-    const response = await fetch(
-      `${BACKEND_URL}/api/chats?${params.toString()}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(text || "Failed to load chats");
-    }
-
-    const data = await response.json();
+    const data = await API.getRecentChats({ limit: RECENT_CHAT_LIMIT });
     recentChats = Array.isArray(data) ? data : [];
     hasLoadedChats = true;
     if (!silent) {
@@ -1469,7 +1288,7 @@ async function loadRecentChats(options = {}) {
         : "Start a new chat to see it here.";
     }
   } catch (error) {
-    console.error("Lock-in recent chats error:", error);
+    Logger.error("Recent chats error:", error);
     if (!silent) {
       historyStatusMessage =
         error?.message || "Unable to load chats right now.";
@@ -1478,33 +1297,21 @@ async function loadRecentChats(options = {}) {
     isHistoryLoading = false;
     hasLoadedChats = true;
     if (lockinWidget && lockinWidget.isOpen) {
-      renderBubbleContent();
+      renderSidebarContent();
     }
   }
 }
 
 async function fetchChatMessagesFromApi(chatId) {
-  const auth = window.LockInAuth;
-  if (!auth || typeof auth.getValidAccessToken !== "function") {
-    throw new Error("Sign in to open chats.");
-  }
-  const token = await auth.getValidAccessToken();
-  if (!token) {
-    throw new Error("Sign in to open chats.");
+  if (!API) {
+    throw new Error("API module not available");
   }
 
-  const response = await fetch(`${BACKEND_URL}/api/chats/${chatId}/messages`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || "Failed to load chat messages");
+  try {
+    return await API.getChatMessages(chatId);
+  } catch (error) {
+    throw error;
   }
-
-  return response.json();
 }
 
 function convertRowsToChatHistory(rows = []) {
@@ -1558,14 +1365,17 @@ function scrollChatToBottom() {
  * Get current tab ID from background script
  */
 async function getTabId() {
-  if (!chrome.runtime) return;
+  if (!Messaging || !chrome.runtime) return;
 
   try {
-    const response = await chrome.runtime.sendMessage({ action: "getTabId" });
-    currentTabId = response.tabId;
-    console.log("Lock-in: Tab ID:", currentTabId);
+    const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.GET_TAB_ID);
+    const response = await Messaging.sendMessage(message);
+    if (response.ok && response.data) {
+      currentTabId = response.data.tabId;
+      Logger.debug("Tab ID:", currentTabId);
+    }
   } catch (error) {
-    console.error("Lock-in: Failed to get tab ID:", error);
+    Logger.error("Failed to get tab ID:", error);
   }
 }
 
@@ -1573,29 +1383,33 @@ async function getTabId() {
  * Load session for current tab
  */
 async function loadSessionForCurrentTab() {
-  if (!chrome.runtime || !currentTabId) return;
+  if (!Messaging || !chrome.runtime || !currentTabId) return;
 
   try {
-    const response = await chrome.runtime.sendMessage({ action: "getSession" });
-    const session = response.session;
+    const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.GET_SESSION);
+    const response = await Messaging.sendMessage(message);
+    if (!response.ok) {
+      return;
+    }
+    const session = response.data?.session;
 
     // No session exists
     if (!session || !session.isActive) return;
 
     // Check if origin matches
     if (session.origin !== currentOrigin) {
-      console.log("Lock-in: Origin changed, not restoring session");
+      Logger.debug("Origin changed, not restoring session");
       await clearSessionForCurrentTab();
       return;
     }
 
     // Check if user explicitly closed it
     if (session.isClosed) {
-      console.log("Lock-in: Session was closed by user");
+      Logger.debug("Session was closed by user");
       return;
     }
 
-    console.log("Lock-in: Restoring session for tab", currentTabId);
+    Logger.debug("Restoring session for tab", currentTabId);
 
     cachedSelection = session.selection || "";
     currentMode = session.mode || "explain";
@@ -1630,7 +1444,7 @@ async function loadSessionForCurrentTab() {
       renderChatBubble();
     }
   } catch (error) {
-    console.error("Lock-in: Failed to load session:", error);
+    Logger.error("Failed to load session:", error);
   }
 }
 
@@ -1693,34 +1507,38 @@ function listenToAuthChanges() {
 }
 
 async function loadStoredChatId() {
-  if (!chrome?.storage?.local) {
+  if (!Storage) {
     currentChatId = null;
     return null;
   }
 
-  return new Promise((resolve) => {
-    chrome.storage.local.get([CHAT_ID_STORAGE_KEY], (data) => {
-      currentChatId = data?.[CHAT_ID_STORAGE_KEY] || null;
-      resolve(currentChatId);
-    });
-  });
+  try {
+    const data = await Storage.getLocal(CHAT_ID_STORAGE_KEY);
+    currentChatId = data[CHAT_ID_STORAGE_KEY] || null;
+    return currentChatId;
+  } catch (error) {
+    Logger.warn("Failed to load chat ID:", error);
+    currentChatId = null;
+    return null;
+  }
 }
 
-function setStoredChatId(chatId) {
-  if (!chrome?.storage?.local) {
+async function setStoredChatId(chatId) {
+  if (!Storage) {
     currentChatId = chatId || null;
-    return Promise.resolve();
+    return;
   }
 
-  return new Promise((resolve) => {
+  try {
     if (!chatId) {
-      chrome.storage.local.remove([CHAT_ID_STORAGE_KEY], () => resolve());
+      await Storage.removeLocal(CHAT_ID_STORAGE_KEY);
     } else {
-      chrome.storage.local.set({ [CHAT_ID_STORAGE_KEY]: chatId }, () =>
-        resolve()
-      );
+      await Storage.setLocal(CHAT_ID_STORAGE_KEY, chatId);
     }
-  });
+    currentChatId = chatId || null;
+  } catch (error) {
+    Logger.warn("Failed to save chat ID:", error);
+  }
 }
 
 /**
@@ -1747,13 +1565,16 @@ async function saveSessionForCurrentTab(options = {}) {
     difficultyLevel: sessionPreferences.difficultyLevel,
   };
 
+  if (!Messaging || !chrome.runtime) return;
+
   try {
-    await chrome.runtime.sendMessage({
-      action: "saveSession",
-      sessionData,
-    });
+    const message = Messaging.createMessage(
+      Messaging.MESSAGE_TYPES.SAVE_SESSION,
+      { sessionData }
+    );
+    await Messaging.sendMessage(message);
   } catch (error) {
-    console.error("Lock-in: Failed to save session:", error);
+    Logger.error("Failed to save session:", error);
   }
 }
 
@@ -1761,21 +1582,22 @@ async function saveSessionForCurrentTab(options = {}) {
  * Update just the position/size in the current session
  */
 async function updateSessionPosition() {
-  if (!chrome.runtime || !currentTabId) return;
+  if (!Messaging || !chrome.runtime || !currentTabId) return;
 
   try {
     // Get current session
-    const response = await chrome.runtime.sendMessage({ action: "getSession" });
-    const session = response.session;
-
-    if (session) {
-      await chrome.runtime.sendMessage({
-        action: "saveSession",
-        sessionData: session,
-      });
+    const getMessage = Messaging.createMessage(Messaging.MESSAGE_TYPES.GET_SESSION);
+    const getResponse = await Messaging.sendMessage(getMessage);
+    if (getResponse.ok && getResponse.data?.session) {
+      const session = getResponse.data.session;
+      const saveMessage = Messaging.createMessage(
+        Messaging.MESSAGE_TYPES.SAVE_SESSION,
+        { sessionData: session }
+      );
+      await Messaging.sendMessage(saveMessage);
     }
   } catch (error) {
-    console.error("Lock-in: Failed to update session position:", error);
+    Logger.error("Failed to update session position:", error);
   }
 }
 
@@ -1783,12 +1605,13 @@ async function updateSessionPosition() {
  * Clear session for current tab
  */
 async function clearSessionForCurrentTab() {
-  if (!chrome.runtime || !currentTabId) return;
+  if (!Messaging || !chrome.runtime || !currentTabId) return;
 
   try {
-    await chrome.runtime.sendMessage({ action: "clearSession" });
+    const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.CLEAR_SESSION);
+    await Messaging.sendMessage(message);
   } catch (error) {
-    console.error("Lock-in: Failed to clear session:", error);
+    Logger.error("Failed to clear session:", error);
   }
 }
 
@@ -1811,23 +1634,23 @@ async function closeBubble() {
 function handleProfileMenuAction(action) {
   switch (action) {
     case "upgrade":
-      console.log("TODO: Handle upgrade plan action");
+      Logger.debug("TODO: Handle upgrade plan action");
       break;
     case "personalisation":
       isPersonalisationPanelOpen = !isPersonalisationPanelOpen;
       renderPersonalisationPanel();
       break;
     case "settings":
-      console.log("TODO: Handle settings action");
+      Logger.debug("TODO: Handle settings action");
       break;
     case "help":
-      console.log("TODO: Handle help action");
+      Logger.debug("TODO: Handle help action");
       break;
     case "logout":
       handleLogout();
       break;
     default:
-      console.log(`Unknown profile action: ${action}`);
+      Logger.debug(`Unknown profile action: ${action}`);
   }
 }
 
@@ -1839,7 +1662,7 @@ function handleLogout() {
   if (window.LockInAuth && typeof window.LockInAuth.logout === "function") {
     window.LockInAuth.logout();
   } else {
-    console.log("Logout handler not available");
+    Logger.debug("Logout handler not available");
   }
 }
 
@@ -1848,7 +1671,7 @@ function handleLogout() {
  */
 function renderPersonalisationPanel() {
   // TODO: Implement personalisation panel UI
-  console.log("Opening personalisation panel");
+  Logger.debug("Opening personalisation panel");
 }
 
 /**
@@ -1861,29 +1684,33 @@ function getModeInfo(mode) {
 /**
  * Set current mode as default
  */
-function setAsDefault(mode) {
-  if (typeof chrome === "undefined" || !chrome.storage) {
+async function setAsDefault(mode) {
+  if (!Storage) {
     return;
   }
 
-  chrome.storage.sync.set(
-    { defaultMode: mode, modePreference: "fixed" },
-    () => {
-      const btn =
-        lockinWidget && lockinWidget.getBubbleElement()
-          ? lockinWidget.getBubbleElement().querySelector(".lockin-set-default")
-          : null;
-      if (!btn) return;
+  try {
+    await Storage.set({
+      defaultMode: mode,
+      modePreference: "fixed",
+    });
 
-      const originalHTML = btn.innerHTML;
-      btn.innerHTML = '<span style="font-size: 11px;">&check;</span>';
-      btn.style.color = "#10b981";
-      setTimeout(() => {
-        btn.innerHTML = originalHTML;
-        btn.style.color = "";
-      }, 1500);
-    }
-  );
+    const btn =
+      lockinWidget && lockinWidget.getBubbleElement()
+        ? lockinWidget.getBubbleElement().querySelector(".lockin-set-default")
+        : null;
+    if (!btn) return;
+
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<span style="font-size: 11px;">&check;</span>';
+    btn.style.color = "#10b981";
+    setTimeout(() => {
+      btn.innerHTML = originalHTML;
+      btn.style.color = "";
+    }, 1500);
+  } catch (error) {
+    Logger.warn("Failed to set default mode:", error);
+  }
 }
 
 /**
@@ -1909,7 +1736,7 @@ function safeInit() {
   if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
     init();
   } else {
-    console.warn("Lock-in: Chrome extension API not available");
+    Logger.warn("Chrome extension API not available");
   }
 }
 

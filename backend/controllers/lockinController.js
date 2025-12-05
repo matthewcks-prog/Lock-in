@@ -21,8 +21,14 @@ const {
   DEFAULT_CHAT_LIST_LIMIT,
 } = require("../config");
 const { checkDailyLimit } = require("../rateLimiter");
-
-const VALID_MODES = ["explain", "simplify", "translate"];
+const {
+  validateMode,
+  validateLanguageCode,
+  validateDifficultyLevel,
+  validateUUID,
+  validateChatHistory,
+  validateText,
+} = require("../utils/validation");
 
 /**
  * POST /api/lockin
@@ -41,44 +47,89 @@ async function handleLockinRequest(req, res) {
       chatId: incomingChatId,
     } = req.body || {};
 
-    const selection = (selectionFromBody || legacyText || "").trim();
-
-    // Validation: mode must be valid
-    if (!mode || !VALID_MODES.includes(mode)) {
+    // Validate mode
+    const modeValidation = validateMode(mode);
+    if (!modeValidation.valid) {
       return res.status(400).json({
         error: "Bad Request",
-        message: `Mode must be one of: ${VALID_MODES.join(", ")}`,
+        message: modeValidation.error,
       });
     }
 
-    const sanitizedHistory = Array.isArray(chatHistory) ? chatHistory : [];
+    // Validate language code
+    const langValidation = validateLanguageCode(targetLanguage);
+    if (!langValidation.valid) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: langValidation.error,
+      });
+    }
+    const normalizedLanguage = langValidation.normalized;
+
+    // Validate difficulty level
+    const difficultyValidation = validateDifficultyLevel(difficultyLevel);
+    if (!difficultyValidation.valid) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: difficultyValidation.error,
+      });
+    }
+    const normalizedDifficulty = difficultyValidation.normalized;
+
+    // Validate and sanitize chat history
+    const historyValidation = validateChatHistory(chatHistory);
+    if (!historyValidation.valid) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: historyValidation.error,
+      });
+    }
+    const sanitizedHistory = historyValidation.sanitized;
     const isInitialRequest = sanitizedHistory.length === 0;
 
-    if (isInitialRequest && selection.length === 0) {
-      return res.status(400).json({
-        error: "Bad Request",
-        message: "Selection is required for the first message.",
-      });
+    // Validate selection (required for initial request)
+    const selection = selectionFromBody || legacyText || "";
+    if (isInitialRequest) {
+      const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, "Selection");
+      if (!selectionValidation.valid) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: selectionValidation.error,
+        });
+      }
+    } else if (selection) {
+      // Optional for follow-up messages, but validate if provided
+      const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, "Selection");
+      if (!selectionValidation.valid) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: selectionValidation.error,
+        });
+      }
     }
 
-    if (selection && selection.length > MAX_SELECTION_LENGTH) {
-      return res.status(400).json({
-        error: "Bad Request",
-        message: `Selection is too long. Maximum ${MAX_SELECTION_LENGTH} characters.`,
-      });
+    // Validate new user message if provided
+    let trimmedUserMessage = "";
+    if (newUserMessage) {
+      const messageValidation = validateText(newUserMessage, MAX_USER_MESSAGE_LENGTH, "Follow-up message");
+      if (!messageValidation.valid) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: messageValidation.error,
+        });
+      }
+      trimmedUserMessage = messageValidation.sanitized;
     }
 
-    const trimmedUserMessage =
-      typeof newUserMessage === "string" ? newUserMessage.trim() : "";
-
-    if (
-      trimmedUserMessage &&
-      trimmedUserMessage.length > MAX_USER_MESSAGE_LENGTH
-    ) {
-      return res.status(400).json({
-        error: "Bad Request",
-        message: `Follow-up questions are too long. Maximum ${MAX_USER_MESSAGE_LENGTH} characters.`,
-      });
+    // Validate chatId if provided
+    if (incomingChatId) {
+      const chatIdValidation = validateUUID(incomingChatId);
+      if (!chatIdValidation.valid) {
+        return res.status(400).json({
+          error: "Bad Request",
+          message: chatIdValidation.error,
+        });
+      }
     }
 
     const userId = req.user?.id;
@@ -127,10 +178,10 @@ async function handleLockinRequest(req, res) {
     });
 
     const aiResponse = await generateLockInResponse({
-      selection,
+      selection: selection.trim(),
       mode,
-      targetLanguage,
-      difficultyLevel,
+      targetLanguage: normalizedLanguage,
+      difficultyLevel: normalizedDifficulty,
       chatHistory: sanitizedHistory,
       newUserMessage: trimmedUserMessage,
     });
@@ -169,8 +220,8 @@ async function handleLockinRequest(req, res) {
     return res.json({
       chatId,
       mode,
-      targetLanguage,
-      difficultyLevel,
+      targetLanguage: normalizedLanguage,
+      difficultyLevel: normalizedDifficulty,
       answer: aiResponse.answer,
       chatHistory: aiResponse.chatHistory,
       usage: aiResponse.usage,
@@ -194,8 +245,10 @@ async function listChats(req, res) {
   try {
     const userId = req.user?.id;
     const requestedLimit = parseInt(req.query.limit, 10);
-    const limit = Number.isFinite(requestedLimit)
-      ? requestedLimit
+    
+    // Validate and constrain limit
+    let limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 100) // Cap at 100
       : DEFAULT_CHAT_LIST_LIMIT;
 
     const chats = await getRecentChats(userId, limit);
@@ -223,10 +276,12 @@ async function deleteChat(req, res) {
     const userId = req.user?.id;
     const chatId = req.params.chatId;
 
-    if (!chatId) {
+    // Validate chatId format
+    const chatIdValidation = validateUUID(chatId);
+    if (!chatIdValidation.valid) {
       return res.status(400).json({
         error: "Bad Request",
-        message: "Chat ID is required",
+        message: chatIdValidation.error,
       });
     }
 
@@ -285,6 +340,15 @@ async function listChatMessages(req, res) {
   try {
     const userId = req.user?.id;
     const { chatId } = req.params;
+
+    // Validate chatId format
+    const chatIdValidation = validateUUID(chatId);
+    if (!chatIdValidation.valid) {
+      return res.status(400).json({
+        error: "Bad Request",
+        message: chatIdValidation.error,
+      });
+    }
 
     const chat = await getChatById(userId, chatId);
     if (!chat) {

@@ -28,12 +28,17 @@
       "matches": ["<all_urls>"],
       "js": [
         "config.js",
+        "libs/logger.js",
+        "libs/messaging.js",
+        "libs/storage.js",
+        "libs/api.js",
         "supabaseAuth.js",
+        "lockin-sidebar.js",
         "lockin-widget.js",
         "chatHistoryUtils.js",
         "contentScript.js"
       ],
-      "css": ["lockin-widget.css", "contentScript.css"],
+      "css": ["contentScript.css"],
       "run_at": "document_end"
     }
   ],
