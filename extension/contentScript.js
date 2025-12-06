@@ -112,6 +112,7 @@ let notesViewMode = "current"; // "current" | "all"
 let notesFilter = "page"; // "page" | "course" | "all" | "starred"
 let notesSearchQuery = "";
 let notesListCache = [];
+let cachedLinkedContext = null;
 let activeNote = createEmptyNote();
 let noteSaveTimer = null;
 let noteSaveStatus = "Saved · just now";
@@ -743,12 +744,17 @@ async function saveActiveNote(forceCreate = false) {
     return;
   }
 
+  const resolvedCourseCode = activeNote.courseCode || getLinkedContext().courseCode || null;
+  if (!activeNote.courseCode && resolvedCourseCode) {
+    activeNote.courseCode = resolvedCourseCode;
+  }
+
   const payload = {
     title: title || "Untitled Note",
     content: sanitizeNoteContent(activeNote.content || ""),
     sourceSelection: activeNote.sourceSelection || "",
     sourceUrl: activeNote.sourceUrl || window.location.href,
-    courseCode: activeNote.courseCode || null,
+    courseCode: resolvedCourseCode,
     noteType: activeNote.noteType || "manual",
     tags: activeNote.tags || [],
   };
@@ -807,7 +813,7 @@ async function duplicateActiveNote() {
     content: sanitizeNoteContent(activeNote.content || ""),
     sourceSelection: activeNote.sourceSelection || "",
     sourceUrl: activeNote.sourceUrl || window.location.href,
-    courseCode: activeNote.courseCode || null,
+    courseCode: activeNote.courseCode || getLinkedContext().courseCode || null,
     noteType: activeNote.noteType || "manual",
     tags: activeNote.tags || [],
   };
@@ -1023,7 +1029,12 @@ async function loadNotes(filter = "page") {
     if (filter === "page") {
       params.sourceUrl = window.location.href;
     } else if (filter === "course") {
-      params.courseCode = activeNote.courseCode || null;
+      const courseCode = getCurrentCourseCode();
+      if (courseCode) {
+        params.courseCode = courseCode;
+      } else {
+        params.sourceUrl = window.location.href;
+      }
     }
     params.limit = 50;
 
@@ -1164,8 +1175,14 @@ function noteMatchesFilter(note, filter) {
     return normalizeUrl(note.sourceUrl || "") === normalizeUrl(window.location.href);
   }
   if (filter === "course") {
-    if (!note.courseCode || !activeNote.courseCode) return true;
-    return note.courseCode === activeNote.courseCode;
+    const courseCode = getCurrentCourseCode();
+    if (courseCode) {
+      if (!note.courseCode) {
+        return normalizeUrl(note.sourceUrl || "") === normalizeUrl(window.location.href);
+      }
+      return note.courseCode.toUpperCase() === courseCode.toUpperCase();
+    }
+    return normalizeUrl(note.sourceUrl || "") === normalizeUrl(window.location.href);
   }
   if (filter === "starred") {
     return (
@@ -1202,8 +1219,9 @@ function buildNoteMetaText(note) {
 }
 
 function getNotesCourseLabel() {
-  if (activeNote?.courseCode) {
-    return `${activeNote.courseCode} · This course`;
+  const courseCode = getCurrentCourseCode();
+  if (courseCode) {
+    return `${courseCode} · This course`;
   }
   return "This course";
 }
@@ -1281,13 +1299,129 @@ function truncateText(text = "", maxLength = 120) {
 }
 
 function getLinkedContext() {
+  if (
+    cachedLinkedContext?.sourceUrl === window.location.href &&
+    cachedLinkedContext?.courseCode
+  ) {
+    return cachedLinkedContext;
+  }
+
   const heading =
     document.querySelector("h1, h2")?.textContent?.trim() || document.title;
-  return {
-    label: heading || window.location.hostname || "This course",
+  const monashContext = detectMonashCourseContext();
+  const linkedContext = {
+    label:
+      heading ||
+      monashContext.label ||
+      window.location.hostname ||
+      "This course",
     sourceUrl: window.location.href,
-    courseCode: null,
+    courseCode: monashContext.courseCode,
   };
+
+  cachedLinkedContext = linkedContext;
+  return linkedContext;
+}
+
+function detectMonashCourseContext() {
+  if (!window.location.hostname.includes("learning.monash.edu")) {
+    return { courseCode: null, label: null, courseId: null };
+  }
+
+  const courseId = new URLSearchParams(window.location.search).get("id");
+  const storedMapping = getStoredMonashCourseMapping();
+  const fromStorage = courseId ? storedMapping[courseId] : null;
+  const detectedCode =
+    findCourseCodeInPage() || fromStorage || extractCourseCodeFromText(document.title);
+
+  if (courseId && detectedCode) {
+    persistMonashCourseMapping(courseId, detectedCode);
+  }
+
+  return {
+    courseCode: detectedCode,
+    label: detectedCode || null,
+    courseId,
+  };
+}
+
+function findCourseCodeInPage() {
+  const candidateTexts = [];
+
+  const metaSelectors = [
+    'meta[property="og:title"]',
+    'meta[name="twitter:title"]',
+    'meta[name="title"]',
+  ];
+  metaSelectors.forEach((selector) => {
+    const content = document.querySelector(selector)?.getAttribute("content");
+    if (content) {
+      candidateTexts.push(content);
+    }
+  });
+
+  const headingSelectors = [
+    "h1",
+    "h2",
+    ".page-header-headings",
+    ".page-header-headings h1",
+    ".course-title",
+    ".breadcrumb",
+    "[data-region='course-header']",
+  ];
+  headingSelectors.forEach((selector) => {
+    document.querySelectorAll(selector).forEach((el) => {
+      const text = el.textContent?.trim();
+      if (text) {
+        candidateTexts.push(text);
+      }
+    });
+  });
+
+  const bodyText = document.body?.innerText || "";
+  if (bodyText) {
+    candidateTexts.push(bodyText.substring(0, 8000));
+  }
+
+  for (const text of candidateTexts) {
+    const code = extractCourseCodeFromText(text);
+    if (code) {
+      return code;
+    }
+  }
+
+  return null;
+}
+
+function extractCourseCodeFromText(text = "") {
+  const match = text.match(/\b([A-Z]{3}\d{4})\b/i);
+  return match ? match[1].toUpperCase() : null;
+}
+
+function getStoredMonashCourseMapping() {
+  try {
+    const raw = localStorage.getItem("lockin:monashCourseCodes");
+    return raw ? JSON.parse(raw) : {};
+  } catch (error) {
+    Logger.warn("Failed to read cached Monash course codes", error);
+    return {};
+  }
+}
+
+function persistMonashCourseMapping(courseId, courseCode) {
+  if (!courseId || !courseCode) return;
+  try {
+    const existing = getStoredMonashCourseMapping();
+    if (existing[courseId] === courseCode) return;
+    const next = { ...existing, [courseId]: courseCode };
+    localStorage.setItem("lockin:monashCourseCodes", JSON.stringify(next));
+  } catch (error) {
+    Logger.warn("Failed to persist Monash course code", error);
+  }
+}
+
+function getCurrentCourseCode() {
+  return activeNote?.courseCode || getLinkedContext().courseCode || null;
 }
 
 function normalizeUrl(url) {
@@ -2131,12 +2265,13 @@ async function saveDraftNotesAsSeparate() {
 
       if (!content) continue; // Skip empty notes
 
+      const courseCode = getCurrentCourseCode();
       const noteData = {
         title: title,
         content: content,
         sourceSelection: cachedSelection || "",
         sourceUrl: window.location.href,
-        courseCode: null,
+        courseCode: courseCode || null,
         noteType: note.type || "general",
         tags: currentStudyResponse.tags || [],
       };
