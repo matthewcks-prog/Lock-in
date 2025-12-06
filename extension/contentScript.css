@@ -4,6 +4,111 @@
  * overlays on mobile. Replaces the old floating bubble UI.
  */
 
+/* === DESIGN SYSTEM === */
+:root {
+  --lockin-accent: #4f46e5;
+  --lockin-accent-soft: #eef2ff;
+  --lockin-border: #e4e4f0;
+  --lockin-bg: #ffffff;
+  --lockin-muted: #777;
+  --lockin-radius-lg: 12px;
+  --lockin-radius-md: 8px;
+  --lockin-radius-pill: 999px;
+}
+
+/* Generic card */
+.lockin-card {
+  background: var(--lockin-bg);
+  border: 1px solid var(--lockin-border);
+  border-radius: var(--lockin-radius-lg);
+  padding: 10px 12px;
+}
+
+/* Primary pill button */
+.lockin-btn-primary {
+  border-radius: var(--lockin-radius-pill);
+  border: none;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--lockin-accent);
+  color: white;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lockin-btn-primary:hover {
+  background: #4338ca;
+}
+
+.lockin-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockin-btn-ghost {
+  border-radius: var(--lockin-radius-pill);
+  border: 1px solid var(--lockin-border);
+  padding: 4px 10px;
+  font-size: 12px;
+  background: #f9f9ff;
+  color: #444;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-btn-ghost:hover {
+  background: #f0f0f5;
+  border-color: #d6d8ff;
+}
+
+.lockin-btn-small {
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.lockin-link-button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--lockin-accent);
+  transition: opacity 0.15s ease;
+}
+
+.lockin-link-button:hover {
+  opacity: 0.7;
+}
+
+.lockin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 11px;
+}
+
+.lockin-field span {
+  color: var(--lockin-muted);
+  font-weight: 500;
+}
+
+.lockin-field input,
+.lockin-field textarea {
+  border-radius: 6px;
+  border: 1px solid var(--lockin-border);
+  padding: 4px 6px;
+  font-size: 12px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.lockin-field input:focus,
+.lockin-field textarea:focus {
+  outline: none;
+  border-color: var(--lockin-accent);
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+}
+
 /* === ROOT CONTAINER === */
 #lockin-root {
   position: fixed;
@@ -87,41 +192,7 @@ body {
 }
 
 /* === SIDEBAR HEADER === */
-.lockin-sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #fafbfc;
-  flex-shrink: 0;
-}
-
-.lockin-logo-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.lockin-logo-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--lockin-accent, #667eea);
-}
-
-.lockin-title-text {
-  font-size: 16px;
-  font-weight: 700;
-  color: #111827;
-}
-
-.lockin-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* Header removed to save space */
 
 .lockin-minimize-btn {
   background: none;
@@ -132,6 +203,10 @@ body {
   color: #6b7280;
   border-radius: 4px;
   transition: all 0.15s ease;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
 }
 
 .lockin-minimize-btn:hover {
@@ -145,6 +220,7 @@ body {
   border-bottom: 1px solid #e5e7eb;
   background: white;
   flex-shrink: 0;
+  position: relative;
 }
 
 .lockin-mode-selector-container {
@@ -227,28 +303,239 @@ body {
   font-size: 14px;
 }
 
-/* === SIDEBAR CHAT SECTION === */
+/* === TABS === */
+.lockin-tabs {
+  display: flex;
+  border-bottom: 1px solid #e2e2ea;
+  margin-bottom: 8px;
+  padding: 0 20px;
+}
+
+.lockin-tab {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 500;
+  color: #666;
+  font-size: 14px;
+  transition: color 0.15s ease;
+}
+
+.lockin-tab:hover {
+  color: #222;
+}
+
+.lockin-tab.is-active {
+  color: #222;
+  border-bottom: 2px solid #4f46e5;
+}
+
+/* === TAB PANELS === */
+.lockin-tabpanels {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lockin-tabpanel {
+  display: none;
+  flex-direction: column;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lockin-tabpanel.is-active {
+  display: flex;
+}
+
+/* === CHAT LAYOUT (History + Chat side by side) === */
+.lockin-chat-layout {
+  display: flex;
+  flex-direction: row;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* === HISTORY SIDEBAR (Left side) === */
+.lockin-history-sidebar {
+  display: flex;
+  flex-direction: row;
+  border-right: 1px solid #e5e7eb;
+  background: #f8fafc;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  position: relative;
+}
+
+.lockin-history-sidebar[data-state="collapsed"] {
+  width: 40px;
+}
+
+.lockin-history-sidebar[data-state="expanded"] {
+  width: 240px;
+}
+
+/* History toggle button (3 vertical dashes) */
+.lockin-history-toggle-btn {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 40px;
+  height: 100%;
+  border: none;
+  background: #f8fafc;
+  border-right: 1px solid #e5e7eb;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  z-index: 10;
+  padding: 0;
+}
+
+.lockin-history-toggle-btn:hover {
+  background: #e5e7eb;
+}
+
+/* 3 vertical dashes icon */
+.lockin-history-toggle-icon {
+  display: block;
+  font-size: 20px;
+  line-height: 1;
+  color: #6b7280;
+  font-weight: 300;
+  letter-spacing: 0;
+}
+
+.lockin-history-toggle-btn:hover .lockin-history-toggle-icon {
+  color: #374151;
+}
+
+.lockin-history-sidebar[data-state="expanded"] .lockin-history-toggle-btn {
+  border-right: 1px solid #e5e7eb;
+}
+
+/* History content container */
+.lockin-sidebar-history {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 12px 16px 12px 48px; /* Left padding to account for toggle button */
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-width: 0;
+}
+
+.lockin-history-sidebar[data-state="collapsed"] .lockin-sidebar-history {
+  display: none;
+}
+
+/* === SIDEBAR CHAT SECTION (Right side) === */
 .lockin-sidebar-chat {
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 16px 20px;
-  gap: 12px;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  min-width: 0;
+  height: 100%;
+  position: relative;
+}
+
+/* Chat messages wrapper with resize capability */
+.lockin-chat-messages-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .lockin-chat-messages {
-  flex: 1;
+  flex: 1 1 auto;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 0;
+  gap: 12px;
+  min-height: 150px;
+  max-height: 100%;
   overscroll-behavior: contain;
+  padding: 16px 20px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Resize handle */
+.lockin-chat-resize-handle {
+  width: 100%;
+  height: 8px;
+  background: transparent;
+  cursor: ns-resize;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background 0.15s ease;
+}
+
+.lockin-chat-resize-handle:hover {
+  background: #e5e7eb;
+}
+
+.lockin-chat-resize-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 4px;
+  background: #9ca3af;
+  border-radius: 2px;
+  transition: background 0.15s ease;
+}
+
+.lockin-chat-resize-handle:hover::before {
+  background: #6b7280;
+}
+
+/* Bottom section (suggested notes + input) */
+.lockin-chat-bottom-section {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 60px;
+  overflow: visible;
+  position: relative;
+  z-index: 1;
 }
 
 .lockin-chat-msg {
   display: flex;
+  width: 100%;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .lockin-chat-msg-user {
@@ -261,25 +548,30 @@ body {
 
 .lockin-chat-bubble {
   max-width: 85%;
-  padding: 10px 12px;
+  padding: 12px 16px;
   border-radius: 12px;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .lockin-chat-msg-user .lockin-chat-bubble {
   background: #e0e7ff;
   color: #1e3a8a;
   border-bottom-right-radius: 4px;
+  border: 1px solid #c7d2fe;
+  font-weight: 500;
 }
 
 .lockin-chat-msg-assistant .lockin-chat-bubble {
-  background: #f3f4f6;
+  background: #ffffff;
   color: #111827;
   border-bottom-left-radius: 4px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .lockin-chat-msg-pending .lockin-chat-bubble {
@@ -289,20 +581,46 @@ body {
 
 .lockin-chat-placeholder {
   text-align: center;
-  padding: 16px;
+  padding: 32px 16px;
   color: #6b7280;
   font-size: 13px;
   word-break: break-word;
   overflow-wrap: anywhere;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
 }
 
 .lockin-chat-input {
   display: flex;
   gap: 8px;
-  align-items: flex-end;
+  align-items: center;
   flex-shrink: 0;
+  padding: 12px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafbfc;
 }
 
+.lockin-chat-input-field {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.lockin-chat-input-field:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
+}
+
+/* Legacy support for textarea */
 .lockin-chat-textarea {
   flex: 1;
   border: 1px solid #d1d5db;
@@ -355,18 +673,274 @@ body {
   }
 }
 
-/* === SIDEBAR HISTORY SECTION === */
-.lockin-sidebar-history {
+/* === SUGGESTED NOTES (inside Chat tab) === */
+.lockin-suggested-notes {
+  flex-shrink: 0;
+  min-height: 0;
+  padding: 12px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafbfc;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  max-height: 200px;
-  border-top: 1px solid #e5e7eb;
-  background: #f8fafc;
-  padding: 12px 16px;
-  gap: 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.lockin-suggested-notes-wrapper {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: var(--lockin-radius-lg);
+  background: var(--lockin-accent-soft);
+  border: 1px solid #d6d8ff;
+  font-size: 13px;
+  max-height: 300px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lockin-suggested-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lockin-suggested-notes-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lockin-suggested-notes-toggle {
+  /* Uses .lockin-btn-ghost styles, but override padding for icon button */
+  padding: 2px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+}
+
+.lockin-suggested-notes-toggle-icon {
+  display: block;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.lockin-suggested-notes-wrapper[data-collapsed="true"] .lockin-suggested-notes-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.lockin-save-all-btn {
+  /* Uses .lockin-btn-primary styles */
+}
+
+.lockin-suggested-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease;
+  max-height: 400px;
+}
+
+.lockin-suggested-notes-wrapper[data-collapsed="true"] .lockin-suggested-notes-list {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+/* Scrollbar for suggested notes list */
+.lockin-suggested-notes-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lockin-suggested-notes-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lockin-suggested-notes-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.lockin-suggested-notes-list::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.lockin-suggested-note {
+  border-radius: var(--lockin-radius-md);
+  background: white;
+  padding: 6px;
+  border: 1px solid #e3e3f4;
+  transition: opacity 0.15s ease;
+}
+
+.lockin-suggested-note.is-saved {
+  opacity: 0.6;
+}
+
+.lockin-suggested-note-top {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.lockin-suggested-note-type,
+.lockin-note-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--lockin-radius-pill);
+  background: var(--lockin-accent-soft);
+  color: var(--lockin-accent);
+}
+
+.lockin-suggested-note-save-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  transition: opacity 0.15s ease;
+}
+
+.lockin-suggested-note-save-btn:hover {
+  opacity: 0.7;
+}
+
+.lockin-suggested-note-save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockin-suggested-note-label {
+  /* Uses .lockin-field styles */
+}
+
+.lockin-suggested-note-content-input {
+  min-height: 60px;
+}
+
+/* === NOTES TAB === */
+.lockin-sidebar-notes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.lockin-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
   flex-shrink: 0;
 }
+
+.lockin-notes-filters {
+  display: flex;
+  gap: 6px;
+}
+
+.lockin-notes-filter {
+  border-radius: var(--lockin-radius-pill);
+  border: 1px solid var(--lockin-border);
+  padding: 4px 10px;
+  background: #f7f7fb;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-notes-filter:hover {
+  background: #f0f0f5;
+}
+
+.lockin-notes-filter.is-active {
+  background: var(--lockin-accent);
+  color: #fff;
+  border-color: var(--lockin-accent);
+}
+
+.lockin-new-note-editor {
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.lockin-new-note-editor.hidden {
+  display: none;
+}
+
+.lockin-new-note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.lockin-new-note-actions {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.lockin-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.lockin-empty {
+  font-size: 13px;
+  color: var(--lockin-muted);
+  margin-top: 8px;
+  text-align: center;
+  padding: 16px;
+}
+
+.lockin-note-item {
+  /* Uses .lockin-card styles */
+  font-size: 13px;
+}
+
+.lockin-note-header {
+  margin-bottom: 4px;
+}
+
+.lockin-note-title {
+  font-weight: 600;
+}
+
+.lockin-note-meta {
+  font-size: 11px;
+  color: var(--lockin-muted);
+  margin-top: 2px;
+}
+
+.lockin-note-body {
+  font-size: 13px;
+  color: #333;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+/* History section styles are now above in .lockin-sidebar-history */
 
 .lockin-history-actions {
   display: flex;
@@ -404,7 +978,8 @@ body {
   flex-direction: column;
   gap: 6px;
   overflow-y: auto;
-  max-height: 150px;
+  flex: 1;
+  min-height: 0;
 }
 
 .lockin-history-item {
@@ -501,6 +1076,15 @@ body {
 /* === RESPONSIVE BEHAVIOR === */
 @media (max-width: 1024px) {
   /* On narrow screens, sidebar is overlay mode (no page shrinking) */
+  .lockin-history-sidebar[data-state="expanded"] {
+    width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .lockin-history-sidebar[data-state="expanded"] {
+    width: 180px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

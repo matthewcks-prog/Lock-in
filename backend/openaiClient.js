@@ -390,7 +390,44 @@ Using the selected text, the previous conversation, and the mode instructions, a
   }
 }
 
+/**
+ * Generate embedding for text using OpenAI's embedding model
+ * @param {string} text - Text to embed
+ * @returns {Promise<number[]>} Array of embedding floats
+ */
+async function embedText(text) {
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    throw new Error('Text is required and must be a non-empty string');
+  }
+
+  const res = await openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text.trim(),
+  });
+
+  return res.data[0].embedding; // array of floats
+}
+
+/**
+ * Generic chat function for use with any messages array
+ * @param {Array<{role: string, content: string}>} messages - Chat messages
+ * @returns {Promise<string>} Assistant's response text
+ */
+async function chatWithModel({ messages }) {
+  const completion = await openai.chat.completions.create({
+    model: DEFAULT_MODEL,
+    messages,
+    temperature: 0.4,
+    max_tokens: 700,
+  });
+
+  const choice = completion.choices[0]?.message;
+  return (choice?.content || '').trim();
+}
+
 module.exports = {
   generateLockInResponse,
   generateStructuredStudyResponse,
+  embedText,
+  chatWithModel,
 };

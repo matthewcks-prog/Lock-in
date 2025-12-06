@@ -95,6 +95,7 @@ let isHistoryPanelOpen = false;
 let historyStatusMessage = "";
 let isHistoryLoading = false;
 let hasLoadedChats = false;
+let currentStudyResponse = null; // Store the current StudyResponse data (notes, todos, tags, etc.)
 const isMac = navigator.platform.toUpperCase().includes("MAC");
 
 // Theme & personalisation state
@@ -227,6 +228,7 @@ function initializeSidebar() {
   window.addEventListener("lockin:switchMode", handleSwitchModeEvent);
   window.addEventListener("lockin:sendMessage", handleSendMessageEvent);
   window.addEventListener("lockin:deleteChat", handleDeleteChatEvent);
+  window.addEventListener("lockin:loadNotes", handleLoadNotesEvent);
   Logger.debug("Sidebar event listeners attached");
 }
 
@@ -313,6 +315,25 @@ function handleDeleteChatEvent(event) {
   handleDeleteChat(chatId);
 }
 
+function handleLoadNotesEvent(event) {
+  const filter = event.detail?.filter || "page";
+  loadNotes(filter);
+
+  // Attach filter button listeners
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  if (sidebarElement) {
+    const filterButtons = sidebarElement.querySelectorAll(".lockin-notes-filter");
+    filterButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const newFilter = btn.getAttribute("data-filter");
+        filterButtons.forEach((b) => b.classList.toggle("is-active", b === btn));
+        loadNotes(newFilter);
+      });
+    });
+  }
+}
+
 /**
  * Render sidebar content
  */
@@ -329,17 +350,22 @@ function renderSidebarContent() {
   // Build each section separately
   const modesHtml = buildModeSelector();
   const chatHtml = buildChatSection();
+  const notesHtml = buildNotesSection();
   const historyHtml = buildHistorySection();
 
   // Render using sidebar's renderContent method
   lockinWidget.renderContent({
     modes: modesHtml,
     chat: chatHtml,
+    notes: notesHtml,
     history: historyHtml,
   });
 
   // Attach textarea and input listeners after rendering
   attachSidebarInputListeners(sidebarElement);
+  attachNoteButtonListeners(sidebarElement);
+  attachNewNoteEditorListeners(sidebarElement);
+  attachChatResizeHandler(sidebarElement);
 
   scrollChatToBottom();
 }
@@ -348,12 +374,13 @@ function renderSidebarContent() {
  * Attach event listeners to sidebar input elements
  */
 function attachSidebarInputListeners(sidebarElement) {
-  const textarea = sidebarElement.querySelector(".lockin-chat-textarea");
+  const input = sidebarElement.querySelector("#lockin-chat-input");
   const sendBtn = sidebarElement.querySelector(".lockin-send-btn");
+  const chatForm = sidebarElement.querySelector(".lockin-chat-input");
 
-  if (textarea) {
-    textarea.value = pendingInputValue;
-    textarea.addEventListener("input", (e) => {
+  if (input) {
+    input.value = pendingInputValue;
+    input.addEventListener("input", (e) => {
       pendingInputValue = e.target.value;
       if (sendBtn) {
         sendBtn.disabled =
@@ -361,11 +388,261 @@ function attachSidebarInputListeners(sidebarElement) {
       }
     });
 
-    textarea.addEventListener("keydown", (e) => {
+    input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey && !isChatLoading) {
         e.preventDefault();
         if (sendBtn) sendBtn.click();
       }
+    });
+  }
+
+  if (chatForm) {
+    chatForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (sendBtn && !sendBtn.disabled) {
+        handleFollowUpSubmit();
+      }
+    });
+  }
+}
+
+/**
+ * Attach event listeners to note save buttons
+ */
+function attachNoteButtonListeners(sidebarElement) {
+  // Save individual note buttons
+  const saveNoteButtons = sidebarElement.querySelectorAll(".lockin-suggested-note-save-btn");
+  saveNoteButtons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const noteIndex = parseInt(btn.getAttribute("data-note-index"), 10);
+      if (!isNaN(noteIndex)) {
+        saveNote(noteIndex);
+      }
+    });
+  });
+
+  // Save all notes button
+  const saveAllBtn = sidebarElement.querySelector(".lockin-save-all-btn");
+  if (saveAllBtn) {
+    saveAllBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      saveAllNotes();
+    });
+  }
+
+  // Suggested notes collapse/expand toggle
+  const notesToggle = sidebarElement.querySelector(".lockin-suggested-notes-toggle");
+  const notesWrapper = sidebarElement.querySelector(".lockin-suggested-notes-wrapper");
+  if (notesToggle && notesWrapper) {
+    // Restore collapsed state from storage
+    if (Storage) {
+      Storage.getLocal("lockin_suggested_notes_collapsed").then((data) => {
+        const isCollapsed = data?.lockin_suggested_notes_collapsed === true;
+        if (isCollapsed) {
+          notesWrapper.setAttribute("data-collapsed", "true");
+          const icon = notesToggle.querySelector(".lockin-suggested-notes-toggle-icon");
+          if (icon) icon.textContent = "▶";
+        }
+      }).catch(() => {
+        // Ignore storage errors
+      });
+    }
+
+    notesToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isCollapsed = notesWrapper.getAttribute("data-collapsed") === "true";
+      const icon = notesToggle.querySelector(".lockin-suggested-notes-toggle-icon");
+      
+      if (isCollapsed) {
+        notesWrapper.removeAttribute("data-collapsed");
+        if (icon) icon.textContent = "▼";
+        if (Storage) {
+          Storage.setLocal("lockin_suggested_notes_collapsed", false).catch(() => {});
+        }
+      } else {
+        notesWrapper.setAttribute("data-collapsed", "true");
+        if (icon) icon.textContent = "▶";
+        if (Storage) {
+          Storage.setLocal("lockin_suggested_notes_collapsed", true).catch(() => {});
+        }
+      }
+    });
+  }
+}
+
+/**
+ * Attach event listeners for the new note editor
+ */
+function attachNewNoteEditorListeners(sidebarElement) {
+  const newNoteBtn = sidebarElement.querySelector(".lockin-new-note-btn");
+  const editorEl = sidebarElement.querySelector(".lockin-new-note-editor");
+  const cancelBtn = sidebarElement.querySelector(".lockin-new-note-cancel");
+  const saveBtn = sidebarElement.querySelector(".lockin-new-note-save");
+  const titleInput = sidebarElement.querySelector("#lockin-new-note-title");
+  const contentInput = sidebarElement.querySelector("#lockin-new-note-content");
+  const filters = sidebarElement.querySelectorAll(".lockin-notes-filter");
+  const listEl = sidebarElement.querySelector("#lockin-notes-list");
+
+  if (!newNoteBtn || !editorEl || !cancelBtn || !saveBtn || !titleInput || !contentInput) {
+    return;
+  }
+
+  // Get context for note creation
+  const context = {
+    pageUrl: window.location.href,
+    courseCode: null, // TODO: Extract from page context if available
+  };
+
+  // Open editor
+  newNoteBtn.addEventListener("click", () => {
+    editorEl.classList.remove("hidden");
+    titleInput.value = "";
+    contentInput.value = "";
+    contentInput.focus();
+  });
+
+  // Cancel editor
+  cancelBtn.addEventListener("click", () => {
+    editorEl.classList.add("hidden");
+    titleInput.value = "";
+    contentInput.value = "";
+  });
+
+  // Save note
+  saveBtn.addEventListener("click", async () => {
+    const title = titleInput.value.trim();
+    const content = contentInput.value.trim();
+    
+    if (!content) {
+      showToast("Note content cannot be empty.", "error");
+      return;
+    }
+
+    if (!window.LockInAPI || !window.LockInAPI.createNote) {
+      Logger.error("LockInAPI.createNote is not available");
+      showToast("Failed to save note. API not available.", "error");
+      return;
+    }
+
+    try {
+      await window.LockInAPI.createNote({
+        title: title || "Untitled Note",
+        content: content,
+        sourceSelection: "", // Since user typed it
+        sourceUrl: context.pageUrl,
+        courseCode: context.courseCode,
+        noteType: "manual",
+        tags: [],
+      });
+
+      editorEl.classList.add("hidden");
+      titleInput.value = "";
+      contentInput.value = "";
+
+      // Reload notes with current filter
+      const activeFilter = Array.from(filters).find((btn) => btn.classList.contains("is-active"));
+      const currentFilter = activeFilter ? activeFilter.getAttribute("data-filter") : "page";
+      await loadNotes(currentFilter);
+
+      showToast("Note saved successfully!");
+    } catch (error) {
+      Logger.error("Failed to save note:", error);
+      showToast("Failed to save note. Please try again.", "error");
+    }
+  });
+}
+
+/**
+ * Attach resize handler for chat messages container
+ */
+function attachChatResizeHandler(sidebarElement) {
+  const resizeHandle = sidebarElement.querySelector("#lockin-chat-resize-handle");
+  const messagesWrapper = sidebarElement.querySelector(".lockin-chat-messages-wrapper");
+  const messagesContainer = sidebarElement.querySelector("#lockin-chat-messages");
+  const bottomSection = sidebarElement.querySelector(".lockin-chat-bottom-section");
+  
+  if (!resizeHandle || !messagesWrapper || !messagesContainer || !bottomSection) {
+    return;
+  }
+
+  let isResizing = false;
+  let startY = 0;
+  let startMessagesHeight = 0;
+  let startBottomHeight = 0;
+
+  resizeHandle.addEventListener("mousedown", (e) => {
+    isResizing = true;
+    startY = e.clientY;
+    startMessagesHeight = messagesContainer.offsetHeight;
+    startBottomHeight = bottomSection.offsetHeight;
+    
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    
+    e.preventDefault();
+    resizeHandle.style.cursor = "ns-resize";
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+  });
+
+  function handleMouseMove(e) {
+    if (!isResizing) return;
+    
+    const deltaY = e.clientY - startY;
+    const newMessagesHeight = startMessagesHeight + deltaY;
+    
+    // Get the parent container height
+    const parentElement = messagesWrapper.parentElement;
+    const parentHeight = parentElement.offsetHeight;
+    const resizeHandleHeight = 8; // Height of resize handle
+    const inputHeight = 60; // Approximate height of input section
+    const minMessagesHeight = 150; // Minimum height for messages container
+    const minBottomHeight = inputHeight + 10; // Minimum height for bottom section (input + padding)
+    
+    // Calculate available space (parent height minus resize handle)
+    const availableHeight = parentHeight - resizeHandleHeight;
+    const maxMessagesHeight = availableHeight - minBottomHeight;
+    
+    // Clamp the messages height
+    const clampedMessagesHeight = Math.max(minMessagesHeight, Math.min(maxMessagesHeight, newMessagesHeight));
+    
+    // Apply height to messages container
+    messagesContainer.style.height = `${clampedMessagesHeight}px`;
+    messagesContainer.style.flex = "0 0 auto";
+    
+    // Bottom section will naturally adjust due to flex layout
+    // The suggested notes section will be squeezed and can scroll if needed
+  }
+
+  function handleMouseUp() {
+    isResizing = false;
+    resizeHandle.style.cursor = "";
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    
+    document.removeEventListener("mousemove", handleMouseMove);
+    document.removeEventListener("mouseup", handleMouseUp);
+    
+    // Save the height to storage
+    if (Storage && messagesContainer.style.height) {
+      const height = parseInt(messagesContainer.style.height, 10);
+      Storage.setLocal("lockin_chat_messages_height", height).catch(() => {
+        // Ignore storage errors
+      });
+    }
+  }
+
+  // Restore saved height
+  if (Storage) {
+    Storage.getLocal("lockin_chat_messages_height").then((data) => {
+      const savedHeight = data?.lockin_chat_messages_height;
+      if (savedHeight && typeof savedHeight === "number") {
+        messagesContainer.style.height = `${savedHeight}px`;
+        messagesContainer.style.flex = "0 0 auto";
+      }
+    }).catch(() => {
+      // Ignore storage errors
     });
   }
 }
@@ -376,18 +653,127 @@ function attachSidebarInputListeners(sidebarElement) {
 function buildChatSection() {
   const chatHtml = buildChatMessagesHtml(chatHistory);
   const sendDisabled = isChatLoading || pendingInputValue.trim().length === 0;
+  
+  // Suggested notes container (inside chat panel)
+  const suggestedNotesHtml = buildSuggestedNotesHtml();
 
   return `
-    <div class="lockin-chat-messages">${chatHtml}</div>
-    <div class="lockin-chat-input">
-      <textarea class="lockin-chat-textarea" id="lockin-chat-input" name="lockin-chat-input" rows="2" placeholder="Ask a follow-up question..." ${
-        isChatLoading ? "disabled" : ""
-      }></textarea>
-      <button class="lockin-send-btn" type="button" ${
-        sendDisabled ? "disabled" : ""
-      }>Send</button>
+    <div class="lockin-chat-messages-wrapper">
+      <div class="lockin-chat-messages" id="lockin-chat-messages">${chatHtml}</div>
+      <div class="lockin-chat-resize-handle" id="lockin-chat-resize-handle"></div>
+    </div>
+    <div class="lockin-chat-bottom-section">
+      <div class="lockin-suggested-notes" id="lockin-suggested-notes">${suggestedNotesHtml}</div>
+      <form class="lockin-chat-input">
+        <input class="lockin-chat-input-field" id="lockin-chat-input" name="lockin-chat-input" placeholder="Ask a follow-up question..." ${
+          isChatLoading ? "disabled" : ""
+        } />
+        <button class="lockin-send-btn" type="submit" ${
+          sendDisabled ? "disabled" : ""
+        }>Send</button>
+      </form>
     </div>
   `;
+}
+
+/**
+ * Build the notes section HTML
+ */
+function buildNotesSection() {
+  return `
+    <div class="lockin-notes-header">
+      <div class="lockin-notes-filters">
+        <button class="lockin-notes-filter is-active" data-filter="page" type="button">This page</button>
+        <button class="lockin-notes-filter" data-filter="course" type="button">This course</button>
+        <button class="lockin-notes-filter" data-filter="all" type="button">All</button>
+      </div>
+      <button class="lockin-btn-primary lockin-new-note-btn" type="button">+ New note</button>
+    </div>
+    <div class="lockin-card lockin-new-note-editor hidden">
+      <div class="lockin-new-note-header">
+        <span>Create note</span>
+        <button class="lockin-link-button lockin-new-note-cancel" type="button">Cancel</button>
+      </div>
+      <label class="lockin-field">
+        <span>Title</span>
+        <input id="lockin-new-note-title" placeholder="E.g. Relational model" />
+      </label>
+      <label class="lockin-field">
+        <span>Content</span>
+        <textarea id="lockin-new-note-content" rows="4" placeholder="Write your own note..."></textarea>
+      </label>
+      <div class="lockin-new-note-actions">
+        <button class="lockin-btn-primary lockin-new-note-save" type="button">Save</button>
+      </div>
+    </div>
+    <div class="lockin-notes-list" id="lockin-notes-list">
+      <p class="lockin-empty">No notes found.</p>
+    </div>
+  `;
+}
+
+/**
+ * Load and display notes
+ */
+async function loadNotes(filter = "page") {
+  if (!window.LockInAPI || !window.LockInAPI.listNotes) {
+    Logger.error("LockInAPI.listNotes is not available");
+    return;
+  }
+
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  const notesList = sidebarElement?.querySelector("#lockin-notes-list");
+  if (!notesList) return;
+
+  notesList.innerHTML = '<p class="lockin-empty">Loading...</p>';
+
+  try {
+    let params = {};
+    if (filter === "page") {
+      params.sourceUrl = window.location.href;
+    } else if (filter === "course") {
+      // TODO: Extract courseCode from page context if available
+      params.courseCode = null;
+    }
+    params.limit = 50;
+
+    const notes = await window.LockInAPI.listNotes(params);
+    renderNotesList(notes, notesList);
+  } catch (error) {
+    Logger.error("Failed to load notes:", error);
+    notesList.innerHTML = '<p class="lockin-empty">Failed to load notes. Please try again.</p>';
+  }
+}
+
+/**
+ * Render notes list
+ */
+function renderNotesList(notes, listEl) {
+  listEl.innerHTML = "";
+
+  if (!notes || notes.length === 0) {
+    listEl.innerHTML = '<p class="lockin-empty">No notes found.</p>';
+    return;
+  }
+
+  notes.forEach((note) => {
+    const item = document.createElement("div");
+    item.className = "lockin-card lockin-note-item";
+    item.innerHTML = `
+      <div class="lockin-note-header">
+        <div>
+          <div class="lockin-note-title">${escapeHtml(note.title || "Untitled")}</div>
+          ${
+            note.course_code
+              ? `<div class="lockin-note-meta">${escapeHtml(note.course_code)}</div>`
+              : ""
+          }
+        </div>
+      </div>
+      <div class="lockin-note-body">${escapeHtml(note.content)}</div>
+    `;
+    listEl.appendChild(item);
+  });
 }
 
 /**
@@ -751,6 +1137,9 @@ async function runMode(mode) {
       },
     ];
 
+    // Store the full StudyResponse for note saving
+    currentStudyResponse = data;
+
     // Log notes, todos, tags, and difficulty for now (can be used later)
     if (data.notes && data.notes.length > 0) {
       Logger.debug("Notes received:", data.notes);
@@ -924,6 +1313,9 @@ async function sendFollowUpMessage(messageText) {
       },
     ];
 
+    // Store the full StudyResponse for note saving
+    currentStudyResponse = data;
+
     // Log notes, todos, tags, and difficulty for now (can be used later)
     if (data.notes && data.notes.length > 0) {
       Logger.debug("Notes received:", data.notes);
@@ -995,11 +1387,14 @@ function scrollChatToBottom() {
     return;
   }
 
+  // Use double requestAnimationFrame for more reliable scrolling
   requestAnimationFrame(() => {
-    const messagesEl = sidebarElement.querySelector(".lockin-chat-messages");
-    if (messagesEl) {
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
+    requestAnimationFrame(() => {
+      const messagesEl = sidebarElement.querySelector("#lockin-chat-messages");
+      if (messagesEl) {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    });
   });
 }
 
@@ -1045,6 +1440,214 @@ function buildChatMessagesHtml(messages) {
   }
 
   return rendered;
+}
+
+/**
+ * Build HTML for suggested notes (editable inputs)
+ */
+function buildSuggestedNotesHtml() {
+  if (!currentStudyResponse || !currentStudyResponse.notes || currentStudyResponse.notes.length === 0) {
+    return "";
+  }
+
+  const notes = currentStudyResponse.notes;
+  const notesList = notes
+    .map((note, index) => {
+      const noteType = note.type || "general";
+      const title = escapeHtml(note.title || "");
+      const content = escapeHtml(note.content || "");
+      return `
+        <div class="lockin-suggested-note" data-note-index="${index}">
+          <div class="lockin-suggested-note-top">
+            <span class="lockin-note-pill">${escapeHtml(noteType)}</span>
+            <button class="lockin-link-button lockin-suggested-note-save-btn" type="button" data-note-index="${index}">💾 Save</button>
+          </div>
+          <label class="lockin-field">
+            <span>Title</span>
+            <input class="lockin-suggested-note-title-input" type="text" value="${title}" />
+          </label>
+          <label class="lockin-field">
+            <span>Content</span>
+            <textarea class="lockin-suggested-note-content-input">${content}</textarea>
+          </label>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `
+    <div class="lockin-card lockin-suggested-notes-wrapper">
+      <div class="lockin-suggested-notes-header">
+        <div class="lockin-suggested-notes-title">📝 Suggested notes</div>
+        <div class="lockin-suggested-notes-actions">
+          <button class="lockin-btn-ghost lockin-btn-small lockin-suggested-notes-toggle" type="button" aria-label="Toggle suggested notes">
+            <span class="lockin-suggested-notes-toggle-icon">▼</span>
+          </button>
+          <button class="lockin-btn-primary lockin-btn-small lockin-save-all-btn" type="button">Save all</button>
+        </div>
+      </div>
+      <div class="lockin-suggested-notes-list">${notesList}</div>
+    </div>
+  `;
+}
+
+/**
+ * Save a single note to the backend (from editable inputs)
+ */
+async function saveNote(noteIndex) {
+  if (!currentStudyResponse || !currentStudyResponse.notes || !currentStudyResponse.notes[noteIndex]) {
+    Logger.error("Cannot save note: note not found at index", noteIndex);
+    return;
+  }
+
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  if (!sidebarElement) return;
+
+  const noteElement = sidebarElement.querySelector(`[data-note-index="${noteIndex}"]`);
+  if (!noteElement) return;
+
+  const titleInput = noteElement.querySelector(".lockin-suggested-note-title-input");
+  const contentInput = noteElement.querySelector(".lockin-suggested-note-content-input");
+  const typeBadge = noteElement.querySelector(".lockin-suggested-note-type");
+
+  if (!titleInput || !contentInput) return;
+
+  const title = titleInput.value.trim();
+  const content = contentInput.value.trim();
+
+  if (!content) {
+    showToast("Note content cannot be empty.", "error");
+    return;
+  }
+
+  if (!window.LockInAPI || !window.LockInAPI.createNote) {
+    Logger.error("LockInAPI.createNote is not available");
+    return;
+  }
+
+  try {
+    const noteData = {
+      title: title || "Untitled Note",
+      content: content,
+      sourceSelection: cachedSelection || "",
+      sourceUrl: window.location.href,
+      courseCode: null, // Could be extracted from page context if available
+      noteType: typeBadge?.textContent?.trim() || "general",
+      tags: currentStudyResponse.tags || [],
+    };
+
+    await window.LockInAPI.createNote(noteData);
+    Logger.debug("Note saved successfully:", noteData.title);
+
+    // Update UI to show saved state
+    noteElement.classList.add("is-saved");
+    const saveBtn = noteElement.querySelector(".lockin-suggested-note-save-btn");
+    if (saveBtn) {
+      saveBtn.textContent = "✓ Saved";
+      saveBtn.disabled = true;
+    }
+
+    // Show toast notification
+    showToast("Note saved successfully!");
+  } catch (error) {
+    Logger.error("Failed to save note:", error);
+    showToast("Failed to save note. Please try again.", "error");
+  }
+}
+
+/**
+ * Save all notes from current StudyResponse (from editable inputs)
+ */
+async function saveAllNotes() {
+  if (!currentStudyResponse || !currentStudyResponse.notes || currentStudyResponse.notes.length === 0) {
+    Logger.error("No notes to save");
+    return;
+  }
+
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  if (!sidebarElement) return;
+
+  if (!window.LockInAPI || !window.LockInAPI.createNote) {
+    Logger.error("LockInAPI.createNote is not available");
+    return;
+  }
+
+  try {
+    const items = sidebarElement.querySelectorAll(".lockin-suggested-note");
+    const savePromises = [];
+
+    for (const item of items) {
+      const titleInput = item.querySelector(".lockin-suggested-note-title-input");
+      const contentInput = item.querySelector(".lockin-suggested-note-content-input");
+      const typeBadge = item.querySelector(".lockin-suggested-note-type");
+
+      if (!titleInput || !contentInput) continue;
+
+      const title = titleInput.value.trim();
+      const content = contentInput.value.trim();
+
+      if (!content) continue; // Skip empty notes
+
+      const noteData = {
+        title: title || "Untitled Note",
+        content: content,
+        sourceSelection: cachedSelection || "",
+        sourceUrl: window.location.href,
+        courseCode: null,
+        noteType: typeBadge?.textContent?.trim() || "general",
+        tags: currentStudyResponse.tags || [],
+      };
+
+      savePromises.push(
+        window.LockInAPI.createNote(noteData).then(() => {
+          item.classList.add("is-saved");
+          const saveBtn = item.querySelector(".lockin-suggested-note-save-btn");
+          if (saveBtn) {
+            saveBtn.textContent = "✓ Saved";
+            saveBtn.disabled = true;
+          }
+        })
+      );
+    }
+
+    await Promise.all(savePromises);
+    Logger.debug("All notes saved successfully");
+
+    showToast(`All ${savePromises.length} notes saved successfully!`);
+  } catch (error) {
+    Logger.error("Failed to save some notes:", error);
+    showToast("Failed to save some notes. Please try again.", "error");
+  }
+}
+
+/**
+ * Show a toast notification
+ */
+function showToast(message, type = "success") {
+  // Simple toast implementation - can be enhanced later
+  const toast = document.createElement("div");
+  toast.className = `lockin-toast lockin-toast-${type}`;
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: ${type === "error" ? "#ef4444" : "#10b981"};
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 10000;
+    font-size: 14px;
+    animation: lockin-toast-slide-in 0.3s ease-out;
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.animation = "lockin-toast-slide-out 0.3s ease-in";
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }
 
 /**
@@ -1434,23 +2037,7 @@ function convertRowsToChatHistory(rows = []) {
     .filter(Boolean);
 }
 
-function scrollChatToBottom() {
-  if (!lockinWidget) {
-    return;
-  }
-
-  const bubbleElement = lockinWidget.getBubbleElement();
-  if (!bubbleElement) {
-    return;
-  }
-
-  requestAnimationFrame(() => {
-    const messagesEl = bubbleElement.querySelector(".lockin-chat-messages");
-    if (messagesEl) {
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-  });
-}
+// Duplicate function removed - using the one above that works with sidebar
 
 // Legacy standalone error bubble and manual positioning have been removed.
 

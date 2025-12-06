@@ -13,6 +13,7 @@ const {
   isOriginAllowed,
 } = require("./config");
 const lockinRoutes = require("./routes/lockinRoutes");
+const noteRoutes = require("./routes/noteRoutes");
 
 function createApp() {
   const app = express();
@@ -69,6 +70,7 @@ function createApp() {
 
   // API routes
   app.use("/api", lockinRoutes);
+  app.use("/api", noteRoutes);
 
   // 404 handler
   app.use((req, res) => {

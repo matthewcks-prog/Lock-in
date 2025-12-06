@@ -310,6 +310,78 @@ async function deleteChat(chatId) {
   });
 }
 
+/**
+ * Create a new note
+ * @param {Object} note - Note data
+ * @param {string} note.title - Note title
+ * @param {string} note.content - Note content
+ * @param {string} [note.sourceSelection] - Original selected text
+ * @param {string} [note.sourceUrl] - Source URL
+ * @param {string} [note.courseCode] - Course code
+ * @param {string} [note.noteType] - Note type (e.g., "definition", "formula", "concept")
+ * @param {string[]} [note.tags] - Array of tags
+ * @returns {Promise<Object>}
+ */
+async function createNote(note) {
+  return apiRequest("/api/notes", {
+    method: "POST",
+    body: JSON.stringify(note),
+  });
+}
+
+/**
+ * List notes with optional filters
+ * @param {Object} [params] - Query parameters
+ * @param {string} [params.sourceUrl] - Filter by source URL
+ * @param {string} [params.courseCode] - Filter by course code
+ * @param {number} [params.limit] - Maximum number of notes to return
+ * @returns {Promise<Array>}
+ */
+async function listNotes(params = {}) {
+  const { sourceUrl, courseCode, limit = 50 } = params;
+  const queryParams = new URLSearchParams();
+  if (sourceUrl) queryParams.set("sourceUrl", sourceUrl);
+  if (courseCode) queryParams.set("courseCode", courseCode);
+  if (limit) queryParams.set("limit", String(limit));
+
+  const endpoint = `/api/notes${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+  return apiRequest(endpoint, {
+    method: "GET",
+  });
+}
+
+/**
+ * Search notes by semantic similarity
+ * @param {Object} params - Search parameters
+ * @param {string} params.query - Search query text
+ * @param {string} [params.courseCode] - Filter by course code
+ * @param {number} [params.k] - Number of matches to return
+ * @returns {Promise<Array>}
+ */
+async function searchNotes({ query, courseCode, k = 10 }) {
+  const queryParams = new URLSearchParams({ q: query, k: String(k) });
+  if (courseCode) queryParams.set("courseCode", courseCode);
+
+  return apiRequest(`/api/notes/search?${queryParams.toString()}`, {
+    method: "GET",
+  });
+}
+
+/**
+ * Chat with notes using semantic search
+ * @param {Object} params - Chat parameters
+ * @param {string} params.query - User's question
+ * @param {string} [params.courseCode] - Filter by course code
+ * @param {number} [params.k] - Number of notes to use as context
+ * @returns {Promise<{answer: string, usedNotes: Array}>}
+ */
+async function chatWithNotes({ query, courseCode, k = 8 }) {
+  return apiRequest("/api/notes/chat", {
+    method: "POST",
+    body: JSON.stringify({ query, courseCode, k }),
+  });
+}
+
 // Export for use in extension
 if (typeof window !== "undefined") {
   window.LockInAPI = {
@@ -320,6 +392,10 @@ if (typeof window !== "undefined") {
     getRecentChats,
     getChatMessages,
     deleteChat,
+    createNote,
+    listNotes,
+    searchNotes,
+    chatWithNotes,
   };
 }
 
@@ -333,6 +409,10 @@ if (typeof module !== "undefined" && module.exports) {
     getRecentChats,
     getChatMessages,
     deleteChat,
+    createNote,
+    listNotes,
+    searchNotes,
+    chatWithNotes,
   };
 }
 
