@@ -68,7 +68,6 @@ const ACCENT_COLORS = {
   ORANGE: { name: "Orange", hex: "#f59e0b" },
 };
 
-
 // ===================================
 // State Management
 // ===================================
@@ -322,12 +321,16 @@ function handleLoadNotesEvent(event) {
   // Attach filter button listeners
   const sidebarElement = lockinWidget?.getSidebarElement();
   if (sidebarElement) {
-    const filterButtons = sidebarElement.querySelectorAll(".lockin-notes-filter");
+    const filterButtons = sidebarElement.querySelectorAll(
+      ".lockin-notes-filter"
+    );
     filterButtons.forEach((btn) => {
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         const newFilter = btn.getAttribute("data-filter");
-        filterButtons.forEach((b) => b.classList.toggle("is-active", b === btn));
+        filterButtons.forEach((b) =>
+          b.classList.toggle("is-active", b === btn)
+        );
         loadNotes(newFilter);
       });
     });
@@ -363,9 +366,9 @@ function renderSidebarContent() {
 
   // Attach textarea and input listeners after rendering
   attachSidebarInputListeners(sidebarElement);
+  attachChatActionListeners(sidebarElement);
   attachNoteButtonListeners(sidebarElement);
   attachNewNoteEditorListeners(sidebarElement);
-  attachChatResizeHandler(sidebarElement);
 
   scrollChatToBottom();
 }
@@ -407,11 +410,75 @@ function attachSidebarInputListeners(sidebarElement) {
 }
 
 /**
- * Attach event listeners to note save buttons
+ * Attach event listeners to chat action buttons (Save as note, Generate notes)
  */
+function attachChatActionListeners(sidebarElement) {
+  const actionButtons = sidebarElement.querySelectorAll(
+    ".lockin-chat-action-btn"
+  );
+
+  actionButtons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const action = btn.getAttribute("data-action");
+      const messageId = btn.getAttribute("data-message-id");
+
+      // Get the message content from the bubble
+      const bubble = btn
+        .closest(".lockin-chat-msg")
+        ?.querySelector(".lockin-chat-bubble");
+      const messageContent = bubble?.textContent?.trim() || "";
+
+      if (action === "save-note") {
+        onSaveAsNote(messageId, messageContent);
+      } else if (action === "generate-notes") {
+        onGenerateNotes(messageId, messageContent);
+      }
+    });
+  });
+
+  // Attach draft panel actions
+  const draftPanel = sidebarElement.querySelector(".lockin-ai-draft-panel");
+  if (draftPanel) {
+    const insertBtn = draftPanel.querySelector('[data-action="insert-draft"]');
+    const saveBtn = draftPanel.querySelector(
+      '[data-action="save-draft-separate"]'
+    );
+    const dismissBtn = draftPanel.querySelector(
+      '[data-action="dismiss-draft"]'
+    );
+    const closeBtn = draftPanel.querySelector(".lockin-draft-panel-close");
+
+    if (insertBtn) {
+      insertBtn.addEventListener("click", () => {
+        insertDraftIntoCurrent();
+      });
+    }
+
+    if (saveBtn) {
+      saveBtn.addEventListener("click", () => {
+        saveDraftNotesAsSeparate();
+      });
+    }
+
+    if (dismissBtn) {
+      dismissBtn.addEventListener("click", () => {
+        clearAiDraftPanel();
+      });
+    }
+
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => {
+        clearAiDraftPanel();
+      });
+    }
+  }
+}
 function attachNoteButtonListeners(sidebarElement) {
   // Save individual note buttons
-  const saveNoteButtons = sidebarElement.querySelectorAll(".lockin-suggested-note-save-btn");
+  const saveNoteButtons = sidebarElement.querySelectorAll(
+    ".lockin-suggested-note-save-btn"
+  );
   saveNoteButtons.forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -432,39 +499,54 @@ function attachNoteButtonListeners(sidebarElement) {
   }
 
   // Suggested notes collapse/expand toggle
-  const notesToggle = sidebarElement.querySelector(".lockin-suggested-notes-toggle");
-  const notesWrapper = sidebarElement.querySelector(".lockin-suggested-notes-wrapper");
+  const notesToggle = sidebarElement.querySelector(
+    ".lockin-suggested-notes-toggle"
+  );
+  const notesWrapper = sidebarElement.querySelector(
+    ".lockin-suggested-notes-wrapper"
+  );
   if (notesToggle && notesWrapper) {
     // Restore collapsed state from storage
     if (Storage) {
-      Storage.getLocal("lockin_suggested_notes_collapsed").then((data) => {
-        const isCollapsed = data?.lockin_suggested_notes_collapsed === true;
-        if (isCollapsed) {
-          notesWrapper.setAttribute("data-collapsed", "true");
-          const icon = notesToggle.querySelector(".lockin-suggested-notes-toggle-icon");
-          if (icon) icon.textContent = "▶";
-        }
-      }).catch(() => {
-        // Ignore storage errors
-      });
+      Storage.getLocal("lockin_suggested_notes_collapsed")
+        .then((data) => {
+          const isCollapsed = data?.lockin_suggested_notes_collapsed === true;
+          if (isCollapsed) {
+            notesWrapper.setAttribute("data-collapsed", "true");
+            const icon = notesToggle.querySelector(
+              ".lockin-suggested-notes-toggle-icon"
+            );
+            if (icon) icon.textContent = "▶";
+          }
+        })
+        .catch(() => {
+          // Ignore storage errors
+        });
     }
 
     notesToggle.addEventListener("click", (e) => {
       e.stopPropagation();
-      const isCollapsed = notesWrapper.getAttribute("data-collapsed") === "true";
-      const icon = notesToggle.querySelector(".lockin-suggested-notes-toggle-icon");
-      
+      const isCollapsed =
+        notesWrapper.getAttribute("data-collapsed") === "true";
+      const icon = notesToggle.querySelector(
+        ".lockin-suggested-notes-toggle-icon"
+      );
+
       if (isCollapsed) {
         notesWrapper.removeAttribute("data-collapsed");
         if (icon) icon.textContent = "▼";
         if (Storage) {
-          Storage.setLocal("lockin_suggested_notes_collapsed", false).catch(() => {});
+          Storage.setLocal("lockin_suggested_notes_collapsed", false).catch(
+            () => {}
+          );
         }
       } else {
         notesWrapper.setAttribute("data-collapsed", "true");
         if (icon) icon.textContent = "▶";
         if (Storage) {
-          Storage.setLocal("lockin_suggested_notes_collapsed", true).catch(() => {});
+          Storage.setLocal("lockin_suggested_notes_collapsed", true).catch(
+            () => {}
+          );
         }
       }
     });
@@ -477,14 +559,15 @@ function attachNoteButtonListeners(sidebarElement) {
 function attachNewNoteEditorListeners(sidebarElement) {
   const newNoteBtn = sidebarElement.querySelector(".lockin-new-note-btn");
   const editorEl = sidebarElement.querySelector(".lockin-new-note-editor");
-  const cancelBtn = sidebarElement.querySelector(".lockin-new-note-cancel");
   const saveBtn = sidebarElement.querySelector(".lockin-new-note-save");
   const titleInput = sidebarElement.querySelector("#lockin-new-note-title");
   const contentInput = sidebarElement.querySelector("#lockin-new-note-content");
-  const filters = sidebarElement.querySelectorAll(".lockin-notes-filter");
+  const filterSelect = sidebarElement.querySelector(
+    "#lockin-notes-filter-select"
+  );
   const listEl = sidebarElement.querySelector("#lockin-notes-list");
 
-  if (!newNoteBtn || !editorEl || !cancelBtn || !saveBtn || !titleInput || !contentInput) {
+  if (!newNoteBtn || !editorEl || !saveBtn || !titleInput || !contentInput) {
     return;
   }
 
@@ -494,26 +577,18 @@ function attachNewNoteEditorListeners(sidebarElement) {
     courseCode: null, // TODO: Extract from page context if available
   };
 
-  // Open editor
+  // Open editor on "+ New note" button click
   newNoteBtn.addEventListener("click", () => {
-    editorEl.classList.remove("hidden");
     titleInput.value = "";
     contentInput.value = "";
     contentInput.focus();
-  });
-
-  // Cancel editor
-  cancelBtn.addEventListener("click", () => {
-    editorEl.classList.add("hidden");
-    titleInput.value = "";
-    contentInput.value = "";
   });
 
   // Save note
   saveBtn.addEventListener("click", async () => {
     const title = titleInput.value.trim();
     const content = contentInput.value.trim();
-    
+
     if (!content) {
       showToast("Note content cannot be empty.", "error");
       return;
@@ -536,13 +611,11 @@ function attachNewNoteEditorListeners(sidebarElement) {
         tags: [],
       });
 
-      editorEl.classList.add("hidden");
       titleInput.value = "";
       contentInput.value = "";
 
       // Reload notes with current filter
-      const activeFilter = Array.from(filters).find((btn) => btn.classList.contains("is-active"));
-      const currentFilter = activeFilter ? activeFilter.getAttribute("data-filter") : "page";
+      const currentFilter = filterSelect?.value || "page";
       await loadNotes(currentFilter);
 
       showToast("Note saved successfully!");
@@ -551,100 +624,21 @@ function attachNewNoteEditorListeners(sidebarElement) {
       showToast("Failed to save note. Please try again.", "error");
     }
   });
+
+  // Filter select change handler
+  if (filterSelect) {
+    filterSelect.addEventListener("change", async (e) => {
+      const filter = e.target.value;
+      await loadNotes(filter);
+    });
+  }
 }
 
 /**
- * Attach resize handler for chat messages container
+ * Attach resize handler for chat messages container (removed - no longer needed)
  */
 function attachChatResizeHandler(sidebarElement) {
-  const resizeHandle = sidebarElement.querySelector("#lockin-chat-resize-handle");
-  const messagesWrapper = sidebarElement.querySelector(".lockin-chat-messages-wrapper");
-  const messagesContainer = sidebarElement.querySelector("#lockin-chat-messages");
-  const bottomSection = sidebarElement.querySelector(".lockin-chat-bottom-section");
-  
-  if (!resizeHandle || !messagesWrapper || !messagesContainer || !bottomSection) {
-    return;
-  }
-
-  let isResizing = false;
-  let startY = 0;
-  let startMessagesHeight = 0;
-  let startBottomHeight = 0;
-
-  resizeHandle.addEventListener("mousedown", (e) => {
-    isResizing = true;
-    startY = e.clientY;
-    startMessagesHeight = messagesContainer.offsetHeight;
-    startBottomHeight = bottomSection.offsetHeight;
-    
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-    
-    e.preventDefault();
-    resizeHandle.style.cursor = "ns-resize";
-    document.body.style.cursor = "ns-resize";
-    document.body.style.userSelect = "none";
-  });
-
-  function handleMouseMove(e) {
-    if (!isResizing) return;
-    
-    const deltaY = e.clientY - startY;
-    const newMessagesHeight = startMessagesHeight + deltaY;
-    
-    // Get the parent container height
-    const parentElement = messagesWrapper.parentElement;
-    const parentHeight = parentElement.offsetHeight;
-    const resizeHandleHeight = 8; // Height of resize handle
-    const inputHeight = 60; // Approximate height of input section
-    const minMessagesHeight = 150; // Minimum height for messages container
-    const minBottomHeight = inputHeight + 10; // Minimum height for bottom section (input + padding)
-    
-    // Calculate available space (parent height minus resize handle)
-    const availableHeight = parentHeight - resizeHandleHeight;
-    const maxMessagesHeight = availableHeight - minBottomHeight;
-    
-    // Clamp the messages height
-    const clampedMessagesHeight = Math.max(minMessagesHeight, Math.min(maxMessagesHeight, newMessagesHeight));
-    
-    // Apply height to messages container
-    messagesContainer.style.height = `${clampedMessagesHeight}px`;
-    messagesContainer.style.flex = "0 0 auto";
-    
-    // Bottom section will naturally adjust due to flex layout
-    // The suggested notes section will be squeezed and can scroll if needed
-  }
-
-  function handleMouseUp() {
-    isResizing = false;
-    resizeHandle.style.cursor = "";
-    document.body.style.cursor = "";
-    document.body.style.userSelect = "";
-    
-    document.removeEventListener("mousemove", handleMouseMove);
-    document.removeEventListener("mouseup", handleMouseUp);
-    
-    // Save the height to storage
-    if (Storage && messagesContainer.style.height) {
-      const height = parseInt(messagesContainer.style.height, 10);
-      Storage.setLocal("lockin_chat_messages_height", height).catch(() => {
-        // Ignore storage errors
-      });
-    }
-  }
-
-  // Restore saved height
-  if (Storage) {
-    Storage.getLocal("lockin_chat_messages_height").then((data) => {
-      const savedHeight = data?.lockin_chat_messages_height;
-      if (savedHeight && typeof savedHeight === "number") {
-        messagesContainer.style.height = `${savedHeight}px`;
-        messagesContainer.style.flex = "0 0 auto";
-      }
-    }).catch(() => {
-      // Ignore storage errors
-    });
-  }
+  // Resize handle removed in new design - using flex layout instead
 }
 
 /**
@@ -653,17 +647,12 @@ function attachChatResizeHandler(sidebarElement) {
 function buildChatSection() {
   const chatHtml = buildChatMessagesHtml(chatHistory);
   const sendDisabled = isChatLoading || pendingInputValue.trim().length === 0;
-  
-  // Suggested notes container (inside chat panel)
-  const suggestedNotesHtml = buildSuggestedNotesHtml();
 
   return `
     <div class="lockin-chat-messages-wrapper">
       <div class="lockin-chat-messages" id="lockin-chat-messages">${chatHtml}</div>
-      <div class="lockin-chat-resize-handle" id="lockin-chat-resize-handle"></div>
     </div>
     <div class="lockin-chat-bottom-section">
-      <div class="lockin-suggested-notes" id="lockin-suggested-notes">${suggestedNotesHtml}</div>
       <form class="lockin-chat-input">
         <input class="lockin-chat-input-field" id="lockin-chat-input" name="lockin-chat-input" placeholder="Ask a follow-up question..." ${
           isChatLoading ? "disabled" : ""
@@ -677,37 +666,47 @@ function buildChatSection() {
 }
 
 /**
- * Build the notes section HTML
+ * Build the notes section HTML - New layout with doc-like editor
  */
 function buildNotesSection() {
   return `
-    <div class="lockin-notes-header">
-      <div class="lockin-notes-filters">
-        <button class="lockin-notes-filter is-active" data-filter="page" type="button">This page</button>
-        <button class="lockin-notes-filter" data-filter="course" type="button">This course</button>
-        <button class="lockin-notes-filter" data-filter="all" type="button">All</button>
+    <div class="lockin-notes-container">
+      <!-- Header with title and actions -->
+      <div class="lockin-notes-top-header">
+        <h2 class="lockin-notes-title">Notes</h2>
+        <div class="lockin-notes-actions">
+          <button class="lockin-btn-primary lockin-new-note-btn" type="button" title="Create a new note">+ New note</button>
+        </div>
       </div>
-      <button class="lockin-btn-primary lockin-new-note-btn" type="button">+ New note</button>
-    </div>
-    <div class="lockin-card lockin-new-note-editor hidden">
-      <div class="lockin-new-note-header">
-        <span>Create note</span>
-        <button class="lockin-link-button lockin-new-note-cancel" type="button">Cancel</button>
+
+      <!-- Main doc-like editor -->
+      <div class="lockin-notes-editor-section">
+        <div class="lockin-new-note-editor">
+          <input id="lockin-new-note-title" class="lockin-note-title-input" placeholder="Note title..." />
+          <textarea id="lockin-new-note-content" class="lockin-note-content-input" placeholder="Write your note here. Add details, context, and your own thoughts..."></textarea>
+          <div class="lockin-note-footer">
+            <span class="lockin-note-timestamp">Last saved just now</span>
+            <button class="lockin-btn-primary lockin-new-note-save" type="button">Save note</button>
+          </div>
+        </div>
       </div>
-      <label class="lockin-field">
-        <span>Title</span>
-        <input id="lockin-new-note-title" placeholder="E.g. Relational model" />
-      </label>
-      <label class="lockin-field">
-        <span>Content</span>
-        <textarea id="lockin-new-note-content" rows="4" placeholder="Write your own note..."></textarea>
-      </label>
-      <div class="lockin-new-note-actions">
-        <button class="lockin-btn-primary lockin-new-note-save" type="button">Save</button>
+
+      <!-- Notes list with filters below editor -->
+      <div class="lockin-notes-list-section">
+        <div class="lockin-notes-list-header">
+          <div class="lockin-notes-filter-group">
+            <span class="lockin-filter-label">Showing:</span>
+            <select class="lockin-notes-filter-select" id="lockin-notes-filter-select">
+              <option value="page" selected>This page</option>
+              <option value="course">This course</option>
+              <option value="all">All notes</option>
+            </select>
+          </div>
+        </div>
+        <div class="lockin-notes-list" id="lockin-notes-list">
+          <p class="lockin-empty">No notes found.</p>
+        </div>
       </div>
-    </div>
-    <div class="lockin-notes-list" id="lockin-notes-list">
-      <p class="lockin-empty">No notes found.</p>
     </div>
   `;
 }
@@ -741,7 +740,8 @@ async function loadNotes(filter = "page") {
     renderNotesList(notes, notesList);
   } catch (error) {
     Logger.error("Failed to load notes:", error);
-    notesList.innerHTML = '<p class="lockin-empty">Failed to load notes. Please try again.</p>';
+    notesList.innerHTML =
+      '<p class="lockin-empty">Failed to load notes. Please try again.</p>';
   }
 }
 
@@ -762,10 +762,14 @@ function renderNotesList(notes, listEl) {
     item.innerHTML = `
       <div class="lockin-note-header">
         <div>
-          <div class="lockin-note-title">${escapeHtml(note.title || "Untitled")}</div>
+          <div class="lockin-note-title">${escapeHtml(
+            note.title || "Untitled"
+          )}</div>
           ${
             note.course_code
-              ? `<div class="lockin-note-meta">${escapeHtml(note.course_code)}</div>`
+              ? `<div class="lockin-note-meta">${escapeHtml(
+                  note.course_code
+                )}</div>`
               : ""
           }
         </div>
@@ -1413,14 +1417,28 @@ function buildChatMessagesHtml(messages) {
   }
 
   const rendered = filtered
-    .map((message) => {
+    .map((message, index) => {
       const roleClass =
         message.role === "user"
           ? "lockin-chat-msg-user"
           : "lockin-chat-msg-assistant";
+
+      // Add action buttons for all assistant messages
+      let actions = "";
+      if (message.role === "assistant") {
+        const messageId = `msg-${index}`;
+        actions = `
+          <div class="lockin-chat-msg-actions">
+            <button class="lockin-chat-action-btn" data-action="save-note" data-message-id="${messageId}" title="Save this response as a note">Save as note</button>
+            <button class="lockin-chat-action-btn" data-action="generate-notes" data-message-id="${messageId}" title="Generate structured notes from this response">Generate notes</button>
+          </div>
+        `;
+      }
+
       return `
         <div class="lockin-chat-msg ${roleClass}">
           <div class="lockin-chat-bubble">${escapeHtml(message.content)}</div>
+          ${actions}
         </div>
       `;
     })
@@ -1443,180 +1461,202 @@ function buildChatMessagesHtml(messages) {
 }
 
 /**
- * Build HTML for suggested notes (editable inputs)
+ * Show AI-generated note suggestions in a draft panel (called only on-demand)
  */
-function buildSuggestedNotesHtml() {
-  if (!currentStudyResponse || !currentStudyResponse.notes || currentStudyResponse.notes.length === 0) {
-    return "";
-  }
-
-  const notes = currentStudyResponse.notes;
-  const notesList = notes
-    .map((note, index) => {
-      const noteType = note.type || "general";
-      const title = escapeHtml(note.title || "");
-      const content = escapeHtml(note.content || "");
-      return `
-        <div class="lockin-suggested-note" data-note-index="${index}">
-          <div class="lockin-suggested-note-top">
-            <span class="lockin-note-pill">${escapeHtml(noteType)}</span>
-            <button class="lockin-link-button lockin-suggested-note-save-btn" type="button" data-note-index="${index}">💾 Save</button>
-          </div>
-          <label class="lockin-field">
-            <span>Title</span>
-            <input class="lockin-suggested-note-title-input" type="text" value="${title}" />
-          </label>
-          <label class="lockin-field">
-            <span>Content</span>
-            <textarea class="lockin-suggested-note-content-input">${content}</textarea>
-          </label>
-        </div>
-      `;
-    })
-    .join("");
-
-  return `
-    <div class="lockin-card lockin-suggested-notes-wrapper">
-      <div class="lockin-suggested-notes-header">
-        <div class="lockin-suggested-notes-title">📝 Suggested notes</div>
-        <div class="lockin-suggested-notes-actions">
-          <button class="lockin-btn-ghost lockin-btn-small lockin-suggested-notes-toggle" type="button" aria-label="Toggle suggested notes">
-            <span class="lockin-suggested-notes-toggle-icon">▼</span>
-          </button>
-          <button class="lockin-btn-primary lockin-btn-small lockin-save-all-btn" type="button">Save all</button>
-        </div>
-      </div>
-      <div class="lockin-suggested-notes-list">${notesList}</div>
-    </div>
-  `;
-}
-
-/**
- * Save a single note to the backend (from editable inputs)
- */
-async function saveNote(noteIndex) {
-  if (!currentStudyResponse || !currentStudyResponse.notes || !currentStudyResponse.notes[noteIndex]) {
-    Logger.error("Cannot save note: note not found at index", noteIndex);
+function showAiDraftNotes() {
+  if (
+    !currentStudyResponse ||
+    !currentStudyResponse.notes ||
+    currentStudyResponse.notes.length === 0
+  ) {
+    showToast(
+      "No notes were generated. Try asking with more specific details.",
+      "info"
+    );
     return;
   }
 
   const sidebarElement = lockinWidget?.getSidebarElement();
   if (!sidebarElement) return;
 
-  const noteElement = sidebarElement.querySelector(`[data-note-index="${noteIndex}"]`);
-  if (!noteElement) return;
+  const notesSection = sidebarElement.querySelector(".lockin-notes-container");
+  if (!notesSection) return;
 
-  const titleInput = noteElement.querySelector(".lockin-suggested-note-title-input");
-  const contentInput = noteElement.querySelector(".lockin-suggested-note-content-input");
-  const typeBadge = noteElement.querySelector(".lockin-suggested-note-type");
+  const notes = currentStudyResponse.notes;
+  const draftBullets = notes
+    .map((note) => {
+      const title = escapeHtml(note.title || "");
+      return `<li class="lockin-draft-note-item">${title}</li>`;
+    })
+    .join("");
 
-  if (!titleInput || !contentInput) return;
+  const draftPanel = document.createElement("div");
+  draftPanel.className = "lockin-ai-draft-panel";
+  draftPanel.innerHTML = `
+    <div class="lockin-draft-panel-header">
+      <h3>AI draft notes from your last question</h3>
+      <button class="lockin-draft-panel-close" type="button" aria-label="Close draft">X</button>
+    </div>
+    <div class="lockin-draft-panel-content">
+      <ul class="lockin-draft-notes-list">
+        ${draftBullets}
+      </ul>
+    </div>
+    <div class="lockin-draft-panel-actions">
+      <button class="lockin-btn-secondary" data-action="insert-draft">Insert into current note</button>
+      <button class="lockin-btn-primary" data-action="save-draft-separate">Save each as separate note</button>
+      <button class="lockin-btn-ghost" data-action="dismiss-draft">Dismiss</button>
+    </div>
+  `;
 
-  const title = titleInput.value.trim();
-  const content = contentInput.value.trim();
-
-  if (!content) {
-    showToast("Note content cannot be empty.", "error");
-    return;
-  }
-
-  if (!window.LockInAPI || !window.LockInAPI.createNote) {
-    Logger.error("LockInAPI.createNote is not available");
-    return;
-  }
-
-  try {
-    const noteData = {
-      title: title || "Untitled Note",
-      content: content,
-      sourceSelection: cachedSelection || "",
-      sourceUrl: window.location.href,
-      courseCode: null, // Could be extracted from page context if available
-      noteType: typeBadge?.textContent?.trim() || "general",
-      tags: currentStudyResponse.tags || [],
-    };
-
-    await window.LockInAPI.createNote(noteData);
-    Logger.debug("Note saved successfully:", noteData.title);
-
-    // Update UI to show saved state
-    noteElement.classList.add("is-saved");
-    const saveBtn = noteElement.querySelector(".lockin-suggested-note-save-btn");
-    if (saveBtn) {
-      saveBtn.textContent = "✓ Saved";
-      saveBtn.disabled = true;
-    }
-
-    // Show toast notification
-    showToast("Note saved successfully!");
-  } catch (error) {
-    Logger.error("Failed to save note:", error);
-    showToast("Failed to save note. Please try again.", "error");
+  // Insert before the editor section
+  const editorSection = notesSection.querySelector(
+    ".lockin-notes-editor-section"
+  );
+  if (editorSection) {
+    editorSection.insertAdjacentElement("beforebegin", draftPanel);
   }
 }
 
 /**
- * Save all notes from current StudyResponse (from editable inputs)
+ * Clear AI draft notes panel
  */
-async function saveAllNotes() {
-  if (!currentStudyResponse || !currentStudyResponse.notes || currentStudyResponse.notes.length === 0) {
+function clearAiDraftPanel() {
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  if (!sidebarElement) return;
+
+  const draftPanel = sidebarElement.querySelector(".lockin-ai-draft-panel");
+  if (draftPanel) {
+    draftPanel.remove();
+  }
+}
+
+/**
+ * Placeholder function for Save as note action
+ * Called when user clicks "Save as note" on a chat message
+ */
+function onSaveAsNote(messageId, messageContent) {
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  if (!sidebarElement) return;
+
+  const notesSection = sidebarElement.querySelector(".lockin-notes-container");
+  if (!notesSection) return;
+
+  // Pre-fill the note editor with message content
+  const titleInput = notesSection.querySelector("#lockin-new-note-title");
+  const contentInput = notesSection.querySelector("#lockin-new-note-content");
+
+  if (titleInput && contentInput) {
+    // Generate a title from first sentence or first 50 chars
+    const firstSentence = messageContent.split(".")[0].trim();
+    const title =
+      firstSentence.length > 50
+        ? firstSentence.substring(0, 50) + "..."
+        : firstSentence;
+
+    titleInput.value = title;
+    contentInput.value = messageContent;
+
+    // Switch to Notes tab
+    lockinWidget.switchTab("notes");
+
+    // Scroll to editor and focus
+    contentInput.focus();
+    showToast("Ready to save! Edit the note and click Save note.");
+  }
+}
+
+/**
+ * Placeholder function for Generate notes action
+ * Called when user clicks "Generate notes" on a chat message
+ */
+function onGenerateNotes(messageId, messageContent) {
+  showAiDraftNotes();
+}
+
+/**
+ * Save AI-drafted notes as separate notes
+ */
+async function saveDraftNotesAsSeparate() {
+  if (
+    !currentStudyResponse ||
+    !currentStudyResponse.notes ||
+    currentStudyResponse.notes.length === 0
+  ) {
     Logger.error("No notes to save");
     return;
   }
 
-  const sidebarElement = lockinWidget?.getSidebarElement();
-  if (!sidebarElement) return;
-
   if (!window.LockInAPI || !window.LockInAPI.createNote) {
     Logger.error("LockInAPI.createNote is not available");
     return;
   }
 
   try {
-    const items = sidebarElement.querySelectorAll(".lockin-suggested-note");
     const savePromises = [];
 
-    for (const item of items) {
-      const titleInput = item.querySelector(".lockin-suggested-note-title-input");
-      const contentInput = item.querySelector(".lockin-suggested-note-content-input");
-      const typeBadge = item.querySelector(".lockin-suggested-note-type");
-
-      if (!titleInput || !contentInput) continue;
-
-      const title = titleInput.value.trim();
-      const content = contentInput.value.trim();
+    for (const note of currentStudyResponse.notes) {
+      const title = (note.title || "Untitled Note").trim();
+      const content = (note.content || "").trim();
 
       if (!content) continue; // Skip empty notes
 
       const noteData = {
-        title: title || "Untitled Note",
+        title: title,
         content: content,
         sourceSelection: cachedSelection || "",
         sourceUrl: window.location.href,
         courseCode: null,
-        noteType: typeBadge?.textContent?.trim() || "general",
+        noteType: note.type || "general",
         tags: currentStudyResponse.tags || [],
       };
 
-      savePromises.push(
-        window.LockInAPI.createNote(noteData).then(() => {
-          item.classList.add("is-saved");
-          const saveBtn = item.querySelector(".lockin-suggested-note-save-btn");
-          if (saveBtn) {
-            saveBtn.textContent = "✓ Saved";
-            saveBtn.disabled = true;
-          }
-        })
-      );
+      savePromises.push(window.LockInAPI.createNote(noteData));
     }
 
     await Promise.all(savePromises);
-    Logger.debug("All notes saved successfully");
+    Logger.debug("All AI draft notes saved successfully");
 
-    showToast(`All ${savePromises.length} notes saved successfully!`);
+    clearAiDraftPanel();
+    showToast(`Saved ${savePromises.length} notes!`);
   } catch (error) {
     Logger.error("Failed to save some notes:", error);
     showToast("Failed to save some notes. Please try again.", "error");
+  }
+}
+
+/**
+ * Insert AI-drafted notes into current note editor
+ */
+function insertDraftIntoCurrent() {
+  if (
+    !currentStudyResponse ||
+    !currentStudyResponse.notes ||
+    currentStudyResponse.notes.length === 0
+  ) {
+    return;
+  }
+
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  if (!sidebarElement) return;
+
+  const contentInput = sidebarElement.querySelector("#lockin-new-note-content");
+  if (!contentInput) return;
+
+  const bulletList = currentStudyResponse.notes
+    .map((note) => `- ${(note.title || "").trim()}`)
+    .filter((item) => item.length > 2)
+    .join("\n");
+
+  if (bulletList) {
+    const currentContent = contentInput.value.trim();
+    contentInput.value = currentContent
+      ? `${currentContent}\n\n## Notes\n${bulletList}`
+      : bulletList;
+
+    clearAiDraftPanel();
+    contentInput.focus();
+    showToast("Draft notes inserted!");
   }
 }
 
