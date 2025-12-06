@@ -25,15 +25,17 @@ class LockinSidebar {
     this.isOpen = false;
     this.isDesktopMode = window.innerWidth > 1024;
     this.activeTab = "chat"; // "chat" or "notes"
-    this.isHistoryExpanded = false; // History sidebar expanded state
+    this.isHistoryPanelOpen = false; // Chat history panel state
 
     // DOM elements
     this.rootElement = null;
     this.togglePill = null;
     this.sidebarElement = null;
-    this.modesElement = null;
-    this.chatElement = null;
-    this.historyElement = null;
+    this.topBarElement = null; // Combined mode + tabs bar
+    this.chatContainerElement = null; // Container for chat view (history + main)
+    this.chatHistoryPanelElement = null; // Left history panel
+    this.chatMainElement = null; // Main chat area
+    this.notesElement = null; // Notes view
 
     // Bind methods
     this.handlePillClick = this.handlePillClick.bind(this);
@@ -45,6 +47,7 @@ class LockinSidebar {
     this.handleNewChatClick = this.handleNewChatClick.bind(this);
     this.handleModeOptionClick = this.handleModeOptionClick.bind(this);
     this.handleTabClick = this.handleTabClick.bind(this);
+    this.handleHistoryToggle = this.handleHistoryToggle.bind(this);
   }
 
   /**
@@ -90,79 +93,61 @@ class LockinSidebar {
     this.sidebarElement.setAttribute("role", "complementary");
     this.sidebarElement.setAttribute("aria-label", "Lock-in Assistant Sidebar");
 
-    // Modes section (with minimize button integrated)
-    this.modesElement = document.createElement("section");
-    this.modesElement.className = "lockin-sidebar-modes";
-    this.modesElement.innerHTML = `
-      <button class="lockin-minimize-btn" aria-label="Close sidebar" type="button">&#10005;</button>
+    // Minimal top bar (mode selector + tabs + close button)
+    this.topBarElement = document.createElement("header");
+    this.topBarElement.className = "lockin-top-bar";
+    this.topBarElement.innerHTML = `
+      <div class="lockin-top-bar-left">
+        <div class="lockin-mode-selector-wrapper"></div>
+        <div class="lockin-tabs-wrapper">
+          <button class="lockin-tab lockin-tab-active" data-tab="chat" type="button">Chat</button>
+          <button class="lockin-tab" data-tab="notes" type="button">Notes</button>
+        </div>
+      </div>
+      <button class="lockin-close-btn" aria-label="Close sidebar" type="button" title="Close">&#10005;</button>
     `;
 
-    // Tabs section
-    this.tabsElement = document.createElement("section");
-    this.tabsElement.className = "lockin-tabs";
-    this.tabsElement.innerHTML = `
-      <button class="lockin-tab is-active" data-tab="chat" type="button">Chat</button>
-      <button class="lockin-tab" data-tab="notes" type="button">Notes</button>
+    // Chat container (holds history panel + main chat area)
+    this.chatContainerElement = document.createElement("div");
+    this.chatContainerElement.className = "lockin-chat-container";
+    
+    // Chat history panel (left side, toggleable)
+    this.chatHistoryPanelElement = document.createElement("aside");
+    this.chatHistoryPanelElement.className = "lockin-chat-history-panel";
+    this.chatHistoryPanelElement.setAttribute("data-state", "closed");
+    
+    // Main chat area (right side)
+    this.chatMainElement = document.createElement("section");
+    this.chatMainElement.className = "lockin-chat-main";
+    
+    // Add history toggle button to chat main header
+    const chatHeader = document.createElement("div");
+    chatHeader.className = "lockin-chat-header";
+    chatHeader.innerHTML = `
+      <button class="lockin-history-toggle-btn" type="button" aria-label="Toggle chat history" title="Chat history">
+        <span class="lockin-history-toggle-icon">☰</span>
+      </button>
     `;
+    this.chatMainElement.appendChild(chatHeader);
+    
+    // Chat content area
+    const chatContent = document.createElement("div");
+    chatContent.className = "lockin-chat-content";
+    this.chatMainElement.appendChild(chatContent);
+    
+    // Assemble chat container
+    this.chatContainerElement.appendChild(this.chatHistoryPanelElement);
+    this.chatContainerElement.appendChild(this.chatMainElement);
 
-    // Tab panels container
-    this.tabPanelsElement = document.createElement("div");
-    this.tabPanelsElement.className = "lockin-tabpanels";
-
-    // Chat panel with history sidebar
-    this.chatPanel = document.createElement("div");
-    this.chatPanel.className = "lockin-tabpanel is-active";
-    this.chatPanel.setAttribute("data-tab-panel", "chat");
-    
-    // Chat layout container (for history + chat side by side)
-    this.chatLayout = document.createElement("div");
-    this.chatLayout.className = "lockin-chat-layout";
-    
-    // History sidebar (left side, collapsible)
-    this.historySidebar = document.createElement("div");
-    this.historySidebar.className = "lockin-history-sidebar";
-    this.historySidebar.setAttribute("data-state", "collapsed");
-    
-    // History toggle button (3 vertical dashes)
-    this.historyToggle = document.createElement("button");
-    this.historyToggle.className = "lockin-history-toggle-btn";
-    this.historyToggle.type = "button";
-    this.historyToggle.setAttribute("aria-label", "Toggle chat history");
-    this.historyToggle.innerHTML = '<span class="lockin-history-toggle-icon">⋮</span>';
-    this.historyToggle.addEventListener("click", () => this.toggleHistorySidebar());
-    
-    // History content container
-    this.historyElement = document.createElement("div");
-    this.historyElement.className = "lockin-sidebar-history";
-    
-    this.historySidebar.appendChild(this.historyToggle);
-    this.historySidebar.appendChild(this.historyElement);
-    
-    // Chat content (right side)
-    this.chatElement = document.createElement("div");
-    this.chatElement.className = "lockin-sidebar-chat";
-    
-    // Append to layout
-    this.chatLayout.appendChild(this.historySidebar);
-    this.chatLayout.appendChild(this.chatElement);
-    this.chatPanel.appendChild(this.chatLayout);
-
-    // Notes panel
-    this.notesPanel = document.createElement("div");
-    this.notesPanel.className = "lockin-tabpanel";
-    this.notesPanel.setAttribute("data-tab-panel", "notes");
-    this.notesElement = document.createElement("div");
-    this.notesElement.className = "lockin-sidebar-notes";
-    this.notesPanel.appendChild(this.notesElement);
-
-    // Append panels to container
-    this.tabPanelsElement.appendChild(this.chatPanel);
-    this.tabPanelsElement.appendChild(this.notesPanel);
+    // Notes section
+    this.notesElement = document.createElement("section");
+    this.notesElement.className = "lockin-notes-container";
+    this.notesElement.style.display = "none";
 
     // Append to sidebar
-    this.sidebarElement.appendChild(this.modesElement);
-    this.sidebarElement.appendChild(this.tabsElement);
-    this.sidebarElement.appendChild(this.tabPanelsElement);
+    this.sidebarElement.appendChild(this.topBarElement);
+    this.sidebarElement.appendChild(this.chatContainerElement);
+    this.sidebarElement.appendChild(this.notesElement);
 
     // Append to root
     this.rootElement.appendChild(this.sidebarElement);
@@ -185,12 +170,16 @@ class LockinSidebar {
     // Toggle pill click
     this.togglePill.addEventListener("click", this.handlePillClick);
 
-    // Minimize button click
-    const minimizeBtn = this.modesElement.querySelector(
-      ".lockin-minimize-btn"
-    );
-    if (minimizeBtn) {
-      minimizeBtn.addEventListener("click", this.handleMinimizeClick);
+    // Close button click
+    const closeBtn = this.topBarElement.querySelector(".lockin-close-btn");
+    if (closeBtn) {
+      closeBtn.addEventListener("click", this.handleMinimizeClick);
+    }
+    
+    // History toggle button
+    const historyToggleBtn = this.chatMainElement.querySelector(".lockin-history-toggle-btn");
+    if (historyToggleBtn) {
+      historyToggleBtn.addEventListener("click", this.handleHistoryToggle);
     }
 
     // Window resize for responsive behavior
@@ -306,24 +295,61 @@ class LockinSidebar {
     this.activeTab = tab;
 
     // Update tab buttons
-    const tabButtons = this.tabsElement.querySelectorAll(".lockin-tab");
+    const tabButtons = this.topBarElement.querySelectorAll(".lockin-tab");
     tabButtons.forEach((btn) => {
-      const isActive = btn.getAttribute("data-tab") === tab;
-      btn.classList.toggle("is-active", isActive);
+      if (btn.getAttribute("data-tab") === tab) {
+        btn.classList.add("lockin-tab-active");
+      } else {
+        btn.classList.remove("lockin-tab-active");
+      }
     });
 
-    // Update tab panels
-    const tabPanels = this.tabPanelsElement.querySelectorAll(".lockin-tabpanel");
-    tabPanels.forEach((panel) => {
-      const isActive = panel.getAttribute("data-tab-panel") === tab;
-      panel.classList.toggle("is-active", isActive);
-    });
-
-    // Dispatch event to load notes if switching to notes tab
-    if (tab === "notes") {
+    // Show/hide sections
+    if (tab === "chat") {
+      this.chatContainerElement.style.display = "";
+      this.notesElement.style.display = "none";
+    } else {
+      this.chatContainerElement.style.display = "none";
+      this.notesElement.style.display = "";
+      // Close history panel when switching to notes
+      this.closeHistoryPanel();
+      // Dispatch event to load notes
       window.dispatchEvent(
-        new CustomEvent("lockin:loadNotes", { detail: { tab, filter: "page" } })
+        new CustomEvent("lockin:loadNotes", { detail: { tab } })
       );
+    }
+  }
+
+  /**
+   * Toggle chat history panel
+   */
+  handleHistoryToggle(e) {
+    e.stopPropagation();
+    if (this.isHistoryPanelOpen) {
+      this.closeHistoryPanel();
+    } else {
+      this.openHistoryPanel();
+    }
+  }
+
+  /**
+   * Open chat history panel
+   */
+  openHistoryPanel() {
+    if (this.activeTab !== "chat") return;
+    this.isHistoryPanelOpen = true;
+    if (this.chatHistoryPanelElement) {
+      this.chatHistoryPanelElement.setAttribute("data-state", "open");
+    }
+  }
+
+  /**
+   * Close chat history panel
+   */
+  closeHistoryPanel() {
+    this.isHistoryPanelOpen = false;
+    if (this.chatHistoryPanelElement) {
+      this.chatHistoryPanelElement.setAttribute("data-state", "closed");
     }
   }
 
@@ -417,14 +443,36 @@ class LockinSidebar {
    * Render sidebar content (called by contentScript)
    */
   renderContent(contentHtml) {
-    // contentHtml should contain the modes, chat, notes, and history sections
-    this.modesElement.innerHTML = contentHtml.modes || "";
-    this.chatElement.innerHTML = contentHtml.chat || "";
-    this.notesElement.innerHTML = contentHtml.notes || "";
-    this.historyElement.innerHTML = contentHtml.history || "";
+    // Render mode selector in top bar
+    const modeWrapper = this.topBarElement.querySelector(".lockin-mode-selector-wrapper");
+    if (modeWrapper) {
+      modeWrapper.innerHTML = contentHtml.modes || "";
+    }
 
-    // Tab visibility is handled by CSS classes, but ensure correct state
-    this.switchTab(this.activeTab);
+    // Render chat content in main chat area
+    const chatContent = this.chatMainElement.querySelector(".lockin-chat-content");
+    if (chatContent) {
+      chatContent.innerHTML = contentHtml.chat || "";
+    }
+
+    // Render history in history panel
+    if (this.chatHistoryPanelElement) {
+      this.chatHistoryPanelElement.innerHTML = contentHtml.history || "";
+    }
+
+    // Render notes
+    if (this.notesElement) {
+      this.notesElement.innerHTML = contentHtml.notes || "";
+    }
+
+    // Update tab visibility
+    if (this.activeTab === "chat") {
+      this.chatContainerElement.style.display = "";
+      this.notesElement.style.display = "none";
+    } else {
+      this.chatContainerElement.style.display = "none";
+      this.notesElement.style.display = "";
+    }
 
     // Re-attach event listeners to new elements
     this.attachContentEventListeners();
@@ -465,10 +513,10 @@ class LockinSidebar {
       });
     }
 
-    // Chat textarea
-    const textarea = this.sidebarElement.querySelector(".lockin-chat-textarea");
-    if (textarea) {
-      textarea.addEventListener("keydown", (e) => {
+    // Chat input field
+    const chatInput = this.sidebarElement.querySelector("#lockin-chat-input");
+    if (chatInput) {
+      chatInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           if (sendBtn) sendBtn.click();
@@ -477,7 +525,7 @@ class LockinSidebar {
     }
 
     // History items
-    const historyItems = this.sidebarElement.querySelectorAll(
+    const historyItems = this.chatHistoryPanelElement.querySelectorAll(
       ".lockin-history-item"
     );
     historyItems.forEach((item) => {
@@ -485,7 +533,7 @@ class LockinSidebar {
     });
 
     // History item menu buttons
-    const historyMenus = this.sidebarElement.querySelectorAll(
+    const historyMenus = this.chatHistoryPanelElement.querySelectorAll(
       ".lockin-history-item-menu"
     );
     historyMenus.forEach((menu) => {
@@ -501,29 +549,17 @@ class LockinSidebar {
     });
 
     // New chat button
-    const newChatBtn = this.sidebarElement.querySelector(
+    const newChatBtn = this.chatHistoryPanelElement.querySelector(
       ".lockin-new-chat-btn"
     );
     if (newChatBtn) {
       newChatBtn.addEventListener("click", this.handleNewChatClick);
     }
 
-    // Tab buttons - use initTabs for proper tab switching
-    this.initTabs();
-  }
-
-  /**
-   * Initialize tab switching logic
-   */
-  initTabs() {
-    const tabButtons = this.tabsElement.querySelectorAll(".lockin-tab");
-    const tabPanels = this.tabPanelsElement.querySelectorAll(".lockin-tabpanel");
-
+    // Tab buttons
+    const tabButtons = this.topBarElement.querySelectorAll(".lockin-tab");
     tabButtons.forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const target = btn.getAttribute("data-tab");
-        this.switchTab(target);
-      });
+      btn.addEventListener("click", this.handleTabClick);
     });
   }
 
@@ -531,27 +567,14 @@ class LockinSidebar {
    * Get the chat content container
    */
   getChatElement() {
-    return this.chatElement;
+    return this.chatMainElement;
   }
 
   /**
    * Get bubble element (alias for getChatElement for compatibility with LockinWidget)
    */
   getBubbleElement() {
-    return this.chatElement;
-  }
-
-  /**
-   * Toggle history sidebar expand/collapse
-   */
-  toggleHistorySidebar() {
-    this.isHistoryExpanded = !this.isHistoryExpanded;
-    if (this.historySidebar) {
-      this.historySidebar.setAttribute(
-        "data-state",
-        this.isHistoryExpanded ? "expanded" : "collapsed"
-      );
-    }
+    return this.chatMainElement;
   }
 
   /**
@@ -625,12 +648,11 @@ class LockinSidebar {
     this.rootElement = null;
     this.togglePill = null;
     this.sidebarElement = null;
-    this.modesElement = null;
-    this.chatElement = null;
-    this.chatLayout = null;
-    this.historySidebar = null;
-    this.historyToggle = null;
-    this.historyElement = null;
+    this.topBarElement = null;
+    this.chatContainerElement = null;
+    this.chatHistoryPanelElement = null;
+    this.chatMainElement = null;
+    this.notesElement = null;
   }
 }
 

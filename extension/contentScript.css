@@ -1,113 +1,7 @@
 /**
- * Lock-in Content Script Styles - Sidebar Layout
- * Right-hand sidebar panel that shrinks page content on desktop,
- * overlays on mobile. Replaces the old floating bubble UI.
+ * Lock-in Content Script Styles - Modern Minimal Sidebar
+ * Restructured layout with minimal top bar, collapsible chat history, and clean notes view
  */
-
-/* === DESIGN SYSTEM === */
-:root {
-  --lockin-accent: #4f46e5;
-  --lockin-accent-soft: #eef2ff;
-  --lockin-border: #e4e4f0;
-  --lockin-bg: #ffffff;
-  --lockin-muted: #777;
-  --lockin-radius-lg: 12px;
-  --lockin-radius-md: 8px;
-  --lockin-radius-pill: 999px;
-}
-
-/* Generic card */
-.lockin-card {
-  background: var(--lockin-bg);
-  border: 1px solid var(--lockin-border);
-  border-radius: var(--lockin-radius-lg);
-  padding: 10px 12px;
-}
-
-/* Primary pill button */
-.lockin-btn-primary {
-  border-radius: var(--lockin-radius-pill);
-  border: none;
-  padding: 4px 12px;
-  font-size: 12px;
-  background: var(--lockin-accent);
-  color: white;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.lockin-btn-primary:hover {
-  background: #4338ca;
-}
-
-.lockin-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.lockin-btn-ghost {
-  border-radius: var(--lockin-radius-pill);
-  border: 1px solid var(--lockin-border);
-  padding: 4px 10px;
-  font-size: 12px;
-  background: #f9f9ff;
-  color: #444;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.lockin-btn-ghost:hover {
-  background: #f0f0f5;
-  border-color: #d6d8ff;
-}
-
-.lockin-btn-small {
-  padding: 2px 8px;
-  font-size: 11px;
-}
-
-.lockin-link-button {
-  border: none;
-  background: none;
-  cursor: pointer;
-  font-size: 11px;
-  color: var(--lockin-accent);
-  transition: opacity 0.15s ease;
-}
-
-.lockin-link-button:hover {
-  opacity: 0.7;
-}
-
-.lockin-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 4px;
-  font-size: 11px;
-}
-
-.lockin-field span {
-  color: var(--lockin-muted);
-  font-weight: 500;
-}
-
-.lockin-field input,
-.lockin-field textarea {
-  border-radius: 6px;
-  border: 1px solid var(--lockin-border);
-  padding: 4px 6px;
-  font-size: 12px;
-  resize: vertical;
-  font-family: inherit;
-}
-
-.lockin-field input:focus,
-.lockin-field textarea:focus {
-  outline: none;
-  border-color: var(--lockin-accent);
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
-}
 
 /* === ROOT CONTAINER === */
 #lockin-root {
@@ -139,7 +33,6 @@ body {
   right: 0;
   height: 100vh;
   width: 30%;
-  --lockin-sidebar-width: 30%;
   background: white;
   border-left: 1px solid #e5e7eb;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
@@ -149,8 +42,7 @@ body {
   pointer-events: auto;
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateX(0);
-  overflow-y: auto;
-  overflow-x: visible;
+  overflow: hidden;
 }
 
 #lockin-sidebar[data-state="collapsed"] {
@@ -191,38 +83,86 @@ body {
   pointer-events: none;
 }
 
-/* === SIDEBAR HEADER === */
-/* Header removed to save space */
-
-.lockin-minimize-btn {
-  background: none;
-  border: none;
-  padding: 6px;
-  cursor: pointer;
-  font-size: 20px;
-  color: #6b7280;
-  border-radius: 4px;
-  transition: all 0.15s ease;
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
-}
-
-.lockin-minimize-btn:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-/* === SIDEBAR MODES SECTION === */
-.lockin-sidebar-modes {
+/* === MINIMAL TOP BAR === */
+.lockin-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #e5e7eb;
   background: white;
   flex-shrink: 0;
-  position: relative;
+  gap: 12px;
 }
 
+.lockin-top-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.lockin-mode-selector-wrapper {
+  flex-shrink: 0;
+}
+
+.lockin-tabs-wrapper {
+  display: flex;
+  gap: 4px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 2px;
+  background: #f9fafb;
+}
+
+.lockin-tab {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.lockin-tab:hover {
+  color: #374151;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.lockin-tab.lockin-tab-active {
+  background: white;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.lockin-close-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockin-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* === MODE SELECTOR === */
 .lockin-mode-selector-container {
   position: relative;
   display: flex;
@@ -234,19 +174,19 @@ body {
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  border: 1px solid var(--lockin-border, #e5e7eb);
-  background: var(--lockin-bg-soft, #f9fafb);
+  border: 1px solid #e5e7eb;
+  background: white;
   border-radius: 20px;
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
-  color: var(--lockin-text, #1f2937);
+  color: #1f2937;
   transition: all 0.15s ease;
 }
 
 .lockin-mode-pill:hover {
-  background: var(--lockin-bg, #ffffff);
-  border-color: var(--lockin-accent, #667eea);
+  background: #f9fafb;
+  border-color: #d1d5db;
 }
 
 .lockin-mode-pill .lockin-mode-icon {
@@ -256,6 +196,7 @@ body {
 .lockin-mode-chevron {
   font-size: 10px;
   transition: transform 0.2s ease;
+  color: #9ca3af;
 }
 
 .lockin-mode-pill:active .lockin-mode-chevron {
@@ -271,8 +212,8 @@ body {
   flex-direction: column;
   gap: 4px;
   padding: 8px;
-  background: var(--lockin-bg, #ffffff);
-  border: 1px solid var(--lockin-border, #e5e7eb);
+  background: white;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 1000;
@@ -286,7 +227,7 @@ body {
   padding: 8px 12px;
   border: none;
   background: transparent;
-  color: var(--lockin-text, #1f2937);
+  color: #1f2937;
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
@@ -296,657 +237,51 @@ body {
 }
 
 .lockin-mode-option:hover {
-  background: var(--lockin-bg-soft, #f9fafb);
+  background: #f9fafb;
 }
 
 .lockin-mode-option-icon {
   font-size: 14px;
 }
 
-/* === TABS === */
-.lockin-tabs {
+/* === CHAT CONTAINER (History Panel + Main Chat) === */
+.lockin-chat-container {
   display: flex;
-  border-bottom: 1px solid #e2e2ea;
-  margin-bottom: 8px;
-  padding: 0 20px;
-}
-
-.lockin-tab {
-  flex: 0 0 auto;
-  padding: 6px 12px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-weight: 500;
-  color: #666;
-  font-size: 14px;
-  transition: color 0.15s ease;
-}
-
-.lockin-tab:hover {
-  color: #222;
-}
-
-.lockin-tab.is-active {
-  color: #222;
-  border-bottom: 2px solid #4f46e5;
-}
-
-/* === TAB PANELS === */
-.lockin-tabpanels {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.lockin-tabpanel {
-  display: none;
-  flex-direction: column;
-  height: 100%;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 }
 
-.lockin-tabpanel.is-active {
-  display: flex;
-}
-
-/* === CHAT LAYOUT (History + Chat side by side) === */
-.lockin-chat-layout {
-  display: flex;
-  flex-direction: row;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* === HISTORY SIDEBAR (Left side) === */
-.lockin-history-sidebar {
-  display: flex;
-  flex-direction: row;
-  border-right: 1px solid #e5e7eb;
-  background: #f8fafc;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: hidden;
-  position: relative;
-}
-
-.lockin-history-sidebar[data-state="collapsed"] {
-  width: 40px;
-}
-
-.lockin-history-sidebar[data-state="expanded"] {
+/* === CHAT HISTORY PANEL (Left Side) === */
+.lockin-chat-history-panel {
   width: 240px;
-}
-
-/* History toggle button (3 vertical dashes) */
-.lockin-history-toggle-btn {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 40px;
-  height: 100%;
-  border: none;
-  background: #f8fafc;
+  background: #f9fafb;
   border-right: 1px solid #e5e7eb;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s ease;
-  z-index: 10;
-  padding: 0;
-}
-
-.lockin-history-toggle-btn:hover {
-  background: #e5e7eb;
-}
-
-/* 3 vertical dashes icon */
-.lockin-history-toggle-icon {
-  display: block;
-  font-size: 20px;
-  line-height: 1;
-  color: #6b7280;
-  font-weight: 300;
-  letter-spacing: 0;
-}
-
-.lockin-history-toggle-btn:hover .lockin-history-toggle-icon {
-  color: #374151;
-}
-
-.lockin-history-sidebar[data-state="expanded"] .lockin-history-toggle-btn {
-  border-right: 1px solid #e5e7eb;
-}
-
-/* History content container */
-.lockin-sidebar-history {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  padding: 12px 16px 12px 48px; /* Left padding to account for toggle button */
-  gap: 12px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  min-width: 0;
-}
-
-.lockin-history-sidebar[data-state="collapsed"] .lockin-sidebar-history {
-  display: none;
-}
-
-/* === SIDEBAR CHAT SECTION (Right side) === */
-.lockin-sidebar-chat {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  padding: 0;
-  gap: 0;
-  overflow: hidden;
-  min-width: 0;
-  height: 100%;
-  position: relative;
-}
-
-/* Chat messages wrapper with resize capability */
-.lockin-chat-messages-wrapper {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
   overflow: hidden;
 }
 
-.lockin-chat-messages {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 150px;
-  max-height: 100%;
-  overscroll-behavior: contain;
-  padding: 16px 20px;
-  -webkit-overflow-scrolling: touch;
+.lockin-chat-history-panel[data-state="closed"] {
+  transform: translateX(-100%);
+  width: 0;
+  border-right: none;
 }
 
-/* Resize handle */
-.lockin-chat-resize-handle {
-  width: 100%;
-  height: 8px;
-  background: transparent;
-  cursor: ns-resize;
-  position: relative;
-  flex-shrink: 0;
-  z-index: 10;
-  transition: background 0.15s ease;
+.lockin-chat-history-panel[data-state="open"] {
+  transform: translateX(0);
 }
-
-.lockin-chat-resize-handle:hover {
-  background: #e5e7eb;
-}
-
-.lockin-chat-resize-handle::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 40px;
-  height: 4px;
-  background: #9ca3af;
-  border-radius: 2px;
-  transition: background 0.15s ease;
-}
-
-.lockin-chat-resize-handle:hover::before {
-  background: #6b7280;
-}
-
-/* Bottom section (suggested notes + input) */
-.lockin-chat-bottom-section {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  min-height: 60px;
-  overflow: visible;
-  position: relative;
-  z-index: 1;
-}
-
-.lockin-chat-msg {
-  display: flex;
-  width: 100%;
-  animation: fadeIn 0.3s ease-in;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.lockin-chat-msg-user {
-  justify-content: flex-end;
-}
-
-.lockin-chat-msg-assistant {
-  justify-content: flex-start;
-}
-
-.lockin-chat-bubble {
-  max-width: 85%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.lockin-chat-msg-user .lockin-chat-bubble {
-  background: #e0e7ff;
-  color: #1e3a8a;
-  border-bottom-right-radius: 4px;
-  border: 1px solid #c7d2fe;
-  font-weight: 500;
-}
-
-.lockin-chat-msg-assistant .lockin-chat-bubble {
-  background: #ffffff;
-  color: #111827;
-  border-bottom-left-radius: 4px;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.lockin-chat-msg-pending .lockin-chat-bubble {
-  font-style: italic;
-  color: #4b5563;
-}
-
-.lockin-chat-placeholder {
-  text-align: center;
-  padding: 32px 16px;
-  color: #6b7280;
-  font-size: 13px;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-}
-
-.lockin-chat-input {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-shrink: 0;
-  padding: 12px 20px;
-  border-top: 1px solid #e5e7eb;
-  background: #fafbfc;
-}
-
-.lockin-chat-input-field {
-  flex: 1;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 14px;
-  font-family: inherit;
-  line-height: 1.4;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-.lockin-chat-input-field:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
-}
-
-/* Legacy support for textarea */
-.lockin-chat-textarea {
-  flex: 1;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 14px;
-  font-family: inherit;
-  resize: none;
-  min-height: 44px;
-  max-height: 80px;
-  line-height: 1.4;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-}
-
-.lockin-chat-textarea:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.15);
-}
-
-.lockin-send-btn {
-  border: none;
-  background: #111827;
-  color: white;
-  border-radius: 8px;
-  padding: 10px 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s ease, background 0.15s ease;
-}
-
-.lockin-send-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.lockin-dots {
-  display: inline-block;
-  width: 24px;
-  height: 8px;
-  background: radial-gradient(circle, #9ca3af 25%, transparent 30%) 0 0 / 8px 8px;
-  animation: lockin-dots 1s steps(4) infinite;
-  margin-right: 6px;
-}
-
-@keyframes lockin-dots {
-  to {
-    background-position: -32px 0;
-  }
-}
-
-/* === SUGGESTED NOTES (inside Chat tab) === */
-.lockin-suggested-notes {
-  flex-shrink: 0;
-  min-height: 0;
-  padding: 12px 20px;
-  border-top: 1px solid #e5e7eb;
-  background: #fafbfc;
-  overflow: visible;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  z-index: 2;
-}
-
-.lockin-suggested-notes-wrapper {
-  margin-top: 8px;
-  padding: 12px;
-  border-radius: var(--lockin-radius-lg);
-  background: var(--lockin-accent-soft);
-  border: 1px solid #d6d8ff;
-  font-size: 13px;
-  max-height: 300px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.lockin-suggested-notes-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.lockin-suggested-notes-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.lockin-suggested-notes-toggle {
-  /* Uses .lockin-btn-ghost styles, but override padding for icon button */
-  padding: 2px 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 24px;
-  height: 24px;
-}
-
-.lockin-suggested-notes-toggle-icon {
-  display: block;
-  font-size: 10px;
-  transition: transform 0.2s ease;
-}
-
-.lockin-suggested-notes-wrapper[data-collapsed="true"] .lockin-suggested-notes-toggle-icon {
-  transform: rotate(-90deg);
-}
-
-.lockin-save-all-btn {
-  /* Uses .lockin-btn-primary styles */
-}
-
-.lockin-suggested-notes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  transition: max-height 0.3s ease, opacity 0.3s ease;
-  max-height: 400px;
-}
-
-.lockin-suggested-notes-wrapper[data-collapsed="true"] .lockin-suggested-notes-list {
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  margin: 0;
-  padding: 0;
-}
-
-/* Scrollbar for suggested notes list */
-.lockin-suggested-notes-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-.lockin-suggested-notes-list::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.lockin-suggested-notes-list::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
-}
-
-.lockin-suggested-notes-list::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
-}
-
-.lockin-suggested-note {
-  border-radius: var(--lockin-radius-md);
-  background: white;
-  padding: 6px;
-  border: 1px solid #e3e3f4;
-  transition: opacity 0.15s ease;
-}
-
-.lockin-suggested-note.is-saved {
-  opacity: 0.6;
-}
-
-.lockin-suggested-note-top {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.lockin-suggested-note-type,
-.lockin-note-pill {
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: var(--lockin-radius-pill);
-  background: var(--lockin-accent-soft);
-  color: var(--lockin-accent);
-}
-
-.lockin-suggested-note-save-btn {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  transition: opacity 0.15s ease;
-}
-
-.lockin-suggested-note-save-btn:hover {
-  opacity: 0.7;
-}
-
-.lockin-suggested-note-save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.lockin-suggested-note-label {
-  /* Uses .lockin-field styles */
-}
-
-.lockin-suggested-note-content-input {
-  min-height: 60px;
-}
-
-/* === NOTES TAB === */
-.lockin-sidebar-notes {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  padding: 16px 20px;
-  gap: 8px;
-  overflow: hidden;
-}
-
-.lockin-notes-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  flex-shrink: 0;
-}
-
-.lockin-notes-filters {
-  display: flex;
-  gap: 6px;
-}
-
-.lockin-notes-filter {
-  border-radius: var(--lockin-radius-pill);
-  border: 1px solid var(--lockin-border);
-  padding: 4px 10px;
-  background: #f7f7fb;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.lockin-notes-filter:hover {
-  background: #f0f0f5;
-}
-
-.lockin-notes-filter.is-active {
-  background: var(--lockin-accent);
-  color: #fff;
-  border-color: var(--lockin-accent);
-}
-
-.lockin-new-note-editor {
-  margin-bottom: 10px;
-  flex-shrink: 0;
-}
-
-.lockin-new-note-editor.hidden {
-  display: none;
-}
-
-.lockin-new-note-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.lockin-new-note-actions {
-  margin-top: 6px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.lockin-notes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1 1 auto;
-  overflow-y: auto;
-  padding-bottom: 8px;
-}
-
-.lockin-empty {
-  font-size: 13px;
-  color: var(--lockin-muted);
-  margin-top: 8px;
-  text-align: center;
-  padding: 16px;
-}
-
-.lockin-note-item {
-  /* Uses .lockin-card styles */
-  font-size: 13px;
-}
-
-.lockin-note-header {
-  margin-bottom: 4px;
-}
-
-.lockin-note-title {
-  font-weight: 600;
-}
-
-.lockin-note-meta {
-  font-size: 11px;
-  color: var(--lockin-muted);
-  margin-top: 2px;
-}
-
-.lockin-note-body {
-  font-size: 13px;
-  color: #333;
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-
-/* History section styles are now above in .lockin-sidebar-history */
 
 .lockin-history-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .lockin-history-label {
@@ -954,7 +289,7 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #475569;
+  color: #6b7280;
 }
 
 .lockin-new-chat-btn {
@@ -962,10 +297,15 @@ body {
   background: #111827;
   color: white;
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.lockin-new-chat-btn:hover {
+  opacity: 0.9;
 }
 
 .lockin-new-chat-btn:disabled {
@@ -978,6 +318,7 @@ body {
   flex-direction: column;
   gap: 6px;
   overflow-y: auto;
+  padding: 12px;
   flex: 1;
   min-height: 0;
 }
@@ -986,14 +327,13 @@ body {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 10px;
-  text-align: left;
   background: white;
   font-size: 12px;
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .lockin-history-item:hover {
@@ -1003,7 +343,8 @@ body {
 
 .lockin-history-item.active {
   border-color: #6366f1;
-  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4);
+  background: #f0f4ff;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.2);
 }
 
 .lockin-history-item-content {
@@ -1018,7 +359,7 @@ body {
   flex-shrink: 0;
   background: none;
   border: none;
-  padding: 4px 4px;
+  padding: 4px;
   cursor: pointer;
   font-size: 18px;
   color: #9ca3af;
@@ -1044,6 +385,9 @@ body {
 .lockin-history-title {
   font-weight: 600;
   color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .lockin-history-meta {
@@ -1051,56 +395,516 @@ body {
   color: #6b7280;
 }
 
+.lockin-history-empty {
+  padding: 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+/* === CHAT MAIN AREA === */
+.lockin-chat-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lockin-chat-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+  flex-shrink: 0;
+}
+
+.lockin-history-toggle-btn {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  color: #6b7280;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockin-history-toggle-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.lockin-chat-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lockin-chat-messages-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lockin-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+.lockin-chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lockin-chat-msg-user {
+  align-items: flex-end;
+}
+
+.lockin-chat-msg-assistant {
+  align-items: flex-start;
+}
+
+.lockin-chat-bubble {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.lockin-chat-msg-user .lockin-chat-bubble {
+  background: #e0e7ff;
+  color: #1e3a8a;
+  border-bottom-right-radius: 4px;
+}
+
+.lockin-chat-msg-assistant .lockin-chat-bubble {
+  background: #f3f4f6;
+  color: #111827;
+  border-bottom-left-radius: 4px;
+}
+
+.lockin-chat-msg-pending .lockin-chat-bubble {
+  font-style: italic;
+  color: #4b5563;
+}
+
+/* Chat action buttons (Save as note, Generate notes) */
+.lockin-chat-msg-actions {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  margin-top: 4px;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.lockin-chat-msg-assistant:hover .lockin-chat-msg-actions {
+  opacity: 1;
+}
+
+.lockin-chat-action-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-weight: 500;
+}
+
+.lockin-chat-action-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.lockin-chat-placeholder {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.lockin-chat-bottom-section {
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: white;
+  flex-shrink: 0;
+}
+
+.lockin-chat-input {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.lockin-chat-input-field {
+  flex: 1;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: none;
+  min-height: 20px;
+  max-height: 120px;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.lockin-chat-input-field:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.lockin-send-btn {
+  border: none;
+  background: #111827;
+  color: white;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+}
+
+.lockin-send-btn:hover:not(:disabled) {
+  background: #1f2937;
+}
+
+.lockin-send-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.lockin-dots {
+  display: inline-block;
+  width: 24px;
+  height: 8px;
+  background: radial-gradient(circle, #9ca3af 25%, transparent 30%) 0 0 / 8px 8px;
+  animation: lockin-dots 1s steps(4) infinite;
+  margin-right: 6px;
+}
+
+@keyframes lockin-dots {
+  to {
+    background-position: -32px 0;
+  }
+}
+
+/* === NOTES CONTAINER === */
+.lockin-notes-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: white;
+}
+
+.lockin-notes-top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.lockin-notes-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.lockin-notes-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lockin-btn-primary {
+  background: #111827;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.lockin-btn-primary:hover {
+  background: #1f2937;
+}
+
+.lockin-new-note-btn {
+  background: #111827;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.lockin-new-note-btn:hover {
+  background: #1f2937;
+}
+
+.lockin-notes-editor-section {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.lockin-new-note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lockin-note-title-input {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.lockin-note-title-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.lockin-note-content-input {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  min-height: 200px;
+  resize: vertical;
+  line-height: 1.6;
+  box-sizing: border-box;
+}
+
+.lockin-note-content-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.lockin-note-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lockin-note-timestamp {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.lockin-new-note-save {
+  background: #111827;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.lockin-new-note-save:hover {
+  background: #1f2937;
+}
+
+.lockin-notes-list-section {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lockin-notes-list-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.lockin-notes-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lockin-filter-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.lockin-notes-filter-select {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  background: white;
+  color: #1f2937;
+  cursor: pointer;
+}
+
+.lockin-notes-filter-select:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.lockin-notes-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lockin-note-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-note-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.lockin-note-header {
+  margin-bottom: 8px;
+}
+
+.lockin-note-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.lockin-note-meta {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.lockin-note-body {
+  font-size: 13px;
+  color: #4b5563;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lockin-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
 /* === SCROLLBARS === */
 .lockin-chat-messages::-webkit-scrollbar,
-.lockin-history-list::-webkit-scrollbar {
+.lockin-history-list::-webkit-scrollbar,
+.lockin-notes-list::-webkit-scrollbar {
   width: 8px;
 }
 
 .lockin-chat-messages::-webkit-scrollbar-track,
-.lockin-history-list::-webkit-scrollbar-track {
+.lockin-history-list::-webkit-scrollbar-track,
+.lockin-notes-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .lockin-chat-messages::-webkit-scrollbar-thumb,
-.lockin-history-list::-webkit-scrollbar-thumb {
+.lockin-history-list::-webkit-scrollbar-thumb,
+.lockin-notes-list::-webkit-scrollbar-thumb {
   background: #d1d5db;
   border-radius: 4px;
 }
 
 .lockin-chat-messages::-webkit-scrollbar-thumb:hover,
-.lockin-history-list::-webkit-scrollbar-thumb:hover {
+.lockin-history-list::-webkit-scrollbar-thumb:hover,
+.lockin-notes-list::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
 
 /* === RESPONSIVE BEHAVIOR === */
 @media (max-width: 1024px) {
-  /* On narrow screens, sidebar is overlay mode (no page shrinking) */
-  .lockin-history-sidebar[data-state="expanded"] {
-    width: 200px;
+  #lockin-sidebar {
+    width: 100%;
+    max-width: 400px;
   }
-}
-
-@media (max-width: 768px) {
-  .lockin-history-sidebar[data-state="expanded"] {
-    width: 180px;
+  
+  .lockin-chat-history-panel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #lockin-sidebar {
-    transition: none;
-  }
-
-  #lockin-toggle-pill {
-    transition: none;
-  }
-
-  .lockin-mode-pill {
-    transition: none;
-  }
-
-  .lockin-minimize-btn {
+  #lockin-sidebar,
+  .lockin-chat-history-panel,
+  #lockin-toggle-pill,
+  .lockin-mode-pill,
+  .lockin-close-btn {
     transition: none;
   }
 }
