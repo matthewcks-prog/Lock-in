@@ -93,12 +93,11 @@ class LockinSidebar {
     this.sidebarElement.setAttribute("role", "complementary");
     this.sidebarElement.setAttribute("aria-label", "Lock-in Assistant Sidebar");
 
-    // Minimal top bar (mode selector + tabs + close button)
+    // Minimal top bar (tabs + close button)
     this.topBarElement = document.createElement("header");
     this.topBarElement.className = "lockin-top-bar";
     this.topBarElement.innerHTML = `
       <div class="lockin-top-bar-left">
-        <div class="lockin-mode-selector-wrapper"></div>
         <div class="lockin-tabs-wrapper">
           <button class="lockin-tab lockin-tab-active" data-tab="chat" type="button">Chat</button>
           <button class="lockin-tab" data-tab="notes" type="button">Notes</button>
@@ -120,13 +119,16 @@ class LockinSidebar {
     this.chatMainElement = document.createElement("section");
     this.chatMainElement.className = "lockin-chat-main";
     
-    // Add history toggle button to chat main header
+    // Add header with history toggle button and mode selector
     const chatHeader = document.createElement("div");
     chatHeader.className = "lockin-chat-header";
     chatHeader.innerHTML = `
-      <button class="lockin-history-toggle-btn" type="button" aria-label="Toggle chat history" title="Chat history">
-        <span class="lockin-history-toggle-icon">☰</span>
-      </button>
+      <div class="lockin-chat-header-left">
+        <button class="lockin-history-toggle-btn" type="button" aria-label="Toggle chat history" title="Chat history">
+          <span class="lockin-history-toggle-icon">☰</span>
+        </button>
+        <div class="lockin-mode-selector-wrapper"></div>
+      </div>
     `;
     this.chatMainElement.appendChild(chatHeader);
     
@@ -443,8 +445,9 @@ class LockinSidebar {
    * Render sidebar content (called by contentScript)
    */
   renderContent(contentHtml) {
-    // Render mode selector in top bar
-    const modeWrapper = this.topBarElement.querySelector(".lockin-mode-selector-wrapper");
+    // Render mode selector in chat header (next to history toggle button)
+    const chatHeader = this.chatMainElement.querySelector(".lockin-chat-header");
+    const modeWrapper = chatHeader?.querySelector(".lockin-mode-selector-wrapper");
     if (modeWrapper) {
       modeWrapper.innerHTML = contentHtml.modes || "";
     }

@@ -330,6 +330,36 @@ async function createNote(note) {
 }
 
 /**
+ * Update an existing note
+ * @param {string} noteId - Note identifier
+ * @param {Object} note - Note data
+ * @returns {Promise<Object>}
+ */
+async function updateNote(noteId, note) {
+  if (!noteId) {
+    throw new Error("noteId is required to update a note");
+  }
+  return apiRequest(`/api/notes/${noteId}`, {
+    method: "PUT",
+    body: JSON.stringify(note),
+  });
+}
+
+/**
+ * Delete a note
+ * @param {string} noteId - Note identifier
+ * @returns {Promise<void>}
+ */
+async function deleteNote(noteId) {
+  if (!noteId) {
+    throw new Error("noteId is required to delete a note");
+  }
+  return apiRequest(`/api/notes/${noteId}`, {
+    method: "DELETE",
+  });
+}
+
+/**
  * List notes with optional filters
  * @param {Object} [params] - Query parameters
  * @param {string} [params.sourceUrl] - Filter by source URL
@@ -393,6 +423,8 @@ if (typeof window !== "undefined") {
     getChatMessages,
     deleteChat,
     createNote,
+    updateNote,
+    deleteNote,
     listNotes,
     searchNotes,
     chatWithNotes,
@@ -410,6 +442,8 @@ if (typeof module !== "undefined" && module.exports) {
     getChatMessages,
     deleteChat,
     createNote,
+    updateNote,
+    deleteNote,
     listNotes,
     searchNotes,
     chatWithNotes,

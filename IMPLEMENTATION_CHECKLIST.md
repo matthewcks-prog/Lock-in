@@ -1,304 +1,659 @@
-# Lock-in UX Improvements - Implementation Checklist
+# Lock-in Implementation Checklist & Code Reference
 
-## Completed Implementations
+This document provides a comprehensive overview of the Lock-in codebase, its features, architecture, and implementation details. It serves as a single source of truth for understanding the current state of the project.
 
-### 1. Chat Tab Improvements
+## Table of Contents
 
-#### 1.1 Remove Auto "Suggested Notes" ✅
-
-- [x] Removed `buildSuggestedNotesHtml()` function entirely
-- [x] Removed `.lockin-suggested-notes` container from `buildChatSection()`
-- [x] No longer renders giant suggested notes card after every response
-- **Status:** Implemented in `contentScript.js` lines 654-675
-
-#### 1.2 Add Action Buttons Under Chat Messages ✅
-
-- [x] Modified `buildChatMessagesHtml()` to add action buttons to assistant messages
-- [x] Action buttons only appear for messages after the first one
-- [x] Two buttons: "Save as note" and "Generate notes"
-- [x] Buttons appear on hover (CSS opacity: 0 → 1 on hover)
-- **Status:** Implemented in `contentScript.js` lines 1458-1510
-
-#### 1.3 Wire Up Chat Action Button Listeners ✅
-
-- [x] Created `attachChatActionListeners()` function
-- [x] Listens for "save-note" and "generate-notes" button clicks
-- [x] Extracts message content from chat bubble
-- [x] Handles draft panel action buttons
-- **Status:** Implemented in `contentScript.js` lines 413-462
+1. [Project Overview](#project-overview)
+2. [Architecture](#architecture)
+3. [Features](#features)
+4. [Code Structure](#code-structure)
+5. [API Endpoints](#api-endpoints)
+6. [Data Models](#data-models)
+7. [Key Functions & Components](#key-functions--components)
+8. [State Management](#state-management)
+9. [Authentication & Security](#authentication--security)
+10. [Known Limitations & Future Enhancements](#known-limitations--future-enhancements)
 
 ---
 
-### 2. Notes Tab Redesign
+## Project Overview
 
-#### 2.1 New Layout Structure ✅
+**Lock-in** is an AI-powered Chrome extension that helps students learn by providing instant explanations, simplifications, and translations of any text on the web. It features a sidebar interface with chat conversations and note-taking capabilities, backed by a Node.js/Express API with Supabase for persistence and OpenAI for AI processing.
 
-- [x] Header with "Notes" title and "+ New note" button
-- [x] Main doc-like editor section (spacious)
-- [x] Filter dropdown below editor
-- [x] Notes list below filters
-- **Status:** Implemented in `contentScript.js` lines 729-770
+### Core Value Propositions
 
-#### 2.2 Doc-Like Editor Styling ✅
-
-- [x] Large title input (16px, bold, 40px min-height)
-- [x] Spacious textarea (150px+ min-height, 1.6 line-height)
-- [x] Footer with timestamp + "Save note" button
-- [x] Editor takes ~45% of height, list takes remaining
-- **Status:** Implemented in `contentScript.css` classes:
-  - `.lockin-note-title-input` (lines 928-933)
-  - `.lockin-note-content-input` (lines 935-942)
-  - `.lockin-note-footer` (lines 944-950)
-
-#### 2.3 Filter Dropdown (Not Pills) ✅
-
-- [x] Replaced pill buttons with HTML select dropdown
-- [x] "Showing: [This page v]" design
-- [x] Filter moved below editor (not in header)
-- [x] Options: "This page", "This course", "All notes"
-- **Status:** Implemented in `contentScript.js` lines 752-761
-- **CSS:** `.lockin-notes-filter-select` (lines 988-1001)
-
-#### 2.4 Update Note Editor Event Listeners ✅
-
-- [x] Updated `attachNewNoteEditorListeners()` to use new layout
-- [x] Removed hidden/cancel button logic
-- [x] Editor always visible (no toggle)
-- [x] Filter select change triggers `loadNotes()`
-- **Status:** Implemented in `contentScript.js` lines 550-623
+- **Text Processing**: Explain, simplify, or translate any selected text
+- **Persistent Chat**: Maintain conversation context across sessions
+- **Note Management**: Save and organize notes with semantic search
+- **RAG (Retrieval-Augmented Generation)**: Chat with your notes using AI
 
 ---
 
-### 3. Save As Note Flow
+## Architecture
 
-#### 3.1 New Function: `saveChatAsNote()` ✅
+### High-Level Flow
 
-- [x] Extracts first sentence as title (max 50 chars)
-- [x] Uses full message as content
-- [x] Pre-fills Note editor fields
-- [x] Switches to Notes tab
-- [x] Shows toast: "Ready to save! Edit the note and click Save note."
-- **Status:** Implemented in `contentScript.js` lines 1568-1589
+```
+User selects text (Ctrl/Cmd + select)
+    ↓
+Extension captures selection
+    ↓
+Content script builds payload (mode, text, context, chat history)
+    ↓
+Request to backend API (/api/lockin)
+    ↓
+Backend validates, authenticates, calls OpenAI
+    ↓
+Backend stores chat/messages in Supabase
+    ↓
+Response returned to extension
+    ↓
+Sidebar updates with AI response and chat history
+```
 
-#### 3.2 Wire Up "Save as note" Button ✅
+### Component Architecture
 
-- [x] Button listener in `attachChatActionListeners()`
-- [x] Calls `saveChatAsNote(messageContent)` on click
-- [x] Message content extracted from chat bubble
-- **Status:** Implemented in `contentScript.js` lines 419-425
-
----
-
-### 4. Generate Notes On-Demand
-
-#### 4.1 New Function: `showAiDraftNotes()` ✅
-
-- [x] Shows AI draft panel only when triggered
-- [x] Displays notes as simple bullet list
-- [x] Panel appears above main editor
-- [x] Includes action buttons: Insert/Save/Dismiss
-- **Status:** Implemented in `contentScript.js` lines 1521-1566
-
-#### 4.2 New Function: `saveDraftNotesAsSeparate()` ✅
-
-- [x] Saves each AI-drafted note as separate note
-- [x] Calls backend API for each note
-- [x] Clears draft panel after saving
-- [x] Shows toast with count
-- **Status:** Implemented in `contentScript.js` lines 1627-1664
-
-#### 4.3 New Function: `insertDraftIntoCurrent()` ✅
-
-- [x] Inserts draft notes as bullet list into editor
-- [x] Adds "## Notes\n- item1\n- item2" format
-- [x] Clears draft panel
-- [x] Focuses editor
-- **Status:** Implemented in `contentScript.js` lines 1666-1689
-
-#### 4.4 New Function: `clearAiDraftPanel()` ✅
-
-- [x] Removes draft panel from DOM
-- **Status:** Implemented in `contentScript.js` lines 1504-1513
-
-#### 4.5 Wire Up "Generate notes" Button ✅
-
-- [x] Button listener in `attachChatActionListeners()`
-- [x] Calls `showAiDraftNotes()` on click
-- [x] Draft panel action buttons handled in same listener
-- **Status:** Implemented in `contentScript.js` lines 428-450
-
----
-
-### 5. CSS Styling
-
-#### 5.1 Chat Action Buttons ✅
-
-- [x] `.lockin-chat-msg-actions` - flex container, opacity 0 by default
-- [x] `.lockin-chat-msg-assistant:hover` - shows actions on hover
-- [x] `.lockin-chat-action-btn` - subtle button style
-- **Status:** Implemented in `contentScript.css` lines 579-611
-
-#### 5.2 New Notes Layout ✅
-
-- [x] `.lockin-notes-container` - main wrapper
-- [x] `.lockin-notes-top-header` - header with title + button
-- [x] `.lockin-notes-editor-section` - spacious editor area
-- [x] `.lockin-notes-list-section` - list below editor
-- **Status:** Implemented in `contentScript.css` lines 833-1030
-
-#### 5.3 AI Draft Panel ✅
-
-- [x] `.lockin-ai-draft-panel` - container with light background
-- [x] `.lockin-draft-panel-header` - header with close button
-- [x] `.lockin-draft-notes-list` - bullet list of items
-- [x] `.lockin-draft-panel-actions` - action buttons
-- **Status:** Implemented in `contentScript.css` lines 952-987
-
-#### 5.4 Filter Dropdown ✅
-
-- [x] `.lockin-notes-filter-select` - dropdown style
-- [x] `.lockin-filter-label` - "Showing:" label
-- [x] `.lockin-notes-filter-group` - flex container
-- **Status:** Implemented in `contentScript.css` lines 980-1001
-
-#### 5.5 Scrollbars ✅
-
-- [x] Notes list scrollbar styling added
-- **Status:** Implemented in `contentScript.css` lines 1003-1014
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Chrome Extension                      │
+├─────────────────────────────────────────────────────────┤
+│  contentScript.js (Main orchestrator)                   │
+│  ├── Text selection detection                           │
+│  ├── Sidebar UI rendering                               │
+│  ├── Chat interface management                          │
+│  ├── Notes interface management                         │
+│  └── API coordination                                   │
+│                                                          │
+│  lockin-sidebar.js (Sidebar component)                  │
+│  ├── Open/close/resize functionality                    │
+│  ├── Tab navigation (Chat/Notes)                        │
+│  └── Responsive behavior                                │
+│                                                          │
+│  libs/api.js (API client)                               │
+│  ├── processText()                                      │
+│  ├── createNote() / listNotes() / searchNotes()        │
+│  ├── chatWithNotes()                                    │
+│  └── Authentication handling                           │
+└─────────────────────────────────────────────────────────┘
+                        ↕ HTTP/JSON
+┌─────────────────────────────────────────────────────────┐
+│                    Backend API                           │
+├─────────────────────────────────────────────────────────┤
+│  Express.js Server                                      │
+│  ├── routes/lockinRoutes.js (Chat endpoints)           │
+│  ├── routes/noteRoutes.js (Notes endpoints)            │
+│  ├── controllers/lockinController.js                    │
+│  ├── controllers/notesController.js                     │
+│  ├── controllers/notesChatController.js (RAG)          │
+│  ├── repositories/notesRepository.js                    │
+│  ├── openaiClient.js (Chat + Embeddings)               │
+│  └── authMiddleware.js (JWT validation)                │
+└─────────────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────────────┐
+│                    Supabase Database                     │
+├─────────────────────────────────────────────────────────┤
+│  Tables:                                                │
+│  ├── chats (chat sessions)                              │
+│  ├── messages (chat messages)                           │
+│  ├── notes (user notes with embeddings)                │
+│  └── Functions: match_notes (vector search)            │
+└─────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### 6. Event Flow Integration
+## Features
 
-#### 6.1 renderSidebarContent() Updated ✅
+### 1. Text Selection & Processing
 
-- [x] Added call to `attachChatActionListeners()`
-- **Status:** Implemented in `contentScript.js` line 368
+**Location**: `extension/contentScript.js`
 
-#### 6.2 Event Listeners Properly Sequenced ✅
+- **Trigger**: User holds Ctrl (Windows/Linux) or Cmd (Mac) and selects text
+- **Modes**:
+  - **Explain**: Clear explanations with examples
+  - **Simplify**: Convert complex text to simple language
+  - **Translate**: Translate and explain in another language
+- **Implementation**: `runMode(mode)`, `callLockInApi()`
 
-- [x] `attachSidebarInputListeners()` - input/form listeners
-- [x] `attachChatActionListeners()` - NEW chat action buttons
-- [x] `attachNoteButtonListeners()` - old button listeners (now unused)
-- [x] `attachNewNoteEditorListeners()` - note editor listeners
-- [x] `attachChatResizeHandler()` - resize logic
-- **Status:** Implemented in `contentScript.js` lines 365-369
+### 2. Chat Interface
 
----
+**Location**: `extension/contentScript.js` (Chat Tab)
 
-## Verification Tests
+#### 2.1 Chat Messages
+- Displays conversation history (user + assistant messages)
+- Follow-up questions supported
+- Persistent chat sessions (saved to Supabase)
+- **Functions**: `buildChatMessagesHtml()`, `buildChatSection()`
 
-### Visual Inspection
+#### 2.2 Chat Action Buttons
+- Appear on hover over assistant messages (except first message)
+- Two actions:
+  - **"Save as note"**: Pre-fills note editor with message content
+  - **"Generate notes"**: Shows AI-drafted notes panel
+- **Functions**: `attachChatActionListeners()`, `onSaveAsNote()`, `onGenerateNotes()`
 
-- [ ] Chat: No giant "Suggested notes" card visible after responses
-- [ ] Chat: Action buttons appear on hover over assistant messages
-- [ ] Chat: Action buttons disappear when cursor leaves message
-- [ ] Notes: Large title input visible (16px, bold)
-- [ ] Notes: Spacious textarea (150px+ height)
-- [ ] Notes: Filters below editor (not at top)
-- [ ] Notes: Filter is a dropdown, not pill buttons
+#### 2.3 Chat History Panel
+- Toggleable left panel showing recent chats
+- Click to load previous conversations
+- New chat button to start fresh
+- **Functions**: `buildHistorySection()`, `handleSelectChat()`, `handleNewChatEvent()`
 
-### Functional Testing
+### 3. Notes Tab
 
-- [ ] Click "Save as note" → Note editor pre-fills, switch to Notes tab
-- [ ] Click "Generate notes" → Draft panel shows with bullets
-- [ ] Click "Insert into current note" → Bullets added to editor
-- [ ] Click "Save each as separate note" → Each note saved, panel closes
-- [ ] Click "Dismiss" → Draft panel closes
-- [ ] Change filter dropdown → Notes list updates
-- [ ] Type and save note → Note appears in list
+**Location**: `extension/contentScript.js` (Notes Tab)
 
-### Browser Console
+#### 3.1 Doc-Like Editor
+- Large title input (16px, bold, 40px min-height)
+- Spacious textarea (150px+ min-height, 1.6 line-height)
+- Footer with timestamp and "Save note" button
+- Always visible (no toggle needed)
+- **Functions**: `buildNotesSection()`, `attachNewNoteEditorListeners()`
 
-- [ ] No JavaScript errors
-- [ ] No warnings about undefined functions
-- [ ] Event listeners firing correctly (test with console.log)
+#### 3.2 Filter Dropdown
+- Filter notes by scope:
+  - "This page" - Notes from current URL
+  - "This course" - Notes from same course code
+  - "All notes" - All user notes
+- Located below editor (not in header)
+- **Functions**: `loadNotes(filter)`, filter select change handler
 
-### Backward Compatibility
+#### 3.3 Notes List
+- Displays saved notes below editor
+- Shows title, preview, and metadata
+- Click to view note details
+- **Functions**: `renderNotesList()`, `loadNotes()`
 
-- [ ] Existing chat functionality unchanged
-- [ ] Backend API calls unchanged
-- [ ] Note storage format unchanged
-- [ ] No breaking changes to other features
+#### 3.4 AI Draft Panel
+- Appears when "Generate notes" is clicked from chat
+- Shows bullet list of AI-suggested notes
+- Actions:
+  - **"Insert into current note"**: Adds bullets to editor
+  - **"Save each as separate note"**: Creates individual notes
+  - **"Dismiss"**: Closes panel
+- **Functions**: `showAiDraftNotes()`, `saveDraftNotesAsSeparate()`, `insertDraftIntoCurrent()`, `clearAiDraftPanel()`
 
----
+### 4. Sidebar System
 
-## Known Limitations (Future Enhancements)
+**Location**: `extension/lockin-sidebar.js`
 
-- ⚠️ Draft notes are not editable as individual cards (by design - intentional change)
-- ⚠️ AI notes generation happens client-side, may be slow with large responses
-- ⚠️ No markdown editor yet (plain text only)
-- ⚠️ Filter dropdown doesn't persist selected filter across sessions (could be added)
-- ⚠️ Draft panel doesn't show note type badges (simplified for UX)
+- Fixed right-hand sidebar (30% viewport width)
+- Resizable width (280-500px on desktop)
+- Responsive: shrinks page on desktop, overlays on mobile
+- Tab navigation (Chat / Notes)
+- Smooth animations
+- **Class**: `LockinSidebar`
 
----
+### 5. Authentication
 
-## Deployment Notes
+**Location**: `extension/supabaseAuth.js`, `backend/authMiddleware.js`
 
-### Files Changed
+- Supabase email/password authentication
+- JWT tokens stored in Chrome Sync
+- Automatic token refresh
+- All API calls include auth headers
+- **Functions**: `getValidAccessToken()`, `requireSupabaseUser()` middleware
 
-1. `extension/contentScript.js` - Main logic
-2. `extension/contentScript.css` - Styling
-3. `UX_CHANGES_SUMMARY.md` - Documentation
-4. `UX_CHANGES_VISUAL_GUIDE.md` - Visual guide
+### 6. Semantic Search (RAG)
 
-### Backward Compatibility
+**Location**: `backend/controllers/notesChatController.js`, `extension/libs/api.js`
 
-✅ **Fully backward compatible**
-
-- No backend changes needed
-- No database migrations needed
-- No storage format changes
-- Old users can migrate seamlessly
-
-### Testing Environment
-
-- Chrome/Brave extension environment
-- Modern browser with ES6+ support
-- CSS3 features (flexbox, grid, transitions)
-
-### Rollback Plan
-
-If issues arise:
-
-1. Revert `contentScript.js` to previous version
-2. Revert `contentScript.css` to previous version
-3. Clear browser cache and reload extension
-
----
-
-## Success Criteria (MET)
-
-✅ Visual noise eliminated (no auto-suggested notes)
-✅ Chat tab feels clean and focused
-✅ Notes tab feels like a real document editor
-✅ Mental model is clear (Chat vs Notes)
-✅ User has intentional control (no auto-spam)
-✅ Save as note flow is smooth
-✅ Generate notes is on-demand only
-✅ Filters don't clutter the writing space
-✅ Power users won't be overwhelmed
-✅ Code is maintainable and documented
+- Vector embeddings for notes (OpenAI embeddings API)
+- Semantic similarity search using Supabase `match_notes()` function
+- Chat with notes: answers questions using user's notes as context
+- **Functions**: `chatWithNotes()`, `searchNotesByEmbedding()`
 
 ---
 
-## Implementation Summary
+## Code Structure
 
-**Total Changes:**
+### Extension (`extension/`)
 
-- ~300 lines added to `contentScript.js`
-- ~200 lines added to `contentScript.css`
-- 7 new functions created
-- 4 existing functions modified
-- 5 new event listeners attached
-- 20+ new CSS classes created
+#### Core Files
 
-**Complexity:** Medium
-**Risk Level:** Low (no backend changes, fully backward compatible)
-**Testing Time:** ~1-2 hours
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `contentScript.js` | Main orchestrator (~2500 lines) | `init()`, `runMode()`, `buildChatSection()`, `buildNotesSection()`, `loadNotes()` |
+| `lockin-sidebar.js` | Sidebar component | `LockinSidebar` class, `init()`, `open()`, `close()`, `switchTab()` |
+| `background.js` | Service worker | Context menus, session management |
+| `popup.js` | Settings UI | Authentication, preferences |
+| `supabaseAuth.js` | Auth handling | `signIn()`, `signOut()`, `getValidAccessToken()` |
 
-**Estimated Impact:**
+#### Shared Libraries (`libs/`)
 
-- User satisfaction: High (cleaner, less noise)
-- Technical debt: None (added, didn't remove)
-- Maintenance burden: Low (well-documented, modular)
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `api.js` | API client | `processText()`, `createNote()`, `listNotes()`, `searchNotes()`, `chatWithNotes()` |
+| `messaging.js` | Message system | Typed messages for extension communication |
+| `storage.js` | Storage wrapper | `get()`, `set()`, chrome.storage abstraction |
+| `logger.js` | Logging utility | `debug()`, `info()`, `warn()`, `error()` |
+
+#### Utilities
+
+| File | Purpose |
+|------|---------|
+| `chatHistoryUtils.js` | Chat history formatting, HTML escaping |
+| `config.js` | Runtime configuration (backend URL, Supabase credentials) |
+
+### Backend (`backend/`)
+
+#### Entry Point
+
+| File | Purpose |
+|------|---------|
+| `index.js` | Server entry point, starts HTTP server |
+| `app.js` | Express app factory, middleware setup, route wiring |
+
+#### Routes
+
+| File | Endpoints |
+|------|-----------|
+| `routes/lockinRoutes.js` | `/api/lockin` (POST), `/api/chats` (GET), `/api/chats/:id` (DELETE), `/api/chats/:id/messages` (GET) |
+| `routes/noteRoutes.js` | `/api/notes` (POST, GET), `/api/notes/search` (GET), `/api/notes/chat` (POST) |
+
+#### Controllers
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `controllers/lockinController.js` | Chat/processing handlers | `handleLockinRequest()`, `listChats()`, `deleteChat()`, `listChatMessages()` |
+| `controllers/notesController.js` | Notes CRUD | `createNote()`, `listNotes()`, `searchNotes()` |
+| `controllers/notesChatController.js` | RAG chat | `chatWithNotes()` |
+
+#### Data Layer
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `repositories/notesRepository.js` | Notes database ops | `createNote()`, `listNotes()`, `searchNotesByEmbedding()` |
+| `chatRepository.js` | Chat database ops | `createChat()`, `getChat()`, `listChats()`, `saveMessage()` |
+| `supabaseClient.js` | Supabase client config | Configured client instance |
+
+#### External Services
+
+| File | Purpose | Key Functions |
+|------|---------|---------------|
+| `openaiClient.js` | OpenAI integration | `chatWithModel()`, `embedText()` |
+
+#### Middleware & Utilities
+
+| File | Purpose |
+|------|---------|
+| `authMiddleware.js` | JWT validation, user context |
+| `rateLimiter.js` | Per-user rate limiting |
+| `config.js` | Centralized configuration |
+| `utils/validation.js` | Input validation utilities |
+
+---
+
+## API Endpoints
+
+### Chat & Processing
+
+#### `POST /api/lockin`
+Process text with AI (Explain/Simplify/Translate).
+
+**Request:**
+```json
+{
+  "selection": "Text to process",
+  "mode": "explain",
+  "targetLanguage": "en",
+  "difficultyLevel": "highschool",
+  "chatHistory": [],
+  "newUserMessage": "Optional follow-up",
+  "chatId": "optional-existing-chat-id"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "mode": "explain",
+    "explanation": "AI response",
+    "notes": [],
+    "todos": [],
+    "tags": [],
+    "difficulty": "medium"
+  },
+  "chatId": "uuid"
+}
+```
+
+#### `GET /api/chats?limit=10`
+Get recent chats for authenticated user.
+
+#### `DELETE /api/chats/:chatId`
+Delete a chat and all its messages.
+
+#### `GET /api/chats/:chatId/messages`
+Get all messages for a specific chat.
+
+### Notes
+
+#### `POST /api/notes`
+Create a new note with embedding.
+
+**Request:**
+```json
+{
+  "title": "Note title",
+  "content": "Note content",
+  "sourceSelection": "Original text",
+  "sourceUrl": "https://example.com",
+  "courseCode": "CS101",
+  "noteType": "manual",
+  "tags": ["tag1"]
+}
+```
+
+#### `GET /api/notes?sourceUrl=&courseCode=&limit=`
+List notes with optional filters.
+
+#### `GET /api/notes/search?q=query&courseCode=&k=`
+Semantic search using vector embeddings.
+
+#### `POST /api/notes/chat`
+Chat with notes (RAG).
+
+**Request:**
+```json
+{
+  "query": "What did I learn about databases?",
+  "courseCode": "CS101",
+  "k": 8
+}
+```
+
+**Response:**
+```json
+{
+  "answer": "AI answer based on notes",
+  "usedNotes": [{"id": "uuid", "title": "...", "courseCode": "CS101"}]
+}
+```
+
+---
+
+## Data Models
+
+### Chat
+```typescript
+{
+  id: string (UUID)
+  user_id: string (UUID)
+  created_at: timestamp
+  updated_at: timestamp
+}
+```
+
+### Message
+```typescript
+{
+  id: string (UUID)
+  chat_id: string (UUID)
+  role: "user" | "assistant"
+  content: string
+  created_at: timestamp
+}
+```
+
+### Note
+```typescript
+{
+  id: string (UUID)
+  user_id: string (UUID)
+  title: string
+  content: string
+  source_selection?: string
+  source_url?: string
+  course_code?: string
+  note_type: string
+  tags: string[]
+  embedding: number[] (1536 dimensions)
+  created_at: timestamp
+  updated_at: timestamp
+}
+```
+
+### StudyResponse (API Response)
+```typescript
+{
+  mode: "explain" | "simplify" | "translate"
+  explanation: string
+  notes: Array<{title: string, content: string, type: string}>
+  todos: Array<{title: string, description: string}>
+  tags: string[]
+  difficulty: "easy" | "medium" | "hard"
+}
+```
+
+---
+
+## Key Functions & Components
+
+### Extension Functions
+
+#### Initialization
+- `init()` - Main initialization, loads state, sets up event listeners
+- `initializeSidebar()` - Initializes LockinSidebar component
+- `loadToggleState()` - Loads highlighting enabled state
+- `loadThemeAndPersonalisation()` - Loads theme and accent color
+
+#### Text Processing
+- `runMode(mode)` - Processes text with selected mode
+- `callLockInApi(payload)` - Makes API request to backend
+- `validateSelection()` - Validates text selection
+- `determineDefaultMode()` - Determines default mode from settings
+
+#### Chat Interface
+- `buildChatSection()` - Renders chat tab HTML
+- `buildChatMessagesHtml()` - Renders chat messages with action buttons
+- `buildHistorySection()` - Renders chat history panel
+- `attachChatActionListeners()` - Handles chat action button clicks
+- `onSaveAsNote()` - Saves chat message as note
+- `onGenerateNotes()` - Shows AI draft notes panel
+
+#### Notes Interface
+- `buildNotesSection()` - Renders notes tab HTML
+- `loadNotes(filter)` - Loads and displays notes
+- `renderNotesList(notes, listEl)` - Renders notes list
+- `attachNewNoteEditorListeners()` - Handles note editor interactions
+- `showAiDraftNotes()` - Displays AI draft panel
+- `saveDraftNotesAsSeparate()` - Saves AI notes as separate notes
+- `insertDraftIntoCurrent()` - Inserts AI notes into editor
+- `clearAiDraftPanel()` - Removes draft panel
+
+#### UI Utilities
+- `showToast(message, type)` - Shows toast notification
+- `applyTheme()` - Applies theme and accent color
+- `renderSidebarContent()` - Renders sidebar content
+
+### Backend Functions
+
+#### Controllers
+- `handleLockinRequest()` - Main text processing handler
+- `listChats()` - Get recent chats
+- `deleteChat()` - Delete chat
+- `listChatMessages()` - Get chat messages
+- `createNote()` - Create note with embedding
+- `listNotes()` - List notes with filters
+- `searchNotes()` - Semantic search
+- `chatWithNotes()` - RAG chat handler
+
+#### Repositories
+- `createNote()` - Insert note with embedding
+- `listNotes()` - Query notes with filters
+- `searchNotesByEmbedding()` - Vector similarity search
+
+#### OpenAI Client
+- `chatWithModel(messages)` - Chat completion
+- `embedText(text)` - Generate embedding vector
+
+---
+
+## State Management
+
+### Extension State (`contentScript.js`)
+
+```javascript
+// UI State
+let highlightingEnabled = true
+let currentMode = MODES.EXPLAIN
+let isBubbleOpen = true
+let currentTabId = null
+let currentOrigin = window.location.origin
+
+// Selection State
+let cachedSelection = ""
+let cachedRect = null
+
+// Chat State
+let chatHistory = []
+let pendingInputValue = ""
+let isChatLoading = false
+let currentChatId = null
+let recentChats = []
+let isHistoryPanelOpen = false
+
+// Notes State
+let currentStudyResponse = null // Stores AI response (notes, todos, tags)
+
+// Theme State
+let currentTheme = THEMES.LIGHT
+let currentAccentColor = "#667eea"
+```
+
+### Storage Keys
+
+- `highlightingEnabled` - Toggle state
+- `lockinBubbleOpen` - Sidebar open state
+- `lockinActiveMode` - Current mode
+- `lockinTheme` - Theme preference
+- `lockinAccentColor` - Accent color
+- `lockinCurrentChatId` - Active chat ID
+
+---
+
+## Authentication & Security
+
+### Authentication Flow
+
+1. User signs in via popup (`popup.js`)
+2. Supabase returns JWT token
+3. Token stored in Chrome Sync
+4. Content script retrieves token via `LockInAuth.getValidAccessToken()`
+5. Token included in all API requests as `Authorization: Bearer <token>`
+6. Backend validates token via `authMiddleware.js`
+
+### Security Measures
+
+- ✅ All endpoints require authentication (Supabase JWT)
+- ✅ Rate limiting per user (configurable daily limit)
+- ✅ Input validation and sanitization
+- ✅ CORS restricted to Chrome extensions
+- ✅ No sensitive data in logs
+- ✅ Error messages don't expose internal details
+- ✅ HTML escaping in chat history (XSS prevention)
+
+---
+
+## Known Limitations & Future Enhancements
+
+### Current Limitations
+
+1. **Notes Features**:
+   - No markdown editor (plain text only)
+   - No rich text formatting toolbar
+   - Filter dropdown doesn't persist selection across sessions
+   - Course code extraction not fully implemented
+
+2. **Chat Features**:
+   - No chat export functionality
+   - No chat sharing
+   - Chat history panel doesn't show preview
+
+3. **AI Features**:
+   - AI notes generation happens client-side (may be slow)
+   - No note templates
+   - No bulk operations on notes
+
+4. **UI/UX**:
+   - No dark mode for notes (theme applies to sidebar only)
+   - Toast notifications are basic (no queue)
+   - No keyboard shortcuts documented
+
+### Future Enhancements
+
+- [ ] Markdown support in note editor
+- [ ] Rich text formatting toolbar
+- [ ] Note templates
+- [ ] Bulk operations on notes
+- [ ] Note tagging UI in editor
+- [ ] Chat export functionality
+- [ ] Keyboard shortcuts
+- [ ] Improved toast notification system
+- [ ] Course code auto-detection from page
+- [ ] Note versioning/history
+- [ ] Collaborative notes (sharing)
+- [ ] Advanced search filters
+- [ ] Note organization (folders/tags)
+
+---
+
+## Development Workflow
+
+### Making Changes
+
+1. **Extension**:
+   - Edit files in `extension/` directory
+   - Go to `chrome://extensions/`
+   - Click refresh icon on Lock-in card
+   - Reload any open webpages to see changes
+
+2. **Backend**:
+   - Edit files in `backend/` directory
+   - Run `npm run dev` for auto-reload
+   - Test with extension or curl
+
+### Testing Checklist
+
+- [ ] Text selection triggers sidebar
+- [ ] All three modes work (Explain, Simplify, Translate)
+- [ ] Chat history persists across sessions
+- [ ] Notes save and load correctly
+- [ ] Filter dropdown works
+- [ ] "Save as note" pre-fills editor
+- [ ] "Generate notes" shows draft panel
+- [ ] AI draft panel actions work
+- [ ] Authentication flow works
+- [ ] Semantic search works
+- [ ] RAG chat works
+
+---
+
+## File Locations Reference
+
+### Extension
+- Main orchestrator: `extension/contentScript.js`
+- Sidebar component: `extension/lockin-sidebar.js`
+- API client: `extension/libs/api.js`
+- Auth: `extension/supabaseAuth.js`
+- Config: `extension/config.js`
+
+### Backend
+- Server entry: `backend/index.js`
+- App setup: `backend/app.js`
+- Chat routes: `backend/routes/lockinRoutes.js`
+- Notes routes: `backend/routes/noteRoutes.js`
+- Chat controller: `backend/controllers/lockinController.js`
+- Notes controller: `backend/controllers/notesController.js`
+- RAG controller: `backend/controllers/notesChatController.js`
+- Notes repository: `backend/repositories/notesRepository.js`
+- OpenAI client: `backend/openaiClient.js`
+
+---
+
+**Last Updated**: Current implementation state as of latest code review.
+**Maintainer Notes**: This document should be updated when new features are added or architecture changes.

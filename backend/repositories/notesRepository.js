@@ -39,6 +39,38 @@ async function listNotes({ userId, sourceUrl, courseCode, limit = 50 }) {
   return data;
 }
 
+async function updateNote({ userId, noteId, title, content, sourceSelection, sourceUrl, courseCode, noteType, tags, embedding }) {
+  const { data, error } = await supabase
+    .from('notes')
+    .update({
+      title,
+      content,
+      source_selection: sourceSelection,
+      source_url: sourceUrl,
+      course_code: courseCode,
+      note_type: noteType,
+      tags,
+      embedding,
+    })
+    .eq('id', noteId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+async function deleteNote({ userId, noteId }) {
+  const { error } = await supabase
+    .from('notes')
+    .delete()
+    .eq('id', noteId)
+    .eq('user_id', userId);
+
+  if (error) throw error;
+}
+
 async function searchNotesByEmbedding({ userId, queryEmbedding, matchCount = 10 }) {
   const { data, error } = await supabase.rpc('match_notes', {
     query_embedding: queryEmbedding,
@@ -53,6 +85,8 @@ async function searchNotesByEmbedding({ userId, queryEmbedding, matchCount = 10 
 module.exports = {
   createNote,
   listNotes,
+  updateNote,
+  deleteNote,
   searchNotesByEmbedding,
 };
 

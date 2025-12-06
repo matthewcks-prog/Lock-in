@@ -107,6 +107,19 @@ let userProfile = {
 };
 let isPersonalisationPanelOpen = false;
 
+// Notes state
+let notesViewMode = "current"; // "current" | "all"
+let notesFilter = "page"; // "page" | "course" | "all" | "starred"
+let notesSearchQuery = "";
+let notesListCache = [];
+let activeNote = createEmptyNote();
+let noteSaveTimer = null;
+let noteSaveStatus = "Saved · just now";
+let isNoteSaving = false;
+let notesLoading = false;
+let hasLoadedNotes = false;
+let noteHasChanges = false;
+
 // ===================================
 // Global Widget & Shared Utilities
 // ===================================
@@ -315,26 +328,11 @@ function handleDeleteChatEvent(event) {
 }
 
 function handleLoadNotesEvent(event) {
-  const filter = event.detail?.filter || "page";
+  const filter = event.detail?.filter || notesFilter || "page";
+  notesFilter = filter;
+  notesViewMode = "current";
+  setNotesView("current", lockinWidget?.getSidebarElement());
   loadNotes(filter);
-
-  // Attach filter button listeners
-  const sidebarElement = lockinWidget?.getSidebarElement();
-  if (sidebarElement) {
-    const filterButtons = sidebarElement.querySelectorAll(
-      ".lockin-notes-filter"
-    );
-    filterButtons.forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const newFilter = btn.getAttribute("data-filter");
-        filterButtons.forEach((b) =>
-          b.classList.toggle("is-active", b === btn)
-        );
-        loadNotes(newFilter);
-      });
-    });
-  }
 }
 
 /**
@@ -367,8 +365,7 @@ function renderSidebarContent() {
   // Attach textarea and input listeners after rendering
   attachSidebarInputListeners(sidebarElement);
   attachChatActionListeners(sidebarElement);
-  attachNoteButtonListeners(sidebarElement);
-  attachNewNoteEditorListeners(sidebarElement);
+  attachNotesUiListeners(sidebarElement);
 
   scrollChatToBottom();
 }
@@ -474,164 +471,390 @@ function attachChatActionListeners(sidebarElement) {
     }
   }
 }
-function attachNoteButtonListeners(sidebarElement) {
-  // Save individual note buttons
-  const saveNoteButtons = sidebarElement.querySelectorAll(
-    ".lockin-suggested-note-save-btn"
+// Removed attachNoteButtonListeners - no longer needed after UX redesign
+// Old suggested notes UI has been replaced with on-demand AI draft panel
+
+/**
+ * Attach event listeners for the Notes experience (header, editor, list)
+ */
+function attachNotesUiListeners(sidebarElement) {
+  if (!sidebarElement) return;
+
+  const titleInput = sidebarElement.querySelector("#lockin-note-title");
+  const editorEl = sidebarElement.querySelector("#lockin-note-editor");
+  const viewButtons = sidebarElement.querySelectorAll(
+    ".lockin-notes-toggle-btn"
   );
-  saveNoteButtons.forEach((btn) => {
+  const newNoteBtn = sidebarElement.querySelector(".lockin-new-note-btn");
+  const searchInput = sidebarElement.querySelector("#lockin-notes-search");
+  const filterSelect = sidebarElement.querySelector(
+    "#lockin-notes-filter-select"
+  );
+  const toolbarButtons = sidebarElement.querySelectorAll(
+    "[data-note-command]"
+  );
+  const menuTrigger = sidebarElement.querySelector(".lockin-note-menu-trigger");
+  const overflowMenu = sidebarElement.querySelector(".lockin-note-menu");
+  const duplicateBtn = sidebarElement.querySelector(
+    '[data-action="duplicate-note"]'
+  );
+  const deleteBtn = sidebarElement.querySelector('[data-action="delete-note"]');
+
+  populateCurrentNoteFields(sidebarElement);
+  renderNotesList();
+
+  viewButtons.forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const noteIndex = parseInt(btn.getAttribute("data-note-index"), 10);
-      if (!isNaN(noteIndex)) {
-        saveNote(noteIndex);
-      }
+      const view = btn.getAttribute("data-view");
+      setNotesView(view, sidebarElement);
     });
   });
 
-  // Save all notes button
-  const saveAllBtn = sidebarElement.querySelector(".lockin-save-all-btn");
-  if (saveAllBtn) {
-    saveAllBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      saveAllNotes();
+  if (newNoteBtn) {
+    newNoteBtn.addEventListener("click", () => {
+      startNewNote();
+      setNotesView("current", sidebarElement);
+      populateCurrentNoteFields(sidebarElement);
+      titleInput?.focus();
     });
   }
 
-  // Suggested notes collapse/expand toggle
-  const notesToggle = sidebarElement.querySelector(
-    ".lockin-suggested-notes-toggle"
-  );
-  const notesWrapper = sidebarElement.querySelector(
-    ".lockin-suggested-notes-wrapper"
-  );
-  if (notesToggle && notesWrapper) {
-    // Restore collapsed state from storage
-    if (Storage) {
-      Storage.getLocal("lockin_suggested_notes_collapsed")
-        .then((data) => {
-          const isCollapsed = data?.lockin_suggested_notes_collapsed === true;
-          if (isCollapsed) {
-            notesWrapper.setAttribute("data-collapsed", "true");
-            const icon = notesToggle.querySelector(
-              ".lockin-suggested-notes-toggle-icon"
-            );
-            if (icon) icon.textContent = "▶";
-          }
-        })
-        .catch(() => {
-          // Ignore storage errors
-        });
-    }
+  if (titleInput) {
+    titleInput.value = activeNote.title || "";
+    titleInput.addEventListener("input", (e) => {
+      activeNote.title = e.target.value;
+      noteHasChanges = true;
+      scheduleNoteSave();
+    });
+  }
 
-    notesToggle.addEventListener("click", (e) => {
+  if (editorEl) {
+    editorEl.innerHTML = sanitizeNoteContent(activeNote.content || "");
+    editorEl.addEventListener("input", () => {
+      activeNote.content = editorEl.innerHTML;
+      noteHasChanges = true;
+      scheduleNoteSave();
+    });
+  }
+
+  toolbarButtons.forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
       e.stopPropagation();
-      const isCollapsed =
-        notesWrapper.getAttribute("data-collapsed") === "true";
-      const icon = notesToggle.querySelector(
-        ".lockin-suggested-notes-toggle-icon"
-      );
+      const command = btn.getAttribute("data-note-command");
+      const value = btn.getAttribute("data-note-value");
 
-      if (isCollapsed) {
-        notesWrapper.removeAttribute("data-collapsed");
-        if (icon) icon.textContent = "▼";
-        if (Storage) {
-          Storage.setLocal("lockin_suggested_notes_collapsed", false).catch(
-            () => {}
-          );
-        }
+      if (!editorEl) return;
+      editorEl.focus();
+
+      if (command === "checkbox") {
+        document.execCommand("insertText", false, "- [ ] ");
+      } else if (command === "code") {
+        const selection = window.getSelection()?.toString() || "";
+        const codeText = selection || "code";
+        document.execCommand(
+          "insertHTML",
+          false,
+          `<code>${escapeHtml(codeText)}</code>`
+        );
       } else {
-        notesWrapper.setAttribute("data-collapsed", "true");
-        if (icon) icon.textContent = "▶";
-        if (Storage) {
-          Storage.setLocal("lockin_suggested_notes_collapsed", true).catch(
-            () => {}
-          );
-        }
+        document.execCommand(command, false, value || null);
       }
+
+      activeNote.content = editorEl.innerHTML;
+      noteHasChanges = true;
+      scheduleNoteSave();
+    });
+  });
+
+  if (menuTrigger && overflowMenu) {
+    const closeMenu = (event) => {
+      if (
+        overflowMenu.contains(event.target) ||
+        menuTrigger.contains(event.target)
+      ) {
+        return;
+      }
+      overflowMenu.classList.remove("is-open");
+      menuTrigger.setAttribute("aria-expanded", "false");
+    };
+
+    menuTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = overflowMenu.classList.toggle("is-open");
+      menuTrigger.setAttribute("aria-expanded", String(isOpen));
+      if (isOpen) {
+        document.addEventListener("click", closeMenu, { once: true });
+      }
+    });
+  }
+
+  if (duplicateBtn) {
+    duplicateBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await duplicateActiveNote();
+    });
+  }
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await deleteActiveNote();
+    });
+  }
+
+  if (searchInput) {
+    searchInput.value = notesSearchQuery;
+    searchInput.addEventListener("input", (e) => {
+      notesSearchQuery = e.target.value || "";
+      renderNotesList();
+    });
+  }
+
+  if (filterSelect) {
+    filterSelect.value = notesFilter;
+    filterSelect.addEventListener("change", async (e) => {
+      const filter = e.target.value;
+      notesFilter = filter;
+      await loadNotes(filter);
     });
   }
 }
 
-/**
- * Attach event listeners for the new note editor
- */
-function attachNewNoteEditorListeners(sidebarElement) {
-  const newNoteBtn = sidebarElement.querySelector(".lockin-new-note-btn");
-  const editorEl = sidebarElement.querySelector(".lockin-new-note-editor");
-  const saveBtn = sidebarElement.querySelector(".lockin-new-note-save");
-  const titleInput = sidebarElement.querySelector("#lockin-new-note-title");
-  const contentInput = sidebarElement.querySelector("#lockin-new-note-content");
-  const filterSelect = sidebarElement.querySelector(
-    "#lockin-notes-filter-select"
-  );
-  const listEl = sidebarElement.querySelector("#lockin-notes-list");
+function setNotesView(view, sidebarElement) {
+  if (!view) return;
+  notesViewMode = view;
 
-  if (!newNoteBtn || !editorEl || !saveBtn || !titleInput || !contentInput) {
+  const viewButtons = sidebarElement?.querySelectorAll(
+    ".lockin-notes-toggle-btn"
+  );
+  viewButtons?.forEach((btn) => {
+    const isActive = btn.getAttribute("data-view") === view;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
+  });
+
+  const currentView = sidebarElement?.querySelector(".lockin-note-current-view");
+  const listView = sidebarElement?.querySelector(".lockin-all-notes-view");
+
+  if (currentView) {
+    currentView.classList.toggle("is-active", view === "current");
+  }
+  if (listView) {
+    listView.classList.toggle("is-active", view === "all");
+  }
+
+  if (view === "all" && !hasLoadedNotes) {
+    loadNotes(notesFilter);
+  }
+}
+
+function populateCurrentNoteFields(sidebarElement) {
+  const titleInput = sidebarElement?.querySelector("#lockin-note-title");
+  const editorEl = sidebarElement?.querySelector("#lockin-note-editor");
+  const statusEl = sidebarElement?.querySelector("#lockin-note-status");
+
+  if (titleInput) {
+    titleInput.value = activeNote.title || "";
+  }
+
+  if (editorEl) {
+    editorEl.innerHTML = sanitizeNoteContent(activeNote.content || "");
+  }
+
+  if (statusEl) {
+    statusEl.textContent = noteSaveStatus;
+  }
+
+  updateNoteMetaRow(sidebarElement);
+}
+
+function updateNoteMetaRow(sidebarElement) {
+  const linkTarget = sidebarElement?.querySelector("#lockin-note-linked-target");
+  const stamps = sidebarElement?.querySelector("#lockin-note-stamps");
+  const courseLabelEl = sidebarElement?.querySelector(
+    "#lockin-notes-course-label"
+  );
+
+  if (courseLabelEl) {
+    courseLabelEl.textContent = getNotesCourseLabel();
+  }
+
+  const linkedContext = buildLinkedContextLabel(activeNote);
+  if (linkTarget) {
+    if (linkedContext.label) {
+      const safeLabel = truncateText(linkedContext.label, 60);
+      linkTarget.innerHTML = linkedContext.url
+        ? `<a href="${escapeHtml(
+            linkedContext.url
+          )}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+            safeLabel
+          )}</a>`
+        : `<span>${escapeHtml(safeLabel)}</span>`;
+    } else {
+      linkTarget.innerHTML =
+        '<span class="lockin-note-link-empty">Linked to: None</span>';
+    }
+  }
+
+  if (stamps) {
+    const metaText = buildNoteMetaText(activeNote);
+    stamps.textContent = metaText;
+  }
+}
+
+function setNoteStatus(statusText) {
+  noteSaveStatus = statusText;
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  const statusEl = sidebarElement?.querySelector("#lockin-note-status");
+  if (statusEl) {
+    statusEl.textContent = statusText;
+  }
+}
+
+function scheduleNoteSave() {
+  setNoteStatus("Saving...");
+  if (noteSaveTimer) {
+    clearTimeout(noteSaveTimer);
+  }
+  noteSaveTimer = setTimeout(() => {
+    saveActiveNote();
+  }, 800);
+}
+
+async function saveActiveNote(forceCreate = false) {
+  if (!activeNote) return;
+
+  const title = (activeNote.title || "").trim();
+  const content = (activeNote.content || "").trim();
+
+  if (!content && !title) {
+    setNoteStatus("Empty note not saved");
     return;
   }
 
-  // Get context for note creation
-  const context = {
-    pageUrl: window.location.href,
-    courseCode: null, // TODO: Extract from page context if available
+  if (!noteHasChanges && activeNote.id) {
+    return;
+  }
+
+  if (!window.LockInAPI || !window.LockInAPI.createNote) {
+    setNoteStatus("Offline – changes pending");
+    return;
+  }
+
+  const payload = {
+    title: title || "Untitled Note",
+    content: sanitizeNoteContent(activeNote.content || ""),
+    sourceSelection: activeNote.sourceSelection || "",
+    sourceUrl: activeNote.sourceUrl || window.location.href,
+    courseCode: activeNote.courseCode || null,
+    noteType: activeNote.noteType || "manual",
+    tags: activeNote.tags || [],
   };
 
-  // Open editor on "+ New note" button click
-  newNoteBtn.addEventListener("click", () => {
-    titleInput.value = "";
-    contentInput.value = "";
-    contentInput.focus();
-  });
+  try {
+    isNoteSaving = true;
+    const shouldUpdate =
+      activeNote.id && window.LockInAPI.updateNote && !forceCreate;
+    const savedNote = shouldUpdate
+      ? await window.LockInAPI.updateNote(activeNote.id, payload)
+      : await window.LockInAPI.createNote(payload);
 
-  // Save note
-  saveBtn.addEventListener("click", async () => {
-    const title = titleInput.value.trim();
-    const content = contentInput.value.trim();
-
-    if (!content) {
-      showToast("Note content cannot be empty.", "error");
-      return;
+    const normalized = normalizeNote(savedNote || payload);
+    if (!normalized.id && activeNote.id) {
+      normalized.id = activeNote.id;
     }
 
-    if (!window.LockInAPI || !window.LockInAPI.createNote) {
-      Logger.error("LockInAPI.createNote is not available");
-      showToast("Failed to save note. API not available.", "error");
-      return;
-    }
-
-    try {
-      await window.LockInAPI.createNote({
-        title: title || "Untitled Note",
-        content: content,
-        sourceSelection: "", // Since user typed it
-        sourceUrl: context.pageUrl,
-        courseCode: context.courseCode,
-        noteType: "manual",
-        tags: [],
-      });
-
-      titleInput.value = "";
-      contentInput.value = "";
-
-      // Reload notes with current filter
-      const currentFilter = filterSelect?.value || "page";
-      await loadNotes(currentFilter);
-
-      showToast("Note saved successfully!");
-    } catch (error) {
-      Logger.error("Failed to save note:", error);
-      showToast("Failed to save note. Please try again.", "error");
-    }
-  });
-
-  // Filter select change handler
-  if (filterSelect) {
-    filterSelect.addEventListener("change", async (e) => {
-      const filter = e.target.value;
-      await loadNotes(filter);
-    });
+    activeNote = { ...activeNote, ...normalized };
+    upsertNoteInCache(normalized);
+    noteHasChanges = false;
+    isNoteSaving = false;
+    setNoteStatus("Saved · just now");
+    updateNoteMetaRow(lockinWidget?.getSidebarElement());
+  } catch (error) {
+    Logger.error("Failed to save note:", error);
+    isNoteSaving = false;
+    setNoteStatus("Offline – changes pending");
+    showToast("Failed to save note. We’ll retry soon.", "error");
   }
+}
+
+function upsertNoteInCache(note) {
+  if (!note) return;
+  const idx = notesListCache.findIndex((n) => n.id === note.id);
+  if (idx >= 0) {
+    notesListCache[idx] = { ...notesListCache[idx], ...note };
+  } else {
+    notesListCache.unshift(note);
+  }
+  renderNotesList();
+}
+
+async function duplicateActiveNote() {
+  if (!activeNote || !activeNote.content) {
+    showToast("Nothing to duplicate yet.", "info");
+    return;
+  }
+
+  if (!window.LockInAPI || !window.LockInAPI.createNote) {
+    showToast("Notes API unavailable right now.", "error");
+    return;
+  }
+
+  const duplicatePayload = {
+    title: `${activeNote.title || "Untitled"} (copy)`,
+    content: sanitizeNoteContent(activeNote.content || ""),
+    sourceSelection: activeNote.sourceSelection || "",
+    sourceUrl: activeNote.sourceUrl || window.location.href,
+    courseCode: activeNote.courseCode || null,
+    noteType: activeNote.noteType || "manual",
+    tags: activeNote.tags || [],
+  };
+
+  try {
+    const saved = await window.LockInAPI.createNote(duplicatePayload);
+    const normalized = normalizeNote(saved || duplicatePayload);
+    activeNote = normalized;
+    upsertNoteInCache(normalized);
+    setNotesView("current", lockinWidget?.getSidebarElement());
+    populateCurrentNoteFields(lockinWidget?.getSidebarElement());
+    showToast("Note duplicated");
+  } catch (error) {
+    Logger.error("Failed to duplicate note:", error);
+    showToast("Couldn't duplicate this note.", "error");
+  }
+}
+
+async function deleteActiveNote() {
+  if (!activeNote || !activeNote.id) {
+    startNewNote();
+    populateCurrentNoteFields(lockinWidget?.getSidebarElement());
+    return;
+  }
+
+  if (!window.LockInAPI || !window.LockInAPI.deleteNote) {
+    showToast("Delete note is not available right now.", "error");
+    return;
+  }
+
+  try {
+    await window.LockInAPI.deleteNote(activeNote.id);
+    notesListCache = notesListCache.filter((n) => n.id !== activeNote.id);
+    startNewNote();
+    populateCurrentNoteFields(lockinWidget?.getSidebarElement());
+    renderNotesList();
+    showToast("Note deleted");
+  } catch (error) {
+    Logger.error("Failed to delete note:", error);
+    showToast("Couldn't delete that note.", "error");
+  }
+}
+
+function startNewNote(prefill = {}) {
+  activeNote = createEmptyNote(prefill);
+  noteHasChanges = false;
+  setNoteStatus("Saved · just now");
 }
 
 /**
@@ -669,43 +892,114 @@ function buildChatSection() {
  * Build the notes section HTML - New layout with doc-like editor
  */
 function buildNotesSection() {
+  const isCurrent = notesViewMode === "current";
+  const isAll = notesViewMode === "all";
+
   return `
-    <div class="lockin-notes-container">
-      <!-- Header with title and actions -->
-      <div class="lockin-notes-top-header">
-        <h2 class="lockin-notes-title">Notes</h2>
+    <div class="lockin-notes-shell">
+      <div class="lockin-notes-header">
+        <div class="lockin-notes-heading">
+          <div class="lockin-notes-heading-title">Notes</div>
+          <div class="lockin-notes-heading-subtitle" id="lockin-notes-course-label">${escapeHtml(
+            getNotesCourseLabel()
+          )}</div>
+        </div>
+        <div class="lockin-notes-toggle" role="group" aria-label="Notes view">
+          <button class="lockin-notes-toggle-btn ${
+            isCurrent ? "is-active" : ""
+          }" data-view="current" type="button" aria-pressed="${
+    isCurrent ? "true" : "false"
+  }">Current</button>
+          <button class="lockin-notes-toggle-btn ${
+            isAll ? "is-active" : ""
+          }" data-view="all" type="button" aria-pressed="${
+    isAll ? "true" : "false"
+  }">All notes</button>
+        </div>
         <div class="lockin-notes-actions">
           <button class="lockin-btn-primary lockin-new-note-btn" type="button" title="Create a new note">+ New note</button>
         </div>
       </div>
 
-      <!-- Main doc-like editor -->
-      <div class="lockin-notes-editor-section">
-        <div class="lockin-new-note-editor">
-          <input id="lockin-new-note-title" class="lockin-note-title-input" placeholder="Note title..." />
-          <textarea id="lockin-new-note-content" class="lockin-note-content-input" placeholder="Write your note here. Add details, context, and your own thoughts..."></textarea>
-          <div class="lockin-note-footer">
-            <span class="lockin-note-timestamp">Last saved just now</span>
-            <button class="lockin-btn-primary lockin-new-note-save" type="button">Save note</button>
+      <div class="lockin-notes-body">
+        ${buildCurrentNoteView(isCurrent)}
+        ${buildAllNotesView(isAll)}
+      </div>
+    </div>
+  `;
+}
+
+function buildCurrentNoteView(isActive) {
+  return `
+    <div class="lockin-note-current-view ${isActive ? "is-active" : ""}">
+      <div class="lockin-note-meta-row">
+        <div class="lockin-note-link">
+          <span class="lockin-note-link-label">Linked to:</span>
+          <span id="lockin-note-linked-target" class="lockin-note-link-target"></span>
+        </div>
+        <div class="lockin-note-stamps" id="lockin-note-stamps">${escapeHtml(
+          buildNoteMetaText(activeNote)
+        )}</div>
+      </div>
+
+      <div class="lockin-note-title-wrap">
+        <input id="lockin-note-title" class="lockin-note-title-input" placeholder="Note title..." />
+      </div>
+
+      <div class="lockin-note-toolbar">
+        <div class="lockin-note-toolbar-left">
+          <button class="lockin-note-tool-btn" type="button" data-note-command="bold" title="Bold (Ctrl/Cmd+B)">B</button>
+          <button class="lockin-note-tool-btn" type="button" data-note-command="italic" title="Italic (Ctrl/Cmd+I)">I</button>
+          <button class="lockin-note-tool-btn" type="button" data-note-command="underline" title="Underline (Ctrl/Cmd+U)">U</button>
+          <span class="lockin-note-toolbar-divider"></span>
+          <button class="lockin-note-tool-btn" type="button" data-note-command="insertUnorderedList" title="Bulleted list">•</button>
+          <button class="lockin-note-tool-btn" type="button" data-note-command="insertOrderedList" title="Numbered list">1.</button>
+          <button class="lockin-note-tool-btn" type="button" data-note-command="checkbox" title="Checkbox list">☐</button>
+          <button class="lockin-note-tool-btn" type="button" data-note-command="code" title="Inline code">&lt;/&gt;</button>
+        </div>
+        <div class="lockin-note-toolbar-right">
+          <button class="lockin-note-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false" title="More options">⋯</button>
+          <div class="lockin-note-menu" role="menu">
+            <button type="button" data-action="duplicate-note">Duplicate note</button>
+            <button type="button" data-action="delete-note" class="danger">Delete note</button>
           </div>
         </div>
       </div>
 
-      <!-- Notes list with filters below editor -->
-      <div class="lockin-notes-list-section">
-        <div class="lockin-notes-list-header">
-          <div class="lockin-notes-filter-group">
-            <span class="lockin-filter-label">Showing:</span>
-            <select class="lockin-notes-filter-select" id="lockin-notes-filter-select">
-              <option value="page" selected>This page</option>
-              <option value="course">This course</option>
-              <option value="all">All notes</option>
-            </select>
-          </div>
+      <div class="lockin-note-editor-card">
+        <div id="lockin-note-editor" class="lockin-note-editor" contenteditable="true" data-placeholder="Write your note here. Add details, context, and your own thoughts…"></div>
+      </div>
+
+      <div class="lockin-note-footer-status">
+        <span id="lockin-note-status" class="lockin-note-status-text">${escapeHtml(
+          noteSaveStatus
+        )}</span>
+      </div>
+    </div>
+  `;
+}
+
+function buildAllNotesView(isActive) {
+  return `
+    <div class="lockin-all-notes-view ${isActive ? "is-active" : ""}">
+      <div class="lockin-notes-filter-bar">
+        <div class="lockin-notes-filter-left">
+          <span class="lockin-filter-label">Showing:</span>
+          <select class="lockin-notes-filter-select" id="lockin-notes-filter-select">
+            <option value="page" ${notesFilter === "page" ? "selected" : ""}>This page</option>
+            <option value="course" ${notesFilter === "course" ? "selected" : ""}>This course</option>
+            <option value="all" ${notesFilter === "all" ? "selected" : ""}>All notes</option>
+            <option value="starred" ${notesFilter === "starred" ? "selected" : ""}>Starred</option>
+          </select>
         </div>
-        <div class="lockin-notes-list" id="lockin-notes-list">
-          <p class="lockin-empty">No notes found.</p>
+        <div class="lockin-notes-search">
+          <input id="lockin-notes-search" class="lockin-notes-search-input" placeholder="Search notes…" value="${escapeHtml(
+            notesSearchQuery
+          )}" />
         </div>
+      </div>
+      <div class="lockin-notes-list" id="lockin-notes-list">
+        ${notesLoading ? '<p class="lockin-empty">Loading...</p>' : ""}
       </div>
     </div>
   `;
@@ -720,64 +1014,291 @@ async function loadNotes(filter = "page") {
     return;
   }
 
-  const sidebarElement = lockinWidget?.getSidebarElement();
-  const notesList = sidebarElement?.querySelector("#lockin-notes-list");
-  if (!notesList) return;
-
-  notesList.innerHTML = '<p class="lockin-empty">Loading...</p>';
+  notesFilter = filter;
+  notesLoading = true;
+  renderNotesList();
 
   try {
     let params = {};
     if (filter === "page") {
       params.sourceUrl = window.location.href;
     } else if (filter === "course") {
-      // TODO: Extract courseCode from page context if available
-      params.courseCode = null;
+      params.courseCode = activeNote.courseCode || null;
     }
     params.limit = 50;
 
     const notes = await window.LockInAPI.listNotes(params);
-    renderNotesList(notes, notesList);
+    notesListCache = Array.isArray(notes)
+      ? notes.map((note) => normalizeNote(note))
+      : [];
+    hasLoadedNotes = true;
+    notesLoading = false;
+    // Sync the active note if it exists in the refreshed list
+    if (activeNote?.id) {
+      const latest = notesListCache.find((n) => n.id === activeNote.id);
+      if (latest) {
+        activeNote = { ...latest };
+      }
+    }
+    renderNotesList();
   } catch (error) {
     Logger.error("Failed to load notes:", error);
-    notesList.innerHTML =
-      '<p class="lockin-empty">Failed to load notes. Please try again.</p>';
+    notesLoading = false;
+    const sidebarElement = lockinWidget?.getSidebarElement();
+    const notesList = sidebarElement?.querySelector("#lockin-notes-list");
+    if (notesList) {
+      notesList.innerHTML =
+        '<p class="lockin-empty">Failed to load notes. Please try again.</p>';
+    }
   }
 }
 
 /**
  * Render notes list
  */
-function renderNotesList(notes, listEl) {
-  listEl.innerHTML = "";
+function renderNotesList() {
+  const sidebarElement = lockinWidget?.getSidebarElement();
+  const listEl = sidebarElement?.querySelector("#lockin-notes-list");
+  if (!listEl) return;
 
-  if (!notes || notes.length === 0) {
-    listEl.innerHTML = '<p class="lockin-empty">No notes found.</p>';
+  if (notesLoading) {
+    listEl.innerHTML = '<p class="lockin-empty">Loading notes...</p>';
     return;
   }
 
-  notes.forEach((note) => {
-    const item = document.createElement("div");
-    item.className = "lockin-card lockin-note-item";
-    item.innerHTML = `
-      <div class="lockin-note-header">
-        <div>
-          <div class="lockin-note-title">${escapeHtml(
-            note.title || "Untitled"
-          )}</div>
-          ${
-            note.course_code
-              ? `<div class="lockin-note-meta">${escapeHtml(
-                  note.course_code
-                )}</div>`
-              : ""
-          }
-        </div>
+  let filtered = [...notesListCache];
+  filtered = filtered.filter((note) => noteMatchesFilter(note, notesFilter));
+
+  const query = notesSearchQuery.trim().toLowerCase();
+  if (query) {
+    filtered = filtered.filter((note) => {
+      const haystack =
+        `${note.title || ""} ${stripHtml(note.content || "")}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }
+
+  if (!filtered.length) {
+    listEl.innerHTML = `
+      <div class="lockin-notes-empty">
+        <div class="lockin-notes-empty-title">No notes yet for this course.</div>
+        <div class="lockin-notes-empty-subtitle">Create one with + New note or save from Chat.</div>
+        <button class="lockin-btn-ghost lockin-notes-empty-btn" type="button">+ New note</button>
       </div>
-      <div class="lockin-note-body">${escapeHtml(note.content)}</div>
     `;
-    listEl.appendChild(item);
+
+    const emptyBtn = listEl.querySelector(".lockin-notes-empty-btn");
+    if (emptyBtn) {
+      emptyBtn.addEventListener("click", () => {
+        startNewNote();
+        setNotesView("current", sidebarElement);
+        populateCurrentNoteFields(sidebarElement);
+        const titleInput = sidebarElement?.querySelector("#lockin-note-title");
+        titleInput?.focus();
+      });
+    }
+    return;
+  }
+
+  const cardsHtml = filtered
+    .map((note) => {
+      const metaParts = [];
+      if (note.courseCode) {
+        metaParts.push(note.courseCode);
+      }
+      const linked = buildLinkedContextLabel(note);
+      if (linked.label) {
+        metaParts.push(truncateText(linked.label, 40));
+      }
+      if (note.updatedAt || note.updated_at) {
+        metaParts.push(formatHistoryTimestamp(note.updatedAt || note.updated_at));
+      }
+
+      const badges = [];
+      if (note.noteType && note.noteType !== "manual") {
+        badges.push('<span class="lockin-note-badge">AI</span>');
+      } else {
+        badges.push('<span class="lockin-note-badge">✏</span>');
+      }
+      if (typeof note.content === "string" && note.content.includes("[ ]")) {
+        badges.push('<span class="lockin-note-badge">☑ todos</span>');
+      }
+
+      const isActive = activeNote?.id && note.id === activeNote.id;
+      return `
+        <div class="lockin-note-card ${isActive ? "is-active" : ""}" data-note-id="${note.id || ""}">
+          <div class="lockin-note-card-head">
+            <div class="lockin-note-card-title">${escapeHtml(
+              note.title || "Untitled"
+            )}</div>
+            <div class="lockin-note-card-badges">${badges.join("")}</div>
+          </div>
+          <div class="lockin-note-card-snippet">${escapeHtml(
+            truncateText(stripHtml(note.content || ""), 160)
+          )}</div>
+          <div class="lockin-note-card-meta">${escapeHtml(metaParts.join(" · "))}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  listEl.innerHTML = cardsHtml;
+
+  listEl.querySelectorAll(".lockin-note-card").forEach((card) => {
+    card.addEventListener("click", () => {
+      const noteId = card.getAttribute("data-note-id");
+      const nextNote = notesListCache.find((n) => String(n.id) === noteId);
+      if (nextNote) {
+        activeNote = { ...nextNote };
+        noteHasChanges = false;
+        setNotesView("current", sidebarElement);
+        populateCurrentNoteFields(sidebarElement);
+      }
+    });
   });
+}
+
+function noteMatchesFilter(note, filter) {
+  if (!filter || filter === "all") return true;
+  if (filter === "page") {
+    return normalizeUrl(note.sourceUrl || "") === normalizeUrl(window.location.href);
+  }
+  if (filter === "course") {
+    if (!note.courseCode || !activeNote.courseCode) return true;
+    return note.courseCode === activeNote.courseCode;
+  }
+  if (filter === "starred") {
+    return (
+      note.is_starred === true ||
+      (Array.isArray(note.tags) && note.tags.includes("starred"))
+    );
+  }
+  return true;
+}
+
+function buildLinkedContextLabel(note) {
+  if (!note) return { label: "", url: "" };
+  const label =
+    note.sourceSelection ||
+    note.linkedLabel ||
+    note.courseCode ||
+    getLinkedContext().label;
+  const url = note.sourceUrl || window.location.href;
+  return { label, url };
+}
+
+function buildNoteMetaText(note) {
+  if (!note) return "";
+  const created = note.createdAt || note.created_at;
+  const updated = note.updatedAt || note.updated_at;
+  const parts = [];
+  if (created) {
+    parts.push(`Created ${formatHistoryTimestamp(created)}`);
+  }
+  if (updated) {
+    parts.push(`Updated ${formatHistoryTimestamp(updated)}`);
+  }
+  return parts.join(" · ");
+}
+
+function getNotesCourseLabel() {
+  if (activeNote?.courseCode) {
+    return `${activeNote.courseCode} · This course`;
+  }
+  return "This course";
+}
+
+function createEmptyNote(prefill = {}) {
+  const context = getLinkedContext();
+  const now = new Date().toISOString();
+  return {
+    id: prefill.id || null,
+    title: prefill.title || "",
+    content: prefill.content || "",
+    sourceUrl: prefill.sourceUrl || context.sourceUrl,
+    courseCode: prefill.courseCode || context.courseCode || null,
+    linkedLabel: prefill.linkedLabel || context.label,
+    sourceSelection: prefill.sourceSelection || "",
+    noteType: prefill.noteType || "manual",
+    tags: prefill.tags || [],
+    createdAt: prefill.createdAt || now,
+    updatedAt: prefill.updatedAt || now,
+  };
+}
+
+function normalizeNote(rawNote = {}) {
+  const normalized = {
+    id: rawNote.id || rawNote.note_id || null,
+    title: rawNote.title || "Untitled Note",
+    content: rawNote.content || "",
+    sourceUrl: rawNote.source_url || rawNote.sourceUrl || "",
+    courseCode: rawNote.course_code || rawNote.courseCode || null,
+    sourceSelection: rawNote.source_selection || rawNote.sourceSelection || "",
+    noteType: rawNote.note_type || rawNote.noteType || "manual",
+    tags: rawNote.tags || [],
+    createdAt: rawNote.created_at || rawNote.createdAt || null,
+    updatedAt:
+      rawNote.updated_at ||
+      rawNote.updatedAt ||
+      rawNote.created_at ||
+      rawNote.createdAt ||
+      null,
+  };
+  normalized.linkedLabel =
+    rawNote.linkedLabel ||
+    normalized.sourceSelection ||
+    normalized.title ||
+    getLinkedContext().label;
+  return normalized;
+}
+
+function sanitizeNoteContent(html = "") {
+  if (typeof html !== "string" || !html) return "";
+  const container = document.createElement("div");
+  container.innerHTML = html;
+  container.querySelectorAll("script,style").forEach((node) => node.remove());
+  container.querySelectorAll("*").forEach((el) => {
+    [...el.attributes].forEach((attr) => {
+      if (attr.name.toLowerCase().startsWith("on")) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return container.innerHTML;
+}
+
+function stripHtml(html = "") {
+  if (!html) return "";
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  return temp.textContent || "";
+}
+
+function truncateText(text = "", maxLength = 120) {
+  const value = text || "";
+  if (value.length <= maxLength) return value;
+  return `${value.substring(0, maxLength - 1)}…`;
+}
+
+function getLinkedContext() {
+  const heading =
+    document.querySelector("h1, h2")?.textContent?.trim() || document.title;
+  return {
+    label: heading || window.location.hostname || "This course",
+    sourceUrl: window.location.href,
+    courseCode: null,
+  };
+}
+
+function normalizeUrl(url) {
+  if (!url) return "";
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    return u.toString().replace(/\/$/, "");
+  } catch (error) {
+    return url;
+  }
 }
 
 /**
@@ -1083,8 +1604,17 @@ async function runMode(mode) {
   };
 
   const baseHistory = Array.isArray(chatHistory) ? [...chatHistory] : [];
-  // Don't add original text to local history - just send selection to API
-  const optimisticHistory = baseHistory;
+  const userMessage = cachedSelection
+    ? {
+        role: "user",
+        content: `${cachedSelection}`,
+      }
+    : null;
+
+  // Optimistically show the latest user selection before the API responds
+  const optimisticHistory = userMessage
+    ? [...baseHistory, userMessage]
+    : baseHistory;
 
   chatHistory = optimisticHistory;
   pendingInputValue = "";
@@ -1101,12 +1631,8 @@ async function runMode(mode) {
       targetLanguage: sessionPreferences.preferredLanguage,
       difficultyLevel: sessionPreferences.difficultyLevel,
       chatHistory: baseHistory,
-      // Only send newUserMessage if we have existing chat history
-      // For initial requests, the selection is sent to buildInitialHistory
-      newUserMessage:
-        baseHistory.length > 0 && cachedSelection
-          ? `${cachedSelection}`
-          : undefined,
+      // Always send the latest selection as the user's message so it appears in history
+      newUserMessage: cachedSelection || undefined,
     });
 
     // Handle new response format: { success: boolean, data?: {...}, error?: {...} }
@@ -1119,18 +1645,10 @@ async function runMode(mode) {
       throw new Error("Invalid response format: missing explanation");
     }
 
-    // Build chat history from structured response
-    // Add user message if this is initial request
-    if (baseHistory.length === 0 && cachedSelection) {
-      chatHistory = [
-        {
-          role: "user",
-          content: `Original text:\n${cachedSelection}`,
-        },
-      ];
-    } else {
-      chatHistory = [...baseHistory];
-    }
+    // Build chat history from structured response (always include the latest user message)
+    chatHistory = userMessage
+      ? [...baseHistory, userMessage]
+      : [...baseHistory];
 
     // Add assistant response
     chatHistory = [
@@ -1172,11 +1690,13 @@ async function runMode(mode) {
 
     if (cachedSelection) {
       const friendlyMessage = getAssistantErrorMessage(error);
-      if (!baseHistory.length) {
-        chatHistory = buildFallbackHistory();
-      } else {
-        chatHistory = baseHistory;
-      }
+      const historyWithUser = userMessage
+        ? [...baseHistory, userMessage]
+        : baseHistory;
+      chatHistory =
+        !historyWithUser.length && cachedSelection
+          ? buildFallbackHistory()
+          : historyWithUser;
       chatHistory = [
         ...chatHistory,
         {
@@ -1479,8 +1999,11 @@ function showAiDraftNotes() {
   const sidebarElement = lockinWidget?.getSidebarElement();
   if (!sidebarElement) return;
 
-  const notesSection = sidebarElement.querySelector(".lockin-notes-container");
+  const notesSection = sidebarElement.querySelector(".lockin-notes-shell");
   if (!notesSection) return;
+
+  clearAiDraftPanel();
+  setNotesView("current", sidebarElement);
 
   const notes = currentStudyResponse.notes;
   const draftBullets = notes
@@ -1509,12 +2032,10 @@ function showAiDraftNotes() {
     </div>
   `;
 
-  // Insert before the editor section
-  const editorSection = notesSection.querySelector(
-    ".lockin-notes-editor-section"
-  );
-  if (editorSection) {
-    editorSection.insertAdjacentElement("beforebegin", draftPanel);
+  const body = notesSection.querySelector(".lockin-notes-body");
+  const currentView = notesSection.querySelector(".lockin-note-current-view");
+  if (body) {
+    body.insertBefore(draftPanel, currentView || body.firstChild);
   }
 }
 
@@ -1539,38 +2060,47 @@ function onSaveAsNote(messageId, messageContent) {
   const sidebarElement = lockinWidget?.getSidebarElement();
   if (!sidebarElement) return;
 
-  const notesSection = sidebarElement.querySelector(".lockin-notes-container");
-  if (!notesSection) return;
+  const safeContent = escapeHtml(messageContent || "").replace(/\n/g, "<br>");
+  const firstSentence = messageContent.split(".")[0].trim();
+  const title =
+    firstSentence.length > 60
+      ? `${firstSentence.substring(0, 60)}…`
+      : firstSentence || "Untitled note";
 
-  // Pre-fill the note editor with message content
-  const titleInput = notesSection.querySelector("#lockin-new-note-title");
-  const contentInput = notesSection.querySelector("#lockin-new-note-content");
+  activeNote = createEmptyNote({
+    title,
+    content: safeContent,
+    sourceSelection: cachedSelection || "",
+  });
+  noteHasChanges = true;
+  noteSaveStatus = "Saving...";
 
-  if (titleInput && contentInput) {
-    // Generate a title from first sentence or first 50 chars
-    const firstSentence = messageContent.split(".")[0].trim();
-    const title =
-      firstSentence.length > 50
-        ? firstSentence.substring(0, 50) + "..."
-        : firstSentence;
-
-    titleInput.value = title;
-    contentInput.value = messageContent;
-
-    // Switch to Notes tab
+  if (lockinWidget) {
     lockinWidget.switchTab("notes");
-
-    // Scroll to editor and focus
-    contentInput.focus();
-    showToast("Ready to save! Edit the note and click Save note.");
   }
+
+  setNotesView("current", sidebarElement);
+  populateCurrentNoteFields(sidebarElement);
+  scheduleNoteSave();
+
+  const editorEl = sidebarElement.querySelector("#lockin-note-editor");
+  editorEl?.focus();
+  showToast("Ready to save! Editing now autosaves.");
 }
 
 /**
- * Placeholder function for Generate notes action
+ * Handle Generate notes action
  * Called when user clicks "Generate notes" on a chat message
+ * Switches to Notes tab and shows AI draft panel
  */
 function onGenerateNotes(messageId, messageContent) {
+  // Switch to Notes tab first (same as "Save as note")
+  if (lockinWidget) {
+    lockinWidget.switchTab("notes");
+  }
+  setNotesView("current", lockinWidget?.getSidebarElement());
+  
+  // Then show the AI draft notes panel
   showAiDraftNotes();
 }
 
@@ -1619,6 +2149,7 @@ async function saveDraftNotesAsSeparate() {
 
     clearAiDraftPanel();
     showToast(`Saved ${savePromises.length} notes!`);
+    await loadNotes(notesFilter);
   } catch (error) {
     Logger.error("Failed to save some notes:", error);
     showToast("Failed to save some notes. Please try again.", "error");
@@ -1640,22 +2171,26 @@ function insertDraftIntoCurrent() {
   const sidebarElement = lockinWidget?.getSidebarElement();
   if (!sidebarElement) return;
 
-  const contentInput = sidebarElement.querySelector("#lockin-new-note-content");
-  if (!contentInput) return;
+  const editorEl = sidebarElement.querySelector("#lockin-note-editor");
+  if (!editorEl) return;
 
   const bulletList = currentStudyResponse.notes
-    .map((note) => `- ${(note.title || "").trim()}`)
-    .filter((item) => item.length > 2)
-    .join("\n");
+    .map((note) => `<li>${escapeHtml((note.title || "").trim())}</li>`)
+    .filter((item) => item.length > 8)
+    .join("");
 
   if (bulletList) {
-    const currentContent = contentInput.value.trim();
-    contentInput.value = currentContent
-      ? `${currentContent}\n\n## Notes\n${bulletList}`
-      : bulletList;
+    const currentContent = editorEl.innerHTML.trim();
+    const listHtml = `<ul>${bulletList}</ul>`;
+    editorEl.innerHTML = currentContent
+      ? `${currentContent}<br><br>${listHtml}`
+      : listHtml;
+    activeNote.content = editorEl.innerHTML;
+    noteHasChanges = true;
+    scheduleNoteSave();
 
     clearAiDraftPanel();
-    contentInput.focus();
+    editorEl.focus();
     showToast("Draft notes inserted!");
   }
 }
