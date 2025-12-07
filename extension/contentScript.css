@@ -14,16 +14,30 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
 }
 
-/* Ensure page content is constrained to left side */
+/* Ensure page content is constrained to left side ONLY when sidebar is expanded */
 html {
-  --lockin-content-width: 70%;
+  --lockin-content-width: 100%;
   --lockin-sidebar-width: 30%;
 }
 
+/* Default: page uses 100% width */
 body {
-  max-width: var(--lockin-content-width, 70%);
+  max-width: 100%;
   margin-right: 0 !important;
   padding-right: 0 !important;
+  transition: max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* When sidebar is expanded (desktop mode), constrain content to 70% */
+body.lockin-sidebar-open {
+  max-width: 70% !important;
+}
+
+@media (max-width: 1024px) {
+  /* On mobile, sidebar overlays content, so body always uses 100% */
+  body.lockin-sidebar-open {
+    max-width: 100% !important;
+  }
 }
 
 /* === SIDEBAR PANEL === */
