@@ -29,6 +29,7 @@ const STORAGE_KEYS = {
   // Sidebar
   SIDEBAR_IS_OPEN: "lockin_sidebar_isOpen",
   SIDEBAR_WIDTH: "lockin:sidebarWidth",
+  SIDEBAR_ACTIVE_TAB: "lockin_sidebar_activeTab",
   
   // Chat
   CURRENT_CHAT_ID: "lockinCurrentChatId",
@@ -48,6 +49,7 @@ const DEFAULTS = {
   [STORAGE_KEYS.MODE_PREFERENCE]: "fixed",
   [STORAGE_KEYS.SIDEBAR_IS_OPEN]: false,
   [STORAGE_KEYS.SIDEBAR_WIDTH]: 380,
+  [STORAGE_KEYS.SIDEBAR_ACTIVE_TAB]: "chat",
 };
 
 /**

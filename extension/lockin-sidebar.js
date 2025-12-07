@@ -13,6 +13,14 @@
 
 class LockinSidebar {
   constructor(options = {}) {
+    this.storageKeys =
+      typeof STORAGE_KEYS !== "undefined"
+        ? STORAGE_KEYS
+        : {
+            SIDEBAR_IS_OPEN: "lockin_sidebar_isOpen",
+            SIDEBAR_ACTIVE_TAB: "lockin_sidebar_activeTab",
+          };
+
     // Fixed width: left side 70%, right side 30%
     this.config = {
       sidebarWidth: 30, // 30% of viewport (fixed)
@@ -293,7 +301,7 @@ class LockinSidebar {
   /**
    * Switch between chat and notes tabs
    */
-  switchTab(tab) {
+  switchTab(tab, { persist = true } = {}) {
     this.activeTab = tab;
 
     // Update tab buttons
@@ -319,6 +327,10 @@ class LockinSidebar {
       window.dispatchEvent(
         new CustomEvent("lockin:loadNotes", { detail: { tab } })
       );
+    }
+
+    if (persist) {
+      this.saveState();
     }
   }
 
@@ -367,6 +379,9 @@ class LockinSidebar {
     this.sidebarElement.setAttribute("data-state", "expanded");
     this.togglePill.setAttribute("aria-label", "Close Lock-in sidebar");
 
+    // Add class to body to indicate sidebar is open
+    document.body.classList.add("lockin-sidebar-open");
+
     // Apply margin to page on desktop
     this.adjustPageMargin();
 
@@ -386,6 +401,9 @@ class LockinSidebar {
     this.sidebarElement.setAttribute("data-state", "collapsed");
     this.togglePill.setAttribute("aria-label", "Open Lock-in sidebar");
 
+    // Remove class from body to restore full width
+    document.body.classList.remove("lockin-sidebar-open");
+
     // Remove margin from page
     this.removePageMargin();
 
@@ -402,20 +420,12 @@ class LockinSidebar {
 
   /**
    * Adjust page width when sidebar opens (desktop only)
-   * Left side stays fixed at 60%, right side is the resizable sidebar
+   * Left side stays fixed at 70%, right side is the resizable sidebar
    */
   adjustPageMargin() {
     if (!this.isDesktopMode) {
       return; // No width adjustment on mobile
     }
-
-    // Calculate what percentage the sidebar should be
-    const viewportWidth = window.innerWidth;
-    const sidebarPercentage = (
-      (this.config.sidebarWidth / viewportWidth) *
-      100
-    ).toFixed(2);
-    const contentPercentage = (100 - sidebarPercentage).toFixed(2);
 
     // Set page max-width to constrain it to 70%
     document.documentElement.style.setProperty(
@@ -428,10 +438,16 @@ class LockinSidebar {
 
   /**
    * Remove page width constraints when sidebar closes
+   * Ensure page content uses 100% of viewport
    */
   removePageMargin() {
-    document.documentElement.style.removeProperty("--lockin-content-width");
-    document.body.style.removeProperty("max-width");
+    // Explicitly set to 100% to ensure full viewport width
+    document.documentElement.style.setProperty(
+      "--lockin-content-width",
+      "100%",
+      "important"
+    );
+    document.body.style.setProperty("max-width", "100%", "important");
   }
 
   /**
@@ -608,7 +624,8 @@ class LockinSidebar {
   saveState() {
     if (typeof chrome !== "undefined" && chrome.storage) {
       chrome.storage.sync.set({
-        lockin_sidebar_isOpen: this.isOpen,
+        [this.storageKeys.SIDEBAR_IS_OPEN]: this.isOpen,
+        [this.storageKeys.SIDEBAR_ACTIVE_TAB]: this.activeTab,
       });
     }
   }
@@ -619,21 +636,36 @@ class LockinSidebar {
   restoreState() {
     if (typeof chrome !== "undefined" && chrome.storage) {
       try {
-        chrome.storage.sync.get(["lockin_sidebar_isOpen"], (data) => {
-          // Restore sidebar open state
-          if (data.lockin_sidebar_isOpen !== undefined) {
-            this.isOpen = data.lockin_sidebar_isOpen;
-            if (this.sidebarElement) {
-              this.sidebarElement.setAttribute(
-                "data-state",
-                this.isOpen ? "expanded" : "collapsed"
-              );
+        chrome.storage.sync.get(
+          [
+            this.storageKeys.SIDEBAR_IS_OPEN,
+            this.storageKeys.SIDEBAR_ACTIVE_TAB,
+          ],
+          (data) => {
+            // Restore sidebar open state
+            if (data[this.storageKeys.SIDEBAR_IS_OPEN] !== undefined) {
+              this.isOpen = data[this.storageKeys.SIDEBAR_IS_OPEN];
+              if (this.sidebarElement) {
+                this.sidebarElement.setAttribute(
+                  "data-state",
+                  this.isOpen ? "expanded" : "collapsed"
+                );
+              }
+              // Update body class based on sidebar state
+              if (this.isOpen) {
+                document.body.classList.add("lockin-sidebar-open");
+                this.adjustPageMargin();
+              } else {
+                document.body.classList.remove("lockin-sidebar-open");
+                this.removePageMargin();
+              }
             }
-            if (this.isOpen) {
-              this.adjustPageMargin();
-            }
+
+            const storedTab =
+              data[this.storageKeys.SIDEBAR_ACTIVE_TAB] || this.activeTab;
+            this.switchTab(storedTab, { persist: false });
           }
-        });
+        );
       } catch (error) {
         console.log("Lock-in Sidebar: Storage access error:", error);
       }
@@ -645,6 +677,7 @@ class LockinSidebar {
    */
   destroy() {
     this.removePageMargin();
+    document.body.classList.remove("lockin-sidebar-open");
     if (this.rootElement) {
       this.rootElement.remove();
     }

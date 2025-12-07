@@ -25,7 +25,17 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://learning.monash.edu/*",
+        "https://edstem.org/*",
+        "https://*.edstem.org/*",
+        "https://monash.au.panopto.com/*",
+        "https://pollev.com/*",
+        "https://*.pollev.com/*",
+        "https://echo360.net.au/*",
+        "https://*.echo360.net.au/*",
+        "https://*.google.com/*"
+      ],
       "js": [
         "config.js",
         "libs/logger.js",
