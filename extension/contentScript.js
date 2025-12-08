@@ -1,9 +1,15 @@
 /**
- * Lock-in Content Script - Contextual AI Assistant
+ * Lock-in Content Script - Contextual AI Assistant (LEGACY)
+ * 
+ * NOTE: This file is legacy code. The active content script is contentScript-react.js
+ * which uses React components from extension/ui.
+ * 
+ * This file may still be referenced for some functionality but the main UI
+ * is now React-based via contentScript-react.js.
+ * 
  * Features:
  * - Modifier key requirement (Ctrl/Cmd + selection)
- * - Smart contextual bubble placement
- * - Draggable response bubble
+ * - Sidebar-based UI (React components)
  * - On/off toggle via popup
  */
 
@@ -76,9 +82,7 @@ let currentMode = MODES.EXPLAIN; // Current active mode
 let isBubbleOpen = true; // Bubble visibility state (persisted)
 let cachedSelection = ""; // Selected text
 let cachedRect = null; // Selection bounding box
-let activeBubble = null; // Current bubble element (widget-based)
-let activePill = null; // Legacy pill element (unused with LockinWidget, kept for safety)
-let isDraggingBubble = false; // Legacy drag flag (no longer used with LockinWidget)
+// Legacy variables removed - using React-based sidebar now
 let chatHistory = []; // Conversation history for the current selection
 let pendingInputValue = ""; // Value inside the follow-up input
 let isChatLoading = false; // Whether we are waiting on the backend
@@ -207,12 +211,22 @@ async function init() {
   await loadStoredChatId();
   listenToAuthChanges();
 
-  // Initialize sidebar system (replaces LockinWidget)
-  if (typeof LockinSidebar !== "undefined") {
-    Logger.debug("LockinSidebar class found, initializing...");
+  // Initialize sidebar system (React-based)
+  // Wait for UI bundle to load and expose LockInUI
+  if (window.LockInUI && window.LockInUI.LockInSidebar) {
+    Logger.debug("LockInSidebar component found, initializing...");
     initializeSidebar();
   } else {
-    Logger.warn("LockinSidebar class not found!");
+    Logger.warn("LockInSidebar component not found! Waiting for UI bundle to load...");
+    // Wait a bit for the script to load
+    setTimeout(() => {
+      if (window.LockInUI && window.LockInUI.LockInSidebar) {
+        Logger.debug("LockInSidebar component found after delay, initializing...");
+        initializeSidebar();
+      } else {
+        Logger.error("LockInSidebar component still not found after delay. Check if ui/index.js loaded correctly.");
+      }
+    }, 500);
   }
 
   // Get tab ID and restore session if available
@@ -1754,7 +1768,7 @@ async function runMode(mode) {
   pendingInputValue = "";
   isChatLoading = true;
 
-  ensureChatBubble();
+  ensureSidebarOpen();
   renderChatBubble();
   saveSessionForCurrentTab({ isLoadingOverride: true });
 
@@ -2011,13 +2025,13 @@ async function sendFollowUpMessage(messageText) {
 }
 
 // ===================================
-// Bubble Display Helpers (LockinSidebar-based)
+// Sidebar Display Helpers
 // ===================================
 
 /**
  * Ensure the sidebar is open and ready to render content.
  */
-function ensureChatBubble() {
+function ensureSidebarOpen() {
   if (!lockinWidget) {
     return;
   }
@@ -2028,8 +2042,7 @@ function ensureChatBubble() {
 }
 
 /**
- * Backwards-compatible helper used throughout older code paths.
- * Delegates to the new sidebar-based renderer.
+ * Render sidebar content (backwards-compatible alias)
  */
 function renderChatBubble() {
   renderSidebarContent();
@@ -2836,7 +2849,7 @@ async function loadSessionForCurrentTab() {
     }
 
     if (chatHistory.length) {
-      ensureChatBubble();
+      ensureSidebarOpen();
       renderChatBubble();
     }
   } catch (error) {
@@ -3016,7 +3029,7 @@ async function clearSessionForCurrentTab() {
 }
 
 /**
- * Close bubble and mark session as closed
+ * Close sidebar and mark session as closed
  */
 async function closeBubble() {
   if (lockinWidget) {

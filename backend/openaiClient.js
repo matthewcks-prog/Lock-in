@@ -32,7 +32,7 @@ function toLanguageName(code = "en") {
 function buildModeDirective(mode, targetLanguage) {
   switch (mode) {
     case "simplify":
-      return "Simplify the passage using short sentences and accessible vocabulary suitable for early university students.";
+      return "Simplify the passage using short sentences and accessible vocabulary suitable for university students.";
     case "translate":
       return `Translate the passage into ${toLanguageName(
         targetLanguage

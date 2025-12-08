@@ -1,0 +1,28 @@
+{
+  "name": "lock-in-extension",
+  "version": "1.0.0",
+  "description": "AI-powered study assistant Chrome extension",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "vite build",
+    "build:extension": "vite build && npm run copy-manifest",
+    "copy-manifest": "node scripts/copy-manifest.js",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.0",
+    "vite": "^7.2.7"
+  }
+}
