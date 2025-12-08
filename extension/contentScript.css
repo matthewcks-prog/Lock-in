@@ -8,10 +8,20 @@
   position: fixed;
   top: 0;
   right: 0;
-  height: 100vh;
+  width: auto;
+  height: auto;
   z-index: 2147483647;
   pointer-events: none;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+}
+
+/* Toggle pill needs pointer-events to be clickable */
+#lockin-root > #lockin-toggle-pill,
+#lockin-root #lockin-toggle-pill {
+  pointer-events: auto !important;
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
@@ -65,26 +75,31 @@ body.lockin-sidebar-open {
 
 /* === TOGGLE PILL (COLLAPSED STATE) === */
 #lockin-toggle-pill {
-  position: fixed;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 56px;
-  height: 56px;
-  border-radius: 56px 0 0 56px;
-  background: linear-gradient(135deg, var(--lockin-accent, #667eea) 0%, #667eea 100%);
-  border: none;
-  color: white;
-  cursor: pointer;
-  box-shadow: -2px 8px 24px rgba(102, 126, 234, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  z-index: 2147483646;
-  pointer-events: auto;
-  transition: all 0.3s ease;
-  padding: 0;
+  position: fixed !important;
+  right: 24px !important;
+  bottom: 32px !important;
+  top: auto !important;
+  transform: none !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 8px 16px !important;
+  border-radius: 9999px !important;
+  background: linear-gradient(to right, #2563eb, #9333ea) !important;
+  border: none !important;
+  color: white !important;
+  cursor: pointer !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  z-index: 2147483646 !important;
+  pointer-events: auto !important;
+  transition: all 0.3s ease !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 #lockin-toggle-pill:hover {
@@ -492,6 +507,81 @@ body.lockin-sidebar-open {
   padding: 16px;
   min-height: 0;
   overscroll-behavior: contain;
+}
+
+/* Chat panel container */
+.lockin-chat-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+/* Chat message styles (component uses these class names) */
+.lockin-chat-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lockin-chat-message-user {
+  align-items: flex-end;
+}
+
+.lockin-chat-message-assistant {
+  align-items: flex-start;
+}
+
+.lockin-chat-message-content {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.lockin-chat-message-user .lockin-chat-message-content {
+  background: #e0e7ff;
+  color: #1e3a8a;
+  border-bottom-right-radius: 4px;
+}
+
+.lockin-chat-message-assistant .lockin-chat-message-content {
+  background: #f3f4f6;
+  color: #111827;
+  border-bottom-left-radius: 4px;
+}
+
+.lockin-chat-message-time {
+  font-size: 11px;
+  color: #9ca3af;
+  padding: 0 4px;
+}
+
+.lockin-chat-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: #9ca3af;
+  font-size: 14px;
+}
+
+.lockin-chat-error {
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.lockin-loading {
+  color: #6b7280;
+  font-style: italic;
 }
 
 .lockin-chat-msg {
