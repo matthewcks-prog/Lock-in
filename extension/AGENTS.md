@@ -1,4 +1,4 @@
-# Extension Folder AGENTS.md
+﻿# Extension Folder AGENTS.md
 
 ## Purpose
 
@@ -21,6 +21,13 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 
 ---
 
+## Living Docs Reminder
+
+- Update this file, root `AGENTS.md`, `AGENTS._LIVINGDOC.md`, and architecture docs whenever extension responsibilities change.
+- If you move content script helpers or UI entry points, reflect it here in the same change.
+
+---
+
 ## File Responsibilities
 
 ### `manifest.json`
@@ -36,16 +43,20 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - Message routing
 - **DO NOT** contain business logic - delegate to core/services
 
-### `contentScript.js`
-- **Thin orchestrator only** (~200 lines max)
-- Detects current site → selects adapter
-- Extracts course context via adapter
-- Mounts React sidebar component from `/extension/ui`
-- Handles Chrome-specific events (text selection, etc.)
+### `contentScript-react.js`
+- **Active** content script (legacy `contentScript.js` removed)
+- Thin orchestrator only: detect site adapter, extract context, and mount React sidebar bundle from `/extension/ui`
+- Delegates to helpers in `extension/content/` for page context, state store, sidebar host, session restore, and interactions
+- Handles Chrome-specific events (text selection, Ctrl/Cmd modifier, Escape close)
+- Applies body class `lockin-sidebar-open` so the page shrinks by the clamped sidebar width (35vw target, 320-390px) when open; mobile overlays instead of resizing
 - **DO NOT** contain:
   - Business logic (use `/core/services`)
   - UI rendering (use React components from `/extension/ui`)
   - Site-specific detection (use adapters from `/integrations`)
+
+### `content/`
+- `pageContext.js` (adapter + page context), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (selection + Escape).
+- Extend functionality by adding focused helpers here instead of inflating `contentScript-react.js`.
 
 ### `ui/`
 - Extension-specific React components for the sidebar widget
@@ -68,7 +79,7 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 
 ## Rules for Editing Extension Files
 
-### ✅ DO
+### âœ… DO
 
 - Keep files small and focused
 - Delegate to `/core` for business logic
@@ -78,7 +89,7 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - Wrap Chrome APIs in thin wrappers
 - Keep extension UI components in `/extension/ui` (they are extension-specific)
 
-### ❌ DON'T
+### âŒ DON'T
 
 - Put business logic in content scripts
 - Hardcode site-specific logic (use adapters)
@@ -183,7 +194,7 @@ When adding new Chrome extension features:
 
 ## Common Mistakes
 
-### ❌ Putting business logic in content script
+### âŒ Putting business logic in content script
 ```javascript
 // BAD
 function createNote(title, content) {
@@ -199,7 +210,7 @@ import { noteService } from '../../core/services/noteService';
 const note = await noteService.createNote({ title, content });
 ```
 
-### ❌ Hardcoding site detection
+### âŒ Hardcoding site detection
 ```javascript
 // BAD
 if (url.includes('learning.monash.edu')) {
@@ -214,7 +225,7 @@ const adapter = getCurrentAdapter();
 const context = adapter.getCourseContext(document, url);
 ```
 
-### ❌ Building HTML strings
+### âŒ Building HTML strings
 ```javascript
 // BAD
 function renderChat(messages) {
@@ -240,3 +251,7 @@ function renderChat(messages) {
 - Keep it simple: extension code should be thin wrappers
 
 **Remember**: Extension code is Chrome-specific glue. Business logic lives in `/core`.
+
+
+
+

@@ -1,4 +1,4 @@
-# Lock-in Implementation Checklist & Code Reference
+﻿# Lock-in Implementation Checklist & Code Reference
 
 This document provides a comprehensive overview of the Lock-in codebase, its features, architecture, and implementation details. It serves as a single source of truth for understanding the current state of the project.
 
@@ -36,70 +36,70 @@ This document provides a comprehensive overview of the Lock-in codebase, its fea
 
 ```
 User selects text (Ctrl/Cmd + select)
-    ↓
+    â†“
 Extension captures selection
-    ↓
+    â†“
 Content script builds payload (mode, text, context, chat history)
-    ↓
+    â†“
 Request to backend API (/api/lockin)
-    ↓
+    â†“
 Backend validates, authenticates, calls OpenAI
-    ↓
+    â†“
 Backend stores chat/messages in Supabase
-    ↓
+    â†“
 Response returned to extension
-    ↓
+    â†“
 Sidebar updates with AI response and chat history
 ```
 
 ### Component Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Chrome Extension                      │
-├─────────────────────────────────────────────────────────┤
-│  contentScript.js (Main orchestrator)                   │
-│  ├── Text selection detection                           │
-│  ├── Sidebar UI rendering                               │
-│  ├── Chat interface management                          │
-│  ├── Notes interface management                         │
-│  └── API coordination                                   │
-│                                                          │
-│  lockin-sidebar.js (Sidebar component)                  │
-│  ├── Open/close/resize functionality                    │
-│  ├── Tab navigation (Chat/Notes)                        │
-│  └── Responsive behavior                                │
-│                                                          │
-│  libs/api.js (API client)                               │
-│  ├── processText()                                      │
-│  ├── createNote() / listNotes() / searchNotes()        │
-│  ├── chatWithNotes()                                    │
-│  └── Authentication handling                           │
-└─────────────────────────────────────────────────────────┘
-                        ↕ HTTP/JSON
-┌─────────────────────────────────────────────────────────┐
-│                    Backend API                           │
-├─────────────────────────────────────────────────────────┤
-│  Express.js Server                                      │
-│  ├── routes/lockinRoutes.js (Chat endpoints)           │
-│  ├── routes/noteRoutes.js (Notes endpoints)            │
-│  ├── controllers/lockinController.js                    │
-│  ├── controllers/notesController.js                     │
-│  ├── controllers/notesChatController.js (RAG)          │
-│  ├── repositories/notesRepository.js                    │
-│  ├── openaiClient.js (Chat + Embeddings)               │
-│  └── authMiddleware.js (JWT validation)                │
-└─────────────────────────────────────────────────────────┘
-                        ↕
-┌─────────────────────────────────────────────────────────┐
-│                    Supabase Database                     │
-├─────────────────────────────────────────────────────────┤
-│  Tables:                                                │
-│  ├── chats (chat sessions)                              │
-│  ├── messages (chat messages)                           │
-│  ├── notes (user notes with embeddings)                │
-│  └── Functions: match_notes (vector search)            │
-└─────────────────────────────────────────────────────────┘
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    Chrome Extension                      â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚  contentScript-react.js (Main orchestrator)                   â”‚
+â”‚  â”œâ”€â”€ Text selection detection                           â”‚
+â”‚  â”œâ”€â”€ Sidebar UI rendering                               â”‚
+â”‚  â”œâ”€â”€ Chat interface management                          â”‚
+â”‚  â”œâ”€â”€ Notes interface management                         â”‚
+â”‚  â””â”€â”€ API coordination                                   â”‚
+â”‚                                                          â”‚
+â”‚  lockin-sidebar.js (Sidebar component)                  â”‚
+â”‚  â”œâ”€â”€ Open/close/resize functionality                    â”‚
+â”‚  â”œâ”€â”€ Tab navigation (Chat/Notes)                        â”‚
+â”‚  â””â”€â”€ Responsive behavior                                â”‚
+â”‚                                                          â”‚
+â”‚  libs/api.js (API client)                               â”‚
+â”‚  â”œâ”€â”€ processText()                                      â”‚
+â”‚  â”œâ”€â”€ createNote() / listNotes() / searchNotes()        â”‚
+â”‚  â”œâ”€â”€ chatWithNotes()                                    â”‚
+â”‚  â””â”€â”€ Authentication handling                           â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                        â†• HTTP/JSON
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    Backend API                           â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚  Express.js Server                                      â”‚
+â”‚  â”œâ”€â”€ routes/lockinRoutes.js (Chat endpoints)           â”‚
+â”‚  â”œâ”€â”€ routes/noteRoutes.js (Notes endpoints)            â”‚
+â”‚  â”œâ”€â”€ controllers/lockinController.js                    â”‚
+â”‚  â”œâ”€â”€ controllers/notesController.js                     â”‚
+â”‚  â”œâ”€â”€ controllers/notesChatController.js (RAG)          â”‚
+â”‚  â”œâ”€â”€ repositories/notesRepository.js                    â”‚
+â”‚  â”œâ”€â”€ openaiClient.js (Chat + Embeddings)               â”‚
+â”‚  â””â”€â”€ authMiddleware.js (JWT validation)                â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
+                        â†•
+â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”
+â”‚                    Supabase Database                     â”‚
+â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤
+â”‚  Tables:                                                â”‚
+â”‚  â”œâ”€â”€ chats (chat sessions)                              â”‚
+â”‚  â”œâ”€â”€ messages (chat messages)                           â”‚
+â”‚  â”œâ”€â”€ notes (user notes with embeddings)                â”‚
+â”‚  â””â”€â”€ Functions: match_notes (vector search)            â”‚
+â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
 ```
 
 ---
@@ -108,7 +108,7 @@ Sidebar updates with AI response and chat history
 
 ### 1. Text Selection & Processing
 
-**Location**: `extension/contentScript.js`
+**Location**: `extension/contentScript-react.js`
 
 - **Trigger**: User holds Ctrl (Windows/Linux) or Cmd (Mac) and selects text
 - **Modes**:
@@ -119,7 +119,7 @@ Sidebar updates with AI response and chat history
 
 ### 2. Chat Interface
 
-**Location**: `extension/contentScript.js` (Chat Tab)
+**Location**: `extension/contentScript-react.js` (Chat Tab)
 
 #### 2.1 Chat Messages
 - Displays conversation history (user + assistant messages)
@@ -142,7 +142,7 @@ Sidebar updates with AI response and chat history
 
 ### 3. Notes Tab
 
-**Location**: `extension/contentScript.js` (Notes Tab)
+**Location**: `extension/contentScript-react.js` (Notes Tab)
 
 #### 3.1 Doc-Like Editor
 - Large title input (16px, bold, 40px min-height)
@@ -214,7 +214,7 @@ Sidebar updates with AI response and chat history
 
 | File | Purpose | Key Functions |
 |------|---------|---------------|
-| `contentScript.js` | Main orchestrator (~2500 lines) | `init()`, `runMode()`, `buildChatSection()`, `buildNotesSection()`, `loadNotes()` |
+| `contentScript-react.js` | React orchestrator (~200 lines) | `init()`, `handleSidebarToggle()`, `runMode()`, `listenToStorageChanges()`, `initializeReactSidebar()` |
 | `lockin-sidebar.js` | Sidebar component | `LockinSidebar` class, `init()`, `open()`, `close()`, `switchTab()` |
 | `background.js` | Service worker | Context menus, session management |
 | `popup.js` | Settings UI | Authentication, preferences |
@@ -495,7 +495,7 @@ Chat with notes (RAG).
 
 ## State Management
 
-### Extension State (`contentScript.js`)
+### Extension State (`contentScript-react.js`)
 
 ```javascript
 // UI State
@@ -549,13 +549,13 @@ let currentAccentColor = "#667eea"
 
 ### Security Measures
 
-- ✅ All endpoints require authentication (Supabase JWT)
-- ✅ Rate limiting per user (configurable daily limit)
-- ✅ Input validation and sanitization
-- ✅ CORS restricted to Chrome extensions
-- ✅ No sensitive data in logs
-- ✅ Error messages don't expose internal details
-- ✅ HTML escaping in chat history (XSS prevention)
+- âœ… All endpoints require authentication (Supabase JWT)
+- âœ… Rate limiting per user (configurable daily limit)
+- âœ… Input validation and sanitization
+- âœ… CORS restricted to Chrome extensions
+- âœ… No sensitive data in logs
+- âœ… Error messages don't expose internal details
+- âœ… HTML escaping in chat history (XSS prevention)
 
 ---
 
@@ -636,7 +636,7 @@ let currentAccentColor = "#667eea"
 ## File Locations Reference
 
 ### Extension
-- Main orchestrator: `extension/contentScript.js`
+- Main orchestrator: `extension/contentScript-react.js`
 - Sidebar component: `extension/lockin-sidebar.js`
 - API client: `extension/libs/api.js`
 - Auth: `extension/supabaseAuth.js`
@@ -657,3 +657,4 @@ let currentAccentColor = "#667eea"
 
 **Last Updated**: Current implementation state as of latest code review.
 **Maintainer Notes**: This document should be updated when new features are added or architecture changes.
+

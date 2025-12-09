@@ -8,7 +8,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 - **Simplify**: Convert complex academic text into easy-to-understand language
 - **Translate**: Translate text into your preferred language with contextual explanations
 - **Sidebar Interface**: Modern right-hand sidebar with chat history and persistent conversations
-- **Resizable Sidebar**: Customize sidebar width (280-500px) with drag-to-resize
+- **Split Layout**: Floating toggle pill, Ctrl/Cmd + select to open, 65/35 split (max ~390px) with mobile overlay
 - **Chat History**: Persistent chat sessions saved to Supabase
 - **Authentication**: Secure user authentication via Supabase
 
@@ -17,12 +17,11 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 ### Extension (`extension/`)
 
 **Core Components:**
-- `contentScript.js` - Main content script orchestrating UI and API calls
-- `lockin-sidebar.js` - Sidebar component with resize functionality
+- `contentScript-react.js` - React-based content script that mounts the sidebar bundle, handles Ctrl/Cmd selection triggers, and syncs the 65/35 layout class
+- `ui/index.js` - Built React sidebar bundle (source lives in `/ui/extension`)
 - `background.js` - Service worker for context menus and session management
 - `popup.js` - Settings and authentication UI
 - `supabaseAuth.js` - Authentication handling
-- `chatHistoryUtils.js` - Chat history utilities
 
 **Shared Modules:**
 - `config.js` - Runtime configuration (backend URL, Supabase credentials)

@@ -22,6 +22,11 @@ Every feature should reinforce this loop:
 
 ---
 
+## Living Docs Expectations
+
+- Keep this file, `AGENTS._LIVINGDOC.md`, `ARCHITECTURE_AUDIT.md`, `CODE_OVERVIEW.md`, and any folder-level `AGENTS.md` updated whenever you move, add, or remove code.
+- Treat docs as the source of truth for structure and flows; do not leave stale references after refactors.
+
 ## Architecture Principles
 
 ### Two Surfaces, One Backend

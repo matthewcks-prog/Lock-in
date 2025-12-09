@@ -43,10 +43,15 @@
         "libs/storage.js",
         "libs/api.js",
         "supabaseAuth.js",
+        "content/pageContext.js",
+        "content/stateStore.js",
+        "content/sidebarHost.js",
+        "content/sessionManager.js",
+        "content/interactions.js",
         "ui/index.js",
         "contentScript-react.js"
       ],
-      "css": ["contentScript.css", "ui/lock-in-extension.css"],
+      "css": ["contentScript.css"],
       "run_at": "document_end"
     }
   ],

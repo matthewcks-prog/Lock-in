@@ -15,8 +15,8 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 ### Core Files
 
 - **`manifest.json`**: Extension configuration (permissions, scripts, metadata)
-- **`contentScript.js`**: Main orchestrator for UI and API calls (~2500 lines)
-- **`lockin-sidebar.js`**: Sidebar component with resize functionality
+- **`contentScript-react.js`**: Active content script (Ctrl/Cmd + select to open, Escape to close) that mounts the React sidebar bundle and syncs layout/state
+- **`ui/index.js`**: Built React sidebar bundle (source in `/ui/extension`)
 - **`background.js`**: Service worker for context menus and session management
 - **`popup.js`**: Settings and authentication UI
 - **`supabaseAuth.js`**: Authentication handling
@@ -30,7 +30,6 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 
 ### Utilities
 
-- **`chatHistoryUtils.js`**: Chat history formatting and utilities
 - **`config.js`**: Runtime configuration (backend URL, Supabase credentials)
 
 ## Features
@@ -82,9 +81,8 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 
 ### Sidebar Interface
 
-- Modern right-hand sidebar (30% viewport width)
-- Resizable width (280-500px on desktop)
-- Responsive design (desktop vs mobile)
+- Modern right-hand sidebar (clamped width: 320-390px at ~35vw; main content uses the remaining width when open)
+- Mobile overlay instead of resizing on smaller viewports
 - Tab navigation (Chat / Notes)
 - Theme support (light/dark/system)
 - Accent color customization
@@ -139,17 +137,13 @@ The extension follows best practices:
 - **API Client**: Reusable backend communication layer
 - **Error Handling**: Comprehensive error handling throughout
 
-### Key Functions in `contentScript.js`
+### Key Flows in `contentScript-react.js`
 
-- `init()`: Initialization and event setup
-- `runMode(mode)`: Process text with selected mode
-- `buildChatSection()`: Render chat interface
-- `buildNotesSection()`: Render notes interface
-- `loadNotes(filter)`: Load and display notes
-- `saveChatAsNote()`: Save chat message as note
-- `showAiDraftNotes()`: Display AI-generated notes
-- `attachChatActionListeners()`: Handle chat action buttons
-- `attachNewNoteEditorListeners()`: Handle note editor interactions
+- `init()` / `safeInit()`: Load adapters, API client, stored preferences, mount React sidebar bundle
+- `handleSidebarToggle()`: Persist open/closed state and sync the page split class (content width = viewport minus clamped sidebar)
+- `runMode(mode)`: Open sidebar on selection (Ctrl/Cmd + highlight) and update mode
+- `listenToStorageChanges()`: Keep mode, open state, and active tab in sync across contexts
+- `initializeReactSidebar()`: Create or update the singleton React sidebar instance
 
 ## Permissions
 
