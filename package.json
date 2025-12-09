@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "vite build --watch --mode development",
     "build": "vite build",
-    "build:extension": "vite build && npm run copy-manifest",
-    "copy-manifest": "node scripts/copy-manifest.js",
+    "build:extension": "vite build",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

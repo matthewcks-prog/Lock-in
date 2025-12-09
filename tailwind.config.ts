@@ -2,6 +2,7 @@
 export default {
   content: [
     "./ui/**/*.{tsx,ts}",
+    "./shared/ui/**/*.{tsx,ts}",
     "./extension/ui/*.js",
   ],
   theme: {

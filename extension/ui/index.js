@@ -39,9 +39,8 @@ var __async = (__this, __arguments, generator) => {
 };
 (function(exports) {
   "use strict";
-  function getDefaultExportFromCjs(x) {
-    return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
-  }
+  var jsxRuntime = { exports: {} };
+  var reactJsxRuntime_production_min = {};
   var react = { exports: {} };
   var react_production_min = {};
   var hasRequiredReact_production_min;
@@ -307,8 +306,36 @@ var __async = (__this, __arguments, generator) => {
     }
     return react.exports;
   }
+  var hasRequiredReactJsxRuntime_production_min;
+  function requireReactJsxRuntime_production_min() {
+    if (hasRequiredReactJsxRuntime_production_min) return reactJsxRuntime_production_min;
+    hasRequiredReactJsxRuntime_production_min = 1;
+    var f = requireReact(), k = Symbol.for("react.element"), l = Symbol.for("react.fragment"), m = Object.prototype.hasOwnProperty, n = f.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner, p = { key: true, ref: true, __self: true, __source: true };
+    function q(c, a, g) {
+      var b, d = {}, e = null, h = null;
+      void 0 !== g && (e = "" + g);
+      void 0 !== a.key && (e = "" + a.key);
+      void 0 !== a.ref && (h = a.ref);
+      for (b in a) m.call(a, b) && !p.hasOwnProperty(b) && (d[b] = a[b]);
+      if (c && c.defaultProps) for (b in a = c.defaultProps, a) void 0 === d[b] && (d[b] = a[b]);
+      return { $$typeof: k, type: c, key: e, ref: h, props: d, _owner: n.current };
+    }
+    reactJsxRuntime_production_min.Fragment = l;
+    reactJsxRuntime_production_min.jsx = q;
+    reactJsxRuntime_production_min.jsxs = q;
+    return reactJsxRuntime_production_min;
+  }
+  var hasRequiredJsxRuntime;
+  function requireJsxRuntime() {
+    if (hasRequiredJsxRuntime) return jsxRuntime.exports;
+    hasRequiredJsxRuntime = 1;
+    {
+      jsxRuntime.exports = requireReactJsxRuntime_production_min();
+    }
+    return jsxRuntime.exports;
+  }
+  var jsxRuntimeExports = requireJsxRuntime();
   var reactExports = requireReact();
-  var React = /* @__PURE__ */ getDefaultExportFromCjs(reactExports);
   var client = {};
   var reactDom = { exports: {} };
   var reactDom_production_min = {};
@@ -6993,894 +7020,83 @@ var __async = (__this, __arguments, generator) => {
     return client;
   }
   var clientExports = requireClient();
-  var jsxRuntime = { exports: {} };
-  var reactJsxRuntime_production_min = {};
-  var hasRequiredReactJsxRuntime_production_min;
-  function requireReactJsxRuntime_production_min() {
-    if (hasRequiredReactJsxRuntime_production_min) return reactJsxRuntime_production_min;
-    hasRequiredReactJsxRuntime_production_min = 1;
-    var f = requireReact(), k = Symbol.for("react.element"), l = Symbol.for("react.fragment"), m = Object.prototype.hasOwnProperty, n = f.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentOwner, p = { key: true, ref: true, __self: true, __source: true };
-    function q(c, a, g) {
-      var b, d = {}, e = null, h = null;
-      void 0 !== g && (e = "" + g);
-      void 0 !== a.key && (e = "" + a.key);
-      void 0 !== a.ref && (h = a.ref);
-      for (b in a) m.call(a, b) && !p.hasOwnProperty(b) && (d[b] = a[b]);
-      if (c && c.defaultProps) for (b in a = c.defaultProps, a) void 0 === d[b] && (d[b] = a[b]);
-      return { $$typeof: k, type: c, key: e, ref: h, props: d, _owner: n.current };
-    }
-    reactJsxRuntime_production_min.Fragment = l;
-    reactJsxRuntime_production_min.jsx = q;
-    reactJsxRuntime_production_min.jsxs = q;
-    return reactJsxRuntime_production_min;
-  }
-  var hasRequiredJsxRuntime;
-  function requireJsxRuntime() {
-    if (hasRequiredJsxRuntime) return jsxRuntime.exports;
-    hasRequiredJsxRuntime = 1;
-    {
-      jsxRuntime.exports = requireReactJsxRuntime_production_min();
-    }
-    return jsxRuntime.exports;
-  }
-  var jsxRuntimeExports = requireJsxRuntime();
-  function useChat(options) {
-    const { apiClient, chatId, onChatIdChange } = options;
-    const [messages, setMessages] = reactExports.useState([]);
-    const [isLoading, setIsLoading] = reactExports.useState(false);
-    const [error, setError] = reactExports.useState(null);
-    const pendingInputRef = reactExports.useRef("");
-    const sendMessage = reactExports.useCallback(
-      (text, mode, selection) => __async(null, null, function* () {
-        var _a;
-        if (!text.trim() || isLoading) return;
-        setIsLoading(true);
-        setError(null);
-        pendingInputRef.current = text;
-        const userMessage = {
-          role: "user",
-          content: text,
-          timestamp: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        setMessages((prev) => [...prev, userMessage]);
-        try {
-          const response = yield apiClient.processText({
-            selection: selection || "",
-            mode,
-            chatHistory: messages,
-            newUserMessage: text,
-            chatId: chatId || void 0,
-            pageUrl: window.location.href
-          });
-          if (response.success && response.data) {
-            const assistantMessage = {
-              role: "assistant",
-              content: response.data.explanation,
-              timestamp: (/* @__PURE__ */ new Date()).toISOString()
-            };
-            setMessages((prev) => [...prev, assistantMessage]);
-            if (response.chatId && response.chatId !== chatId) {
-              onChatIdChange == null ? void 0 : onChatIdChange(response.chatId);
-            }
-          } else {
-            throw new Error(((_a = response.error) == null ? void 0 : _a.message) || "Failed to process message");
-          }
-        } catch (err) {
-          const error2 = err instanceof Error ? err : new Error("Unknown error");
-          setError(error2);
-          setMessages((prev) => prev.slice(0, -1));
-        } finally {
-          setIsLoading(false);
-          pendingInputRef.current = "";
-        }
-      }),
-      [apiClient, messages, chatId, isLoading, onChatIdChange]
+  const MODE_OPTIONS = [
+    { value: "explain", label: "Explain", hint: "Clarify the selection" },
+    { value: "simplify", label: "Simplify", hint: "Make it easier to digest" },
+    { value: "translate", label: "Translate", hint: "Switch to another language" },
+    { value: "general", label: "General", hint: "Ask anything about the content" }
+  ];
+  const CHAT_TAB_ID = "chat";
+  const NOTES_TAB_ID = "notes";
+  const SIDEBAR_ACTIVE_TAB_KEY = "lockin_sidebar_activeTab";
+  const MODE_STORAGE_KEY = "lockinActiveMode";
+  function isValidUUID(value) {
+    if (!value) return false;
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value
     );
-    const clearMessages = reactExports.useCallback(() => {
-      setMessages([]);
-      setError(null);
-    }, []);
-    const loadChatHistory = reactExports.useCallback(
-      (targetChatId) => __async(null, null, function* () {
-        if (!targetChatId) return;
-        setIsLoading(true);
-        setError(null);
-        try {
-          const chatMessages = yield apiClient.getChatMessages(targetChatId);
-          const transformed = chatMessages.map((msg) => ({
-            role: msg.role,
-            content: msg.input_text || msg.output_text || "",
-            timestamp: msg.created_at,
-            messageId: msg.id
-          }));
-          setMessages(transformed);
-        } catch (err) {
-          const error2 = err instanceof Error ? err : new Error("Failed to load chat history");
-          setError(error2);
-        } finally {
-          setIsLoading(false);
-        }
-      }),
-      [apiClient]
-    );
-    reactExports.useEffect(() => {
-      if (chatId) {
-        loadChatHistory(chatId);
-      } else {
-        clearMessages();
-      }
-    }, [chatId]);
-    return {
-      messages,
-      isLoading,
-      error,
-      sendMessage,
-      clearMessages,
-      loadChatHistory
-    };
   }
-  function ChatPanel({
-    apiClient,
-    chatId,
-    onChatIdChange,
-    currentMode,
-    selectedText
-  }) {
-    const { messages, isLoading, error, sendMessage } = useChat({
-      apiClient,
-      chatId,
-      onChatIdChange
-    });
-    const [inputValue, setInputValue] = reactExports.useState("");
-    const messagesEndRef = reactExports.useRef(null);
-    const inputRef = reactExports.useRef(null);
-    const lastSelectedTextRef = reactExports.useRef("");
-    reactExports.useEffect(() => {
-      var _a;
-      (_a = messagesEndRef.current) == null ? void 0 : _a.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
-    reactExports.useEffect(() => {
-      if (selectedText && selectedText.trim() && selectedText !== lastSelectedTextRef.current && !isLoading && messages.length === 0) {
-        lastSelectedTextRef.current = selectedText;
-        sendMessage(selectedText, currentMode, selectedText).catch((err) => {
-          console.error("Failed to send selected text:", err);
-        });
-      } else if (selectedText && selectedText !== lastSelectedTextRef.current) {
-        lastSelectedTextRef.current = selectedText;
-      }
-    }, [selectedText, currentMode, sendMessage, isLoading, messages.length]);
-    const handleSubmit = (e) => __async(null, null, function* () {
-      e.preventDefault();
-      if (!inputValue.trim() || isLoading) return;
-      const text = inputValue.trim();
-      setInputValue("");
-      yield sendMessage(text, currentMode, selectedText);
-    });
-    const sendDisabled = isLoading || !inputValue.trim();
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-panel", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-messages-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-messages", id: "lockin-chat-messages", children: [
-        messages.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-empty", children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Start a conversation by asking a question or selecting text." }) }),
-        messages.map((msg, idx) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: `lockin-chat-message lockin-chat-message-${msg.role}`,
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-message-content", children: msg.content }),
-              msg.timestamp && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-message-time", children: new Date(msg.timestamp).toLocaleTimeString() })
-            ]
-          },
-          idx
-        )),
-        isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-message lockin-chat-message-assistant", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-message-content", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-loading", children: "Thinking..." }) }) }),
-        error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-error", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
-          "Error: ",
-          error.message
-        ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: messagesEndRef })
-      ] }) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-bottom-section", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "lockin-chat-input", onSubmit: handleSubmit, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "input",
-          {
-            ref: inputRef,
-            className: "lockin-chat-input-field",
-            id: "lockin-chat-input",
-            name: "lockin-chat-input",
-            placeholder: "Ask a follow-up question...",
-            value: inputValue,
-            onChange: (e) => setInputValue(e.target.value),
-            disabled: isLoading
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            className: "lockin-send-btn",
-            type: "submit",
-            disabled: sendDisabled,
-            children: "Send"
-          }
-        )
-      ] }) })
-    ] });
-  }
-  function createEmptyNote(prefill = {}) {
-    const now = (/* @__PURE__ */ new Date()).toISOString();
-    return {
-      id: prefill.id || null,
-      title: prefill.title || "",
-      content: prefill.content || "",
-      sourceUrl: prefill.sourceUrl || "",
-      courseCode: prefill.courseCode || null,
-      linkedLabel: prefill.linkedLabel || "",
-      sourceSelection: prefill.sourceSelection || "",
-      noteType: prefill.noteType || "manual",
-      tags: prefill.tags || [],
-      createdAt: prefill.createdAt || now,
-      updatedAt: prefill.updatedAt || now,
-      isStarred: prefill.isStarred || false
-    };
-  }
-  function normalizeNote(rawNote) {
-    return {
-      id: rawNote.id || rawNote.note_id || null,
-      title: rawNote.title || "Untitled Note",
-      content: rawNote.content || "",
-      sourceUrl: rawNote.source_url || rawNote.sourceUrl || "",
-      courseCode: rawNote.course_code || rawNote.courseCode || null,
-      sourceSelection: rawNote.source_selection || rawNote.sourceSelection || "",
-      noteType: rawNote.note_type || rawNote.noteType || "manual",
-      tags: Array.isArray(rawNote.tags) ? rawNote.tags : [],
-      createdAt: rawNote.created_at || rawNote.createdAt || null,
-      updatedAt: rawNote.updated_at || rawNote.updatedAt || rawNote.created_at || rawNote.createdAt || null,
-      linkedLabel: rawNote.linkedLabel || rawNote.sourceSelection || rawNote.title || "",
-      isStarred: rawNote.is_starred || rawNote.isStarred || false
-    };
-  }
-  function useNotes(options) {
-    const { apiClient, courseCode, sourceUrl = typeof window !== "undefined" ? window.location.href : "" } = options;
-    const [activeNote, setActiveNote] = reactExports.useState(createEmptyNote());
-    const [notes, setNotes] = reactExports.useState([]);
-    const [isLoading, setIsLoading] = reactExports.useState(false);
-    const [error, setError] = reactExports.useState(null);
-    const [viewMode, setViewMode] = reactExports.useState("current");
-    const [filter, setFilter] = reactExports.useState("page");
-    const [searchQuery, setSearchQuery] = reactExports.useState("");
-    const [saveStatus, setSaveStatus] = reactExports.useState("Saved · just now");
-    const [hasChanges, setHasChanges] = reactExports.useState(false);
-    const loadNotes = reactExports.useCallback(() => __async(null, null, function* () {
-      setIsLoading(true);
-      setError(null);
-      try {
-        let params = { limit: 50 };
-        if (filter === "page") {
-          params.sourceUrl = sourceUrl;
-        } else if (filter === "course" && courseCode) {
-          params.courseCode = courseCode;
-        }
-        const apiNotes = yield apiClient.listNotes(params);
-        const normalized = Array.isArray(apiNotes) ? apiNotes.map((note) => normalizeNote(note)) : [];
-        setNotes(normalized);
-        if (activeNote == null ? void 0 : activeNote.id) {
-          const latest = normalized.find((n) => n.id === activeNote.id);
-          if (latest) {
-            setActiveNote(__spreadValues({}, latest));
-          }
-        }
-      } catch (err) {
-        const error2 = err instanceof Error ? err : new Error("Failed to load notes");
-        setError(error2);
-      } finally {
-        setIsLoading(false);
-      }
-    }), [apiClient, filter, courseCode, sourceUrl, activeNote.id]);
-    const createNote = reactExports.useCallback(() => {
-      const newNote = createEmptyNote();
-      newNote.sourceUrl = sourceUrl;
-      newNote.courseCode = courseCode || null;
-      setActiveNote(newNote);
-      setHasChanges(false);
-      setSaveStatus("Unsaved");
-    }, [sourceUrl, courseCode]);
-    const saveNote = reactExports.useCallback(() => __async(null, null, function* () {
-      if (!activeNote.content.trim()) {
-        setSaveStatus("Cannot save empty note");
-        return;
-      }
-      setIsLoading(true);
-      setError(null);
-      try {
-        if (activeNote.id) {
-          yield apiClient.updateNote(activeNote.id, {
-            title: activeNote.title,
-            content: activeNote.content,
-            sourceSelection: activeNote.sourceSelection,
-            sourceUrl: activeNote.sourceUrl,
-            courseCode: activeNote.courseCode,
-            noteType: activeNote.noteType,
-            tags: activeNote.tags
-          });
-        } else {
-          const created = yield apiClient.createNote({
-            title: activeNote.title,
-            content: activeNote.content,
-            sourceSelection: activeNote.sourceSelection,
-            sourceUrl: activeNote.sourceUrl,
-            courseCode: activeNote.courseCode,
-            noteType: activeNote.noteType,
-            tags: activeNote.tags
-          });
-          if (created == null ? void 0 : created.id) {
-            setActiveNote(__spreadProps(__spreadValues({}, activeNote), { id: created.id }));
-          }
-        }
-        setSaveStatus("Saved · just now");
-        setHasChanges(false);
-        yield loadNotes();
-      } catch (err) {
-        const error2 = err instanceof Error ? err : new Error("Failed to save note");
-        setError(error2);
-        setSaveStatus("Failed to save");
-      } finally {
-        setIsLoading(false);
-      }
-    }), [activeNote, apiClient, loadNotes]);
-    const updateNote = reactExports.useCallback(
-      (note) => __async(null, null, function* () {
-        if (!note.id) return;
-        setIsLoading(true);
-        try {
-          yield apiClient.updateNote(note.id, {
-            title: note.title,
-            content: note.content,
-            sourceSelection: note.sourceSelection,
-            sourceUrl: note.sourceUrl,
-            courseCode: note.courseCode,
-            noteType: note.noteType,
-            tags: note.tags
-          });
-          yield loadNotes();
-          if (activeNote.id === note.id) {
-            setActiveNote(note);
-          }
-        } catch (err) {
-          const error2 = err instanceof Error ? err : new Error("Failed to update note");
-          setError(error2);
-        } finally {
-          setIsLoading(false);
-        }
-      }),
-      [apiClient, loadNotes, activeNote.id]
-    );
-    const deleteNote = reactExports.useCallback(
-      (noteId) => __async(null, null, function* () {
-        setIsLoading(true);
-        try {
-          yield apiClient.deleteNote(noteId);
-          if (activeNote.id === noteId) {
-            createNote();
-          }
-          yield loadNotes();
-        } catch (err) {
-          const error2 = err instanceof Error ? err : new Error("Failed to delete note");
-          setError(error2);
-        } finally {
-          setIsLoading(false);
-        }
-      }),
-      [apiClient, loadNotes, activeNote.id, createNote]
-    );
-    const duplicateNote = reactExports.useCallback(
-      (noteId) => __async(null, null, function* () {
-        const note = notes.find((n) => n.id === noteId);
-        if (!note) return;
-        setIsLoading(true);
-        try {
-          const duplicated = yield apiClient.createNote({
-            title: `${note.title} (Copy)`,
-            content: note.content,
-            sourceSelection: note.sourceSelection,
-            sourceUrl: note.sourceUrl,
-            courseCode: note.courseCode,
-            noteType: note.noteType,
-            tags: note.tags
-          });
-          if (duplicated == null ? void 0 : duplicated.id) {
-            yield loadNotes();
-            setActiveNote(normalizeNote(duplicated));
-          }
-        } catch (err) {
-          const error2 = err instanceof Error ? err : new Error("Failed to duplicate note");
-          setError(error2);
-        } finally {
-          setIsLoading(false);
-        }
-      }),
-      [apiClient, notes, loadNotes]
-    );
-    reactExports.useEffect(() => {
-      if (viewMode === "all") {
-        loadNotes();
-      }
-    }, [filter, viewMode]);
-    return {
-      activeNote,
-      setActiveNote,
-      notes,
-      isLoading,
-      error,
-      viewMode,
-      setViewMode,
-      filter,
-      setFilter,
-      searchQuery,
-      setSearchQuery,
-      createNote,
-      saveNote,
-      updateNote,
-      deleteNote,
-      duplicateNote,
-      loadNotes,
-      saveStatus,
-      hasChanges
-    };
-  }
-  function escapeHtml(text) {
-    if (typeof text !== "string") return "";
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
-  function formatTimestamp(timestamp) {
-    if (!timestamp) return "Just now";
-    const date = new Date(timestamp);
+  function formatTimeLabel(iso) {
+    if (!iso) return "";
+    const date = new Date(iso);
     if (Number.isNaN(date.getTime())) return "";
-    const diff = Date.now() - date.getTime();
-    const minutes = Math.floor(diff / 6e4);
-    if (minutes < 60) {
-      return minutes <= 1 ? "Just now" : `${minutes} min ago`;
-    }
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) {
-      return `${hours} hr${hours > 1 ? "s" : ""} ago`;
-    }
-    return date.toLocaleDateString();
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-  function buildFallbackChatTitle(timestamp) {
-    if (!timestamp) return "Untitled chat";
-    const date = new Date(timestamp);
-    if (Number.isNaN(date.getTime())) return "Untitled chat";
-    return `Chat from ${date.toISOString().split("T")[0]}`;
+  function relativeLabel(iso) {
+    if (!iso) return "just now";
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return "just now";
+    const delta = Date.now() - date.getTime();
+    const minutes = Math.round(delta / 6e4);
+    if (minutes <= 1) return "just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.round(hours / 24);
+    return `${days}d ago`;
   }
-  function NotesPanel({
-    apiClient,
-    courseCode,
-    sourceUrl
+  function textSnippet(text, length = 80) {
+    if (!text) return "Untitled chat";
+    if (text.length <= length) return text;
+    return `${text.slice(0, length)}...`;
+  }
+  function ModeSelector({
+    value,
+    onSelect
   }) {
-    const {
-      activeNote,
-      setActiveNote,
-      notes,
-      isLoading,
-      error,
-      viewMode,
-      setViewMode,
-      filter,
-      setFilter,
-      searchQuery,
-      setSearchQuery,
-      createNote,
-      saveNote,
-      deleteNote,
-      duplicateNote,
-      saveStatus,
-      hasChanges
-    } = useNotes({ apiClient, courseCode, sourceUrl });
-    const editorRef = reactExports.useRef(null);
-    const [isSaving, setIsSaving] = reactExports.useState(false);
+    const [isOpen, setIsOpen] = reactExports.useState(false);
+    const toggle = () => setIsOpen((prev) => !prev);
     reactExports.useEffect(() => {
-      if (editorRef.current && viewMode === "current") {
-        editorRef.current.innerHTML = activeNote.content || "";
-      }
-    }, [activeNote.id, viewMode]);
-    reactExports.useEffect(() => {
-      if (!hasChanges || !activeNote.content.trim()) return;
-      const timer = setTimeout(() => __async(null, null, function* () {
-        setIsSaving(true);
-        yield saveNote();
-        setIsSaving(false);
-      }), 2e3);
-      return () => clearTimeout(timer);
-    }, [activeNote.content, hasChanges, saveNote]);
-    const handleEditorInput = () => {
-      if (!editorRef.current) return;
-      setActiveNote(__spreadProps(__spreadValues({}, activeNote), {
-        content: editorRef.current.innerHTML
-      }));
-    };
-    const handleTitleChange = (e) => {
-      setActiveNote(__spreadProps(__spreadValues({}, activeNote), { title: e.target.value }));
-    };
-    const handleToolbarClick = (command) => {
-      var _a;
-      document.execCommand(command, false);
-      (_a = editorRef.current) == null ? void 0 : _a.focus();
-    };
-    const getNotesCourseLabel = () => {
-      if (courseCode) return courseCode;
-      if (sourceUrl) {
-        try {
-          const url = new URL(sourceUrl);
-          return url.hostname;
-        } catch (e) {
-          return "Unknown";
-        }
-      }
-      return "All notes";
-    };
-    const filteredNotes = notes.filter((note) => {
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return note.title.toLowerCase().includes(query) || note.content.toLowerCase().includes(query);
-      }
-      return true;
-    });
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-shell", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-heading", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-heading-title", children: "Notes" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-heading-subtitle", children: escapeHtml(getNotesCourseLabel()) })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "div",
-          {
-            className: "lockin-notes-toggle",
-            role: "group",
-            "aria-label": "Notes view",
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: `lockin-notes-toggle-btn ${viewMode === "current" ? "is-active" : ""}`,
-                  onClick: () => setViewMode("current"),
-                  "aria-pressed": viewMode === "current",
-                  children: "Current"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: `lockin-notes-toggle-btn ${viewMode === "all" ? "is-active" : ""}`,
-                  onClick: () => setViewMode("all"),
-                  "aria-pressed": viewMode === "all",
-                  children: "All notes"
-                }
-              )
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-actions", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            className: "lockin-btn-primary lockin-new-note-btn",
-            onClick: createNote,
-            title: "Create a new note",
-            children: "+ New note"
-          }
-        ) })
+      const handler = () => setIsOpen(false);
+      document.addEventListener("click", handler);
+      return () => document.removeEventListener("click", handler);
+    }, []);
+    const current = MODE_OPTIONS.find((option) => option.value === value);
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-mode-selector-container", onClick: (e) => e.stopPropagation(), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "lockin-mode-pill", onClick: toggle, "aria-haspopup": "listbox", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-icon", children: "*" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (current == null ? void 0 : current.label) || "Mode" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-chevron", children: "v" })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-body", children: [
-        viewMode === "current" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-current-view is-active", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-meta-row", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-link", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-link-label", children: "Linked to:" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-link-target", children: activeNote.sourceUrl ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "a",
-                {
-                  href: activeNote.sourceUrl,
-                  target: "_blank",
-                  rel: "noopener noreferrer",
-                  children: activeNote.linkedLabel || activeNote.sourceUrl
-                }
-              ) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-link-empty", children: "None" }) })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-stamps", children: saveStatus })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-title-wrap", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
-            {
-              className: "lockin-note-title-input",
-              placeholder: "Note title...",
-              value: activeNote.title || "",
-              onChange: handleTitleChange
-            }
-          ) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar-left", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: "lockin-note-tool-btn",
-                  onClick: () => handleToolbarClick("bold"),
-                  title: "Bold (Ctrl/Cmd+B)",
-                  children: "B"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: "lockin-note-tool-btn",
-                  onClick: () => handleToolbarClick("italic"),
-                  title: "Italic (Ctrl/Cmd+I)",
-                  children: "I"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: "lockin-note-tool-btn",
-                  onClick: () => handleToolbarClick("underline"),
-                  title: "Underline (Ctrl/Cmd+U)",
-                  children: "U"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-toolbar-divider" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: "lockin-note-tool-btn",
-                  onClick: () => handleToolbarClick("insertUnorderedList"),
-                  title: "Bulleted list",
-                  children: "•"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: "lockin-note-tool-btn",
-                  onClick: () => handleToolbarClick("insertOrderedList"),
-                  title: "Numbered list",
-                  children: "1."
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar-right", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: "lockin-note-menu-trigger",
-                  "aria-haspopup": "true",
-                  title: "More options",
-                  children: "⋯"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-menu", role: "menu", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    type: "button",
-                    onClick: () => activeNote.id && duplicateNote(activeNote.id),
-                    children: "Duplicate note"
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    type: "button",
-                    onClick: () => activeNote.id && deleteNote(activeNote.id),
-                    className: "danger",
-                    children: "Delete note"
-                  }
-                )
-              ] })
+      isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-mode-expandable", role: "listbox", children: MODE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          className: "lockin-mode-option",
+          onClick: () => {
+            onSelect(option.value);
+            setIsOpen(false);
+          },
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-option-icon", children: option.value === "translate" ? "T" : "-" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: option.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "11px", color: "#6b7280" }, children: option.hint })
             ] })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-editor-card", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              ref: editorRef,
-              className: "lockin-note-editor",
-              contentEditable: true,
-              "data-placeholder": "Write your note here. Add details, context, and your own thoughts…",
-              onInput: handleEditorInput
-            }
-          ) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-footer-status", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-status-text", children: isSaving ? "Saving..." : saveStatus }) })
-        ] }),
-        viewMode === "all" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-all-notes-view is-active", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-filter-bar", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-filter-left", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-filter-label", children: "Showing:" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "select",
-                {
-                  className: "lockin-notes-filter-select",
-                  value: filter,
-                  onChange: (e) => setFilter(e.target.value),
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "page", children: "This page" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "course", children: "This course" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All notes" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "starred", children: "Starred" })
-                  ]
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-search", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "input",
-              {
-                className: "lockin-notes-search-input",
-                placeholder: "Search notes…",
-                value: searchQuery,
-                onChange: (e) => setSearchQuery(e.target.value)
-              }
-            ) })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-list", children: [
-            isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-empty", children: "Loading..." }),
-            error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-empty", children: "Failed to load notes. Please try again." }),
-            !isLoading && !error && filteredNotes.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-empty", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-empty-title", children: "No notes yet." }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-empty-subtitle", children: "Create one with + New note or save from Chat." })
-            ] }),
-            filteredNotes.map((note) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "div",
-              {
-                className: "lockin-note-card",
-                onClick: () => setActiveNote(note),
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: note.title || "Untitled" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-preview", children: note.content.replace(/<[^>]*>/g, "").substring(0, 100) }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-meta", children: [
-                    note.courseCode && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-card-course", children: note.courseCode }),
-                    note.updatedAt && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-card-time", children: new Date(note.updatedAt).toLocaleDateString() })
-                  ] })
-                ]
-              },
-              note.id || `temp-${note.title}`
-            ))
-          ] })
-        ] })
-      ] })
+          ]
+        },
+        option.value
+      )) })
     ] });
-  }
-  function useChatHistory(options) {
-    const { apiClient, limit = 10 } = options;
-    const [chats, setChats] = reactExports.useState([]);
-    const [isLoading, setIsLoading] = reactExports.useState(false);
-    const [error, setError] = reactExports.useState(null);
-    const loadChats = reactExports.useCallback(() => __async(null, null, function* () {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const recentChats = yield apiClient.getRecentChats({ limit });
-        const transformed = Array.isArray(recentChats) ? recentChats.map((chat) => ({
-          id: chat.id,
-          title: chat.title || void 0,
-          createdAt: chat.created_at,
-          updatedAt: chat.updated_at,
-          lastMessageAt: chat.last_message_at || void 0,
-          messageCount: chat.message_count || void 0
-        })) : [];
-        setChats(transformed);
-      } catch (err) {
-        const error2 = err instanceof Error ? err : new Error("Failed to load chats");
-        setError(error2);
-      } finally {
-        setIsLoading(false);
-      }
-    }), [apiClient, limit]);
-    const deleteChat = reactExports.useCallback(
-      (chatId) => __async(null, null, function* () {
-        try {
-          yield apiClient.deleteChat(chatId);
-          setChats((prev) => prev.filter((chat) => chat.id !== chatId));
-        } catch (err) {
-          const error2 = err instanceof Error ? err : new Error("Failed to delete chat");
-          setError(error2);
-          throw error2;
-        }
-      }),
-      [apiClient]
-    );
-    const createNewChat = reactExports.useCallback(() => {
-    }, []);
-    reactExports.useEffect(() => {
-      loadChats();
-    }, []);
-    return {
-      chats,
-      isLoading,
-      error,
-      loadChats,
-      deleteChat,
-      createNewChat
-    };
-  }
-  function ChatHistoryPanel({
-    apiClient,
-    currentChatId,
-    onChatSelect,
-    onNewChat
-  }) {
-    const { chats, isLoading, error, deleteChat } = useChatHistory({
-      apiClient
-    });
-    const handleChatClick = (chatId) => {
-      onChatSelect == null ? void 0 : onChatSelect(chatId);
-    };
-    const handleDeleteClick = (e, chatId) => __async(null, null, function* () {
-      e.stopPropagation();
-      if (confirm("Delete this chat?")) {
-        try {
-          yield deleteChat(chatId);
-          if (currentChatId === chatId) {
-            onChatSelect == null ? void 0 : onChatSelect(null);
-          }
-        } catch (err) {
-          console.error("Failed to delete chat:", err);
-        }
-      }
-    });
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-panel", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-actions", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-label", children: "Chats" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-new-chat-btn", onClick: onNewChat, children: "+ New Chat" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-list", children: [
-        isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-history-empty", children: "Loading chats..." }),
-        error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-history-empty", children: "Failed to load chats. Please try again." }),
-        !isLoading && !error && chats.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-history-empty", children: "No chats yet." }),
-        chats.map((chat) => {
-          const isActive = chat.id === currentChatId;
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: `lockin-history-item ${isActive ? "active" : ""}`,
-              onClick: () => handleChatClick(chat.id),
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-item-content", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-title", children: chat.title || buildFallbackChatTitle(chat.id) }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-meta", children: formatTimestamp(chat.lastMessageAt || chat.createdAt) })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    className: "lockin-history-item-menu",
-                    onClick: (e) => handleDeleteClick(e, chat.id),
-                    title: "Delete chat",
-                    "aria-label": "Delete chat menu",
-                    children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-menu-dots", children: "…" })
-                  }
-                )
-              ]
-            },
-            chat.id
-          );
-        })
-      ] })
-    ] });
-  }
-  function Tabs({
-    tabs,
-    activeTab,
-    onTabChange,
-    variant = "line"
-  }) {
-    const containerClasses = variant === "line" ? "flex gap-0 border-b border-gray-200" : "flex gap-2 bg-gray-100 p-1 rounded-lg";
-    const tabClasses = (isActive) => variant === "line" ? `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${isActive ? "border-blue-600 text-blue-600" : "border-transparent text-gray-600 hover:text-gray-900"}` : `px-4 py-2 text-sm font-medium transition-colors rounded-md ${isActive ? "bg-white text-blue-600 shadow-sm" : "text-gray-600 hover:text-gray-900"}`;
-    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: containerClasses, children: tabs.map((tab) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "button",
-      {
-        className: tabClasses(tab.id === activeTab),
-        onClick: () => onTabChange(tab.id),
-        children: [
-          tab.icon && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline mr-1", children: tab.icon }),
-          tab.label
-        ]
-      },
-      tab.id
-    )) });
   }
   function LockInSidebar({
     apiClient,
@@ -7889,198 +7105,728 @@ var __async = (__this, __arguments, generator) => {
     currentMode,
     selectedText,
     pageContext,
-    storage
+    storage,
+    activeTabExternal
   }) {
-    const [activeTab, setActiveTab] = reactExports.useState("chat");
-    const [isHistoryPanelOpen, setIsHistoryPanelOpen] = reactExports.useState(false);
-    const [currentChatId, setCurrentChatId] = reactExports.useState(null);
+    var _a;
+    const [activeTab, setActiveTab] = reactExports.useState(activeTabExternal || CHAT_TAB_ID);
+    const [mode, setMode] = reactExports.useState(currentMode);
+    const [messages, setMessages] = reactExports.useState([]);
+    const [recentChats, setRecentChats] = reactExports.useState([]);
+    const [activeHistoryId, setActiveHistoryId] = reactExports.useState(null);
+    const [isHistoryOpen, setIsHistoryOpen] = reactExports.useState(false);
+    const [chatId, setChatId] = reactExports.useState(null);
+    const [inputValue, setInputValue] = reactExports.useState("");
+    const [chatError, setChatError] = reactExports.useState(null);
+    const [isSending, setIsSending] = reactExports.useState(false);
+    const [notesView, setNotesView] = reactExports.useState("current");
+    const [noteTitle, setNoteTitle] = reactExports.useState("");
+    const [noteContent, setNoteContent] = reactExports.useState("");
+    const [noteStatus, setNoteStatus] = reactExports.useState("saved");
+    const [lastSavedAt, setLastSavedAt] = reactExports.useState(null);
+    const [notes, setNotes] = reactExports.useState([]);
+    const [notesFilter, setNotesFilter] = reactExports.useState("course");
+    const [notesSearch, setNotesSearch] = reactExports.useState("");
+    const layoutTimeoutRef = reactExports.useRef(null);
+    const previousSelectionRef = reactExports.useRef();
+    const courseCode = (pageContext == null ? void 0 : pageContext.courseContext.courseCode) || null;
+    const pageUrl = (pageContext == null ? void 0 : pageContext.url) || (typeof window !== "undefined" ? window.location.href : "");
+    const noteLinkedLabel = (pageContext == null ? void 0 : pageContext.courseContext.courseCode) || "None";
+    const filteredNotes = reactExports.useMemo(() => {
+      const searchTerm = notesSearch.trim().toLowerCase();
+      return notes.filter((note) => {
+        const matchesFilter = notesFilter === "all" || notesFilter === "course" && note.courseCode === courseCode || notesFilter === "page" && pageUrl && note.snippet.includes(pageUrl) || notesFilter === "starred" && false;
+        const matchesSearch = !searchTerm || note.title.toLowerCase().includes(searchTerm) || note.snippet.toLowerCase().includes(searchTerm);
+        return matchesFilter && matchesSearch;
+      });
+    }, [courseCode, notes, notesFilter, notesSearch, pageUrl]);
+    const applySplitLayout = reactExports.useCallback(
+      (open) => {
+        const body = document.body;
+        const html = document.documentElement;
+        if (!body || !html) return;
+        if (open) {
+          body.classList.add("lockin-sidebar-open");
+          html.classList.add("lockin-sidebar-transitioning");
+        } else {
+          body.classList.remove("lockin-sidebar-open");
+        }
+        if (layoutTimeoutRef.current) {
+          window.clearTimeout(layoutTimeoutRef.current);
+        }
+        layoutTimeoutRef.current = window.setTimeout(() => {
+          html.classList.remove("lockin-sidebar-transitioning");
+        }, 320);
+      },
+      []
+    );
     reactExports.useEffect(() => {
       if (!storage) return;
-      storage.get("lockin_sidebar_activeTab").then((tab) => {
-        if (tab === "chat" || tab === "notes") {
+      storage.get(SIDEBAR_ACTIVE_TAB_KEY).then((tab) => {
+        if (tab === CHAT_TAB_ID || tab === NOTES_TAB_ID) {
           setActiveTab(tab);
         }
       });
     }, [storage]);
     reactExports.useEffect(() => {
       if (!storage) return;
-      storage.set("lockin_sidebar_activeTab", activeTab);
+      storage.set(SIDEBAR_ACTIVE_TAB_KEY, activeTab).catch(() => {
+      });
     }, [activeTab, storage]);
-    const courseCode = (pageContext == null ? void 0 : pageContext.courseContext.courseCode) || null;
-    const sourceUrl = (pageContext == null ? void 0 : pageContext.url) || (typeof window !== "undefined" ? window.location.href : "");
-    if (!isOpen) {
-      return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    reactExports.useEffect(() => {
+      if (!storage) return;
+      storage.set(MODE_STORAGE_KEY, mode).catch(() => {
+      });
+    }, [mode, storage]);
+    reactExports.useEffect(() => {
+      if (!activeTabExternal) return;
+      if (activeTabExternal === activeTab) return;
+      setActiveTab(activeTabExternal);
+    }, [activeTabExternal, activeTab]);
+    reactExports.useEffect(() => {
+      applySplitLayout(isOpen);
+      return () => {
+        applySplitLayout(false);
+        if (layoutTimeoutRef.current) {
+          window.clearTimeout(layoutTimeoutRef.current);
+        }
+      };
+    }, [applySplitLayout, isOpen]);
+    reactExports.useEffect(() => {
+      const handleKeyDown = (event) => {
+        if (event.key === "Escape" && isOpen) {
+          onToggle();
+        }
+      };
+      if (isOpen) {
+        document.addEventListener("keydown", handleKeyDown);
+        return () => document.removeEventListener("keydown", handleKeyDown);
+      }
+      return void 0;
+    }, [isOpen, onToggle]);
+    reactExports.useEffect(() => {
+      setMode(currentMode);
+    }, [currentMode]);
+    const upsertHistory = reactExports.useCallback(
+      (item, previousId) => {
+        setRecentChats((prev) => {
+          const filtered = prev.filter(
+            (history) => history.id !== item.id && (!previousId || history.id !== previousId)
+          );
+          return [item, ...filtered].slice(0, 12);
+        });
+      },
+      []
+    );
+    const triggerProcess = reactExports.useCallback(
+      (_0) => __async(null, [_0], function* ({
+        selection,
+        newUserMessage,
+        chatHistory,
+        provisionalChatId
+      }) {
+        var _a2;
+        const trimmedSelection = selection || selectedText || "";
+        if (!trimmedSelection && !newUserMessage) return;
+        setChatError(null);
+        setIsSending(true);
+        const pendingId = `assistant-${Date.now()}`;
+        const pendingMessage = {
+          id: pendingId,
+          role: "assistant",
+          content: "Thinking...",
+          timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+          mode,
+          isPending: true
+        };
+        setMessages((prev) => [...prev, pendingMessage]);
+        try {
+          const baseHistory = (chatHistory || messages).map((message) => ({
+            role: message.role,
+            content: message.content
+          }));
+          const apiChatId = isValidUUID(chatId) ? chatId : void 0;
+          const response = (apiClient == null ? void 0 : apiClient.processText) ? yield apiClient.processText({
+            selection: trimmedSelection,
+            mode,
+            chatHistory: baseHistory,
+            newUserMessage,
+            chatId: apiChatId,
+            pageUrl,
+            courseCode
+          }) : null;
+          const explanation = ((_a2 = response == null ? void 0 : response.data) == null ? void 0 : _a2.explanation) || `(${mode}) ${newUserMessage || trimmedSelection}`;
+          const resolvedChatId = (response == null ? void 0 : response.chatId) || chatId || provisionalChatId || null;
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          setMessages(
+            (prev) => prev.map(
+              (message) => message.id === pendingId ? __spreadProps(__spreadValues({}, message), { content: explanation, isPending: false }) : message
+            )
+          );
+          if (resolvedChatId) {
+            setChatId(resolvedChatId);
+            setActiveHistoryId(resolvedChatId);
+            upsertHistory(
+              {
+                id: resolvedChatId,
+                title: textSnippet(newUserMessage || trimmedSelection, 48),
+                updatedAt: now,
+                lastMessage: explanation
+              },
+              provisionalChatId
+            );
+          }
+        } catch (error) {
+          const fallback = (error == null ? void 0 : error.message) || "We could not process this request. Try again in a moment.";
+          setChatError(fallback);
+          setMessages(
+            (prev) => prev.map(
+              (message) => message.id === pendingId ? __spreadProps(__spreadValues({}, message), { content: fallback, isPending: false }) : message
+            )
+          );
+        } finally {
+          setIsSending(false);
+        }
+      }),
+      [
+        apiClient,
+        chatId,
+        courseCode,
+        messages,
+        mode,
+        pageUrl,
+        selectedText,
+        upsertHistory
+      ]
+    );
+    const startNewChat = reactExports.useCallback(
+      (text, source = "selection") => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        const provisionalChatId = `chat-${Date.now()}`;
+        const userMessage = {
+          id: `${provisionalChatId}-user`,
+          role: "user",
+          content: trimmed,
+          timestamp: now,
+          mode,
+          source
+        };
+        setActiveTab(CHAT_TAB_ID);
+        setIsHistoryOpen(false);
+        setChatError(null);
+        setMessages([userMessage]);
+        setChatId(null);
+        setActiveHistoryId(provisionalChatId);
+        upsertHistory({
+          id: provisionalChatId,
+          title: textSnippet(trimmed, 48),
+          updatedAt: now,
+          lastMessage: trimmed
+        });
+        triggerProcess({
+          selection: trimmed,
+          chatHistory: [userMessage],
+          provisionalChatId
+        });
+      },
+      [mode, triggerProcess, upsertHistory]
+    );
+    reactExports.useEffect(() => {
+      if (!selectedText || selectedText.trim().length === 0) return;
+      if (previousSelectionRef.current === selectedText) return;
+      previousSelectionRef.current = selectedText;
+      startNewChat(selectedText, "selection");
+    }, [selectedText, startNewChat]);
+    const persistNoteDraft = reactExports.useCallback(
+      (draftId) => {
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        const id = draftId || `note-${Date.now()}`;
+        const nextNote = {
+          id,
+          title: noteTitle.trim() || "Untitled note",
+          snippet: noteContent.trim() || "Write your note here...",
+          updatedAt: now,
+          courseCode
+        };
+        setNotes((prev) => {
+          const filtered = prev.filter((note) => note.id !== id);
+          return [nextNote, ...filtered];
+        });
+        setLastSavedAt(now);
+        setNoteStatus("saved");
+        return id;
+      },
+      [courseCode, noteContent, noteTitle]
+    );
+    reactExports.useEffect(() => {
+      if (noteStatus !== "saving") return;
+      const timeout = window.setTimeout(() => {
+        persistNoteDraft();
+      }, 650);
+      return () => window.clearTimeout(timeout);
+    }, [noteStatus, persistNoteDraft]);
+    reactExports.useEffect(() => {
+      const loadHistory = () => __async(null, null, function* () {
+        if (!(apiClient == null ? void 0 : apiClient.getRecentChats)) return;
+        try {
+          const result = yield apiClient.getRecentChats({ limit: 8 });
+          if (Array.isArray(result)) {
+            const mapped = result.map((item) => ({
+              id: item.id || `chat-${Math.random().toString(16).slice(2)}`,
+              title: item.title || "Conversation",
+              updatedAt: item.updated_at || item.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+              lastMessage: item.lastMessage || ""
+            }));
+            setRecentChats(mapped);
+          }
+        } catch (e) {
+        }
+      });
+      loadHistory();
+    }, [apiClient]);
+    const handleSend = () => {
+      const trimmed = inputValue.trim();
+      if (!trimmed) return;
+      const userMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: trimmed,
+        timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+        mode,
+        source: "followup"
+      };
+      setMessages((prev) => {
+        const next = [...prev, userMessage];
+        const provisionalChatId = isValidUUID(chatId) ? chatId : activeHistoryId != null ? activeHistoryId : void 0;
+        triggerProcess({
+          selection: selectedText || "",
+          newUserMessage: trimmed,
+          chatHistory: next,
+          provisionalChatId
+        });
+        return next;
+      });
+      setInputValue("");
+    };
+    const handleHistorySelect = (item) => __async(null, null, function* () {
+      setActiveTab(CHAT_TAB_ID);
+      setIsHistoryOpen(false);
+      setActiveHistoryId(item.id);
+      setChatId(item.id);
+      setChatError(null);
+      if (!(apiClient == null ? void 0 : apiClient.getChatMessages)) {
+        setMessages([
+          {
+            id: `history-${item.id}-user`,
+            role: "user",
+            content: item.title,
+            timestamp: item.updatedAt,
+            mode
+          }
+        ]);
+        return;
+      }
+      setIsSending(true);
+      try {
+        const response = yield apiClient.getChatMessages(item.id);
+        if (Array.isArray(response)) {
+          const normalized = response.map((message) => ({
+            id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
+            role: message.role === "assistant" ? "assistant" : "user",
+            content: message.content || message.output_text || message.input_text || "Message",
+            timestamp: message.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+            mode: message.mode || mode
+          }));
+          setMessages(normalized);
+        }
+      } catch (error) {
+        setChatError(
+          (error == null ? void 0 : error.message) || "Could not load this conversation. Try refreshing the page."
+        );
+      } finally {
+        setIsSending(false);
+      }
+    });
+    const startBlankChat = () => {
+      startNewChat("Ask anything about this page", "followup");
+    };
+    const handleNewNote = () => {
+      setNotesView("current");
+      setNoteTitle("");
+      setNoteContent("");
+      setNoteStatus("saved");
+      setLastSavedAt(null);
+    };
+    const notesFooterLabel = reactExports.useMemo(() => {
+      if (noteStatus === "saving") return "Saving...";
+      if (noteStatus === "saved") {
+        return lastSavedAt ? `Saved - ${relativeLabel(lastSavedAt)}` : "Saved";
+      }
+      return "Not saved";
+    }, [lastSavedAt, noteStatus]);
+    const renderChatMessages = () => {
+      if (!messages.length) {
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-placeholder", children: "Ctrl/Cmd + highlight text to start a chat, or type a question below." });
+      }
+      return messages.map((message) => {
+        const roleClass = message.role === "assistant" ? "lockin-chat-msg lockin-chat-msg-assistant" : "lockin-chat-msg lockin-chat-msg-user";
+        const bubbleClass = message.role === "assistant" ? "lockin-chat-bubble" : "lockin-chat-bubble";
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: roleClass, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: `${bubbleClass}${message.isPending ? " lockin-chat-msg-pending" : ""}`,
+              children: message.content
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-message-time", children: [
+            message.source === "selection" ? "Selection - " : "",
+            formatTimeLabel(message.timestamp)
+          ] })
+        ] }, message.id);
+      });
+    };
+    const renderNotesView = () => /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-container", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-shell", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-heading-title", children: "Notes" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-heading-subtitle", children: courseCode ? `Course: ${courseCode}` : "No course detected" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-toggle", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `lockin-notes-toggle-btn ${notesView === "current" ? "is-active" : ""}`,
+              onClick: () => setNotesView("current"),
+              children: "Current"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: `lockin-notes-toggle-btn ${notesView === "all" ? "is-active" : ""}`,
+              onClick: () => setNotesView("all"),
+              children: "All notes"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-actions", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-btn-primary", onClick: handleNewNote, children: "+ New note" }) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-body", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: `lockin-note-current-view ${notesView === "current" ? "is-active" : ""}`,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-meta-row", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-link-label", children: "Linked to:" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-link-target", children: /* @__PURE__ */ jsxRuntimeExports.jsx("a", { href: pageUrl, target: "_blank", rel: "noreferrer", children: noteLinkedLabel }) })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: notesFooterLabel })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-title-wrap", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  className: "lockin-note-title-input",
+                  value: noteTitle,
+                  placeholder: "Note title...",
+                  onChange: (e) => {
+                    setNoteTitle(e.target.value);
+                    setNoteStatus("saving");
+                  }
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar-left", children: [
+                  ["B", "I", "U"].map((tool) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      className: "lockin-note-tool-btn",
+                      "aria-label": tool,
+                      children: tool
+                    },
+                    tool
+                  )),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-toolbar-divider" }),
+                  ["*", "1."].map((tool) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      className: "lockin-note-tool-btn",
+                      "aria-label": tool,
+                      children: tool
+                    },
+                    tool
+                  ))
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-toolbar-right", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-note-menu-trigger", "aria-label": "More", children: "..." }) })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-editor-card", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  className: "lockin-note-editor",
+                  role: "textbox",
+                  contentEditable: true,
+                  "data-placeholder": "Write your note here...",
+                  onInput: (e) => {
+                    setNoteContent(e.target.innerText || "");
+                    setNoteStatus("saving");
+                  },
+                  suppressContentEditableWarning: true,
+                  children: noteContent
+                }
+              ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-footer-status", children: notesFooterLabel })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: `lockin-all-notes-view ${notesView === "all" ? "is-active" : ""}`,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-filter-bar", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-filter-left", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-filter-label", children: "Filter" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    "select",
+                    {
+                      className: "lockin-notes-filter-select",
+                      value: notesFilter,
+                      onChange: (e) => setNotesFilter(e.target.value),
+                      children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "page", children: "This page" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "course", children: "This course" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All notes" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "starred", children: "Starred" })
+                      ]
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-search", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "input",
+                  {
+                    className: "lockin-notes-search-input",
+                    placeholder: "Search notes",
+                    value: notesSearch,
+                    onChange: (e) => setNotesSearch(e.target.value)
+                  }
+                ) })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-list", children: filteredNotes.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-empty", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-empty-title", children: "No notes yet" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-empty-subtitle", children: "Capture a note from the current page to see it here." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    className: "lockin-btn-ghost lockin-notes-empty-btn",
+                    onClick: () => setNotesView("current"),
+                    children: "Create a note"
+                  }
+                )
+              ] }) : filteredNotes.map((note) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-head", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: note.title }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-badges", children: note.courseCode ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-badge", children: note.courseCode }) : null })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-snippet", children: note.snippet }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-meta", children: [
+                  "Updated ",
+                  relativeLabel(note.updatedAt)
+                ] })
+              ] }, note.id)) })
+            ]
+          }
+        )
+      ] })
+    ] }) });
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      !isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
           id: "lockin-toggle-pill",
-          className: "pointer-events-auto fixed bottom-8 right-6 z-[2147483646] inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium text-sm shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95",
           onClick: onToggle,
           "aria-label": "Open Lock-in sidebar",
-          title: "Open Lock-in study assistant",
-          children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Lock-in" })
+          children: "Lock-in"
         }
-      );
-    }
-    const tabs = [
-      { id: "chat", label: "Chat" },
-      { id: "notes", label: "Notes" }
-    ];
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "aside",
-      {
-        id: "lockin-sidebar",
-        className: "fixed top-0 right-0 h-screen w-[30%] max-w-md flex flex-col bg-white shadow-xl pointer-events-auto",
-        "data-state": "expanded",
-        role: "complementary",
-        "aria-label": "Lock-in Study Assistant",
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-shrink-0 border-b border-gray-200 bg-white", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between px-4 py-3", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-gray-500", children: "Mode" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-semibold text-gray-900 capitalize", children: currentMode })
+      ),
+      isOpen && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "div",
+        {
+          id: "lockin-sidebar",
+          className: "lockin-sidebar",
+          "data-state": isOpen ? "expanded" : "collapsed",
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-top-bar", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-top-bar-left", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-mode-selector-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  ModeSelector,
+                  {
+                    value: mode,
+                    onSelect: (newMode) => setMode(newMode)
+                  }
+                ) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-tabs-wrapper", role: "tablist", children: [CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
+                  const label = tabId === CHAT_TAB_ID ? "Chat" : "Notes";
+                  const isActive = activeTab === tabId;
+                  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      className: `lockin-tab ${isActive ? "lockin-tab-active" : ""}`,
+                      onClick: () => setActiveTab(tabId),
+                      role: "tab",
+                      "aria-selected": isActive,
+                      children: label
+                    },
+                    tabId
+                  );
+                }) })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "button",
                 {
-                  className: "p-1 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors",
+                  className: "lockin-close-btn",
                   onClick: onToggle,
                   "aria-label": "Close sidebar",
-                  title: "Close",
-                  children: "X"
+                  children: "x"
                 }
               )
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "px-4 pb-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-              Tabs,
-              {
-                tabs,
-                activeTab,
-                onTabChange: (tabId) => {
-                  if (tabId === "chat" || tabId === "notes") {
-                    setActiveTab(tabId);
-                  }
-                },
-                variant: "pill"
-              }
-            ) })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-hidden flex flex-col", children: [
-            activeTab === "chat" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col overflow-hidden", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-shrink-0 px-4 py-2 border-b border-gray-100 flex items-center gap-2", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  "button",
-                  {
-                    className: "p-1 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0",
-                    onClick: () => setIsHistoryPanelOpen(!isHistoryPanelOpen),
-                    "aria-label": isHistoryPanelOpen ? "Hide history" : "Show history",
-                    title: isHistoryPanelOpen ? "Hide chat history" : "Show chat history",
-                    children: isHistoryPanelOpen ? "<" : "="
-                  }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-medium text-gray-600 flex-1", children: isHistoryPanelOpen ? "Chat History" : "Current Chat" })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 overflow-hidden flex", children: [
-                isHistoryPanelOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-1/3 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  ChatHistoryPanel,
-                  {
-                    apiClient,
-                    currentChatId,
-                    onChatSelect: (chatId) => {
-                      setCurrentChatId(chatId);
-                    },
-                    onNewChat: () => {
-                      setCurrentChatId(null);
-                    }
-                  }
-                ) }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  ChatPanel,
-                  {
-                    apiClient,
-                    chatId: currentChatId,
-                    onChatIdChange: setCurrentChatId,
-                    currentMode,
-                    selectedText
-                  }
-                ) })
+            activeTab === CHAT_TAB_ID && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-container", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "aside",
+                {
+                  className: "lockin-chat-history-panel",
+                  "data-state": isHistoryOpen ? "open" : "closed",
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-actions", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-label", children: "Chats" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          className: "lockin-new-chat-btn",
+                          onClick: startBlankChat,
+                          children: "+ New Chat"
+                        }
+                      )
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-list", children: recentChats.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-empty", children: "No chats yet. Start from a highlight or a question." }) : recentChats.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "button",
+                      {
+                        className: `lockin-history-item ${activeHistoryId === item.id ? "active" : ""}`,
+                        onClick: () => handleHistorySelect(item),
+                        children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-item-content", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-title", children: item.title }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-meta", children: relativeLabel(item.updatedAt) })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-item-menu", children: "..." })
+                        ]
+                      },
+                      item.id
+                    )) })
+                  ]
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-main", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-header", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-header-left", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        className: "lockin-history-toggle-btn",
+                        onClick: () => setIsHistoryOpen((prev) => !prev),
+                        "aria-label": "Toggle chat history",
+                        children: "="
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 700 }, children: "Chat" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: "12px", color: "#6b7280" }, children: [
+                        "Mode: ",
+                        (_a = MODE_OPTIONS.find((m) => m.value === mode)) == null ? void 0 : _a.label,
+                        " |",
+                        " ",
+                        courseCode ? `Course ${courseCode}` : "No course detected"
+                      ] })
+                    ] })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-mode-selector-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModeSelector, { value: mode, onSelect: (newMode) => setMode(newMode) }) })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-content", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-messages-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-messages", children: [
+                    renderChatMessages(),
+                    chatError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-error", children: chatError })
+                  ] }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-bottom-section", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-input", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "textarea",
+                      {
+                        className: "lockin-chat-input-field",
+                        placeholder: "Ask a follow-up question...",
+                        value: inputValue,
+                        onChange: (e) => setInputValue(e.target.value),
+                        rows: 1
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
+                      "button",
+                      {
+                        className: "lockin-send-btn",
+                        disabled: !inputValue.trim() || isSending,
+                        onClick: handleSend,
+                        children: "Send"
+                      }
+                    )
+                  ] }) })
+                ] })
               ] })
             ] }),
-            activeTab === "notes" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex-1 overflow-hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-              NotesPanel,
-              {
-                apiClient,
-                courseCode,
-                sourceUrl
-              }
-            ) })
-          ] })
-        ]
-      }
-    ) });
-  }
-  let sidebarRoot = null;
-  let sidebarContainer = null;
-  let currentProps = null;
-  function mountLockInSidebar(container, props) {
-    const root = clientExports.createRoot(container);
-    root.render(React.createElement(LockInSidebar, props));
-    return () => {
-      root.unmount();
-    };
+            activeTab === NOTES_TAB_ID && renderNotesView()
+          ]
+        }
+      )
+    ] });
   }
   function createLockInSidebar(props) {
-    if (!sidebarRoot || !sidebarContainer || !document.body.contains(sidebarContainer)) {
-      sidebarContainer = document.createElement("div");
-      sidebarContainer.id = "lockin-root";
-      document.body.appendChild(sidebarContainer);
-      sidebarRoot = clientExports.createRoot(sidebarContainer);
+    let container = document.getElementById("lockin-root");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "lockin-root";
+      document.body.appendChild(container);
     }
-    currentProps = props;
-    if (sidebarRoot) {
-      sidebarRoot.render(React.createElement(LockInSidebar, currentProps));
-    }
+    let currentProps = __spreadValues({}, props);
+    const root = clientExports.createRoot(container);
+    const render = () => {
+      if (currentProps) {
+        root.render(/* @__PURE__ */ jsxRuntimeExports.jsx(LockInSidebar, __spreadValues({}, currentProps)));
+      }
+    };
+    render();
     return {
-      root: sidebarContainer,
+      root,
       unmount: () => {
-        if (sidebarRoot) {
-          sidebarRoot.unmount();
-          sidebarRoot = null;
-        }
-        if (sidebarContainer && document.body.contains(sidebarContainer)) {
-          sidebarContainer.remove();
-          sidebarContainer = null;
-        }
+        root.unmount();
+        container == null ? void 0 : container.remove();
         currentProps = null;
       },
       updateProps: (newProps) => {
         if (currentProps) {
           currentProps = __spreadValues(__spreadValues({}, currentProps), newProps);
-        } else {
-          currentProps = __spreadValues(__spreadValues({}, props), newProps);
-        }
-        if (sidebarRoot && currentProps) {
-          sidebarRoot.render(React.createElement(LockInSidebar, currentProps));
+          render();
         }
       }
     };
   }
   if (typeof window !== "undefined") {
-    window.React = React;
     window.LockInUI = {
-      mountLockInSidebar,
       createLockInSidebar,
       LockInSidebar
     };
   }
-  exports.ChatHistoryPanel = ChatHistoryPanel;
-  exports.ChatPanel = ChatPanel;
   exports.LockInSidebar = LockInSidebar;
-  exports.NotesPanel = NotesPanel;
   exports.createLockInSidebar = createLockInSidebar;
-  exports.mountLockInSidebar = mountLockInSidebar;
-  exports.useChat = useChat;
-  exports.useChatHistory = useChatHistory;
-  exports.useNotes = useNotes;
 })(this.LockInUI = this.LockInUI || {});
 //# sourceMappingURL=index.js.map

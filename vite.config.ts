@@ -23,7 +23,8 @@ export default defineConfig({
   build: {
     outDir: "extension/ui",
     lib: {
-      entry: resolve(process.cwd(), "extension/ui/index.tsx"),
+      // Source entry lives under ui/extension, build outputs to extension/ui
+      entry: resolve(process.cwd(), "ui/extension/index.tsx"),
       name: "LockInUI",
       formats: ["iife"],
       fileName: () => "index.js",
