@@ -7129,6 +7129,7 @@ var __async = (__this, __arguments, generator) => {
     const [notesView, setNotesView] = reactExports.useState("current");
     const [noteTitle, setNoteTitle] = reactExports.useState("");
     const [noteContent, setNoteContent] = reactExports.useState("");
+    const [currentNoteId, setCurrentNoteId] = reactExports.useState(null);
     const [noteStatus, setNoteStatus] = reactExports.useState("saved");
     const [lastSavedAt, setLastSavedAt] = reactExports.useState(null);
     const [notes, setNotes] = reactExports.useState([]);
@@ -7136,6 +7137,14 @@ var __async = (__this, __arguments, generator) => {
     const [notesSearch, setNotesSearch] = reactExports.useState("");
     const layoutTimeoutRef = reactExports.useRef(null);
     const previousSelectionRef = reactExports.useRef();
+    const autoSaveTimeoutRef = reactExports.useRef(null);
+    const noteEditorRef = reactExports.useRef(null);
+    const saveAbortControllerRef = reactExports.useRef(null);
+    const lastSavedContentRef = reactExports.useRef("");
+    const lastSavedTitleRef = reactExports.useRef("");
+    const saveQueueRef = reactExports.useRef([]);
+    const isProcessingQueueRef = reactExports.useRef(false);
+    const isUpdatingFromExternalRef = reactExports.useRef(false);
     const courseCode = (pageContext == null ? void 0 : pageContext.courseContext.courseCode) || null;
     const pageUrl = (pageContext == null ? void 0 : pageContext.url) || (typeof window !== "undefined" ? window.location.href : "");
     const noteLinkedLabel = (pageContext == null ? void 0 : pageContext.courseContext.courseCode) || "None";
@@ -7386,34 +7395,154 @@ var __async = (__this, __arguments, generator) => {
         appendSelectionToCurrentChat(selectedText);
       }
     }, [appendSelectionToCurrentChat, messages.length, selectedText, startNewChat]);
-    const persistNoteDraft = reactExports.useCallback(
-      (draftId) => {
-        const now = (/* @__PURE__ */ new Date()).toISOString();
-        const id = draftId || `note-${Date.now()}`;
-        const nextNote = {
-          id,
-          title: noteTitle.trim() || "Untitled note",
-          snippet: noteContent.trim() || "Write your note here...",
-          updatedAt: now,
-          courseCode
-        };
-        setNotes((prev) => {
-          const filtered = prev.filter((note) => note.id !== id);
-          return [nextNote, ...filtered];
-        });
-        setLastSavedAt(now);
-        setNoteStatus("saved");
-        return id;
-      },
-      [courseCode, noteContent, noteTitle]
+    const processSaveQueue = reactExports.useCallback(() => __async(null, null, function* () {
+      if (isProcessingQueueRef.current || saveQueueRef.current.length === 0) {
+        return;
+      }
+      isProcessingQueueRef.current = true;
+      while (saveQueueRef.current.length > 0) {
+        const saveFn = saveQueueRef.current.shift();
+        if (saveFn) {
+          try {
+            yield saveFn();
+          } catch (error) {
+            console.error("Error processing save queue:", error);
+          }
+        }
+      }
+      isProcessingQueueRef.current = false;
+    }), []);
+    const saveNoteToBackend = reactExports.useCallback(
+      (noteId, abortSignal) => __async(null, null, function* () {
+        var _a;
+        if (!apiClient) {
+          console.error("API client not available");
+          return null;
+        }
+        const title = noteTitle.trim() || "Untitled note";
+        const content = noteContent.trim();
+        if (!content) {
+          return noteId;
+        }
+        if (noteId && isValidUUID(noteId) && lastSavedContentRef.current === content && lastSavedTitleRef.current === title) {
+          return noteId;
+        }
+        if (abortSignal == null ? void 0 : abortSignal.aborted) {
+          return noteId;
+        }
+        try {
+          let savedNote;
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          if (noteId && isValidUUID(noteId)) {
+            if (!apiClient.updateNote) {
+              console.error("updateNote API not available");
+              return noteId;
+            }
+            if (abortSignal == null ? void 0 : abortSignal.aborted) {
+              return noteId;
+            }
+            savedNote = yield apiClient.updateNote(
+              noteId,
+              {
+                title,
+                content,
+                sourceUrl: pageUrl,
+                courseCode: courseCode || null,
+                noteType: "manual"
+              },
+              { signal: abortSignal }
+            );
+          } else {
+            if (!apiClient.createNote) {
+              console.error("createNote API not available");
+              return null;
+            }
+            if (abortSignal == null ? void 0 : abortSignal.aborted) {
+              return null;
+            }
+            savedNote = yield apiClient.createNote(
+              {
+                title,
+                content,
+                sourceUrl: pageUrl,
+                courseCode: courseCode || null,
+                noteType: "manual"
+              },
+              { signal: abortSignal }
+            );
+          }
+          if (abortSignal == null ? void 0 : abortSignal.aborted) {
+            return noteId;
+          }
+          const savedId = savedNote.id || noteId;
+          const savedTitle = savedNote.title || title;
+          const savedUpdatedAt = savedNote.updated_at || savedNote.updatedAt || now;
+          lastSavedContentRef.current = content;
+          lastSavedTitleRef.current = title;
+          const noteListItem = {
+            id: savedId,
+            title: savedTitle,
+            snippet: content.slice(0, 80),
+            updatedAt: savedUpdatedAt,
+            courseCode: savedNote.course_code || savedNote.courseCode || courseCode || null
+          };
+          setNotes((prev) => {
+            const filtered = prev.filter((note) => note.id !== savedId);
+            return [noteListItem, ...filtered];
+          });
+          setCurrentNoteId(savedId);
+          setLastSavedAt(now);
+          setNoteStatus("saved");
+          return savedId;
+        } catch (error) {
+          if (abortSignal == null ? void 0 : abortSignal.aborted) {
+            return noteId;
+          }
+          const isNetworkError = (error == null ? void 0 : error.code) === "NETWORK_ERROR" || ((_a = error == null ? void 0 : error.message) == null ? void 0 : _a.includes("fetch")) || !navigator.onLine;
+          if (isNetworkError) {
+            console.warn("Network error saving note, will retry:", error);
+            setNoteStatus("idle");
+          } else {
+            console.error("Failed to save note:", error);
+            setNoteStatus("idle");
+          }
+          return noteId;
+        }
+      }),
+      [apiClient, courseCode, noteContent, noteTitle, pageUrl]
     );
+    const queueSave = reactExports.useCallback(() => __async(null, null, function* () {
+      if (saveAbortControllerRef.current) {
+        saveAbortControllerRef.current.abort();
+      }
+      const abortController = new AbortController();
+      saveAbortControllerRef.current = abortController;
+      const saveFn = () => __async(null, null, function* () {
+        if (abortController.signal.aborted) {
+          return;
+        }
+        const result = yield saveNoteToBackend(currentNoteId, abortController.signal);
+        if (!abortController.signal.aborted && result) {
+          setCurrentNoteId(result);
+        }
+      });
+      saveQueueRef.current.push(saveFn);
+      processSaveQueue();
+    }), [currentNoteId, saveNoteToBackend, processSaveQueue]);
     reactExports.useEffect(() => {
       if (noteStatus !== "saving") return;
-      const timeout = window.setTimeout(() => {
-        persistNoteDraft();
-      }, 650);
-      return () => window.clearTimeout(timeout);
-    }, [noteStatus, persistNoteDraft]);
+      if (autoSaveTimeoutRef.current) {
+        window.clearTimeout(autoSaveTimeoutRef.current);
+      }
+      autoSaveTimeoutRef.current = window.setTimeout(() => {
+        queueSave();
+      }, 1500);
+      return () => {
+        if (autoSaveTimeoutRef.current) {
+          window.clearTimeout(autoSaveTimeoutRef.current);
+        }
+      };
+    }, [noteStatus, queueSave]);
     reactExports.useEffect(() => {
       const loadHistory = () => __async(null, null, function* () {
         if (!(apiClient == null ? void 0 : apiClient.getRecentChats)) return;
@@ -7433,6 +7562,53 @@ var __async = (__this, __arguments, generator) => {
       });
       loadHistory();
     }, [apiClient]);
+    reactExports.useEffect(() => {
+      const loadNotes = () => __async(null, null, function* () {
+        if (!(apiClient == null ? void 0 : apiClient.listNotes) || activeTab !== NOTES_TAB_ID) return;
+        try {
+          const result = yield apiClient.listNotes({
+            courseCode: notesFilter === "course" ? courseCode || void 0 : void 0,
+            limit: 50
+          });
+          if (Array.isArray(result)) {
+            const mapped = result.map((item) => ({
+              id: item.id,
+              title: item.title || "Untitled note",
+              snippet: (item.content || "").slice(0, 80),
+              updatedAt: item.updated_at || item.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+              courseCode: item.course_code || item.courseCode || null
+            }));
+            setNotes(mapped);
+          }
+        } catch (error) {
+          console.error("Failed to load notes:", error);
+        }
+      });
+      loadNotes();
+    }, [apiClient, activeTab, notesFilter, courseCode]);
+    reactExports.useEffect(() => {
+      if (!noteEditorRef.current) return;
+      const currentText = noteEditorRef.current.innerText || "";
+      if (currentText !== noteContent && !isUpdatingFromExternalRef.current) {
+        isUpdatingFromExternalRef.current = true;
+        noteEditorRef.current.innerText = noteContent;
+        requestAnimationFrame(() => {
+          isUpdatingFromExternalRef.current = false;
+        });
+      }
+    }, [noteContent]);
+    reactExports.useEffect(() => {
+      if (activeTab === NOTES_TAB_ID && noteEditorRef.current && notesView === "current") {
+        const currentText = noteEditorRef.current.innerText || "";
+        if (currentText !== noteContent) {
+          isUpdatingFromExternalRef.current = true;
+          noteEditorRef.current.innerText = noteContent;
+          requestAnimationFrame(() => {
+            isUpdatingFromExternalRef.current = false;
+          });
+        }
+      }
+    }, [activeTab, notesView]);
     const handleSend = () => {
       const trimmed = inputValue.trim();
       if (!trimmed) return;
@@ -7514,12 +7690,98 @@ var __async = (__this, __arguments, generator) => {
       });
     };
     const handleNewNote = () => {
+      if (saveAbortControllerRef.current) {
+        saveAbortControllerRef.current.abort();
+      }
+      if (autoSaveTimeoutRef.current) {
+        window.clearTimeout(autoSaveTimeoutRef.current);
+      }
       setNotesView("current");
       setNoteTitle("");
       setNoteContent("");
+      setCurrentNoteId(null);
       setNoteStatus("saved");
       setLastSavedAt(null);
+      lastSavedContentRef.current = "";
+      lastSavedTitleRef.current = "";
+      isUpdatingFromExternalRef.current = true;
+      if (noteEditorRef.current) {
+        noteEditorRef.current.innerText = "";
+      }
+      isUpdatingFromExternalRef.current = false;
     };
+    const handleLoadNote = reactExports.useCallback(
+      (noteId) => __async(null, null, function* () {
+        if (!(apiClient == null ? void 0 : apiClient.listNotes)) {
+          console.error("listNotes API not available");
+          return;
+        }
+        if (saveAbortControllerRef.current) {
+          saveAbortControllerRef.current.abort();
+        }
+        if (autoSaveTimeoutRef.current) {
+          window.clearTimeout(autoSaveTimeoutRef.current);
+        }
+        try {
+          const localNote = notes.find((n) => n.id === noteId);
+          if (localNote) {
+            const allNotes2 = yield apiClient.listNotes({ limit: 100 });
+            const fullNote = allNotes2.find((n) => n.id === noteId);
+            if (fullNote) {
+              setCurrentNoteId(fullNote.id);
+              const title = fullNote.title || "";
+              const content = fullNote.content || "";
+              setNoteTitle(title);
+              setNoteContent(content);
+              setNoteStatus("saved");
+              setLastSavedAt(fullNote.updated_at || fullNote.updatedAt || null);
+              setNotesView("current");
+              lastSavedContentRef.current = content;
+              lastSavedTitleRef.current = title;
+              isUpdatingFromExternalRef.current = true;
+              if (noteEditorRef.current && noteEditorRef.current.innerText !== content) {
+                noteEditorRef.current.innerText = content;
+              }
+              isUpdatingFromExternalRef.current = false;
+              return;
+            }
+          }
+          const allNotes = yield apiClient.listNotes({ limit: 100 });
+          const note = allNotes.find((n) => n.id === noteId);
+          if (note) {
+            setCurrentNoteId(note.id);
+            const title = note.title || "";
+            const content = note.content || "";
+            setNoteTitle(title);
+            setNoteContent(content);
+            setNoteStatus("saved");
+            setLastSavedAt(note.updated_at || note.updatedAt || null);
+            setNotesView("current");
+            lastSavedContentRef.current = content;
+            lastSavedTitleRef.current = title;
+            isUpdatingFromExternalRef.current = true;
+            if (noteEditorRef.current && noteEditorRef.current.innerText !== content) {
+              noteEditorRef.current.innerText = content;
+            }
+            isUpdatingFromExternalRef.current = false;
+            const noteListItem = {
+              id: note.id,
+              title: title || "Untitled note",
+              snippet: content.slice(0, 80),
+              updatedAt: note.updated_at || note.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+              courseCode: note.course_code || note.courseCode || null
+            };
+            setNotes((prev) => {
+              const filtered = prev.filter((n) => n.id !== note.id);
+              return [noteListItem, ...filtered];
+            });
+          }
+        } catch (error) {
+          console.error("Failed to load note:", error);
+        }
+      }),
+      [apiClient, notes]
+    );
     const handleSaveAsNote = reactExports.useCallback(
       (messageContent) => __async(null, null, function* () {
         if (!(apiClient == null ? void 0 : apiClient.createNote)) {
@@ -7549,14 +7811,21 @@ var __async = (__this, __arguments, generator) => {
           });
           setActiveTab(NOTES_TAB_ID);
           setNotesView("current");
+          setCurrentNoteId(createdNote.id);
+          const content = messageContent.trim();
           setNoteTitle(noteListItem.title);
-          setNoteContent(messageContent.trim());
+          setNoteContent(content);
           setNoteStatus("saved");
           setLastSavedAt(now);
+          lastSavedContentRef.current = content;
+          lastSavedTitleRef.current = noteListItem.title;
+          isUpdatingFromExternalRef.current = true;
+          if (noteEditorRef.current) {
+            noteEditorRef.current.innerText = content;
+          }
+          isUpdatingFromExternalRef.current = false;
           setTimeout(() => {
-            const editor = document.querySelector(
-              ".lockin-note-editor"
-            );
+            const editor = noteEditorRef.current;
             if (editor) {
               editor.focus();
               const range = document.createRange();
@@ -7576,6 +7845,7 @@ var __async = (__this, __arguments, generator) => {
           console.error("Failed to save note:", error);
           setActiveTab(NOTES_TAB_ID);
           setNotesView("current");
+          setCurrentNoteId(null);
           setNoteTitle(
             messageContent.split("\n")[0].trim().slice(0, 50) || "Untitled note"
           );
@@ -7694,16 +7964,23 @@ var __async = (__this, __arguments, generator) => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-editor-card", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
                 {
+                  ref: noteEditorRef,
                   className: "lockin-note-editor",
                   role: "textbox",
                   contentEditable: true,
                   "data-placeholder": "Write your note here...",
                   onInput: (e) => {
-                    setNoteContent(e.target.innerText || "");
-                    setNoteStatus("saving");
+                    if (isUpdatingFromExternalRef.current) return;
+                    const newContent = e.target.innerText || "";
+                    if (newContent !== noteContent) {
+                      setNoteContent(newContent);
+                      setNoteStatus("saving");
+                    }
                   },
-                  suppressContentEditableWarning: true,
-                  children: noteContent
+                  onKeyDown: (e) => {
+                    if (e.key === "Enter" && !e.shiftKey) ;
+                  },
+                  suppressContentEditableWarning: true
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-footer-status", children: notesFooterLabel })
@@ -7754,17 +8031,26 @@ var __async = (__this, __arguments, generator) => {
                     children: "Create a note"
                   }
                 )
-              ] }) : filteredNotes.map((note) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-head", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: note.title }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-badges", children: note.courseCode ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-badge", children: note.courseCode }) : null })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-snippet", children: note.snippet }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-meta", children: [
-                  "Updated ",
-                  relativeLabel(note.updatedAt)
-                ] })
-              ] }, note.id)) })
+              ] }) : filteredNotes.map((note) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "lockin-note-card",
+                  onClick: () => handleLoadNote(note.id),
+                  style: { cursor: "pointer" },
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-head", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: note.title }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-badges", children: note.courseCode ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-badge", children: note.courseCode }) : null })
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-snippet", children: note.snippet }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-meta", children: [
+                      "Updated ",
+                      relativeLabel(note.updatedAt)
+                    ] })
+                  ]
+                },
+                note.id
+              )) })
             ]
           }
         )

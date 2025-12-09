@@ -200,6 +200,7 @@ export function LockInSidebar({
   const [notesView, setNotesView] = useState<"current" | "all">("current");
   const [noteTitle, setNoteTitle] = useState("");
   const [noteContent, setNoteContent] = useState("");
+  const [currentNoteId, setCurrentNoteId] = useState<string | null>(null);
   const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("saved");
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [notes, setNotes] = useState<NoteListItem[]>([]);
@@ -207,6 +208,14 @@ export function LockInSidebar({
   const [notesSearch, setNotesSearch] = useState("");
   const layoutTimeoutRef = useRef<number | null>(null);
   const previousSelectionRef = useRef<string | undefined>();
+  const autoSaveTimeoutRef = useRef<number | null>(null);
+  const noteEditorRef = useRef<HTMLDivElement | null>(null);
+  const saveAbortControllerRef = useRef<AbortController | null>(null);
+  const lastSavedContentRef = useRef<string>("");
+  const lastSavedTitleRef = useRef<string>("");
+  const saveQueueRef = useRef<Array<() => Promise<void>>>([]);
+  const isProcessingQueueRef = useRef<boolean>(false);
+  const isUpdatingFromExternalRef = useRef<boolean>(false);
 
   const courseCode = pageContext?.courseContext.courseCode || null;
   const pageUrl =
@@ -520,35 +529,222 @@ export function LockInSidebar({
     }
   }, [appendSelectionToCurrentChat, messages.length, selectedText, startNewChat]);
 
-  const persistNoteDraft = useCallback(
-    (draftId?: string) => {
-      const now = new Date().toISOString();
-      const id = draftId || `note-${Date.now()}`;
-      const nextNote: NoteListItem = {
-        id,
-        title: noteTitle.trim() || "Untitled note",
-        snippet: noteContent.trim() || "Write your note here...",
-        updatedAt: now,
-        courseCode,
-      };
-      setNotes((prev) => {
-        const filtered = prev.filter((note) => note.id !== id);
-        return [nextNote, ...filtered];
-      });
-      setLastSavedAt(now);
-      setNoteStatus("saved");
-      return id;
+  // Process save queue sequentially to prevent race conditions
+  const processSaveQueue = useCallback(async () => {
+    if (isProcessingQueueRef.current || saveQueueRef.current.length === 0) {
+      return;
+    }
+
+    isProcessingQueueRef.current = true;
+
+    while (saveQueueRef.current.length > 0) {
+      const saveFn = saveQueueRef.current.shift();
+      if (saveFn) {
+        try {
+          await saveFn();
+        } catch (error) {
+          console.error("Error processing save queue:", error);
+        }
+      }
+    }
+
+    isProcessingQueueRef.current = false;
+  }, []);
+
+  const saveNoteToBackend = useCallback(
+    async (noteId: string | null, abortSignal?: AbortSignal): Promise<string | null> => {
+      if (!apiClient) {
+        console.error("API client not available");
+        return null;
+      }
+
+      const title = noteTitle.trim() || "Untitled note";
+      const content = noteContent.trim();
+
+      // Don't save empty notes
+      if (!content) {
+        return noteId;
+      }
+
+      // Content diffing: Only save if content or title actually changed
+      if (
+        noteId &&
+        isValidUUID(noteId) &&
+        lastSavedContentRef.current === content &&
+        lastSavedTitleRef.current === title
+      ) {
+        // Content hasn't changed, skip save
+        return noteId;
+      }
+
+      // Check if request was aborted
+      if (abortSignal?.aborted) {
+        return noteId;
+      }
+
+      try {
+        let savedNote: any;
+        const now = new Date().toISOString();
+
+        if (noteId && isValidUUID(noteId)) {
+          // Update existing note
+          if (!apiClient.updateNote) {
+            console.error("updateNote API not available");
+            return noteId;
+          }
+          
+          // Check abort signal before making request
+          if (abortSignal?.aborted) {
+            return noteId;
+          }
+
+          savedNote = await apiClient.updateNote(
+            noteId,
+            {
+              title,
+              content,
+              sourceUrl: pageUrl,
+              courseCode: courseCode || null,
+              noteType: "manual",
+            },
+            { signal: abortSignal }
+          );
+        } else {
+          // Create new note
+          if (!apiClient.createNote) {
+            console.error("createNote API not available");
+            return null;
+          }
+
+          // Check abort signal before making request
+          if (abortSignal?.aborted) {
+            return null;
+          }
+
+          savedNote = await apiClient.createNote(
+            {
+              title,
+              content,
+              sourceUrl: pageUrl,
+              courseCode: courseCode || null,
+              noteType: "manual",
+            },
+            { signal: abortSignal }
+          );
+        }
+
+        // Check if request was aborted after completion
+        if (abortSignal?.aborted) {
+          return noteId;
+        }
+
+        const savedId = savedNote.id || noteId;
+        const savedTitle = savedNote.title || title;
+        const savedUpdatedAt = savedNote.updated_at || savedNote.updatedAt || now;
+
+        // Update last saved content/title for diffing
+        lastSavedContentRef.current = content;
+        lastSavedTitleRef.current = title;
+
+        // Update local notes list
+        const noteListItem: NoteListItem = {
+          id: savedId,
+          title: savedTitle,
+          snippet: content.slice(0, 80),
+          updatedAt: savedUpdatedAt,
+          courseCode: savedNote.course_code || savedNote.courseCode || courseCode || null,
+        };
+
+        setNotes((prev) => {
+          const filtered = prev.filter((note) => note.id !== savedId);
+          return [noteListItem, ...filtered];
+        });
+
+        setCurrentNoteId(savedId);
+        setLastSavedAt(now);
+        setNoteStatus("saved");
+        return savedId;
+      } catch (error: any) {
+        // Don't update status if request was aborted
+        if (abortSignal?.aborted) {
+          return noteId;
+        }
+        
+        // Check if it's a network error (might be offline)
+        const isNetworkError = 
+          error?.code === "NETWORK_ERROR" || 
+          error?.message?.includes("fetch") ||
+          !navigator.onLine;
+
+        if (isNetworkError) {
+          // Keep status as "saving" to retry later
+          console.warn("Network error saving note, will retry:", error);
+          setNoteStatus("idle");
+        } else {
+          console.error("Failed to save note:", error);
+          setNoteStatus("idle");
+        }
+        return noteId;
+      }
     },
-    [courseCode, noteContent, noteTitle]
+    [apiClient, courseCode, noteContent, noteTitle, pageUrl]
   );
 
+  // Queued save function that processes saves sequentially
+  const queueSave = useCallback(async () => {
+    // Cancel any pending save request
+    if (saveAbortControllerRef.current) {
+      saveAbortControllerRef.current.abort();
+    }
+
+    // Create new abort controller for this save
+    const abortController = new AbortController();
+    saveAbortControllerRef.current = abortController;
+
+    // Create a save function that will be queued
+    const saveFn = async () => {
+      // Check if aborted before processing
+      if (abortController.signal.aborted) {
+        return;
+      }
+
+      const result = await saveNoteToBackend(currentNoteId, abortController.signal);
+      
+      // Only update if not aborted
+      if (!abortController.signal.aborted && result) {
+        setCurrentNoteId(result);
+      }
+    };
+
+    // Add to queue
+    saveQueueRef.current.push(saveFn);
+    
+    // Process queue
+    processSaveQueue();
+  }, [currentNoteId, saveNoteToBackend, processSaveQueue]);
+
+  // Auto-save effect: debounced save to backend with improved debouncing
   useEffect(() => {
     if (noteStatus !== "saving") return;
-    const timeout = window.setTimeout(() => {
-      persistNoteDraft();
-    }, 650);
-    return () => window.clearTimeout(timeout);
-  }, [noteStatus, persistNoteDraft]);
+
+    // Clear any pending timeout
+    if (autoSaveTimeoutRef.current) {
+      window.clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Increased debounce delay for better server load reduction
+    // 1500ms = 1.5 seconds of inactivity before saving
+    // This reduces API calls significantly while still feeling responsive
+    autoSaveTimeoutRef.current = window.setTimeout(() => {
+      queueSave();
+    }, 1500);
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        window.clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [noteStatus, queueSave]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -570,6 +766,64 @@ export function LockInSidebar({
     };
     loadHistory();
   }, [apiClient]);
+
+  // Load notes from API when component mounts or when switching to notes tab
+  useEffect(() => {
+    const loadNotes = async () => {
+      if (!apiClient?.listNotes || activeTab !== NOTES_TAB_ID) return;
+      try {
+        const result = await apiClient.listNotes({
+          courseCode: notesFilter === "course" ? courseCode || undefined : undefined,
+          limit: 50,
+        });
+        if (Array.isArray(result)) {
+          const mapped = result.map((item: any) => ({
+            id: item.id,
+            title: item.title || "Untitled note",
+            snippet: (item.content || "").slice(0, 80),
+            updatedAt: item.updated_at || item.updatedAt || new Date().toISOString(),
+            courseCode: item.course_code || item.courseCode || null,
+          }));
+          setNotes(mapped);
+        }
+      } catch (error) {
+        // ignore fetch errors, user may be offline
+        console.error("Failed to load notes:", error);
+      }
+    };
+    loadNotes();
+  }, [apiClient, activeTab, notesFilter, courseCode]);
+
+  // Sync contentEditable with noteContent when it changes externally (not from user input)
+  useEffect(() => {
+    if (!noteEditorRef.current) return;
+    
+    // Only update if content differs and we're not currently updating from user input
+    const currentText = noteEditorRef.current.innerText || "";
+    if (currentText !== noteContent && !isUpdatingFromExternalRef.current) {
+      // This means noteContent changed externally (e.g., loading a note, new note, etc.)
+      isUpdatingFromExternalRef.current = true;
+      noteEditorRef.current.innerText = noteContent;
+      // Reset flag after a brief delay to allow React to process
+      requestAnimationFrame(() => {
+        isUpdatingFromExternalRef.current = false;
+      });
+    }
+  }, [noteContent]);
+
+  // Initialize editor content when switching to notes tab or when editor becomes available
+  useEffect(() => {
+    if (activeTab === NOTES_TAB_ID && noteEditorRef.current && notesView === "current") {
+      const currentText = noteEditorRef.current.innerText || "";
+      if (currentText !== noteContent) {
+        isUpdatingFromExternalRef.current = true;
+        noteEditorRef.current.innerText = noteContent;
+        requestAnimationFrame(() => {
+          isUpdatingFromExternalRef.current = false;
+        });
+      }
+    }
+  }, [activeTab, notesView]);
 
   const handleSend = () => {
     const trimmed = inputValue.trim();
@@ -663,12 +917,122 @@ export function LockInSidebar({
   };
 
   const handleNewNote = () => {
+    // Cancel any pending saves
+    if (saveAbortControllerRef.current) {
+      saveAbortControllerRef.current.abort();
+    }
+    if (autoSaveTimeoutRef.current) {
+      window.clearTimeout(autoSaveTimeoutRef.current);
+    }
+
     setNotesView("current");
     setNoteTitle("");
     setNoteContent("");
+    setCurrentNoteId(null);
     setNoteStatus("saved");
     setLastSavedAt(null);
+    
+    // Reset last saved content/title for diffing
+    lastSavedContentRef.current = "";
+    lastSavedTitleRef.current = "";
+    
+    // Clear editor content
+    isUpdatingFromExternalRef.current = true;
+    if (noteEditorRef.current) {
+      noteEditorRef.current.innerText = "";
+    }
+    isUpdatingFromExternalRef.current = false;
   };
+
+  const handleLoadNote = useCallback(
+    async (noteId: string) => {
+      if (!apiClient?.listNotes) {
+        console.error("listNotes API not available");
+        return;
+      }
+
+      // Cancel any pending saves before loading a new note
+      if (saveAbortControllerRef.current) {
+        saveAbortControllerRef.current.abort();
+      }
+      if (autoSaveTimeoutRef.current) {
+        window.clearTimeout(autoSaveTimeoutRef.current);
+      }
+
+      try {
+        // Try to find note in local list first
+        const localNote = notes.find((n) => n.id === noteId);
+        if (localNote) {
+          // Load from API to get full content
+          const allNotes = await apiClient.listNotes({ limit: 100 });
+          const fullNote = allNotes.find((n: any) => n.id === noteId);
+          if (fullNote) {
+            setCurrentNoteId(fullNote.id);
+            const title = fullNote.title || "";
+            const content = fullNote.content || "";
+            setNoteTitle(title);
+            setNoteContent(content);
+            setNoteStatus("saved");
+            setLastSavedAt(fullNote.updated_at || fullNote.updatedAt || null);
+            setNotesView("current");
+            
+            // Update last saved content/title for diffing
+            lastSavedContentRef.current = content;
+            lastSavedTitleRef.current = title;
+            
+            // Update contentEditable element
+            isUpdatingFromExternalRef.current = true;
+            if (noteEditorRef.current && noteEditorRef.current.innerText !== content) {
+              noteEditorRef.current.innerText = content;
+            }
+            isUpdatingFromExternalRef.current = false;
+            return;
+          }
+        }
+
+        // If not found locally, fetch from API
+        const allNotes = await apiClient.listNotes({ limit: 100 });
+        const note = allNotes.find((n: any) => n.id === noteId);
+        if (note) {
+          setCurrentNoteId(note.id);
+          const title = note.title || "";
+          const content = note.content || "";
+          setNoteTitle(title);
+          setNoteContent(content);
+          setNoteStatus("saved");
+          setLastSavedAt(note.updated_at || note.updatedAt || null);
+          setNotesView("current");
+
+          // Update last saved content/title for diffing
+          lastSavedContentRef.current = content;
+          lastSavedTitleRef.current = title;
+
+          // Update contentEditable element
+          isUpdatingFromExternalRef.current = true;
+          if (noteEditorRef.current && noteEditorRef.current.innerText !== content) {
+            noteEditorRef.current.innerText = content;
+          }
+          isUpdatingFromExternalRef.current = false;
+
+          // Update local notes list
+          const noteListItem: NoteListItem = {
+            id: note.id,
+            title: title || "Untitled note",
+            snippet: content.slice(0, 80),
+            updatedAt: note.updated_at || note.updatedAt || new Date().toISOString(),
+            courseCode: note.course_code || note.courseCode || null,
+          };
+          setNotes((prev) => {
+            const filtered = prev.filter((n) => n.id !== note.id);
+            return [noteListItem, ...filtered];
+          });
+        }
+      } catch (error: any) {
+        console.error("Failed to load note:", error);
+      }
+    },
+    [apiClient, notes]
+  );
 
   const handleSaveAsNote = useCallback(
     async (messageContent: string) => {
@@ -711,16 +1075,27 @@ export function LockInSidebar({
         // Switch to Notes tab and open the note
         setActiveTab(NOTES_TAB_ID);
         setNotesView("current");
+        setCurrentNoteId(createdNote.id);
+        const content = messageContent.trim();
         setNoteTitle(noteListItem.title);
-        setNoteContent(messageContent.trim());
+        setNoteContent(content);
         setNoteStatus("saved");
         setLastSavedAt(now);
+        
+        // Update last saved content/title for diffing
+        lastSavedContentRef.current = content;
+        lastSavedTitleRef.current = noteListItem.title;
+
+        // Update editor content
+        isUpdatingFromExternalRef.current = true;
+        if (noteEditorRef.current) {
+          noteEditorRef.current.innerText = content;
+        }
+        isUpdatingFromExternalRef.current = false;
 
         // Focus the editor after a brief delay to ensure DOM is ready
         setTimeout(() => {
-          const editor = document.querySelector(
-            ".lockin-note-editor"
-          ) as HTMLElement;
+          const editor = noteEditorRef.current;
           if (editor) {
             editor.focus();
             // Move cursor to end of content
@@ -742,6 +1117,7 @@ export function LockInSidebar({
         // Still switch to Notes tab and pre-fill, but mark as unsaved
         setActiveTab(NOTES_TAB_ID);
         setNotesView("current");
+        setCurrentNoteId(null);
         setNoteTitle(
           messageContent.split("\n")[0].trim().slice(0, 50) || "Untitled note"
         );
@@ -898,18 +1274,32 @@ export function LockInSidebar({
 
             <div className="lockin-note-editor-card">
               <div
+                ref={noteEditorRef}
                 className="lockin-note-editor"
                 role="textbox"
                 contentEditable
                 data-placeholder="Write your note here..."
                 onInput={(e) => {
-                  setNoteContent((e.target as HTMLElement).innerText || "");
-                  setNoteStatus("saving");
+                  // Only update if not updating from external source
+                  if (isUpdatingFromExternalRef.current) return;
+                  
+                  const newContent = (e.target as HTMLElement).innerText || "";
+                  if (newContent !== noteContent) {
+                    setNoteContent(newContent);
+                    setNoteStatus("saving");
+                  }
+                }}
+                onKeyDown={(e) => {
+                  // Allow Enter key to work normally (creates new line)
+                  // Shift+Enter also works normally
+                  // Don't prevent default - let browser handle it naturally
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    // Enter key creates new line - browser handles this automatically
+                    // No need to preventDefault
+                  }
                 }}
                 suppressContentEditableWarning
-              >
-                {noteContent}
-              </div>
+              />
             </div>
 
             <div className="lockin-note-footer-status">{notesFooterLabel}</div>
@@ -960,7 +1350,12 @@ export function LockInSidebar({
                 </div>
               ) : (
                 filteredNotes.map((note) => (
-                  <div key={note.id} className="lockin-note-card">
+                  <div
+                    key={note.id}
+                    className="lockin-note-card"
+                    onClick={() => handleLoadNote(note.id)}
+                    style={{ cursor: "pointer" }}
+                  >
                     <div className="lockin-note-card-head">
                       <div className="lockin-note-card-title">{note.title}</div>
                       <div className="lockin-note-card-badges">
