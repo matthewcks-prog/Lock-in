@@ -7036,12 +7036,6 @@ var __async = (__this, __arguments, generator) => {
       value
     );
   }
-  function formatTimeLabel(iso) {
-    if (!iso) return "";
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return "";
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
   function relativeLabel(iso) {
     if (!iso) return "just now";
     const date = new Date(iso);
@@ -7059,6 +7053,20 @@ var __async = (__this, __arguments, generator) => {
     if (!text) return "Untitled chat";
     if (text.length <= length) return text;
     return `${text.slice(0, length)}...`;
+  }
+  function SaveNoteAction({ onSaveAsNote }) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-save-note-action", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        className: "lockin-chat-save-note-btn",
+        onClick: (e) => {
+          e.stopPropagation();
+          onSaveAsNote();
+        },
+        type: "button",
+        children: "Save note"
+      }
+    ) });
   }
   function ModeSelector({
     value,
@@ -7108,7 +7116,6 @@ var __async = (__this, __arguments, generator) => {
     storage,
     activeTabExternal
   }) {
-    var _a;
     const [activeTab, setActiveTab] = reactExports.useState(activeTabExternal || CHAT_TAB_ID);
     const [mode, setMode] = reactExports.useState(currentMode);
     const [messages, setMessages] = reactExports.useState([]);
@@ -7180,9 +7187,10 @@ var __async = (__this, __arguments, generator) => {
     }, [mode, storage]);
     reactExports.useEffect(() => {
       if (!activeTabExternal) return;
-      if (activeTabExternal === activeTab) return;
-      setActiveTab(activeTabExternal);
-    }, [activeTabExternal, activeTab]);
+      setActiveTab(
+        (current) => current === activeTabExternal ? current : activeTabExternal
+      );
+    }, [activeTabExternal]);
     reactExports.useEffect(() => {
       applySplitLayout(isOpen);
       return () => {
@@ -7225,7 +7233,7 @@ var __async = (__this, __arguments, generator) => {
         chatHistory,
         provisionalChatId
       }) {
-        var _a2;
+        var _a;
         const trimmedSelection = selection || selectedText || "";
         if (!trimmedSelection && !newUserMessage) return;
         setChatError(null);
@@ -7255,7 +7263,7 @@ var __async = (__this, __arguments, generator) => {
             pageUrl,
             courseCode
           }) : null;
-          const explanation = ((_a2 = response == null ? void 0 : response.data) == null ? void 0 : _a2.explanation) || `(${mode}) ${newUserMessage || trimmedSelection}`;
+          const explanation = ((_a = response == null ? void 0 : response.data) == null ? void 0 : _a.explanation) || `(${mode}) ${newUserMessage || trimmedSelection}`;
           const resolvedChatId = (response == null ? void 0 : response.chatId) || chatId || provisionalChatId || null;
           const now = (/* @__PURE__ */ new Date()).toISOString();
           setMessages(
@@ -7333,12 +7341,51 @@ var __async = (__this, __arguments, generator) => {
       },
       [mode, triggerProcess, upsertHistory]
     );
+    const appendSelectionToCurrentChat = reactExports.useCallback(
+      (text) => {
+        const trimmed = text.trim();
+        if (!trimmed) return;
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        const userMessage = {
+          id: `user-${Date.now()}`,
+          role: "user",
+          content: trimmed,
+          timestamp: now,
+          mode,
+          source: "selection"
+        };
+        const provisionalChatId = isValidUUID(chatId) ? chatId : activeHistoryId || `chat-${Date.now()}`;
+        setActiveTab(CHAT_TAB_ID);
+        setIsHistoryOpen(false);
+        setChatError(null);
+        setActiveHistoryId(provisionalChatId);
+        const nextMessages = [...messages, userMessage];
+        setMessages(nextMessages);
+        upsertHistory({
+          id: provisionalChatId,
+          title: textSnippet(trimmed, 48),
+          updatedAt: now,
+          lastMessage: trimmed
+        });
+        triggerProcess({
+          selection: trimmed,
+          newUserMessage: trimmed,
+          chatHistory: nextMessages,
+          provisionalChatId
+        });
+      },
+      [activeHistoryId, chatId, messages, mode, triggerProcess, upsertHistory]
+    );
     reactExports.useEffect(() => {
       if (!selectedText || selectedText.trim().length === 0) return;
       if (previousSelectionRef.current === selectedText) return;
       previousSelectionRef.current = selectedText;
-      startNewChat(selectedText, "selection");
-    }, [selectedText, startNewChat]);
+      if (messages.length === 0) {
+        startNewChat(selectedText, "selection");
+      } else {
+        appendSelectionToCurrentChat(selectedText);
+      }
+    }, [appendSelectionToCurrentChat, messages.length, selectedText, startNewChat]);
     const persistNoteDraft = reactExports.useCallback(
       (draftId) => {
         const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -7450,7 +7497,21 @@ var __async = (__this, __arguments, generator) => {
       }
     });
     const startBlankChat = () => {
-      startNewChat("Ask anything about this page", "followup");
+      const now = (/* @__PURE__ */ new Date()).toISOString();
+      const provisionalChatId = `chat-${Date.now()}`;
+      setActiveTab(CHAT_TAB_ID);
+      setIsHistoryOpen(false);
+      setChatError(null);
+      setMessages([]);
+      setInputValue("");
+      setChatId(null);
+      setActiveHistoryId(provisionalChatId);
+      upsertHistory({
+        id: provisionalChatId,
+        title: "New chat",
+        updatedAt: now,
+        lastMessage: ""
+      });
     };
     const handleNewNote = () => {
       setNotesView("current");
@@ -7459,6 +7520,71 @@ var __async = (__this, __arguments, generator) => {
       setNoteStatus("saved");
       setLastSavedAt(null);
     };
+    const handleSaveAsNote = reactExports.useCallback(
+      (messageContent) => __async(null, null, function* () {
+        if (!(apiClient == null ? void 0 : apiClient.createNote)) {
+          console.error("createNote API not available");
+          return;
+        }
+        try {
+          const title = messageContent.split("\n")[0].trim().slice(0, 50) || "Untitled note";
+          const createdNote = yield apiClient.createNote({
+            title,
+            content: messageContent.trim(),
+            sourceUrl: pageUrl,
+            courseCode: courseCode || null,
+            noteType: "manual"
+          });
+          const now = (/* @__PURE__ */ new Date()).toISOString();
+          const noteListItem = {
+            id: createdNote.id || `note-${Date.now()}`,
+            title: createdNote.title || title,
+            snippet: messageContent.trim().slice(0, 80),
+            updatedAt: createdNote.updated_at || createdNote.updatedAt || now,
+            courseCode: createdNote.course_code || createdNote.courseCode || courseCode || null
+          };
+          setNotes((prev) => {
+            const filtered = prev.filter((note) => note.id !== noteListItem.id);
+            return [noteListItem, ...filtered];
+          });
+          setActiveTab(NOTES_TAB_ID);
+          setNotesView("current");
+          setNoteTitle(noteListItem.title);
+          setNoteContent(messageContent.trim());
+          setNoteStatus("saved");
+          setLastSavedAt(now);
+          setTimeout(() => {
+            const editor = document.querySelector(
+              ".lockin-note-editor"
+            );
+            if (editor) {
+              editor.focus();
+              const range = document.createRange();
+              const selection = window.getSelection();
+              if (editor.childNodes.length > 0) {
+                range.setStart(editor, editor.childNodes.length);
+                range.collapse(true);
+              } else {
+                range.selectNodeContents(editor);
+                range.collapse(false);
+              }
+              selection == null ? void 0 : selection.removeAllRanges();
+              selection == null ? void 0 : selection.addRange(range);
+            }
+          }, 150);
+        } catch (error) {
+          console.error("Failed to save note:", error);
+          setActiveTab(NOTES_TAB_ID);
+          setNotesView("current");
+          setNoteTitle(
+            messageContent.split("\n")[0].trim().slice(0, 50) || "Untitled note"
+          );
+          setNoteContent(messageContent.trim());
+          setNoteStatus("idle");
+        }
+      }),
+      [apiClient, courseCode, pageUrl]
+    );
     const notesFooterLabel = reactExports.useMemo(() => {
       if (noteStatus === "saving") return "Saving...";
       if (noteStatus === "saved") {
@@ -7468,7 +7594,7 @@ var __async = (__this, __arguments, generator) => {
     }, [lastSavedAt, noteStatus]);
     const renderChatMessages = () => {
       if (!messages.length) {
-        return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-placeholder", children: "Ctrl/Cmd + highlight text to start a chat, or type a question below." });
+        return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-empty", children: "Ask anything about this page to start a new chat." });
       }
       return messages.map((message) => {
         const roleClass = message.role === "assistant" ? "lockin-chat-msg lockin-chat-msg-assistant" : "lockin-chat-msg lockin-chat-msg-user";
@@ -7481,10 +7607,12 @@ var __async = (__this, __arguments, generator) => {
               children: message.content
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-message-time", children: [
-            message.source === "selection" ? "Selection - " : "",
-            formatTimeLabel(message.timestamp)
-          ] })
+          message.role === "assistant" && !message.isPending ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            SaveNoteAction,
+            {
+              onSaveAsNote: () => handleSaveAsNote(message.content)
+            }
+          ) : null
         ] }, message.id);
       });
     };
@@ -7661,13 +7789,7 @@ var __async = (__this, __arguments, generator) => {
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-top-bar", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-top-bar-left", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-mode-selector-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  ModeSelector,
-                  {
-                    value: mode,
-                    onSelect: (newMode) => setMode(newMode)
-                  }
-                ) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-brand", children: "Lock-in" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-tabs-wrapper", role: "tablist", children: [CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
                   const label = tabId === CHAT_TAB_ID ? "Chat" : "Notes";
                   const isActive = activeTab === tabId;
@@ -7690,99 +7812,130 @@ var __async = (__this, __arguments, generator) => {
                   className: "lockin-close-btn",
                   onClick: onToggle,
                   "aria-label": "Close sidebar",
-                  children: "x"
+                  children: "×"
                 }
               )
             ] }),
-            activeTab === CHAT_TAB_ID && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-container", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "aside",
-                {
-                  className: "lockin-chat-history-panel",
-                  "data-state": isHistoryOpen ? "open" : "closed",
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-actions", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-label", children: "Chats" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "button",
+            activeTab === CHAT_TAB_ID && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-toolbar", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-toolbar-left", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "button",
+                  {
+                    className: "lockin-history-toggle-btn",
+                    onClick: () => setIsHistoryOpen((prev) => !prev),
+                    "aria-label": "Toggle chat history",
+                    "aria-pressed": isHistoryOpen,
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "span",
                         {
-                          className: "lockin-new-chat-btn",
-                          onClick: startBlankChat,
-                          children: "+ New Chat"
+                          className: "lockin-history-toggle-icon",
+                          "aria-hidden": "true",
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" })
+                          ]
                         }
-                      )
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-list", children: recentChats.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-empty", children: "No chats yet. Start from a highlight or a question." }) : recentChats.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "button",
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-sr-only", children: "Toggle chat history" })
+                    ]
+                  }
+                ) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-toolbar-right", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    ModeSelector,
+                    {
+                      value: mode,
+                      onSelect: (newMode) => setMode(newMode)
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      className: "lockin-new-chat-btn",
+                      onClick: startBlankChat,
+                      children: "+ New chat"
+                    }
+                  )
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: "lockin-chat-container",
+                  "data-history-state": isHistoryOpen ? "open" : "closed",
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "aside",
                       {
-                        className: `lockin-history-item ${activeHistoryId === item.id ? "active" : ""}`,
-                        onClick: () => handleHistorySelect(item),
+                        className: "lockin-chat-history-panel",
+                        "data-state": isHistoryOpen ? "open" : "closed",
                         children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-item-content", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-title", children: item.title }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-meta", children: relativeLabel(item.updatedAt) })
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-actions", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-label", children: "Chats" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "button",
+                              {
+                                className: "lockin-new-chat-btn",
+                                onClick: startBlankChat,
+                                children: "+ New chat"
+                              }
+                            )
                           ] }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-item-menu", children: "..." })
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-list", children: recentChats.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-empty", children: "No chats yet. Start from a highlight or a question." }) : recentChats.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "button",
+                            {
+                              className: `lockin-history-item ${activeHistoryId === item.id ? "active" : ""}`,
+                              onClick: () => handleHistorySelect(item),
+                              children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-item-content", children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-title", children: item.title }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-meta", children: relativeLabel(item.updatedAt) })
+                              ] })
+                            },
+                            item.id
+                          )) })
                         ]
-                      },
-                      item.id
-                    )) })
+                      }
+                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-main", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-content", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-messages-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-messages", children: [
+                        renderChatMessages(),
+                        chatError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-error", children: chatError })
+                      ] }) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-bottom-section", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-input", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "textarea",
+                          {
+                            className: "lockin-chat-input-field",
+                            placeholder: "Ask a follow-up question...",
+                            value: inputValue,
+                            onChange: (e) => setInputValue(e.target.value),
+                            onKeyDown: (e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                if (inputValue.trim() && !isSending) {
+                                  handleSend();
+                                }
+                              }
+                            },
+                            rows: 1
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            className: "lockin-send-btn",
+                            disabled: !inputValue.trim() || isSending,
+                            onClick: handleSend,
+                            children: "Send"
+                          }
+                        )
+                      ] }) })
+                    ] }) })
                   ]
                 }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-main", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-header", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-header-left", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "button",
-                      {
-                        className: "lockin-history-toggle-btn",
-                        onClick: () => setIsHistoryOpen((prev) => !prev),
-                        "aria-label": "Toggle chat history",
-                        children: "="
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 700 }, children: "Chat" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontSize: "12px", color: "#6b7280" }, children: [
-                        "Mode: ",
-                        (_a = MODE_OPTIONS.find((m) => m.value === mode)) == null ? void 0 : _a.label,
-                        " |",
-                        " ",
-                        courseCode ? `Course ${courseCode}` : "No course detected"
-                      ] })
-                    ] })
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-mode-selector-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ModeSelector, { value: mode, onSelect: (newMode) => setMode(newMode) }) })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-content", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-messages-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-messages", children: [
-                    renderChatMessages(),
-                    chatError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-error", children: chatError })
-                  ] }) }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-bottom-section", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-input", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "textarea",
-                      {
-                        className: "lockin-chat-input-field",
-                        placeholder: "Ask a follow-up question...",
-                        value: inputValue,
-                        onChange: (e) => setInputValue(e.target.value),
-                        rows: 1
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "button",
-                      {
-                        className: "lockin-send-btn",
-                        disabled: !inputValue.trim() || isSending,
-                        onClick: handleSend,
-                        children: "Send"
-                      }
-                    )
-                  ] }) })
-                ] })
-              ] })
+              )
             ] }),
             activeTab === NOTES_TAB_ID && renderNotesView()
           ]

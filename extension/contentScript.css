@@ -26,15 +26,9 @@
 
 /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
 html {
-  --lockin-sidebar-min: 320px;
-  --lockin-sidebar-max: 390px;
-  --lockin-sidebar-fluid: 35vw;
-  --lockin-sidebar-width: clamp(
-    var(--lockin-sidebar-min),
-    var(--lockin-sidebar-fluid),
-    var(--lockin-sidebar-max)
-  );
-  --lockin-content-width: calc(100% - var(--lockin-sidebar-width));
+  /* Explicit 65/35 split to avoid gutters between content and sidebar */
+  --lockin-sidebar-width: 30vw;
+  --lockin-content-width: 70vw;
 }
 
 /* Default: page uses 100% width */
@@ -52,6 +46,8 @@ body.lockin-sidebar-open {
   width: var(--lockin-content-width) !important;
   max-width: var(--lockin-content-width) !important;
   overflow-x: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Prevent horizontal scrollbar during transition */
@@ -66,6 +62,18 @@ body.lockin-sidebar-open #page-wrapper {
   max-width: none !important;
   width: 100% !important;
   margin-left: 0 !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Also flatten common container wrappers that add gutters */
+body.lockin-sidebar-open .container,
+body.lockin-sidebar-open .container-fluid,
+body.lockin-sidebar-open main,
+body.lockin-sidebar-open #main-content,
+body.lockin-sidebar-open .content {
+  max-width: 100% !important;
+  width: 100% !important;
   margin-right: 0 !important;
   padding-right: 0 !important;
 }
@@ -164,6 +172,12 @@ body.lockin-sidebar-open #page-wrapper {
   gap: 12px;
   flex: 1;
   min-width: 0;
+}
+
+.lockin-brand {
+  font-weight: 700;
+  font-size: 14px;
+  color: #111827;
 }
 
 .lockin-mode-selector-wrapper {
@@ -309,22 +323,28 @@ body.lockin-sidebar-open #page-wrapper {
 
 /* === CHAT CONTAINER (History Panel + Main Chat) === */
 .lockin-chat-container {
-  display: flex;
+  display: grid;
+  grid-template-columns: 260px 1fr;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  gap: 0;
+}
+
+.lockin-chat-container[data-history-state="closed"] {
+  grid-template-columns: 0 1fr;
 }
 
 /* === CHAT HISTORY PANEL (Left Side) === */
 .lockin-chat-history-panel {
-  width: 25%;
-  min-width: 180px;
-  max-width: 240px;
+  width: 260px;
+  min-width: 240px;
+  max-width: 280px;
   background: #f9fafb;
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.24s ease;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -332,11 +352,15 @@ body.lockin-sidebar-open #page-wrapper {
 .lockin-chat-history-panel[data-state="closed"] {
   transform: translateX(-100%);
   width: 0;
+  min-width: 0;
+  opacity: 0;
+  pointer-events: none;
   border-right: none;
 }
 
 .lockin-chat-history-panel[data-state="open"] {
   transform: translateX(0);
+  opacity: 1;
 }
 
 .lockin-history-actions {
@@ -474,48 +498,72 @@ body.lockin-sidebar-open #page-wrapper {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  background: white;
 }
 
-.lockin-chat-header {
+.lockin-chat-toolbar {
   display: flex;
   align-items: center;
-  padding: 8px 12px;
+  justify-content: space-between;
+  padding: 10px 16px;
   border-bottom: 1px solid #e5e7eb;
-  background: white;
-  flex-shrink: 0;
+  background: #ffffff;
+  gap: 12px;
 }
 
-.lockin-chat-header-left {
+.lockin-chat-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lockin-chat-toolbar-title {
+  font-weight: 700;
+  color: #111827;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lockin-chat-toolbar-right {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1;
 }
 
 .lockin-history-toggle-btn {
-  background: none;
-  border: none;
-  padding: 6px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  padding: 8px;
   cursor: pointer;
-  font-size: 16px;
-  color: #6b7280;
-  border-radius: 4px;
+  color: #374151;
+  border-radius: 10px;
   transition: all 0.15s ease;
-  width: 32px;
-  height: 32px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
 }
 
 .lockin-history-toggle-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
+  background: #e5e7eb;
+  border-color: #d1d5db;
 }
 
-.lockin-chat-header .lockin-mode-selector-wrapper {
-  flex-shrink: 0;
+.lockin-history-toggle-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.lockin-history-toggle-line {
+  width: 14px;
+  height: 2px;
+  background: #111827;
+  border-radius: 999px;
+  display: block;
 }
 
 .lockin-chat-content {
@@ -662,21 +710,19 @@ body.lockin-sidebar-open #page-wrapper {
   color: #4b5563;
 }
 
-/* Chat action buttons (Save as note, Generate notes) */
-.lockin-chat-msg-actions {
-  display: flex;
-  gap: 8px;
+/* Save note action for assistant messages */
+.lockin-chat-save-note-action {
   padding: 4px 0;
   margin-top: 4px;
-  opacity: 0.7;
+  opacity: 0;
   transition: opacity 0.15s ease;
 }
 
-.lockin-chat-msg-assistant:hover .lockin-chat-msg-actions {
+.lockin-chat-msg-assistant:hover .lockin-chat-save-note-action {
   opacity: 1;
 }
 
-.lockin-chat-action-btn {
+.lockin-chat-save-note-btn {
   background: none;
   border: none;
   color: #6b7280;
@@ -688,12 +734,12 @@ body.lockin-sidebar-open #page-wrapper {
   font-weight: 500;
 }
 
-.lockin-chat-action-btn:hover {
+.lockin-chat-save-note-btn:hover {
   background: #f3f4f6;
   color: #374151;
 }
 
-.lockin-chat-placeholder {
+.lockin-chat-empty {
   text-align: center;
   padding: 32px 16px;
   color: #9ca3af;
@@ -1225,6 +1271,7 @@ body.lockin-sidebar-open #page-wrapper {
   font-size: 13px;
   color: #4b5563;
   line-height: 1.5;
+  line-clamp: 2;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -1293,6 +1340,18 @@ body.lockin-sidebar-open #page-wrapper {
 .lockin-history-list::-webkit-scrollbar-thumb:hover,
 .lockin-notes-list::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
+}
+
+.lockin-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* === RESPONSIVE BEHAVIOR === */

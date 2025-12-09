@@ -33,8 +33,7 @@
         "https://pollev.com/*",
         "https://*.pollev.com/*",
         "https://echo360.net.au/*",
-        "https://*.echo360.net.au/*",
-        "https://*.google.com/*"
+        "https://*.echo360.net.au/*"
       ],
       "js": [
         "config.js",

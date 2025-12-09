@@ -85,13 +85,6 @@ function isValidUUID(value: string | null | undefined) {
   );
 }
 
-function formatTimeLabel(iso: string | null | undefined) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
 function relativeLabel(iso: string | null | undefined) {
   if (!iso) return "just now";
   const date = new Date(iso);
@@ -111,6 +104,28 @@ function textSnippet(text: string, length = 80) {
   if (text.length <= length) return text;
   return `${text.slice(0, length)}...`;
 }
+
+interface SaveNoteActionProps {
+  onSaveAsNote: () => void;
+}
+
+function SaveNoteAction({ onSaveAsNote }: SaveNoteActionProps) {
+  return (
+    <div className="lockin-chat-save-note-action">
+      <button
+        className="lockin-chat-save-note-btn"
+        onClick={(e) => {
+          e.stopPropagation();
+          onSaveAsNote();
+        }}
+        type="button"
+      >
+        Save note
+      </button>
+    </div>
+  );
+}
+
 function ModeSelector({
   value,
   onSelect,
@@ -266,9 +281,10 @@ export function LockInSidebar({
 
   useEffect(() => {
     if (!activeTabExternal) return;
-    if (activeTabExternal === activeTab) return;
-    setActiveTab(activeTabExternal);
-  }, [activeTabExternal, activeTab]);
+    setActiveTab((current) =>
+      current === activeTabExternal ? current : activeTabExternal
+    );
+  }, [activeTabExternal]);
 
   useEffect(() => {
     applySplitLayout(isOpen);
@@ -451,12 +467,58 @@ export function LockInSidebar({
     [mode, triggerProcess, upsertHistory]
   );
 
+  const appendSelectionToCurrentChat = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const now = new Date().toISOString();
+      const userMessage: ChatMessageItem = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: trimmed,
+        timestamp: now,
+        mode,
+        source: "selection",
+      };
+      const provisionalChatId = isValidUUID(chatId)
+        ? (chatId as string)
+        : activeHistoryId || `chat-${Date.now()}`;
+
+      setActiveTab(CHAT_TAB_ID);
+      setIsHistoryOpen(false);
+      setChatError(null);
+      setActiveHistoryId(provisionalChatId);
+
+      const nextMessages = [...messages, userMessage];
+      setMessages(nextMessages);
+
+      upsertHistory({
+        id: provisionalChatId,
+        title: textSnippet(trimmed, 48),
+        updatedAt: now,
+        lastMessage: trimmed,
+      });
+
+      triggerProcess({
+        selection: trimmed,
+        newUserMessage: trimmed,
+        chatHistory: nextMessages,
+        provisionalChatId,
+      });
+    },
+    [activeHistoryId, chatId, messages, mode, triggerProcess, upsertHistory]
+  );
+
   useEffect(() => {
     if (!selectedText || selectedText.trim().length === 0) return;
     if (previousSelectionRef.current === selectedText) return;
     previousSelectionRef.current = selectedText;
-    startNewChat(selectedText, "selection");
-  }, [selectedText, startNewChat]);
+    if (messages.length === 0) {
+      startNewChat(selectedText, "selection");
+    } else {
+      appendSelectionToCurrentChat(selectedText);
+    }
+  }, [appendSelectionToCurrentChat, messages.length, selectedText, startNewChat]);
 
   const persistNoteDraft = useCallback(
     (draftId?: string) => {
@@ -583,7 +645,21 @@ export function LockInSidebar({
   };
 
   const startBlankChat = () => {
-    startNewChat("Ask anything about this page", "followup");
+    const now = new Date().toISOString();
+    const provisionalChatId = `chat-${Date.now()}`;
+    setActiveTab(CHAT_TAB_ID);
+    setIsHistoryOpen(false);
+    setChatError(null);
+    setMessages([]);
+    setInputValue("");
+    setChatId(null);
+    setActiveHistoryId(provisionalChatId);
+    upsertHistory({
+      id: provisionalChatId,
+      title: "New chat",
+      updatedAt: now,
+      lastMessage: "",
+    });
   };
 
   const handleNewNote = () => {
@@ -593,6 +669,88 @@ export function LockInSidebar({
     setNoteStatus("saved");
     setLastSavedAt(null);
   };
+
+  const handleSaveAsNote = useCallback(
+    async (messageContent: string) => {
+      if (!apiClient?.createNote) {
+        console.error("createNote API not available");
+        return;
+      }
+
+      try {
+        // Generate a title from the message content (first line or first 50 chars)
+        const title = messageContent
+          .split("\n")[0]
+          .trim()
+          .slice(0, 50) || "Untitled note";
+
+        // Create note via API
+        const createdNote = await apiClient.createNote({
+          title,
+          content: messageContent.trim(),
+          sourceUrl: pageUrl,
+          courseCode: courseCode || null,
+          noteType: "manual",
+        });
+
+        // Update local notes state
+        const now = new Date().toISOString();
+        const noteListItem: NoteListItem = {
+          id: createdNote.id || `note-${Date.now()}`,
+          title: createdNote.title || title,
+          snippet: messageContent.trim().slice(0, 80),
+          updatedAt: createdNote.updated_at || createdNote.updatedAt || now,
+          courseCode: createdNote.course_code || createdNote.courseCode || courseCode || null,
+        };
+
+        setNotes((prev) => {
+          const filtered = prev.filter((note) => note.id !== noteListItem.id);
+          return [noteListItem, ...filtered];
+        });
+
+        // Switch to Notes tab and open the note
+        setActiveTab(NOTES_TAB_ID);
+        setNotesView("current");
+        setNoteTitle(noteListItem.title);
+        setNoteContent(messageContent.trim());
+        setNoteStatus("saved");
+        setLastSavedAt(now);
+
+        // Focus the editor after a brief delay to ensure DOM is ready
+        setTimeout(() => {
+          const editor = document.querySelector(
+            ".lockin-note-editor"
+          ) as HTMLElement;
+          if (editor) {
+            editor.focus();
+            // Move cursor to end of content
+            const range = document.createRange();
+            const selection = window.getSelection();
+            if (editor.childNodes.length > 0) {
+              range.setStart(editor, editor.childNodes.length);
+              range.collapse(true);
+            } else {
+              range.selectNodeContents(editor);
+              range.collapse(false);
+            }
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+          }
+        }, 150);
+      } catch (error: any) {
+        console.error("Failed to save note:", error);
+        // Still switch to Notes tab and pre-fill, but mark as unsaved
+        setActiveTab(NOTES_TAB_ID);
+        setNotesView("current");
+        setNoteTitle(
+          messageContent.split("\n")[0].trim().slice(0, 50) || "Untitled note"
+        );
+        setNoteContent(messageContent.trim());
+        setNoteStatus("idle");
+      }
+    },
+    [apiClient, courseCode, pageUrl]
+  );
 
   const notesFooterLabel = useMemo(() => {
     if (noteStatus === "saving") return "Saving...";
@@ -605,8 +763,8 @@ export function LockInSidebar({
   const renderChatMessages = () => {
     if (!messages.length) {
       return (
-        <div className="lockin-chat-placeholder">
-          Ctrl/Cmd + highlight text to start a chat, or type a question below.
+        <div className="lockin-chat-empty">
+          Ask anything about this page to start a new chat.
         </div>
       );
     }
@@ -630,10 +788,11 @@ export function LockInSidebar({
           >
             {message.content}
           </div>
-          <div className="lockin-chat-message-time">
-            {message.source === "selection" ? "Selection - " : ""}
-            {formatTimeLabel(message.timestamp)}
-          </div>
+          {message.role === "assistant" && !message.isPending ? (
+            <SaveNoteAction
+              onSaveAsNote={() => handleSaveAsNote(message.content)}
+            />
+          ) : null}
         </div>
       );
     });
@@ -848,12 +1007,7 @@ export function LockInSidebar({
         >
           <div className="lockin-top-bar">
             <div className="lockin-top-bar-left">
-              <div className="lockin-mode-selector-wrapper">
-                <ModeSelector
-                  value={mode}
-                  onSelect={(newMode) => setMode(newMode)}
-                />
-              </div>
+              <div className="lockin-brand">Lock-in</div>
               <div className="lockin-tabs-wrapper" role="tablist">
                 {[CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
                   const label = tabId === CHAT_TAB_ID ? "Chat" : "Notes";
@@ -879,108 +1033,131 @@ export function LockInSidebar({
               onClick={onToggle}
               aria-label="Close sidebar"
             >
-              x
+              ×
             </button>
           </div>
 
           {activeTab === CHAT_TAB_ID && (
-            <div className="lockin-chat-container">
-              <aside
-                className="lockin-chat-history-panel"
-                data-state={isHistoryOpen ? "open" : "closed"}
-              >
-                <div className="lockin-history-actions">
-                  <span className="lockin-history-label">Chats</span>
-                  <button
-                    className="lockin-new-chat-btn"
-                    onClick={startBlankChat}
-                  >
-                    + New Chat
-                  </button>
-                </div>
-                <div className="lockin-history-list">
-                  {recentChats.length === 0 ? (
-                    <div className="lockin-history-empty">
-                      No chats yet. Start from a highlight or a question.
-                    </div>
-                  ) : (
-                    recentChats.map((item) => (
+                <>
+                  <div className="lockin-chat-toolbar">
+                    <div className="lockin-chat-toolbar-left">
                       <button
-                        key={item.id}
-                        className={`lockin-history-item ${
-                          activeHistoryId === item.id ? "active" : ""
-                        }`}
-                        onClick={() => handleHistorySelect(item)}
+                        className="lockin-history-toggle-btn"
+                        onClick={() => setIsHistoryOpen((prev) => !prev)}
+                        aria-label="Toggle chat history"
+                        aria-pressed={isHistoryOpen}
                       >
-                        <div className="lockin-history-item-content">
-                          <div className="lockin-history-title">
-                            {item.title}
+                        <span
+                          className="lockin-history-toggle-icon"
+                          aria-hidden="true"
+                        >
+                          <span className="lockin-history-toggle-line" />
+                          <span className="lockin-history-toggle-line" />
+                          <span className="lockin-history-toggle-line" />
+                        </span>
+                        <span className="lockin-sr-only">Toggle chat history</span>
+                      </button>
+                    </div>
+                    <div className="lockin-chat-toolbar-right">
+                      <ModeSelector
+                        value={mode}
+                        onSelect={(newMode) => setMode(newMode)}
+                      />
+                      <button
+                        className="lockin-new-chat-btn"
+                        onClick={startBlankChat}
+                      >
+                        + New chat
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    className="lockin-chat-container"
+                    data-history-state={isHistoryOpen ? "open" : "closed"}
+                  >
+                    <aside
+                      className="lockin-chat-history-panel"
+                      data-state={isHistoryOpen ? "open" : "closed"}
+                    >
+                      <div className="lockin-history-actions">
+                        <span className="lockin-history-label">Chats</span>
+                        <button
+                          className="lockin-new-chat-btn"
+                          onClick={startBlankChat}
+                        >
+                          + New chat
+                        </button>
+                      </div>
+                      <div className="lockin-history-list">
+                        {recentChats.length === 0 ? (
+                          <div className="lockin-history-empty">
+                            No chats yet. Start from a highlight or a question.
                           </div>
-                          <div className="lockin-history-meta">
-                            {relativeLabel(item.updatedAt)}
+                        ) : (
+                          recentChats.map((item) => (
+                            <button
+                              key={item.id}
+                              className={`lockin-history-item ${
+                                activeHistoryId === item.id ? "active" : ""
+                              }`}
+                              onClick={() => handleHistorySelect(item)}
+                            >
+                              <div className="lockin-history-item-content">
+                                <div className="lockin-history-title">
+                                  {item.title}
+                                </div>
+                                <div className="lockin-history-meta">
+                                  {relativeLabel(item.updatedAt)}
+                                </div>
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </aside>
+
+                    <div className="lockin-chat-main">
+                      <div className="lockin-chat-content">
+                        <div className="lockin-chat-messages-wrapper">
+                          <div className="lockin-chat-messages">
+                            {renderChatMessages()}
+                            {chatError && (
+                              <div className="lockin-chat-error">{chatError}</div>
+                            )}
                           </div>
                         </div>
-                        <span className="lockin-history-item-menu">...</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </aside>
 
-              <div className="lockin-chat-main">
-                <div className="lockin-chat-header">
-                  <div className="lockin-chat-header-left">
-                    <button
-                      className="lockin-history-toggle-btn"
-                      onClick={() => setIsHistoryOpen((prev) => !prev)}
-                      aria-label="Toggle chat history"
-                    >
-                      =
-                    </button>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>Chat</div>
-                      <div style={{ fontSize: "12px", color: "#6b7280" }}>
-                        Mode: {MODE_OPTIONS.find((m) => m.value === mode)?.label} |{" "}
-                        {courseCode ? `Course ${courseCode}` : "No course detected"}
+                        <div className="lockin-chat-bottom-section">
+                          <div className="lockin-chat-input">
+                            <textarea
+                              className="lockin-chat-input-field"
+                              placeholder="Ask a follow-up question..."
+                              value={inputValue}
+                              onChange={(e) => setInputValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && !e.shiftKey) {
+                                  e.preventDefault();
+                                  if (inputValue.trim() && !isSending) {
+                                    handleSend();
+                                  }
+                                }
+                              }}
+                              rows={1}
+                            />
+                            <button
+                              className="lockin-send-btn"
+                              disabled={!inputValue.trim() || isSending}
+                              onClick={handleSend}
+                            >
+                              Send
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                  <div className="lockin-mode-selector-wrapper">
-                    <ModeSelector value={mode} onSelect={(newMode) => setMode(newMode)} />
-                  </div>
-                </div>
-
-                <div className="lockin-chat-content">
-                  <div className="lockin-chat-messages-wrapper">
-                    <div className="lockin-chat-messages">
-                      {renderChatMessages()}
-                      {chatError && (
-                        <div className="lockin-chat-error">{chatError}</div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="lockin-chat-bottom-section">
-                    <div className="lockin-chat-input">
-                      <textarea
-                        className="lockin-chat-input-field"
-                        placeholder="Ask a follow-up question..."
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        rows={1}
-                      />
-                      <button
-                        className="lockin-send-btn"
-                        disabled={!inputValue.trim() || isSending}
-                        onClick={handleSend}
-                      >
-                        Send
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+                </>
           )}
 
           {activeTab === NOTES_TAB_ID && renderNotesView()}
