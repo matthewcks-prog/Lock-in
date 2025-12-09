@@ -100,14 +100,31 @@ export function createApiClient(config: ApiClientConfig) {
   /**
    * Make an authenticated API request
    */
-  async function apiRequest<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  async function apiRequest<T = any>(
+    endpoint: string,
+    options: RequestInit & { signal?: AbortSignal } = {}
+  ): Promise<T> {
     const url = endpoint.startsWith("http") ? endpoint : `${backendUrl}${endpoint}`;
+
+    // Check if request was aborted before starting
+    if (options.signal?.aborted) {
+      const error = new Error("Request was aborted");
+      (error as any).code = "ABORTED";
+      throw error;
+    }
 
     // Get access token
     const accessToken = await authClient.getValidAccessToken();
     if (!accessToken) {
       const error = new Error("Please sign in via the Lock-in popup before using the assistant.");
       (error as any).code = "AUTH_REQUIRED";
+      throw error;
+    }
+
+    // Check again after async operation
+    if (options.signal?.aborted) {
+      const error = new Error("Request was aborted");
+      (error as any).code = "ABORTED";
       throw error;
     }
 
@@ -118,17 +135,24 @@ export function createApiClient(config: ApiClientConfig) {
       ...(options.headers || {}),
     };
 
-    // Prepare request
+    // Prepare request (include signal for cancellation)
     const requestOptions: RequestInit = {
       ...options,
       headers,
+      signal: options.signal,
     };
 
     // Make request
     let response: Response;
     try {
       response = await fetch(url, requestOptions);
-    } catch (networkError) {
+    } catch (networkError: any) {
+      // Check if error is due to abort
+      if (networkError.name === "AbortError" || options.signal?.aborted) {
+        const error = new Error("Request was aborted");
+        (error as any).code = "ABORTED";
+        throw error;
+      }
       const error = new Error("Unable to reach Lock-in. Please check your connection.");
       (error as any).code = "NETWORK_ERROR";
       (error as any).cause = networkError;
@@ -267,18 +291,22 @@ export function createApiClient(config: ApiClientConfig) {
   /**
    * Create a new note
    */
-  async function createNote(note: {
-    title: string;
-    content: string;
-    sourceSelection?: string;
-    sourceUrl?: string;
-    courseCode?: string | null;
-    noteType?: string;
-    tags?: string[];
-  }): Promise<any> {
+  async function createNote(
+    note: {
+      title: string;
+      content: string;
+      sourceSelection?: string;
+      sourceUrl?: string;
+      courseCode?: string | null;
+      noteType?: string;
+      tags?: string[];
+    },
+    options?: { signal?: AbortSignal }
+  ): Promise<any> {
     return apiRequest<any>("/api/notes", {
       method: "POST",
       body: JSON.stringify(note),
+      signal: options?.signal,
     });
   }
 
@@ -295,15 +323,20 @@ export function createApiClient(config: ApiClientConfig) {
       courseCode?: string | null;
       noteType?: string;
       tags?: string[];
-    }
+    },
+    options?: { signal?: AbortSignal }
   ): Promise<any> {
     if (!noteId) {
       throw new Error("noteId is required to update a note");
     }
-    return apiRequest<any>(`/api/notes/${noteId}`, {
-      method: "PUT",
-      body: JSON.stringify(note),
-    });
+    return apiRequest<any>(
+      `/api/notes/${noteId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(note),
+        signal: options?.signal,
+      }
+    );
   }
 
   /**

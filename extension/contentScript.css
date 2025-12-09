@@ -1117,6 +1117,12 @@ body.lockin-sidebar-open .content {
   line-height: 1.6;
   font-size: 14px;
   outline: none;
+  direction: ltr;
+  text-align: left;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: #1f2937;
+  font-family: inherit;
 }
 
 .lockin-note-editor:empty:before {
