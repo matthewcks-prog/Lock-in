@@ -100,6 +100,7 @@ CURRENT RUN NOTES
 - Content script refactored into helpers under `extension/content/` (pageContext, stateStore, sidebarHost, sessionManager, interactions) with a thin orchestrator.
 - Architecture docs refreshed: `ARCHITECTURE_AUDIT.md` now reflects the modular content script; `CODE_OVERVIEW.md` updated with the current structure.
 - Implementation checklist still references legacy components and needs a future cleanup pass.
+- Sidebar UX tightened: mode selector now lives inside the Chat tab header only; chat history toggle is a compact pill; top bar simplified to brand + tabs.
 
 When youâ€™re ready, follow the workflow above starting from step 1 (scan docs and structure), then present your plan before you touch any files.
 
