@@ -26,9 +26,12 @@
 
 /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
 html {
-  /* Explicit 65/35 split to avoid gutters between content and sidebar */
-  --lockin-sidebar-width: 30vw;
-  --lockin-content-width: 70vw;
+  /* Clamp keeps sidebar consistent on large/small screens and leaves ~65% to content */
+  --lockin-sidebar-min: 320px;
+  --lockin-sidebar-max: 500px;
+  --lockin-sidebar-ideal: 35vw;
+  --lockin-sidebar-width: clamp(var(--lockin-sidebar-min), var(--lockin-sidebar-ideal), var(--lockin-sidebar-max));
+  --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
 }
 
 /* Default: page uses 100% width */
@@ -835,24 +838,74 @@ body.lockin-sidebar-open .content {
 .lockin-notes-header {
   display: grid;
   grid-template-columns: 1fr auto auto;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 16px;
   border-bottom: 1px solid #e5e7eb;
-  min-height: 52px;
+  background: #ffffff;
 }
 
-.lockin-notes-heading-title {
-  font-size: 18px;
+.lockin-notes-header-middle {
+  display: flex;
+  align-items: center;
+}
+
+.lockin-notes-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.lockin-notes-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lockin-note-course-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.lockin-note-label {
+  font-weight: 400;
+  color: #6b7280;
+}
+
+.lockin-note-course-code {
   font-weight: 700;
   color: #111827;
-  line-height: 1.2;
 }
 
-.lockin-notes-heading-subtitle {
+.lockin-note-link-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #6b7280;
-  margin-top: 2px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lockin-note-link-inline {
+  color: #2563eb;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.lockin-note-link-inline:hover {
+  text-decoration: underline;
+}
+
+.lockin-note-link-empty {
+  color: #9ca3af;
 }
 
 .lockin-notes-toggle {
@@ -928,7 +981,7 @@ body.lockin-sidebar-open .content {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   padding: 12px 16px 14px;
   overflow: hidden;
 }
@@ -941,203 +994,413 @@ body.lockin-sidebar-open .content {
   height: 100%;
 }
 
+.lockin-note-current-view {
+  gap: 10px;
+}
+
 .lockin-note-current-view.is-active,
 .lockin-all-notes-view.is-active {
   display: flex;
 }
 
-.lockin-note-meta-row {
+.lockin-note-shell-card {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 6px 20px rgba(17, 24, 39, 0.04);
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #6b7280;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.lockin-note-link-label {
-  font-weight: 600;
-  color: #4b5563;
-  margin-right: 4px;
+.lockin-note-shell-head {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
 }
 
-.lockin-note-link-target a {
-  color: #2563eb;
-  text-decoration: none;
-}
-
-.lockin-note-link-target a:hover {
-  text-decoration: underline;
-}
-
-.lockin-note-link-empty {
-  color: #9ca3af;
-}
-
-.lockin-note-title-wrap {
-  margin-top: 4px;
+.lockin-note-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
 }
 
 .lockin-note-title-input {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 14px 12px;
-  font-size: 16px;
-  font-weight: 600;
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 6px 0;
+  font-size: 17px;
+  font-weight: 700;
   font-family: inherit;
-  width: 100%;
-  box-sizing: border-box;
+  color: #111827;
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.15s ease;
+  min-width: 0;
 }
 
 .lockin-note-title-input:focus {
   outline: none;
-  border-color: var(--lockin-accent, #667eea);
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+  border-bottom-color: #667eea;
+}
+
+.lockin-note-title-input::placeholder {
+  color: #9ca3af;
+  font-weight: 500;
+}
+
+.lockin-note-status {
+  font-size: 11px;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f3f4f6;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lockin-note-status.is-success {
+  color: #065f46;
+  background: #ecfdf3;
+}
+
+.lockin-note-status.is-error {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.lockin-note-status.is-muted {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.lockin-inline-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: lockin-spin 0.8s linear infinite;
+}
+
+@keyframes lockin-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.lockin-note-toolbar-wrapper {
+  padding: 0 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .lockin-note-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 6px 4px;
-  margin-top: 6px;
-  gap: 8px;
-}
-
-.lockin-note-toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   flex-wrap: wrap;
-}
-
-.lockin-note-toolbar-right {
-  display: flex;
-  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  justify-content: flex-end;
   position: relative;
 }
 
-.lockin-note-tool-btn {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  border-radius: 6px;
-  font-weight: 700;
-  color: #374151;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.lockin-note-tool-btn:hover {
-  background: #f3f4f6;
-  color: #111827;
+.lockin-note-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
 }
 
 .lockin-note-toolbar-divider {
   width: 1px;
-  height: 20px;
+  height: 22px;
   background: #e5e7eb;
   margin: 0 4px;
 }
 
-.lockin-note-menu-trigger {
-  width: 32px;
-  height: 32px;
-  border: none;
+.lockin-note-tool-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
   background: transparent;
   border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
   cursor: pointer;
-  font-size: 18px;
-  color: #4b5563;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.lockin-note-menu-trigger:hover {
-  background: #f3f4f6;
+.lockin-note-tool-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+}
+
+.lockin-note-tool-btn:hover {
+  background: #eef2ff;
+  border-color: #e5e7eb;
   color: #111827;
 }
 
-.lockin-note-menu {
-  position: absolute;
-  right: 0;
-  top: 36px;
-  min-width: 170px;
-  background: #fff;
+.lockin-note-tool-btn.is-active {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #111827;
+}
+
+.lockin-note-tool-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockin-note-block-select {
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  padding: 6px;
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-  z-index: 5;
-}
-
-.lockin-note-menu.is-open {
-  display: flex;
-}
-
-.lockin-note-menu button {
-  border: none;
-  background: transparent;
-  text-align: left;
-  padding: 8px 10px;
   border-radius: 8px;
+  padding: 6px 10px;
   font-size: 13px;
+  font-family: inherit;
+  background: white;
   color: #1f2937;
-  cursor: pointer;
-  transition: background 0.15s ease;
 }
 
-.lockin-note-menu button:hover {
-  background: #f3f4f6;
+.lockin-note-toolbar-menu {
+  position: relative;
 }
 
-.lockin-note-menu button.danger {
-  color: #b91c1c;
-}
-
-.lockin-note-editor-card {
-  margin-top: 10px;
-  flex: 1;
-  min-height: 200px;
+.lockin-note-color-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 20px);
+  gap: 8px;
+  padding: 10px;
+  background: white;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
-  background: #f9fafb;
-  padding: 14px;
-  overflow: auto;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  z-index: 10;
 }
 
-.lockin-note-editor {
-  width: 100%;
-  min-height: 100%;
+.lockin-color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+}
+
+.lockin-color-swatch:hover {
+  border-color: #9ca3af;
+}
+
+.lockin-note-editor-surface {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: white;
+}
+
+.lockin-note-editor-scroll {
+  position: relative;
+  flex: 1;
+  min-height: 220px;
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+}
+
+.lockin-note-editor-area {
+  min-height: 200px;
+  outline: none;
+  border: none;
   line-height: 1.6;
   font-size: 14px;
-  outline: none;
+  color: #111827;
+  font-family: inherit;
   direction: ltr;
-  text-align: left;
   white-space: pre-wrap;
   word-wrap: break-word;
-  color: #1f2937;
-  font-family: inherit;
 }
 
-.lockin-note-editor:empty:before {
-  content: attr(data-placeholder);
+.lockin-note-placeholder {
+  position: absolute;
+  top: 16px;
+  left: 20px;
   color: #9ca3af;
   pointer-events: none;
-  display: block;
+  font-size: 14px;
 }
 
-.lockin-note-footer-status {
-  margin-top: 8px;
-  display: flex;
-  justify-content: flex-end;
+.lockin-note-inline-error {
+  padding: 10px 12px;
+  margin: 8px 12px 12px;
+  border-radius: 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
   font-size: 12px;
+}
+
+.lockin-note-paragraph {
+  margin: 0 0 12px;
+}
+
+.lockin-note-heading-h1 {
+  font-size: 18px;
+  font-weight: 800;
+  margin: 14px 0 8px;
+  color: #111827;
+}
+
+.lockin-note-heading-h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 12px 0 8px;
+  color: #111827;
+}
+
+.lockin-note-heading-h3 {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 10px 0 6px;
+  color: #111827;
+}
+
+.lockin-note-quote {
+  border-left: 3px solid #e5e7eb;
+  padding-left: 10px;
+  color: #4b5563;
+  margin: 12px 0;
+}
+
+.lockin-note-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.lockin-note-list-item {
+  margin-bottom: 6px;
+}
+
+.lockin-note-text-bold {
+  font-weight: 700;
+}
+
+.lockin-note-text-italic {
+  font-style: italic;
+}
+
+.lockin-note-text-underline {
+  text-decoration: underline;
+}
+
+.lockin-note-text-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  background: #f3f4f6;
+  padding: 2px 5px;
+  border-radius: 6px;
+}
+
+.lockin-note-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 10px;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.lockin-note-link {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.lockin-note-attachment-wrapper {
+  display: inline-block;
+}
+
+.lockin-note-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #111827;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.lockin-note-attachment-chip:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 3px 10px rgba(99, 102, 241, 0.12);
+}
+
+.lockin-note-attachment-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: #4b5563;
+}
+
+.lockin-note-attachment-name {
+  font-weight: 700;
+}
+
+.lockin-note-attachment-meta {
+  font-size: 11px;
   color: #6b7280;
+}
+
+.lockin-note-image-shell {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  margin: 8px 0;
+}
+
+.lockin-note-image-shell.is-selected {
+  outline: 2px solid #c7d2fe;
+  outline-offset: 4px;
+}
+
+.lockin-note-image-node {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+}
+
+.lockin-image-resize-handle {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #94a3b8;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: se-resize;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
 .lockin-all-notes-view {
