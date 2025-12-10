@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CodeNode, CodeHighlightNode, INSERT_CODE_BLOCK_COMMAND } from "@lexical/code";
+import { CodeNode, CodeHighlightNode, $createCodeNode } from "@lexical/code";
 import { LinkNode, TOGGLE_LINK_COMMAND } from "@lexical/link";
 import {
   INSERT_ORDERED_LIST_COMMAND,
@@ -9,6 +9,7 @@ import {
   $isListNode,
 } from "@lexical/list";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
+import LexicalErrorBoundary from "@lexical/react/LexicalErrorBoundary";
 import { HeadingNode, QuoteNode, $createHeadingNode, $isHeadingNode } from "@lexical/rich-text";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import type { InitialConfigType } from "@lexical/react/LexicalComposer";
@@ -20,13 +21,14 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { AutoFocusPlugin } from "@lexical/react/LexicalAutoFocusPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $generateNodesFromDOM } from "@lexical/html";
-import { $insertNodes, mergeRegister, $nodesOfType } from "@lexical/utils";
+import { mergeRegister } from "@lexical/utils";
 import { $patchStyleText, $setBlocksType } from "@lexical/selection";
 import {
   $createParagraphNode,
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $insertNodes,
   COMMAND_PRIORITY_LOW,
   FORMAT_ELEMENT_COMMAND,
   FORMAT_TEXT_COMMAND,
@@ -36,9 +38,11 @@ import {
   SELECTION_CHANGE_COMMAND,
   UNDO_COMMAND,
   $getNodeByKey,
+  $nodesOfType,
   EditorState,
+  $isElementNode,
 } from "lexical";
-import type { Note, NoteAsset, NoteContent, NoteStatus } from "../../core/domain/Note.ts";
+import type { Note, NoteAsset, NoteContent, NoteStatus } from "../../../core/domain/Note.ts";
 import { AttachmentNode, $createAttachmentNode, $isAttachmentNode } from "./nodes/AttachmentNode";
 import { ImageNode, $createImageNode, $isImageNode } from "./nodes/ImageNode";
 
@@ -480,10 +484,7 @@ function NoteToolbar({
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) return;
       const anchorNode = selection.anchor.getNode();
-      const element =
-        anchorNode.getKey() === "root"
-          ? anchorNode
-          : anchorNode.getTopLevelElementOrThrow();
+      const element = anchorNode.getTopLevelElementOrThrow();
 
       const formats = new Set<string>();
       if (selection.hasFormat("bold")) formats.add("bold");
@@ -501,8 +502,11 @@ function NoteToolbar({
         setBlockTypeState(type === "paragraph" ? "paragraph" : "paragraph");
       }
 
-      const formatType = element.getFormatType ? element.getFormatType() : "left";
-      setAlignment(formatType || "left");
+      if ($isElementNode(element)) {
+        setAlignment(element.getFormatType() || "left");
+      } else {
+        setAlignment("left");
+      }
     });
   }, [editor]);
 
@@ -654,7 +658,14 @@ function NoteToolbar({
         </ToolbarButton>
         <ToolbarButton
           label="Code block"
-          onClick={() => editor.dispatchCommand(INSERT_CODE_BLOCK_COMMAND, undefined)}
+          onClick={() =>
+            editor.update(() => {
+              const selection = $getSelection();
+              if ($isRangeSelection(selection)) {
+                $setBlocksType(selection, () => $createCodeNode());
+              }
+            })
+          }
         >
           {"{}"}
         </ToolbarButton>
@@ -846,6 +857,7 @@ export function NoteEditorShell({
                 />
               }
               placeholder={<div className="lockin-note-placeholder">Write your note here...</div>}
+              ErrorBoundary={LexicalErrorBoundary}
             />
           </div>
         </div>

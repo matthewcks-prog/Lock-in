@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Note } from "../../core/domain/Note.ts";
-import type { NotesService } from "../../core/services/notesService.ts";
+import type { Note } from "../../../core/domain/Note.ts";
+import type { NotesService } from "../../../core/services/notesService.ts";
 import { useNoteAssets } from "../../hooks/useNoteAssets";
 import { useNoteEditor } from "../../hooks/useNoteEditor";
 import { NoteEditor } from "./NoteEditor";
