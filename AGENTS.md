@@ -221,6 +221,15 @@ To add a new site integration:
 3. Test: Verify course code extraction works
 4. Document: Add site to supported sites list
 
+### Notes Editing Flow (extension)
+
+1. Domain types live in `core/domain/Note.ts` (`Note`, `NoteContent`, `NoteStatus`, `NoteAsset`).
+2. All backend calls go through `core/services/notesService.ts` (handles `content_json`/`editor_version`, writes both on create/update, and lazily migrates legacy HTML-only notes by saving a Lexical JSON state).
+3. UI orchestration sits in `ui/extension/LockInSidebar.tsx` and `ui/extension/notes/NotesPanel.tsx`.
+4. Lexical-based editor is in `ui/extension/notes/NoteEditor.tsx` (no contentEditable/innerHTML). Autosave/state comes from `useNoteEditor` + `useNotesList`; assets flow through `useNoteAssets` wired to `notesService`.
+5. When creating notes from chat or selection, generate `NoteContent` (Lexical JSON, `version: lexical_v1`) instead of HTML.
+6. The Notes UI uses a single card shell (title + status + toolbar + editor) with inline attachments: the paperclip inserts `ImageNode`/`AttachmentNode` at the cursor, images are resizable, and there is no separate attachments list.
+
 ### Adding a New Extension UI Feature
 
 1. Create component: `/extension/ui/components/NewFeature.tsx` (or source in `/ui` if using build process)

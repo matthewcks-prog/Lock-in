@@ -1,8 +1,6 @@
 # Global AGENTS.md Template
 
 > **Note**: This is a template for `~/.codex/AGENTS.md` (global preferences).
-> Copy this to your global location and customize as needed.
-
 ---
 
 ## Developer Preferences

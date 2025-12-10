@@ -22,6 +22,7 @@ export interface AuthClient {
   getSession(): Promise<AuthSession | null>;
   getCurrentUser(): Promise<AuthUser | null>;
   getValidAccessToken(): Promise<string | null>;
+  getAccessToken(): Promise<string | null>;
   onSessionChanged(callback: (session: AuthSession | null) => void): () => void;
 }
 
@@ -303,6 +304,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     getSession,
     getCurrentUser,
     getValidAccessToken,
+    getAccessToken: getValidAccessToken,
     onSessionChanged,
   };
 }

@@ -2,24 +2,31 @@
 
 const { supabase } = require('../supabaseClient');
 
-async function createNote({ userId, title, content, sourceSelection, sourceUrl, courseCode, noteType, tags, embedding }) {
+async function createNote({ userId, title, contentJson, editorVersion, contentPlain, legacyContent, sourceSelection, sourceUrl, courseCode, noteType, tags, embedding }) {
+  const insertData = {
+    user_id: userId,
+    title,
+    content_json: contentJson || {}, // Ensure we always provide content_json (defaults to {} in DB but safer to be explicit)
+    editor_version: editorVersion || 'lexical_v1',
+    content_plain: contentPlain || legacyContent || null, // Plain text content for search/display
+    source_selection: sourceSelection,
+    source_url: sourceUrl,
+    course_code: courseCode,
+    note_type: noteType,
+    tags,
+    embedding,
+  };
+
   const { data, error } = await supabase
     .from('notes')
-    .insert({
-      user_id: userId,
-      title,
-      content,
-      source_selection: sourceSelection,
-      source_url: sourceUrl,
-      course_code: courseCode,
-      note_type: noteType,
-      tags,
-      embedding,
-    })
+    .insert(insertData)
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error creating note:', error);
+    throw error;
+  }
   return data;
 }
 
@@ -39,25 +46,32 @@ async function listNotes({ userId, sourceUrl, courseCode, limit = 50 }) {
   return data;
 }
 
-async function updateNote({ userId, noteId, title, content, sourceSelection, sourceUrl, courseCode, noteType, tags, embedding }) {
+async function updateNote({ userId, noteId, title, contentJson, editorVersion, contentPlain, legacyContent, sourceSelection, sourceUrl, courseCode, noteType, tags, embedding }) {
+  const updateData = {
+    title,
+    content_json: contentJson || {}, // Ensure we always provide content_json
+    editor_version: editorVersion || 'lexical_v1',
+    content_plain: contentPlain || legacyContent || null, // Plain text content for search/display
+    source_selection: sourceSelection,
+    source_url: sourceUrl,
+    course_code: courseCode,
+    note_type: noteType,
+    tags,
+    embedding,
+  };
+
   const { data, error } = await supabase
     .from('notes')
-    .update({
-      title,
-      content,
-      source_selection: sourceSelection,
-      source_url: sourceUrl,
-      course_code: courseCode,
-      note_type: noteType,
-      tags,
-      embedding,
-    })
+    .update(updateData)
     .eq('id', noteId)
     .eq('user_id', userId)
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error('Error updating note:', error);
+    throw error;
+  }
   return data;
 }
 
@@ -82,11 +96,28 @@ async function searchNotesByEmbedding({ userId, queryEmbedding, matchCount = 10 
   return data;
 }
 
+async function getNoteForUser({ userId, noteId }) {
+  const { data, error } = await supabase
+    .from('notes')
+    .select('*')
+    .eq('id', noteId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    // PGRST116 = no rows found
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
+  return data;
+}
+
 module.exports = {
   createNote,
   listNotes,
   updateNote,
   deleteNote,
   searchNotesByEmbedding,
+  getNoteForUser,
 };
 

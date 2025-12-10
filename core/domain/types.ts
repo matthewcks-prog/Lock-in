@@ -21,11 +21,6 @@ export type DifficultyLevel = "highschool" | "university";
 export type Theme = "light" | "dark" | "system";
 
 /**
- * Note type classification
- */
-export type NoteType = "manual" | "definition" | "formula" | "concept" | "general" | "ai-generated";
-
-/**
  * Chat message role
  */
 export type ChatRole = "user" | "assistant" | "system";
@@ -92,24 +87,6 @@ export interface ApiResponse<T = StudyResponse> {
     code?: string;
   };
   chatId?: string;
-}
-
-/**
- * Note domain model
- */
-export interface Note {
-  id: string | null;
-  title: string;
-  content: string;
-  sourceUrl: string;
-  sourceSelection?: string;
-  courseCode: string | null;
-  noteType: NoteType;
-  tags: string[];
-  createdAt: string | null;
-  updatedAt: string | null;
-  linkedLabel?: string;
-  isStarred?: boolean;
 }
 
 /**
@@ -240,3 +217,17 @@ export interface AIRequestRecord {
   tokens_out: number | null;
   created_at: string;
 }
+
+/**
+ * Note-related domain exports live in core/domain/Note.ts
+ * and are re-exported here for convenience.
+ */
+export type {
+  Note,
+  NoteAsset,
+  NoteAssetType,
+  NoteContent,
+  NoteContentVersion,
+  NoteStatus,
+  NoteType,
+} from "./Note.ts";

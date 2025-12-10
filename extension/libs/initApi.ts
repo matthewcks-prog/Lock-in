@@ -12,7 +12,7 @@ import { chromeStorage } from "./chromeStorage";
 /**
  * Get config from window (set by config.js)
  */
-function getConfig() {
+export function getConfig() {
   const config = (typeof window !== "undefined" && (window as any).LOCKIN_CONFIG) || {};
   return {
     backendUrl: config.BACKEND_URL || "http://localhost:3000",
@@ -53,9 +53,18 @@ export function initApiClient(authClient: ReturnType<typeof initAuthClient>) {
 /**
  * Initialize both clients and expose globally for backward compatibility
  */
+let cachedClients: { authClient: ReturnType<typeof initAuthClient>; apiClient: ReturnType<typeof initApiClient> } | null =
+  null;
+
 export function initClients() {
+  if (cachedClients) {
+    return cachedClients;
+  }
+
   const authClient = initAuthClient();
   const apiClient = initApiClient(authClient);
+
+  cachedClients = { authClient, apiClient };
 
   // Expose globally for backward compatibility with existing code
   if (typeof window !== "undefined") {
@@ -63,5 +72,16 @@ export function initClients() {
     (window as any).LockInAPI = apiClient;
   }
 
-  return { authClient, apiClient };
+  return cachedClients;
+}
+
+// Auto-initialize when running in the extension/page context
+if (typeof window !== "undefined") {
+  initClients();
+  (window as any).LockInInit = {
+    getConfig,
+    initAuthClient,
+    initApiClient,
+    initClients,
+  };
 }

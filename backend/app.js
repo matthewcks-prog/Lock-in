@@ -80,6 +80,33 @@ function createApp() {
     });
   });
 
+  // Error handler middleware (must be last)
+  app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    console.error('Stack:', err.stack);
+    
+    // Log request details for debugging
+    console.error('Request:', {
+      method: req.method,
+      path: req.path,
+      body: req.body,
+      params: req.params,
+      query: req.query,
+    });
+
+    // Send error response
+    const statusCode = err.status || err.statusCode || 500;
+    const message = err.message || 'Internal server error';
+    
+    res.status(statusCode).json({
+      success: false,
+      error: {
+        message,
+        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+      },
+    });
+  });
+
   return app;
 }
 

@@ -30,6 +30,41 @@ const ALLOWED_ORIGINS = [
   /^https:\/\/learning\.monash\.edu$/,
 ];
 
+// Asset uploads (notes)
+const NOTE_ASSETS_BUCKET = process.env.NOTE_ASSETS_BUCKET || "note-assets";
+const NOTE_ASSETS_MAX_BYTES =
+  parseInt(process.env.NOTE_ASSETS_MAX_BYTES, 10) || 10 * 1024 * 1024; // 10MB default
+
+// MIME allow-list grouped by asset category for easy extension
+const NOTE_ASSET_MIME_GROUPS = {
+  image: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+  document: [
+    "application/pdf",
+    "text/plain",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ],
+  audio: [],
+  video: [],
+  other: [],
+};
+
+const ALLOWED_ASSET_MIME_TYPES = Object.values(NOTE_ASSET_MIME_GROUPS).flat();
+
+// Preferred extensions for common MIME types (fallback to subtype if missing)
+const MIME_EXTENSION_MAP = {
+  "application/pdf": "pdf",
+  "text/plain": "txt",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    "docx",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+    "pptx",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
 function isOriginAllowed(origin) {
   if (!origin) {
     // Allow non-browser clients (health checks, local tools, etc.)
@@ -48,6 +83,11 @@ module.exports = {
   DAILY_REQUEST_LIMIT,
   DEFAULT_CHAT_LIST_LIMIT,
   isOriginAllowed,
+  NOTE_ASSETS_BUCKET,
+  NOTE_ASSETS_MAX_BYTES,
+  NOTE_ASSET_MIME_GROUPS,
+  ALLOWED_ASSET_MIME_TYPES,
+  MIME_EXTENSION_MAP,
 };
 
 

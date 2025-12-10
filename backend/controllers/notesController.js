@@ -2,6 +2,7 @@
 
 const notesRepo = require('../repositories/notesRepository');
 const { embedText } = require('../openaiClient');
+const { extractPlainTextFromLexical } = require('../utils/lexicalUtils');
 
 /**
  * Normalize tags to ensure consistent array format
@@ -25,7 +26,10 @@ async function createNote(req, res, next) {
     const userId = req.user.id;
     const {
       title,
-      content,
+      content, // Legacy field (fallback)
+      content_json, // Lexical JSON state
+      editor_version, // Editor version (e.g., 'lexical_v1')
+      content_text, // Plain text extracted from Lexical
       sourceSelection,
       sourceUrl,
       courseCode,
@@ -33,17 +37,70 @@ async function createNote(req, res, next) {
       tags,
     } = req.body;
 
-    // Validate required fields
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    // Debug logging
+    console.log('createNote request body keys:', Object.keys(req.body));
+    console.log('content_json type:', typeof content_json);
+    console.log('editor_version:', editor_version);
+
+    // Determine which content format we're using
+    const hasLexicalContent = content_json && editor_version;
+    const hasLegacyContent = content && typeof content === 'string' && content.trim().length > 0;
+
+    if (!hasLexicalContent && !hasLegacyContent) {
       return res.status(400).json({ 
         success: false,
-        error: { message: 'content is required and cannot be empty' } 
+        error: { message: 'content_json and editor_version are required, or legacy content field must be provided' } 
+      });
+    }
+
+    // Ensure content_json is always an object (required by database)
+    let finalContentJson = {};
+    let finalEditorVersion = 'lexical_v1';
+    
+    if (hasLexicalContent) {
+      // Validate content_json is an object
+      if (typeof content_json === 'string') {
+        try {
+          finalContentJson = JSON.parse(content_json);
+        } catch {
+          return res.status(400).json({ 
+            success: false,
+            error: { message: 'content_json must be a valid JSON object' } 
+          });
+        }
+      } else if (typeof content_json === 'object' && content_json !== null) {
+        finalContentJson = content_json;
+      } else {
+        return res.status(400).json({ 
+          success: false,
+          error: { message: 'content_json must be a valid JSON object' } 
+        });
+      }
+      finalEditorVersion = editor_version;
+    }
+
+    // Extract plain text for embedding
+    let plainText = '';
+    if (hasLexicalContent) {
+      // Use provided content_text or extract from Lexical JSON
+      plainText = content_text || extractPlainTextFromLexical(finalContentJson) || '';
+    } else {
+      // Legacy: use content field (strip HTML if present)
+      plainText = content.trim();
+      // Basic HTML stripping for legacy content
+      plainText = plainText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    if (!plainText || plainText.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: { message: 'Note content cannot be empty' } 
       });
     }
 
     // Validate content length (prevent extremely long notes)
     const MAX_CONTENT_LENGTH = 50000; // 50k characters
-    if (content.length > MAX_CONTENT_LENGTH) {
+    if (plainText.length > MAX_CONTENT_LENGTH) {
       return res.status(400).json({ 
         success: false,
         error: { message: `content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters` } 
@@ -53,7 +110,7 @@ async function createNote(req, res, next) {
     // Generate embedding for semantic search
     let embedding;
     try {
-      embedding = await embedText(content);
+      embedding = await embedText(plainText);
     } catch (embedError) {
       // Log but don't fail - note can still be saved without embedding
       console.error('Failed to generate embedding:', embedError);
@@ -64,7 +121,10 @@ async function createNote(req, res, next) {
     const note = await notesRepo.createNote({
       userId,
       title: title?.trim() || 'Untitled Note',
-      content: content.trim(),
+      contentJson: finalContentJson,
+      editorVersion: finalEditorVersion,
+      contentPlain: plainText,
+      legacyContent: hasLegacyContent ? content.trim() : null,
       sourceSelection: sourceSelection?.trim() || null,
       sourceUrl: sourceUrl?.trim() || null,
       courseCode: courseCode?.trim() || null,
@@ -157,7 +217,10 @@ async function updateNote(req, res, next) {
     const { noteId } = req.params;
     const {
       title,
-      content,
+      content, // Legacy field (fallback)
+      content_json, // Lexical JSON state
+      editor_version, // Editor version (e.g., 'lexical_v1')
+      content_text, // Plain text extracted from Lexical
       sourceSelection,
       sourceUrl,
       courseCode,
@@ -172,16 +235,65 @@ async function updateNote(req, res, next) {
       });
     }
 
-    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+    // Determine which content format we're using
+    const hasLexicalContent = content_json && editor_version;
+    const hasLegacyContent = content && typeof content === 'string' && content.trim().length > 0;
+
+    if (!hasLexicalContent && !hasLegacyContent) {
       return res.status(400).json({ 
         success: false,
-        error: { message: 'content is required and cannot be empty' } 
+        error: { message: 'content_json and editor_version are required, or legacy content field must be provided' } 
+      });
+    }
+
+    // Ensure content_json is always an object (required by database)
+    let finalContentJson = {};
+    let finalEditorVersion = 'lexical_v1';
+    
+    if (hasLexicalContent) {
+      // Validate content_json is an object
+      if (typeof content_json === 'string') {
+        try {
+          finalContentJson = JSON.parse(content_json);
+        } catch {
+          return res.status(400).json({ 
+            success: false,
+            error: { message: 'content_json must be a valid JSON object' } 
+          });
+        }
+      } else if (typeof content_json === 'object' && content_json !== null) {
+        finalContentJson = content_json;
+      } else {
+        return res.status(400).json({ 
+          success: false,
+          error: { message: 'content_json must be a valid JSON object' } 
+        });
+      }
+      finalEditorVersion = editor_version;
+    }
+
+    // Extract plain text for embedding
+    let plainText = '';
+    if (hasLexicalContent) {
+      // Use provided content_text or extract from Lexical JSON
+      plainText = content_text || extractPlainTextFromLexical(finalContentJson) || '';
+    } else {
+      // Legacy: use content field (strip HTML if present)
+      plainText = content.trim();
+      // Basic HTML stripping for legacy content
+      plainText = plainText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    if (!plainText || plainText.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        error: { message: 'Note content cannot be empty' } 
       });
     }
 
     let embedding;
     try {
-      embedding = await embedText(content);
+      embedding = await embedText(plainText);
     } catch (embedError) {
       console.error('Failed to regenerate embedding:', embedError);
       embedding = null;
@@ -191,7 +303,10 @@ async function updateNote(req, res, next) {
       userId,
       noteId,
       title: title?.trim() || 'Untitled Note',
-      content: content.trim(),
+      contentJson: finalContentJson,
+      editorVersion: finalEditorVersion,
+      contentPlain: plainText,
+      legacyContent: hasLegacyContent ? content.trim() : null,
       sourceSelection: sourceSelection?.trim() || null,
       sourceUrl: sourceUrl?.trim() || null,
       courseCode: courseCode?.trim() || null,

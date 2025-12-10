@@ -2,6 +2,7 @@
 
 const notesRepo = require('../repositories/notesRepository');
 const { embedText, chatWithModel } = require('../openaiClient');
+const { extractPlainTextFromLexical } = require('../utils/lexicalUtils');
 
 // POST /api/notes/chat
 // body: { query: string, courseCode?: string, k?: number }
@@ -56,7 +57,11 @@ async function chatWithNotes(req, res, next) {
     // Build context from matched notes
     const contextBlocks = matches.map((n, i) => {
       const courseInfo = n.course_code ? ` (course: ${n.course_code})` : '';
-      return `Note ${i + 1}${courseInfo}:\n${n.content}`;
+      // Use content_plain if available, otherwise extract from content_json
+      const noteText = n.content_plain || 
+        (n.content_json ? extractPlainTextFromLexical(n.content_json) : '') ||
+        '';
+      return `Note ${i + 1}${courseInfo}:\n${noteText}`;
     });
 
     const systemPrompt = `You are a study assistant that answers questions using the student's own notes.
