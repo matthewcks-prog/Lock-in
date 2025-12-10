@@ -5,7 +5,7 @@
  * Uses auth client interface - no direct Chrome dependencies.
  */
 
-import type { StudyResponse, ApiResponse, ChatMessage } from "../core/domain/types";
+import type { StudyResponse, ApiResponse, ChatMessage, NoteAsset } from "../core/domain/types";
 import type { AuthClient } from "./auth";
 
 export interface ApiClientConfig {
@@ -43,6 +43,19 @@ export interface ChatWithNotesParams {
   query: string;
   courseCode?: string;
   k?: number;
+}
+
+export interface UploadNoteAssetParams {
+  noteId: string;
+  file: File | Blob;
+}
+
+export interface ListNoteAssetsParams {
+  noteId: string;
+}
+
+export interface DeleteNoteAssetParams {
+  assetId: string;
 }
 
 /**
@@ -96,6 +109,7 @@ async function createApiError(response: Response, originalError: Error | null = 
  */
 export function createApiClient(config: ApiClientConfig) {
   const { backendUrl, authClient } = config;
+  const clientConfig = { backendUrl };
 
   /**
    * Make an authenticated API request
@@ -129,9 +143,10 @@ export function createApiClient(config: ApiClientConfig) {
     }
 
     // Prepare headers
+    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
     const headers: HeadersInit = {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(options.headers || {}),
     };
 
@@ -288,19 +303,29 @@ export function createApiClient(config: ApiClientConfig) {
     });
   }
 
+  type NotePayload = {
+    title?: string;
+    content?: string;
+    content_text?: string | null;
+    content_json?: unknown;
+    contentJson?: unknown;
+    editor_version?: string;
+    sourceSelection?: string | null;
+    source_selection?: string | null;
+    sourceUrl?: string | null;
+    source_url?: string | null;
+    courseCode?: string | null;
+    course_code?: string | null;
+    noteType?: string | null;
+    note_type?: string | null;
+    tags?: string[];
+  };
+
   /**
    * Create a new note
    */
   async function createNote(
-    note: {
-      title: string;
-      content: string;
-      sourceSelection?: string;
-      sourceUrl?: string;
-      courseCode?: string | null;
-      noteType?: string;
-      tags?: string[];
-    },
+    note: NotePayload & { title: string },
     options?: { signal?: AbortSignal }
   ): Promise<any> {
     return apiRequest<any>("/api/notes", {
@@ -315,15 +340,7 @@ export function createApiClient(config: ApiClientConfig) {
    */
   async function updateNote(
     noteId: string,
-    note: {
-      title?: string;
-      content?: string;
-      sourceSelection?: string;
-      sourceUrl?: string;
-      courseCode?: string | null;
-      noteType?: string;
-      tags?: string[];
-    },
+    note: NotePayload,
     options?: { signal?: AbortSignal }
   ): Promise<any> {
     if (!noteId) {
@@ -390,7 +407,87 @@ export function createApiClient(config: ApiClientConfig) {
     });
   }
 
+  /**
+   * Map backend note asset response (snake_case) to frontend NoteAsset (camelCase)
+   */
+  function mapNoteAsset(raw: any): NoteAsset {
+    return {
+      id: raw.id,
+      noteId: raw.note_id,
+      userId: raw.user_id,
+      type: raw.type,
+      mimeType: raw.mime_type,
+      storagePath: raw.storage_path,
+      createdAt: raw.created_at,
+      url: raw.url,
+      fileName: raw.file_name || raw.filename || raw.name || null,
+    };
+  }
+
+  /**
+   * Upload an asset for a note
+   */
+  async function uploadNoteAsset(params: UploadNoteAssetParams): Promise<NoteAsset> {
+    const { noteId, file } = params;
+    if (!noteId) {
+      throw new Error("noteId is required to upload an asset");
+    }
+    if (!file) {
+      throw new Error("file is required to upload an asset");
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const raw = await apiRequest<any>(`/api/notes/${noteId}/assets`, {
+      method: "POST",
+      body: formData,
+      // Let the browser set Content-Type with boundary
+    });
+
+    return mapNoteAsset(raw);
+  }
+
+  /**
+   * List assets for a note
+   */
+  async function listNoteAssets(params: ListNoteAssetsParams): Promise<NoteAsset[]> {
+    const { noteId } = params;
+    if (!noteId) {
+      throw new Error("noteId is required to list assets");
+    }
+
+    const raw = await apiRequest<any[]>(`/api/notes/${noteId}/assets`, {
+      method: "GET",
+    });
+
+    return raw.map(mapNoteAsset);
+  }
+
+  /**
+   * Delete a note asset
+   */
+  async function deleteNoteAsset(params: DeleteNoteAssetParams): Promise<void> {
+    const { assetId } = params;
+    if (!assetId) {
+      throw new Error("assetId is required to delete an asset");
+    }
+
+    return apiRequest<void>(`/api/note-assets/${assetId}`, {
+      method: "DELETE",
+    });
+  }
+
+  /**
+   * Get backend URL used by this client
+   */
+  function getBackendUrl(): string {
+    return clientConfig.backendUrl;
+  }
+
   return {
+    apiRequest,
+    getBackendUrl,
     processText,
     getRecentChats,
     getChatMessages,
@@ -401,6 +498,9 @@ export function createApiClient(config: ApiClientConfig) {
     listNotes,
     searchNotes,
     chatWithNotes,
+    uploadNoteAsset,
+    listNoteAssets,
+    deleteNoteAsset,
   };
 }
 

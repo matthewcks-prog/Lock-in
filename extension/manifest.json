@@ -37,11 +37,10 @@
       ],
       "js": [
         "config.js",
+        "libs/initApi.js",
         "libs/logger.js",
         "libs/messaging.js",
         "libs/storage.js",
-        "libs/api.js",
-        "supabaseAuth.js",
         "content/pageContext.js",
         "content/stateStore.js",
         "content/sidebarHost.js",

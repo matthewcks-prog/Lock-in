@@ -1,66 +1,320 @@
-/**
- * Page context + adapter resolution for the content script.
- * Keeps site detection isolated from the orchestrator.
- */
-(function () {
-  function buildFallbackAdapter() {
-    return {
-      getPageContext(dom, url) {
-        const heading = dom.querySelector("h1, h2")?.textContent?.trim() || dom.title;
-        let courseCode = null;
+"use strict";
+var LockInPageContext = (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+  var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-        const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
-        if (urlMatch) {
-          courseCode = urlMatch[1].toUpperCase();
-        } else {
-          const bodyText = dom.body?.innerText || "";
-          const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
-          if (codeMatch) {
-            courseCode = codeMatch[1].toUpperCase();
-          }
-        }
+  // extension/content/pageContext.ts
+  var pageContext_exports = {};
+  __export(pageContext_exports, {
+    resolveAdapterContext: () => resolveAdapterContext
+  });
 
-        return {
-          url,
-          title: dom.title,
-          heading,
-          courseContext: {
-            courseCode,
-            sourceUrl: url,
-          },
-        };
-      },
-    };
-  }
-
-  function resolveAdapterContext(logger) {
-    const log = logger || { error: console.error, warn: console.warn, debug: () => {} };
-    let adapter = null;
-    let pageContext = null;
-
-    try {
-      if (typeof window.getCurrentAdapter === "function") {
-        adapter = window.getCurrentAdapter();
-      }
-
-      if (!adapter) {
-        adapter = buildFallbackAdapter();
-      }
-
-      pageContext = adapter.getPageContext(document, window.location.href);
-    } catch (error) {
-      log.error("Failed to get page context:", error);
-      adapter = adapter || buildFallbackAdapter();
-      pageContext = {
-        url: window.location.href,
-        title: document.title,
-        courseContext: { courseCode: null, sourceUrl: window.location.href },
+  // integrations/adapters/baseAdapter.ts
+  var GenericAdapter = class {
+    canHandle(_url) {
+      return true;
+    }
+    getCourseCode(_dom) {
+      return null;
+    }
+    getWeek(_dom) {
+      return null;
+    }
+    getTopic(dom) {
+      var _a, _b;
+      const heading = (_b = (_a = dom.querySelector("h1, h2")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim();
+      return heading || null;
+    }
+    getCourseContext(_dom, url) {
+      return {
+        courseCode: null,
+        sourceUrl: url
       };
     }
+    getPageContext(dom, url) {
+      var _a, _b;
+      const heading = ((_b = (_a = dom.querySelector("h1, h2")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim()) || dom.title;
+      return {
+        url,
+        title: dom.title,
+        heading,
+        courseContext: this.getCourseContext(dom, url)
+      };
+    }
+  };
 
-    return { adapter, pageContext };
+  // core/utils/textUtils.ts
+  function extractCourseCodeFromText(text) {
+    if (!text || typeof text !== "string") return null;
+    const match = text.match(/\b([A-Z]{3}\d{4})\b/i);
+    return match ? match[1].toUpperCase() : null;
   }
 
-  window.LockInContent = window.LockInContent || {};
-  window.LockInContent.resolveAdapterContext = resolveAdapterContext;
+  // integrations/adapters/moodleAdapter.ts
+  var MoodleAdapter = class {
+    constructor() {
+    }
+    canHandle(url) {
+      return url.includes("learning.monash.edu");
+    }
+    /**
+     * Get course code from page DOM
+     */
+    getCourseCode(dom) {
+      var _a;
+      const candidateTexts = [];
+      const metaSelectors = [
+        'meta[property="og:title"]',
+        'meta[name="twitter:title"]',
+        'meta[name="title"]'
+      ];
+      metaSelectors.forEach((selector) => {
+        var _a2;
+        const content = (_a2 = dom.querySelector(selector)) == null ? void 0 : _a2.getAttribute("content");
+        if (content) candidateTexts.push(content);
+      });
+      const headingSelectors = [
+        "h1",
+        "h2",
+        ".page-header-headings",
+        ".page-header-headings h1",
+        ".course-title",
+        ".breadcrumb",
+        "[data-region='course-header']"
+      ];
+      headingSelectors.forEach((selector) => {
+        dom.querySelectorAll(selector).forEach((el) => {
+          var _a2;
+          const text = (_a2 = el.textContent) == null ? void 0 : _a2.trim();
+          if (text) candidateTexts.push(text);
+        });
+      });
+      const bodyText = ((_a = dom.body) == null ? void 0 : _a.innerText) || "";
+      if (bodyText) {
+        candidateTexts.push(bodyText.substring(0, 8e3));
+      }
+      for (const text of candidateTexts) {
+        const code = extractCourseCodeFromText(text);
+        if (code) {
+          const courseId2 = this.getCourseId(dom);
+          if (courseId2) {
+            this.persistCourseMapping(courseId2, code);
+          }
+          return code;
+        }
+      }
+      const courseId = this.getCourseId(dom);
+      if (courseId) {
+        return this.getStoredCourseMapping(courseId);
+      }
+      return null;
+    }
+    /**
+     * Extract week number from Moodle page
+     */
+    getWeek(_dom) {
+      return null;
+    }
+    /**
+     * Extract topic/title from page
+     */
+    getTopic(dom) {
+      var _a, _b;
+      const heading = (_b = (_a = dom.querySelector("h1, h2")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim();
+      return heading || null;
+    }
+    /**
+     * Get course ID from URL query params
+     */
+    getCourseId(dom) {
+      const url = new URL(dom.location.href);
+      return url.searchParams.get("id");
+    }
+    /**
+     * Get stored course code mapping from localStorage
+     */
+    getStoredCourseMapping(courseId) {
+      try {
+        const raw = localStorage.getItem("lockin:monashCourseCodes");
+        const mapping = raw ? JSON.parse(raw) : {};
+        return mapping[courseId] || null;
+      } catch (error) {
+        console.warn("Failed to read cached Monash course codes", error);
+        return null;
+      }
+    }
+    /**
+     * Persist course code mapping to localStorage
+     */
+    persistCourseMapping(courseId, courseCode) {
+      if (!courseId || !courseCode) return;
+      try {
+        const existing = this.getStoredCourseMapping(courseId) ? JSON.parse(localStorage.getItem("lockin:monashCourseCodes") || "{}") : {};
+        if (existing[courseId] === courseCode) return;
+        const next = { ...existing, [courseId]: courseCode };
+        localStorage.setItem("lockin:monashCourseCodes", JSON.stringify(next));
+      } catch (error) {
+        console.warn("Failed to persist Monash course code", error);
+      }
+    }
+    /**
+     * Get full course context
+     */
+    getCourseContext(dom, url) {
+      const courseCode = this.getCourseCode(dom);
+      const topic = this.getTopic(dom);
+      return {
+        courseCode,
+        courseName: courseCode || void 0,
+        topic: topic || void 0,
+        sourceUrl: url,
+        sourceLabel: topic || courseCode || void 0
+      };
+    }
+    /**
+     * Get full page context
+     */
+    getPageContext(dom, url) {
+      var _a, _b;
+      const heading = ((_b = (_a = dom.querySelector("h1, h2")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim()) || dom.title;
+      const courseContext = this.getCourseContext(dom, url);
+      return {
+        url,
+        title: dom.title,
+        heading,
+        courseContext
+      };
+    }
+  };
+
+  // integrations/adapters/edstemAdapter.ts
+  var EdstemAdapter = class {
+    canHandle(url) {
+      return url.includes("edstem.org");
+    }
+    getCourseCode(dom) {
+      var _a, _b;
+      const title = dom.title;
+      const heading = (_b = (_a = dom.querySelector("h1")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim();
+      const candidates = [title, heading].filter(Boolean);
+      for (const text of candidates) {
+        const code = extractCourseCodeFromText(text || "");
+        if (code) return code;
+      }
+      return null;
+    }
+    getWeek(_dom) {
+      return null;
+    }
+    getTopic(dom) {
+      var _a, _b;
+      const heading = (_b = (_a = dom.querySelector("h1, h2")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim();
+      return heading || null;
+    }
+    getCourseContext(dom, url) {
+      const courseCode = this.getCourseCode(dom);
+      const topic = this.getTopic(dom);
+      return {
+        courseCode,
+        topic: topic || void 0,
+        sourceUrl: url,
+        sourceLabel: topic || courseCode || void 0
+      };
+    }
+    getPageContext(dom, url) {
+      var _a, _b;
+      const heading = ((_b = (_a = dom.querySelector("h1, h2")) == null ? void 0 : _a.textContent) == null ? void 0 : _b.trim()) || dom.title;
+      const courseContext = this.getCourseContext(dom, url);
+      return {
+        url,
+        title: dom.title,
+        heading,
+        courseContext
+      };
+    }
+  };
+
+  // integrations/index.ts
+  var adapters = [
+    new MoodleAdapter(),
+    new EdstemAdapter(),
+    new GenericAdapter()
+    // Fallback - must be last
+  ];
+  function getAdapterForUrl(url) {
+    for (const adapter of adapters) {
+      if (adapter.canHandle(url)) {
+        return adapter;
+      }
+    }
+    return new GenericAdapter();
+  }
+
+  // extension/content/pageContext.ts
+  function inferCourseCode(dom, url) {
+    var _a;
+    const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
+    if (urlMatch) {
+      return urlMatch[1].toUpperCase();
+    }
+    const bodyText = ((_a = dom.body) == null ? void 0 : _a.innerText) || "";
+    const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
+    return codeMatch ? codeMatch[1].toUpperCase() : null;
+  }
+  function resolveAdapterContext(logger) {
+    var _a, _b, _c;
+    const log = {
+      error: (_a = logger == null ? void 0 : logger.error) != null ? _a : console.error,
+      warn: (_b = logger == null ? void 0 : logger.warn) != null ? _b : console.warn,
+      debug: (_c = logger == null ? void 0 : logger.debug) != null ? _c : (() => {
+      })
+    };
+    let adapter = new GenericAdapter();
+    let pageContext = {
+      url: window.location.href,
+      title: document.title,
+      heading: document.title,
+      courseContext: { courseCode: null, sourceUrl: window.location.href }
+    };
+    try {
+      adapter = getAdapterForUrl(window.location.href) || adapter;
+      pageContext = adapter.getPageContext(document, window.location.href);
+      const courseContext = pageContext.courseContext || { courseCode: null, sourceUrl: window.location.href };
+      if (!courseContext.courseCode) {
+        const inferred = inferCourseCode(document, window.location.href);
+        if (inferred) {
+          pageContext = {
+            ...pageContext,
+            courseContext: {
+              ...courseContext,
+              courseCode: inferred
+            }
+          };
+        }
+      }
+    } catch (error) {
+      log.error("Failed to get page context:", error);
+    }
+    return { adapter, pageContext };
+  }
+  if (typeof window !== "undefined") {
+    window.LockInContent = window.LockInContent || {};
+    window.LockInContent.resolveAdapterContext = resolveAdapterContext;
+  }
+  return __toCommonJS(pageContext_exports);
 })();

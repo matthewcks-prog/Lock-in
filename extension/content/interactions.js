@@ -64,6 +64,14 @@
 
     function handleKeyPress(event) {
       if (event.key === "Escape") {
+        const target = event.target;
+        if (
+          target &&
+          typeof target.closest === "function" &&
+          (target.closest("#lockin-sidebar") || target.closest("#lockin-root"))
+        ) {
+          return;
+        }
         const state = stateStore.getSnapshot();
         if (state.isSidebarOpen && onCloseSidebar) {
           onCloseSidebar();

@@ -31,7 +31,7 @@ This is a living overview of the current codebase. Update it whenever files move
   - Hands off rendering to the built React bundle.
 
 - **`content/` helpers**
-  - `pageContext.js` (adapter + page context resolution).
+  - `pageContext.js` (adapter + page context resolution, imports `/integrations` bundle with fallback inference).
   - `stateStore.js` (sidebar/selection/mode state + storage sync).
   - `sidebarHost.js` (mounts/upgrades React sidebar and body classes).
   - `sessionManager.js` (tab ID + session restore/clear).
@@ -44,7 +44,7 @@ This is a living overview of the current codebase. Update it whenever files move
   - Toolbar popup UI logic, settings, and auth UI.
 
 - **`ui/index.js`**
-  - Built React sidebar bundle consumed by the content script (source in `ui/extension/index.tsx`).
+  - Built React sidebar bundle consumed by the content script (source entry in `ui/extension/index.tsx`, sidebar orchestration in `ui/extension/LockInSidebar.tsx`, Lexical note editor in `ui/extension/notes/`).
 
 ### Shared Modules
 
@@ -54,14 +54,8 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`storage.js`**
   - Wrapper for `chrome.storage` with defaults and async/await helpers.
 
-- **`api.js`** (legacy JS client)
-  - Backend API client wrapper with auth token handling and error handling.
-
-- **`supabaseAuth.js`**
-  - Supabase authentication handling (sign-in/up, token storage/refresh, session management).
-
-- **`libs/initApi.ts` + `/api` (TS)**
-  - Shared TypeScript API/auth clients intended to replace the legacy JS client (not yet wired into the runtime bundle).
+- **`libs/initApi.js` + `/api` (TS)**
+  - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/libs/initApi.ts`).
 
 ### Styling
 
@@ -84,20 +78,40 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`config.js`**
   - Centralized configuration (env vars, rate limits, CORS origins).
+  - Asset upload settings: bucket name (`NOTE_ASSETS_BUCKET`), max size, and MIME allow-list.
 
 ### Routes & Controllers
 
 - **`routes/lockinRoutes.js`**
   - HTTP route definitions and middleware wiring.
 
+- **`routes/noteRoutes.js`**
+  - Authenticated routes for notes CRUD, search, note chat, and note asset upload/list/delete.
+
 - **`controllers/lockinController.js`**
   - Handlers for AI processing, chat listing/deletion, and chat messages.
   - Input validation and error handling.
+
+- **`controllers/notesController.js`**
+  - Notes CRUD, including embeddings.
+
+- **`controllers/notesChatController.js`**
+  - Handles chat over notes.
+
+- **`controllers/noteAssetsController.js`**
+  - Handles note asset upload/list/delete via Supabase Storage with validation.
+  - Returns assets with snake_case fields (note_id, mime_type, storage_path, created_at) that are mapped to camelCase in the API client.
 
 ### Data Layer
 
 - **`chatRepository.js`**
   - Database access layer for chats and chat messages (Supabase).
+
+- **`notesRepository.js`**
+  - Data access for notes, embeddings, and ownership checks.
+
+- **`noteAssetsRepository.js`**
+  - Data access for the `note_assets` table (create/list/get/delete).
 
 - **`supabaseClient.js`**
   - Configured Supabase client instance used across the data layer.
@@ -115,6 +129,9 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`rateLimiter.js`**
   - Per-user rate limiting backed by Supabase.
 
+- **`middleware/uploadMiddleware.js`**
+  - Multer-based in-memory upload handler with size and MIME validation for note assets.
+
 ## Key Design Patterns
 
 ### Extension
@@ -123,7 +140,8 @@ This is a living overview of the current codebase. Update it whenever files move
 2. **Single widget**: One React sidebar bundle rendered via `contentScript-react.js` and `sidebarHost.js`.
 3. **Storage/messaging abstractions**: `storage.js` and `messaging.js` hide Chrome APIs behind async helpers.
 4. **Separation of concerns**: Orchestrator delegates state, session, and UI responsibilities to dedicated helpers.
-5. **API abstraction**: Legacy `api.js` currently in use; migration planned to shared TypeScript clients.
+5. **API abstraction**: Shared `/api` TypeScript client is bundled into `libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
+6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor`/`useNotesList`, and the Lexical editor resides in `ui/extension/notes/` with inline attachment/image nodes (resizable images, paperclip insertion).
 
 ### Backend
 
@@ -148,5 +166,5 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **Extension behavior & UI**: Start with `extension/contentScript-react.js` and helpers in `extension/content/`, then the built React bundle `extension/ui/index.js` (source in `ui/extension/index.tsx`).
 - **Backend request flow**: Start with `backend/routes/lockinRoutes.js`, then `controllers/lockinController.js`.
-- **Auth & persistence**: Read `supabaseAuth.js` (extension) alongside `authMiddleware.js` (backend).
-- **API communication**: Check the legacy `api.js` (extension), the shared `/api` TypeScript clients, and `openaiClient.js` (backend).
+- **Auth & persistence**: Supabase auth client lives in `/api/auth.ts` and is bundled to the extension via `extension/libs/initApi.js` (`window.LockInAuth`); backend enforcement via `backend/middleware/authMiddleware.js`.
+- **API communication**: Use the bundled `/api/client.ts` exposed through `extension/libs/initApi.js` (`window.LockInAPI`); backend logic in `openaiClient.js`. The client includes typed methods for note assets (`uploadNoteAsset`, `listNoteAssets`, `deleteNoteAsset`) that return `NoteAsset` objects with camelCase fields.

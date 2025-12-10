@@ -55,13 +55,15 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
   - Site-specific detection (use adapters from `/integrations`)
 
 ### `content/`
-- `pageContext.js` (adapter + page context), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (selection + Escape).
+- `pageContext.js` (adapter + page context; bundled from `pageContext.ts` importing `/integrations`), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (selection + Escape).
 - Extend functionality by adding focused helpers here instead of inflating `contentScript-react.js`.
+- Rebuild `pageContext.js` when adapters/page context logic change: `node_modules/.bin/esbuild extension/content/pageContext.ts --bundle --format=iife --platform=browser --target=es2018 --global-name=LockInPageContext --outfile=extension/content/pageContext.js`.
 
 ### `ui/`
-- Extension-specific React components for the sidebar widget
-- Components: `LockInSidebar`, `ChatPanel`, `NotesPanel`, `ChatHistoryPanel`
-- Hooks: `useChat`, `useNotes`, `useChatHistory`
+- Built bundle lives here (`extension/ui/index.js`), source lives under `/ui/extension`
+- Sidebar orchestrator: `ui/extension/LockInSidebar.tsx` (wraps chat + notes)
+- Notes UI: `ui/extension/notes/` (`NotesPanel`, Lexical `NoteEditor`, asset helpers)
+- Hooks: `useNoteEditor`, `useNoteAssets`, `useNotesList` in `/ui/hooks`
 - **These components are NOT shared with the web app** - they are specific to the extension sidebar
 
 ### `popup/`
@@ -104,14 +106,10 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 The content script should follow this pattern:
 
 ```javascript
-// 1. Get adapter for current site
-import { getCurrentAdapter } from '../../integrations';
-const adapter = getCurrentAdapter();
+// 1. Get adapter + context via bundled helper
+const { adapter, pageContext } = window.LockInContent.resolveAdapterContext(Logger);
 
-// 2. Extract context
-const pageContext = adapter.getPageContext(document, window.location.href);
-
-// 3. Mount React component from extension UI
+// 2. Mount React component from extension UI
 // Note: In practice, this is loaded via script tag and accessed via window.LockInUI
 // The built bundle is at extension/ui/index.js
 // const { LockInSidebar, createLockInSidebar } = window.LockInUI;
@@ -220,9 +218,8 @@ if (url.includes('learning.monash.edu')) {
 
 ```javascript
 // GOOD
-import { getCurrentAdapter } from '../../integrations';
-const adapter = getCurrentAdapter();
-const context = adapter.getCourseContext(document, url);
+const { adapter, pageContext } = window.LockInContent.resolveAdapterContext(Logger);
+const context = pageContext.courseContext;
 ```
 
 ### âŒ Building HTML strings

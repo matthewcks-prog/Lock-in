@@ -23,9 +23,18 @@ It exists so future humans and AI agents can understand how data is stored and a
   - `folders` = user-defined groupings (e.g. "FIT2100 Week 1").  
   - Currently there is **no explicit FK from notes → folders** – grouping is conceptual only.
 
+- **Note Assets**  
+  - `note_assets` = uploaded files attached to a note (images, PDFs, docs).  
+  - Files live in Supabase Storage bucket `note-assets` at `<user_id>/<note_id>/<asset_id>.<ext>`.  
+  - Table stores metadata + storage path; URLs are derived with `getPublicUrl`.
+
 - **AI Requests**  
   - `ai_requests` = per-call log of AI usage (tokens in/out, mode).  
   - Useful for analytics, quotas, and debugging.
+
+## Access Patterns
+
+- Extension/web app clients call the backend through the shared TypeScript client (`/api`, bundled to `extension/libs/initApi.js`) and attach the Supabase JWT from `window.LockInAuth`.
 
 ---
 
@@ -105,7 +114,9 @@ CREATE TABLE public.notes (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
   title text,
-  content text NOT NULL,
+  content_json jsonb NOT NULL,
+  editor_version text NOT NULL DEFAULT 'lexical_v1'::text,
+  content_plain text,
   source_selection text,
   source_url text,
   course_code text,
@@ -123,7 +134,9 @@ CREATE TABLE public.notes (
 - `id` - Unique note identifier
 - `user_id` - Owner (FK to `auth.users`)
 - `title` - Note title
-- `content` - Note content (HTML or markdown)
+- `content_json` - Canonical structured content (Lexical JSON), `NOT NULL`
+- `editor_version` - Version tag for the editor that produced `content_json` (e.g., `lexical_v1`), `NOT NULL`, default `'lexical_v1'`
+- `content_plain` - Plain text extracted from Lexical JSON for search/display purposes (nullable)
 - `source_selection` - Original selected text that triggered note creation
 - `source_url` - URL of the page where note was created
 - `course_code` - Course code (e.g., "FIT1045") - auto-extracted or manual
@@ -134,6 +147,43 @@ CREATE TABLE public.notes (
 - `updated_at` - Last update timestamp
 
 **Usage:** Stores user's study notes. Can be created manually or auto-generated from AI responses. Supports semantic search via embeddings.
+
+**Content handling:**
+- All notes must have `content_json` (Lexical JSON) and `editor_version` set.
+- `content_plain` is automatically extracted from Lexical JSON and used for embeddings and search.
+- Legacy notes with only HTML content are lazily migrated on read: the app converts HTML → minimal Lexical JSON and immediately persists `content_json` + `editor_version`.
+
+---
+
+### `note_assets`
+
+Attachments for notes (images/documents). Files live in Supabase Storage bucket `note-assets` using the path `<user_id>/<note_id>/<asset_id>.<ext>`.
+
+```sql
+CREATE TABLE public.note_assets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  note_id uuid NOT NULL REFERENCES public.notes(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  type text NOT NULL,         -- 'image', 'document', 'audio', 'video', 'other'
+  mime_type text NOT NULL,
+  storage_path text NOT NULL, -- path in Supabase Storage
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_note_assets_note_id ON public.note_assets(note_id);
+CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
+```
+
+**Fields:**
+- `id` - Asset id
+- `note_id` - Parent note id (cascade delete)
+- `user_id` - Owner (FK to `auth.users`)
+- `type` - High-level category (`image`, `document`, `audio`, `video`, `other`)
+- `mime_type` - Exact MIME type
+- `storage_path` - Path inside the `note-assets` bucket
+- `created_at` - Upload timestamp
+
+**Usage:** Each record references a file in Supabase Storage. URLs are generated on read using `getPublicUrl(storage_path)`.
 
 ---
 
@@ -198,6 +248,8 @@ See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
 - `ChatRecord` - Matches `chats` table
 - `ChatMessageRecord` - Matches `chat_messages` table
 - `NoteRecord` - Matches `notes` table
+- `NoteAsset` - Frontend domain model for `note_assets` (camelCase: noteId, userId, mimeType, storagePath, createdAt)
+- `NoteAssetType` - Union type: `'image' | 'document' | 'audio' | 'video' | 'other'`
 - `FolderRecord` - Matches `folders` table
 - `AIRequestRecord` - Matches `ai_requests` table
 
@@ -207,16 +259,15 @@ See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
 
 ```
 auth.users (Supabase)
-  ├── chats (1:N)
-  │     └── chat_messages (1:N)
-  ├── notes (1:N)
-  ├── folders (1:N)
-  └── ai_requests (1:N)
+  -> chats (1:N)
+     -> chat_messages (1:N)
+  -> notes (1:N)
+     -> note_assets (1:N)
+  -> folders (1:N)
+  -> ai_requests (1:N)
 ```
 
 **Note:** Currently no explicit relationship between `notes` and `folders`. Organization is done via `course_code` and `tags`.
-
----
 
 ## Indexes (Recommended)
 
@@ -236,6 +287,10 @@ CREATE INDEX idx_notes_user_id ON public.notes(user_id);
 CREATE INDEX idx_notes_course_code ON public.notes(course_code);
 CREATE INDEX idx_notes_source_url ON public.notes(source_url);
 CREATE INDEX idx_notes_updated_at ON public.notes(updated_at DESC);
+
+-- Note assets
+CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
+CREATE INDEX idx_note_assets_note_id ON public.note_assets(note_id);
 
 -- Semantic search (if using pgvector)
 CREATE INDEX idx_notes_embedding ON public.notes USING ivfflat (embedding vector_cosine_ops);
@@ -272,7 +327,7 @@ CREATE POLICY "Users can delete own chats"
   USING (auth.uid() = user_id);
 ```
 
-Apply similar policies to `chat_messages`, `notes`, `folders`, and `ai_requests`.
+Apply similar policies to `chat_messages`, `notes`, `note_assets`, `folders`, and `ai_requests`.
 
 ---
 
@@ -289,3 +344,4 @@ Apply similar policies to `chat_messages`, `notes`, `folders`, and `ai_requests`
 - Check `/core/domain/types.ts` for TypeScript types
 - Check backend repositories for query patterns
 - Follow RLS policies - never expose user data across users
+

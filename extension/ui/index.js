@@ -7020,6 +7020,84 @@ var __async = (__this, __arguments, generator) => {
     return client;
   }
   var clientExports = requireClient();
+  function useNoteAssets(noteId, apiClient) {
+    const [noteAssets, setNoteAssets] = reactExports.useState([]);
+    const [isLoading, setIsLoading] = reactExports.useState(false);
+    const [isUploading, setIsUploading] = reactExports.useState(false);
+    const [error, setError] = reactExports.useState(null);
+    const loadAssets = reactExports.useCallback(() => __async(null, null, function* () {
+      if (!noteId || !(apiClient == null ? void 0 : apiClient.listNoteAssets)) {
+        setNoteAssets([]);
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      setError(null);
+      setNoteAssets([]);
+      try {
+        const assets = yield apiClient.listNoteAssets({ noteId });
+        setNoteAssets(Array.isArray(assets) ? assets : []);
+      } catch (err) {
+        setError((err == null ? void 0 : err.message) || "Failed to load attachments");
+      } finally {
+        setIsLoading(false);
+      }
+    }), [apiClient, noteId]);
+    reactExports.useEffect(() => {
+      loadAssets();
+    }, [loadAssets]);
+    const uploadAsset = reactExports.useCallback(
+      (file) => __async(null, null, function* () {
+        if (!noteId) {
+          setError("Save the note before adding attachments.");
+          return null;
+        }
+        if (!(apiClient == null ? void 0 : apiClient.uploadNoteAsset)) {
+          setError("Upload is not available.");
+          return null;
+        }
+        setIsUploading(true);
+        setError(null);
+        try {
+          const asset = yield apiClient.uploadNoteAsset({ noteId, file });
+          setNoteAssets((prev) => [...prev, asset]);
+          return asset;
+        } catch (err) {
+          setError((err == null ? void 0 : err.message) || "Failed to upload attachment");
+          return null;
+        } finally {
+          setIsUploading(false);
+        }
+      }),
+      [apiClient, noteId]
+    );
+    const deleteAsset = reactExports.useCallback(
+      (assetId) => __async(null, null, function* () {
+        if (!(apiClient == null ? void 0 : apiClient.deleteNoteAsset)) {
+          setError("Delete is not available.");
+          return false;
+        }
+        try {
+          yield apiClient.deleteNoteAsset({ assetId });
+          setNoteAssets((prev) => prev.filter((asset) => asset.id !== assetId));
+          return true;
+        } catch (err) {
+          setError((err == null ? void 0 : err.message) || "Failed to delete attachment");
+          return false;
+        }
+      }),
+      [apiClient]
+    );
+    return {
+      noteAssets,
+      isLoading,
+      isUploading,
+      error,
+      uploadAsset,
+      deleteAsset,
+      reloadAssets: loadAssets
+    };
+  }
   const MODE_OPTIONS = [
     { value: "explain", label: "Explain", hint: "Clarify the selection" },
     { value: "simplify", label: "Simplify", hint: "Make it easier to digest" },
@@ -7145,9 +7223,35 @@ var __async = (__this, __arguments, generator) => {
     const saveQueueRef = reactExports.useRef([]);
     const isProcessingQueueRef = reactExports.useRef(false);
     const isUpdatingFromExternalRef = reactExports.useRef(false);
+    const fileInputRef = reactExports.useRef(null);
+    const lastNoteSelectionRef = reactExports.useRef(null);
+    const isFileInputActiveRef = reactExports.useRef(false);
     const courseCode = (pageContext == null ? void 0 : pageContext.courseContext.courseCode) || null;
     const pageUrl = (pageContext == null ? void 0 : pageContext.url) || (typeof window !== "undefined" ? window.location.href : "");
     const noteLinkedLabel = (pageContext == null ? void 0 : pageContext.courseContext.courseCode) || "None";
+    const {
+      noteAssets,
+      isLoading: areAssetsLoading,
+      isUploading: isAssetUploading,
+      error: noteAssetError,
+      uploadAsset,
+      deleteAsset
+    } = useNoteAssets(currentNoteId || void 0, apiClient);
+    const isLikelyHtml = reactExports.useCallback((value) => {
+      return /<\/?[a-z][\s\S]*>/i.test(value);
+    }, []);
+    const normalizeToHtml = reactExports.useCallback(
+      (value) => {
+        if (!value) return "";
+        if (isLikelyHtml(value) || value.includes("<img")) {
+          return value;
+        }
+        const div = document.createElement("div");
+        div.textContent = value;
+        return div.innerHTML.replace(/\n/g, "<br>");
+      },
+      [isLikelyHtml]
+    );
     const filteredNotes = reactExports.useMemo(() => {
       const searchTerm = notesSearch.trim().toLowerCase();
       return notes.filter((note) => {
@@ -7262,7 +7366,7 @@ var __async = (__this, __arguments, generator) => {
             role: message.role,
             content: message.content
           }));
-          const apiChatId = isValidUUID(chatId) ? chatId : void 0;
+          const apiChatId = isValidUUID(chatId) && chatId ? chatId : void 0;
           const response = (apiClient == null ? void 0 : apiClient.processText) ? yield apiClient.processText({
             selection: trimmedSelection,
             mode,
@@ -7270,7 +7374,7 @@ var __async = (__this, __arguments, generator) => {
             newUserMessage,
             chatId: apiChatId,
             pageUrl,
-            courseCode
+            courseCode: courseCode || void 0
           }) : null;
           const explanation = ((_a = response == null ? void 0 : response.data) == null ? void 0 : _a.explanation) || `(${mode}) ${newUserMessage || trimmedSelection}`;
           const resolvedChatId = (response == null ? void 0 : response.chatId) || chatId || provisionalChatId || null;
@@ -7588,10 +7692,10 @@ var __async = (__this, __arguments, generator) => {
     }, [apiClient, activeTab, notesFilter, courseCode]);
     reactExports.useEffect(() => {
       if (!noteEditorRef.current) return;
-      const currentText = noteEditorRef.current.innerText || "";
-      if (currentText !== noteContent && !isUpdatingFromExternalRef.current) {
+      const currentHtml = noteEditorRef.current.innerHTML || "";
+      if (currentHtml !== noteContent && !isUpdatingFromExternalRef.current) {
         isUpdatingFromExternalRef.current = true;
-        noteEditorRef.current.innerText = noteContent;
+        noteEditorRef.current.innerHTML = noteContent;
         requestAnimationFrame(() => {
           isUpdatingFromExternalRef.current = false;
         });
@@ -7599,10 +7703,10 @@ var __async = (__this, __arguments, generator) => {
     }, [noteContent]);
     reactExports.useEffect(() => {
       if (activeTab === NOTES_TAB_ID && noteEditorRef.current && notesView === "current") {
-        const currentText = noteEditorRef.current.innerText || "";
-        if (currentText !== noteContent) {
+        const currentHtml = noteEditorRef.current.innerHTML || "";
+        if (currentHtml !== noteContent) {
           isUpdatingFromExternalRef.current = true;
-          noteEditorRef.current.innerText = noteContent;
+          noteEditorRef.current.innerHTML = noteContent;
           requestAnimationFrame(() => {
             isUpdatingFromExternalRef.current = false;
           });
@@ -7706,7 +7810,7 @@ var __async = (__this, __arguments, generator) => {
       lastSavedTitleRef.current = "";
       isUpdatingFromExternalRef.current = true;
       if (noteEditorRef.current) {
-        noteEditorRef.current.innerText = "";
+        noteEditorRef.current.innerHTML = "";
       }
       isUpdatingFromExternalRef.current = false;
     };
@@ -7730,7 +7834,7 @@ var __async = (__this, __arguments, generator) => {
             if (fullNote) {
               setCurrentNoteId(fullNote.id);
               const title = fullNote.title || "";
-              const content = fullNote.content || "";
+              const content = normalizeToHtml(fullNote.content || "");
               setNoteTitle(title);
               setNoteContent(content);
               setNoteStatus("saved");
@@ -7739,8 +7843,8 @@ var __async = (__this, __arguments, generator) => {
               lastSavedContentRef.current = content;
               lastSavedTitleRef.current = title;
               isUpdatingFromExternalRef.current = true;
-              if (noteEditorRef.current && noteEditorRef.current.innerText !== content) {
-                noteEditorRef.current.innerText = content;
+              if (noteEditorRef.current && noteEditorRef.current.innerHTML !== content) {
+                noteEditorRef.current.innerHTML = content;
               }
               isUpdatingFromExternalRef.current = false;
               return;
@@ -7751,7 +7855,7 @@ var __async = (__this, __arguments, generator) => {
           if (note) {
             setCurrentNoteId(note.id);
             const title = note.title || "";
-            const content = note.content || "";
+            const content = normalizeToHtml(note.content || "");
             setNoteTitle(title);
             setNoteContent(content);
             setNoteStatus("saved");
@@ -7760,8 +7864,8 @@ var __async = (__this, __arguments, generator) => {
             lastSavedContentRef.current = content;
             lastSavedTitleRef.current = title;
             isUpdatingFromExternalRef.current = true;
-            if (noteEditorRef.current && noteEditorRef.current.innerText !== content) {
-              noteEditorRef.current.innerText = content;
+            if (noteEditorRef.current && noteEditorRef.current.innerHTML !== content) {
+              noteEditorRef.current.innerHTML = content;
             }
             isUpdatingFromExternalRef.current = false;
             const noteListItem = {
@@ -7780,7 +7884,7 @@ var __async = (__this, __arguments, generator) => {
           console.error("Failed to load note:", error);
         }
       }),
-      [apiClient, notes]
+      [apiClient, notes, normalizeToHtml]
     );
     const handleSaveAsNote = reactExports.useCallback(
       (messageContent) => __async(null, null, function* () {
@@ -7812,7 +7916,7 @@ var __async = (__this, __arguments, generator) => {
           setActiveTab(NOTES_TAB_ID);
           setNotesView("current");
           setCurrentNoteId(createdNote.id);
-          const content = messageContent.trim();
+          const content = normalizeToHtml(messageContent.trim());
           setNoteTitle(noteListItem.title);
           setNoteContent(content);
           setNoteStatus("saved");
@@ -7821,7 +7925,7 @@ var __async = (__this, __arguments, generator) => {
           lastSavedTitleRef.current = noteListItem.title;
           isUpdatingFromExternalRef.current = true;
           if (noteEditorRef.current) {
-            noteEditorRef.current.innerText = content;
+            noteEditorRef.current.innerHTML = content;
           }
           isUpdatingFromExternalRef.current = false;
           setTimeout(() => {
@@ -7849,11 +7953,162 @@ var __async = (__this, __arguments, generator) => {
           setNoteTitle(
             messageContent.split("\n")[0].trim().slice(0, 50) || "Untitled note"
           );
-          setNoteContent(messageContent.trim());
+          setNoteContent(normalizeToHtml(messageContent.trim()));
           setNoteStatus("idle");
         }
       }),
-      [apiClient, courseCode, pageUrl]
+      [apiClient, courseCode, normalizeToHtml, pageUrl]
+    );
+    const captureEditorSelection = reactExports.useCallback(() => {
+      var _a;
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+      const range = selection.getRangeAt(0);
+      if ((_a = noteEditorRef.current) == null ? void 0 : _a.contains(range.commonAncestorContainer)) {
+        lastNoteSelectionRef.current = range.cloneRange();
+      }
+    }, []);
+    const insertNodeAtCursor = reactExports.useCallback(
+      (node) => {
+        const editor = noteEditorRef.current;
+        if (!editor) {
+          const serializedNode = node instanceof Text ? node.data : node.outerHTML || "";
+          const fallbackContent = noteContent ? `${noteContent}${serializedNode}` : serializedNode;
+          setNoteContent(fallbackContent);
+          setNoteStatus("saving");
+          return;
+        }
+        isUpdatingFromExternalRef.current = true;
+        editor.focus();
+        const selection = window.getSelection();
+        let range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+        if (lastNoteSelectionRef.current && (!range || !editor.contains(range.commonAncestorContainer))) {
+          range = lastNoteSelectionRef.current.cloneRange();
+        }
+        if (!range || !editor.contains(range.commonAncestorContainer)) {
+          range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+        }
+        const isImage = node instanceof HTMLElement && node.tagName === "IMG";
+        range.deleteContents();
+        range.insertNode(node);
+        if (isImage) {
+          const textNode = document.createTextNode(" ");
+          range.setStartAfter(node);
+          range.insertNode(textNode);
+          range.setStartAfter(textNode);
+        } else {
+          range.setStartAfter(node);
+        }
+        range.collapse(true);
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        lastNoteSelectionRef.current = range.cloneRange();
+        const updatedContent = editor.innerHTML || "";
+        setNoteContent(updatedContent);
+        setNoteStatus("saving");
+        setTimeout(() => {
+          isUpdatingFromExternalRef.current = false;
+        }, 50);
+      },
+      [noteContent]
+    );
+    const handleFileInputChange = reactExports.useCallback(
+      (event) => __async(null, null, function* () {
+        var _a;
+        event.preventDefault();
+        event.stopPropagation();
+        const file = (_a = event.target.files) == null ? void 0 : _a[0];
+        if (!file) {
+          isFileInputActiveRef.current = false;
+          return;
+        }
+        const editor = noteEditorRef.current;
+        try {
+          const asset = yield uploadAsset(file);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
+          if (asset && asset.type === "image") {
+            const fromStoragePath = asset.storagePath && asset.storagePath.includes("/") ? asset.storagePath.split("/").pop() || "" : asset.storagePath || "";
+            const fileLabel = (file.name || "").trim() || fromStoragePath || (asset == null ? void 0 : asset.mimeType) || (asset == null ? void 0 : asset.type) || "image";
+            const imageEl = document.createElement("img");
+            imageEl.src = asset.url;
+            imageEl.alt = fileLabel;
+            imageEl.style.maxWidth = "100%";
+            imageEl.style.display = "inline-block";
+            imageEl.style.verticalAlign = "middle";
+            imageEl.style.margin = "2px 4px";
+            imageEl.style.borderRadius = "4px";
+            imageEl.style.boxShadow = "0 1px 3px rgba(0, 0, 0, 0.1)";
+            insertNodeAtCursor(imageEl);
+            setTimeout(() => {
+              if (editor) {
+                editor.focus();
+                const sidebarElement = editor.closest("#lockin-sidebar");
+                if (sidebarElement && document.activeElement !== editor) {
+                  editor.focus();
+                }
+              }
+            }, 100);
+          }
+        } finally {
+          isFileInputActiveRef.current = false;
+        }
+      }),
+      [insertNodeAtCursor, uploadAsset]
+    );
+    const handleInsertAttachmentClick = reactExports.useCallback((e) => {
+      var _a;
+      e.preventDefault();
+      e.stopPropagation();
+      isFileInputActiveRef.current = true;
+      (_a = fileInputRef.current) == null ? void 0 : _a.click();
+    }, []);
+    const getAssetDisplayName = reactExports.useCallback((asset) => {
+      var _a, _b;
+      if (!asset) return "attachment";
+      const storagePath = ((_a = asset.storagePath) != null ? _a : "") + "";
+      const fromPath = storagePath ? storagePath.split("/").pop() : "";
+      if (fromPath) return fromPath;
+      if (asset.mimeType) return asset.mimeType;
+      return (_b = asset.type) != null ? _b : "attachment";
+    }, []);
+    const getAssetIconLabel = reactExports.useCallback((asset) => {
+      const mime = (asset == null ? void 0 : asset.mimeType) || "";
+      if (mime.startsWith("image/")) return "IMG";
+      if (mime === "application/pdf") return "PDF";
+      if (mime.includes("presentation")) return "PPT";
+      if (mime.includes("word") || mime.includes("document")) return "DOC";
+      if (mime.startsWith("video/")) return "VID";
+      if (mime.startsWith("audio/")) return "AUD";
+      return "FILE";
+    }, []);
+    const handleDeleteAsset = reactExports.useCallback(
+      (asset) => __async(this, null, function* () {
+        if (!asset) return;
+        const success = yield deleteAsset(asset.id);
+        if (!success) return;
+        const editor = noteEditorRef.current;
+        if (!editor || !asset.url) return;
+        const imgs = Array.from(editor.querySelectorAll("img"));
+        let changed = false;
+        imgs.forEach((img) => {
+          if (img.getAttribute("src") === asset.url) {
+            img.remove();
+            changed = true;
+          }
+        });
+        if (changed) {
+          const html = editor.innerHTML || "";
+          setNoteContent(html);
+          setNoteStatus("saving");
+        }
+      }),
+      [deleteAsset, setNoteContent, setNoteStatus]
     );
     const notesFooterLabel = reactExports.useMemo(() => {
       if (noteStatus === "saving") return "Saving...";
@@ -7959,8 +8214,43 @@ var __async = (__this, __arguments, generator) => {
                     tool
                   ))
                 ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-toolbar-right", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-note-menu-trigger", "aria-label": "More", children: "..." }) })
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar-right", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      className: "lockin-note-tool-btn",
+                      onClick: handleInsertAttachmentClick,
+                      disabled: !currentNoteId || isAssetUploading,
+                      "aria-label": "Insert image or attachment",
+                      title: currentNoteId ? "Insert image or attachment" : "Save the note to add attachments",
+                      type: "button",
+                      children: isAssetUploading ? "Uploading..." : "Insert image"
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-note-menu-trigger", "aria-label": "More", children: "..." })
+                ] })
               ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  ref: fileInputRef,
+                  type: "file",
+                  accept: "image/*,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                  style: { display: "none" },
+                  onChange: handleFileInputChange,
+                  onClick: (e) => {
+                    e.stopPropagation();
+                  },
+                  onBlur: () => {
+                    setTimeout(() => {
+                      isFileInputActiveRef.current = false;
+                      if (noteEditorRef.current) {
+                        noteEditorRef.current.focus();
+                      }
+                    }, 100);
+                  }
+                }
+              ),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-editor-card", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "div",
                 {
@@ -7971,18 +8261,60 @@ var __async = (__this, __arguments, generator) => {
                   "data-placeholder": "Write your note here...",
                   onInput: (e) => {
                     if (isUpdatingFromExternalRef.current) return;
-                    const newContent = e.target.innerText || "";
+                    const newContent = e.target.innerHTML || "";
                     if (newContent !== noteContent) {
                       setNoteContent(newContent);
                       setNoteStatus("saving");
                     }
+                    captureEditorSelection();
                   },
+                  onMouseUp: captureEditorSelection,
+                  onKeyUp: captureEditorSelection,
                   onKeyDown: (e) => {
                     if (e.key === "Enter" && !e.shiftKey) ;
                   },
                   suppressContentEditableWarning: true
                 }
               ) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-attachments", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-attachments-header", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-attachments-title", children: "Attachments" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-attachments-status", children: isAssetUploading ? "Uploading..." : areAssetsLoading ? "Loading..." : "" })
+                ] }),
+                noteAssetError ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-asset-error", children: noteAssetError }) : null,
+                noteAssets.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-attachments-empty", children: currentNoteId ? "No attachments yet" : "Save the note to add attachments" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-attachments-list", children: noteAssets.map((asset) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    className: "lockin-note-attachment-row",
+                    children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-attachment-icon", children: getAssetIconLabel(asset) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-attachment-name", children: getAssetDisplayName(asset) }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-attachment-actions", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "a",
+                          {
+                            href: asset.url,
+                            target: "_blank",
+                            rel: "noreferrer",
+                            className: "lockin-note-attachment-link",
+                            children: "View"
+                          }
+                        ),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            className: "lockin-note-attachment-delete",
+                          onClick: () => handleDeleteAsset(asset),
+                            "aria-label": "Delete attachment",
+                            children: "Delete"
+                          }
+                        )
+                      ] })
+                    ]
+                  },
+                  asset.id
+                )) })
+              ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-footer-status", children: notesFooterLabel })
             ]
           }

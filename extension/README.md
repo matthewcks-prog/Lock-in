@@ -18,14 +18,13 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 - **`contentScript-react.js`**: Active content script (Ctrl/Cmd + select to open, Escape to close) that mounts the React sidebar bundle and syncs layout/state
 - **`ui/index.js`**: Built React sidebar bundle (source in `/ui/extension`)
 - **`background.js`**: Service worker for context menus and session management
-- **`popup.js`**: Settings and authentication UI
-- **`supabaseAuth.js`**: Authentication handling
+- **`popup.js`**: Settings and authentication UI (uses `window.LockInAuth` from the bundled client)
 
 ### Shared Libraries (`libs/`)
 
 - **`messaging.js`**: Typed message system for extension communication
 - **`storage.js`**: Wrapper for chrome.storage operations
-- **`api.js`**: Backend API client wrapper (chat, notes, search)
+- **`initApi.js`**: Bundled `/api` TypeScript client/auth (exposes `window.LockInAPI` + `window.LockInAuth`)
 - **`logger.js`**: Centralized logging utility
 
 ### Utilities
