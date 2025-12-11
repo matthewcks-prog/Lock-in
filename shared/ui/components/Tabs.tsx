@@ -18,6 +18,7 @@ export interface TabsProps {
   activeTab: string;
   onTabChange: (tabId: string) => void;
   variant?: "line" | "pill";
+  ariaLabel?: string;
 }
 
 export function Tabs({
@@ -25,6 +26,7 @@ export function Tabs({
   activeTab,
   onTabChange,
   variant = "line",
+  ariaLabel,
 }: TabsProps) {
   const containerClasses =
     variant === "line"
@@ -44,13 +46,56 @@ export function Tabs({
             : "text-gray-600 hover:text-gray-900"
         }`;
 
+  const tabRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (tabs.length === 0) return;
+
+    const focusTab = (targetIndex: number) => {
+      const nextIndex = (targetIndex + tabs.length) % tabs.length;
+      onTabChange(tabs[nextIndex].id);
+      tabRefs.current[nextIndex]?.focus();
+    };
+
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        event.preventDefault();
+        focusTab(index + 1);
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        event.preventDefault();
+        focusTab(index - 1);
+        break;
+      case "Home":
+        event.preventDefault();
+        focusTab(0);
+        break;
+      case "End":
+        event.preventDefault();
+        focusTab(tabs.length - 1);
+        break;
+      default:
+        break;
+    }
+  };
+
   return (
-    <div className={containerClasses}>
-      {tabs.map((tab) => (
+    <div className={containerClasses} role="tablist" aria-label={ariaLabel}>
+      {tabs.map((tab, index) => (
         <button
           key={tab.id}
+          ref={(node) => {
+            tabRefs.current[index] = node;
+          }}
           className={tabClasses(tab.id === activeTab)}
           onClick={() => onTabChange(tab.id)}
+          onKeyDown={(event) => handleKeyDown(event, index)}
+          type="button"
+          role="tab"
+          aria-selected={tab.id === activeTab}
+          tabIndex={tab.id === activeTab ? 0 : -1}
         >
           {tab.icon && <span className="inline mr-1">{tab.icon}</span>}
           {tab.label}
