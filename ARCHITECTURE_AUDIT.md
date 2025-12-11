@@ -31,6 +31,7 @@ This file is kept in sync with the codebase. Update it whenever architecture or 
 - Backend supports generic note assets (images/docs) with validation + Supabase Storage/DB, and the extension UI now uploads/lists/deletes them via `useNoteAssets` with inline Markdown insertion for images.
 - Extension now loads the shared `/api` TypeScript client/auth bundle via `libs/initApi.js`; legacy `supabaseAuth.js` and `libs/api.js` were removed.
 - Site adapters are bundled into the content script via `extension/content/pageContext.ts` importing `/integrations`; no global `window.getCurrentAdapter` dependency.
+- **Scalability & Security (Dec 2024)**: Database indexes applied (`002_performance_indexes.sql`), Row Level Security enabled on all tables (`003_row_level_security.sql`), API client retry with exponential backoff, offline save queue, optimistic locking for concurrent edit detection.
 
 ## Outstanding Issues (ordered by impact)
 

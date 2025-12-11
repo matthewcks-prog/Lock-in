@@ -78,6 +78,8 @@ import { Button, Card, TextInput } from "@shared/ui/components";
 
 - Keep components simple and focused
 - Use Tailwind CSS for styling
+- Prefer accessible defaults (labels bound via `htmlFor`/`id`, aria attributes for error/helper text, roving tab indexes for
+  composite widgets)
 - Make components accessible (ARIA labels, keyboard navigation)
 - Export types for props
 - Keep components framework-agnostic (React only, no Chrome/Next.js specifics)

@@ -48,9 +48,18 @@ export function Button({
     <button
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       disabled={disabled || isLoading}
+      aria-busy={isLoading}
       {...props}
     >
-      {isLoading ? "Loading..." : children}
+      <span className="flex items-center justify-center gap-2">
+        {isLoading && (
+          <span
+            className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+            aria-hidden
+          />
+        )}
+        <span className={isLoading ? "opacity-80" : undefined}>{children}</span>
+      </span>
     </button>
   );
 }

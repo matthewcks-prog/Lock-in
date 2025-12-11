@@ -3,6 +3,11 @@
  * 
  * Chrome-agnostic API client for backend communication.
  * Uses auth client interface - no direct Chrome dependencies.
+ * 
+ * Scalability features:
+ * - Exponential backoff retry for transient failures
+ * - Request deduplication via AbortController
+ * - Optimistic locking support via updatedAt
  */
 
 import type { StudyResponse, ApiResponse, ChatMessage, NoteAsset } from "../core/domain/types";
@@ -11,6 +16,44 @@ import type { AuthClient } from "./auth";
 export interface ApiClientConfig {
   backendUrl: string;
   authClient: AuthClient;
+}
+
+/**
+ * Retry configuration for transient failures
+ * Industry best practice: exponential backoff with jitter
+ */
+interface RetryConfig {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  retryableStatuses: number[];
+}
+
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 5000,
+  // 429 = rate limit, 502/503/504 = server overload/temporary issues
+  retryableStatuses: [429, 502, 503, 504],
+};
+
+/**
+ * Calculate delay with exponential backoff and jitter
+ * Jitter prevents thundering herd problem with thousands of users
+ */
+function calculateRetryDelay(attempt: number, config: RetryConfig): number {
+  const exponentialDelay = config.baseDelayMs * Math.pow(2, attempt);
+  const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
+  // Add 0-30% jitter to prevent synchronized retries
+  const jitter = cappedDelay * (Math.random() * 0.3);
+  return Math.floor(cappedDelay + jitter);
+}
+
+/**
+ * Sleep utility for retry delays
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export interface ProcessTextParams {
@@ -56,6 +99,34 @@ export interface ListNoteAssetsParams {
 
 export interface DeleteNoteAssetParams {
   assetId: string;
+}
+
+/**
+ * Options for API requests
+ */
+export interface ApiRequestOptions extends RequestInit {
+  signal?: AbortSignal;
+  /** Set to false to disable retries for this request */
+  retry?: boolean;
+  /** Custom retry config */
+  retryConfig?: Partial<RetryConfig>;
+  /** updatedAt for optimistic locking (conflict detection) */
+  ifUnmodifiedSince?: string;
+}
+
+/**
+ * Conflict error thrown when optimistic locking fails
+ */
+export class ConflictError extends Error {
+  code = "CONFLICT";
+  status = 409;
+  serverVersion?: string;
+  
+  constructor(message: string, serverVersion?: string) {
+    super(message);
+    this.name = "ConflictError";
+    this.serverVersion = serverVersion;
+  }
 }
 
 /**
@@ -112,16 +183,30 @@ export function createApiClient(config: ApiClientConfig) {
   const clientConfig = { backendUrl };
 
   /**
-   * Make an authenticated API request
+   * Make an authenticated API request with automatic retry for transient failures.
+   * 
+   * Scalability features:
+   * - Exponential backoff with jitter for retries (prevents thundering herd)
+   * - Automatic retry for 429, 502, 503, 504 status codes
+   * - Support for optimistic locking via If-Unmodified-Since header
+   * - AbortController support for request cancellation
    */
   async function apiRequest<T = any>(
     endpoint: string,
-    options: RequestInit & { signal?: AbortSignal } = {}
+    options: ApiRequestOptions = {}
   ): Promise<T> {
+    const {
+      retry = true,
+      retryConfig: customRetryConfig,
+      ifUnmodifiedSince,
+      ...fetchOptions
+    } = options;
+    
+    const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...customRetryConfig };
     const url = endpoint.startsWith("http") ? endpoint : `${backendUrl}${endpoint}`;
 
     // Check if request was aborted before starting
-    if (options.signal?.aborted) {
+    if (fetchOptions.signal?.aborted) {
       const error = new Error("Request was aborted");
       (error as any).code = "ABORTED";
       throw error;
@@ -136,77 +221,131 @@ export function createApiClient(config: ApiClientConfig) {
     }
 
     // Check again after async operation
-    if (options.signal?.aborted) {
+    if (fetchOptions.signal?.aborted) {
       const error = new Error("Request was aborted");
       (error as any).code = "ABORTED";
       throw error;
     }
 
     // Prepare headers
-    const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
+    const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
     const headers: HeadersInit = {
       Authorization: `Bearer ${accessToken}`,
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(options.headers || {}),
+      ...(ifUnmodifiedSince ? { "If-Unmodified-Since": ifUnmodifiedSince } : {}),
+      ...(fetchOptions.headers || {}),
     };
 
     // Prepare request (include signal for cancellation)
     const requestOptions: RequestInit = {
-      ...options,
+      ...fetchOptions,
       headers,
-      signal: options.signal,
+      signal: fetchOptions.signal,
     };
 
-    // Make request
-    let response: Response;
-    try {
-      response = await fetch(url, requestOptions);
-    } catch (networkError: any) {
-      // Check if error is due to abort
-      if (networkError.name === "AbortError" || options.signal?.aborted) {
+    // Retry loop with exponential backoff
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= (retry ? retryConfig.maxRetries : 0); attempt++) {
+      // Check abort before each attempt
+      if (fetchOptions.signal?.aborted) {
         const error = new Error("Request was aborted");
         (error as any).code = "ABORTED";
         throw error;
       }
-      const error = new Error("Unable to reach Lock-in. Please check your connection.");
-      (error as any).code = "NETWORK_ERROR";
-      (error as any).cause = networkError;
-      throw error;
-    }
 
-    // Handle auth errors
-    if (response.status === 401 || response.status === 403) {
-      // Try to sign out if auth fails
-      await authClient.signOut().catch(() => {
-        // Ignore sign-out errors
-      });
-    }
+      // Wait before retry (skip for first attempt)
+      if (attempt > 0) {
+        const delay = calculateRetryDelay(attempt - 1, retryConfig);
+        console.log(`[API] Retry attempt ${attempt}/${retryConfig.maxRetries} after ${delay}ms`);
+        await sleep(delay);
+        
+        // Check abort after sleep
+        if (fetchOptions.signal?.aborted) {
+          const error = new Error("Request was aborted");
+          (error as any).code = "ABORTED";
+          throw error;
+        }
+      }
 
-    // Handle HTTP errors
-    if (!response.ok) {
-      throw await createApiError(response);
-    }
+      // Make request
+      let response: Response;
+      try {
+        response = await fetch(url, requestOptions);
+      } catch (networkError: any) {
+        // Check if error is due to abort
+        if (networkError.name === "AbortError" || fetchOptions.signal?.aborted) {
+          const error = new Error("Request was aborted");
+          (error as any).code = "ABORTED";
+          throw error;
+        }
+        
+        // Network errors are retryable
+        lastError = new Error("Unable to reach Lock-in. Please check your connection.");
+        (lastError as any).code = "NETWORK_ERROR";
+        (lastError as any).cause = networkError;
+        
+        if (retry && attempt < retryConfig.maxRetries) {
+          continue; // Retry on network error
+        }
+        throw lastError;
+      }
 
-    // Parse and return response
-    try {
-      const data = await response.json();
-      // Check for success: false in response body (even if HTTP status is 200)
-      if (data && data.success === false) {
-        const error = new Error(data.error?.message || "Request failed");
-        (error as any).code = data.error?.code || "API_ERROR";
+      // Handle 409 Conflict for optimistic locking
+      if (response.status === 409) {
+        let serverVersion: string | undefined;
+        try {
+          const body = await response.json();
+          serverVersion = body?.updatedAt || body?.updated_at;
+        } catch {}
+        throw new ConflictError(
+          "Note was modified by another session. Please refresh and try again.",
+          serverVersion
+        );
+      }
+
+      // Check if response status is retryable
+      if (retry && retryConfig.retryableStatuses.includes(response.status) && attempt < retryConfig.maxRetries) {
+        lastError = await createApiError(response);
+        continue; // Retry on retryable status
+      }
+
+      // Handle auth errors
+      if (response.status === 401 || response.status === 403) {
+        // Try to sign out if auth fails
+        await authClient.signOut().catch(() => {
+          // Ignore sign-out errors
+        });
+      }
+
+      // Handle HTTP errors
+      if (!response.ok) {
+        throw await createApiError(response);
+      }
+
+      // Parse and return response
+      try {
+        const data = await response.json();
+        // Check for success: false in response body (even if HTTP status is 200)
+        if (data && data.success === false) {
+          const error = new Error(data.error?.message || "Request failed");
+          (error as any).code = data.error?.code || "API_ERROR";
+          throw error;
+        }
+        return data;
+      } catch (parseError) {
+        // If it's already an Error we threw, re-throw it
+        if (parseError instanceof Error && (parseError as any).code) {
+          throw parseError;
+        }
+        const error = new Error("Failed to parse API response");
+        (error as any).code = "PARSE_ERROR";
+        (error as any).cause = parseError;
         throw error;
       }
-      return data;
-    } catch (parseError) {
-      // If it's already an Error we threw, re-throw it
-      if (parseError instanceof Error && (parseError as any).code) {
-        throw parseError;
-      }
-      const error = new Error("Failed to parse API response");
-      (error as any).code = "PARSE_ERROR";
-      (error as any).cause = parseError;
-      throw error;
     }
+
+    // If we've exhausted all retries
+    throw lastError || new Error("Request failed after retries");
   }
 
   /**

@@ -8,6 +8,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - **Backend API** (`backend/`) is a Node.js/Express server that handles auth, rate limiting, and chat storage backed by Supabase.
 
 **Data Flow:**
+
 1. User highlights text (Ctrl/Cmd + select) -> extension captures selection.
 2. Extension builds payload (mode, text, user/session info, chat state).
 3. Request goes to backend (`/api/lockin` and related chat endpoints).
@@ -19,18 +20,22 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Core Files
 
 - **`manifest.json`**
+
   - Chrome Extension manifest (permissions, content scripts, background service worker, icons).
 
 - **`config.js`**
+
   - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key).
   - Single source of truth for runtime URLs.
 
 - **`contentScript-react.js`**
+
   - Thin orchestrator injected into webpages.
   - Delegates to helpers in `extension/content/` for adapter resolution, state, interactions, and session restore.
   - Hands off rendering to the built React bundle.
 
 - **`content/` helpers**
+
   - `pageContext.js` (adapter + page context resolution, imports `/integrations` bundle with fallback inference).
   - `stateStore.js` (sidebar/selection/mode state + storage sync).
   - `sidebarHost.js` (mounts/upgrades React sidebar and body classes).
@@ -38,9 +43,11 @@ This is a living overview of the current codebase. Update it whenever files move
   - `interactions.js` (selection + Escape handlers).
 
 - **`background.js`**
+
   - Service worker for background tasks, context menus, and session routing.
 
 - **`popup.js`**
+
   - Toolbar popup UI logic, settings, and auth UI.
 
 - **`ui/index.js`**
@@ -49,9 +56,11 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Shared Modules
 
 - **`messaging.js`**
+
   - Typed message system for extension communication.
 
 - **`storage.js`**
+
   - Wrapper for `chrome.storage` with defaults and async/await helpers.
 
 - **`libs/initApi.js` + `/api` (TS)**
@@ -72,6 +81,7 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Application Setup
 
 - **`app.js`**
+
   - Express application factory.
   - Configures middleware (CORS, JSON parsing, logging).
   - Wires up routes and error handling.
@@ -83,19 +93,24 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Routes & Controllers
 
 - **`routes/lockinRoutes.js`**
+
   - HTTP route definitions and middleware wiring.
 
 - **`routes/noteRoutes.js`**
+
   - Authenticated routes for notes CRUD, search, note chat, and note asset upload/list/delete.
 
 - **`controllers/lockinController.js`**
+
   - Handlers for AI processing, chat listing/deletion, and chat messages.
   - Input validation and error handling.
 
 - **`controllers/notesController.js`**
+
   - Notes CRUD, including embeddings.
 
 - **`controllers/notesChatController.js`**
+
   - Handles chat over notes.
 
 - **`controllers/noteAssetsController.js`**
@@ -105,12 +120,15 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Data Layer
 
 - **`chatRepository.js`**
+
   - Database access layer for chats and chat messages (Supabase).
 
 - **`notesRepository.js`**
+
   - Data access for notes, embeddings, and ownership checks.
 
 - **`noteAssetsRepository.js`**
+
   - Data access for the `note_assets` table (create/list/get/delete).
 
 - **`supabaseClient.js`**
@@ -124,9 +142,11 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Middleware
 
 - **`authMiddleware.js`**
+
   - Validates Supabase JWT tokens and attaches user context.
 
 - **`rateLimiter.js`**
+
   - Per-user rate limiting backed by Supabase.
 
 - **`middleware/uploadMiddleware.js`**
@@ -149,6 +169,31 @@ This is a living overview of the current codebase. Update it whenever files move
 2. **Middleware chain**: Auth -> Rate Limit -> Validation -> Handler.
 3. **Error handling**: Consistent error responses without leaking internal details.
 4. **Configuration**: All env vars accessed through `config.js`.
+5. **Optimistic locking**: Notes support `If-Unmodified-Since` header for conflict detection.
+6. **Input validation**: UUID validation, content length limits, tag sanitization.
+
+## Scalability Features
+
+The system is designed to handle thousands of concurrent users:
+
+### API Client (`/api/client.ts`)
+
+- **Exponential backoff with jitter**: Retries transient failures (429, 502, 503, 504) with randomized delays to prevent thundering herd.
+- **Request deduplication**: AbortController cancels in-flight requests when new ones are triggered.
+- **Optimistic locking**: `ConflictError` thrown when concurrent edits are detected.
+
+### Note Editor (`/ui/hooks/useNoteEditor.ts`)
+
+- **Offline queue**: Failed saves are queued in localStorage and synced when back online.
+- **Fingerprint deduplication**: Content changes are fingerprinted to prevent unnecessary saves.
+- **Debounced autosave**: 1500ms debounce limits API calls to ~40/minute per active user.
+
+### Backend (`/backend`)
+
+- **Optimistic locking**: Notes repository checks `updated_at` before updates to detect conflicts.
+- **Database indexes**: Applied via `migrations/002_performance_indexes.sql` - composite indexes on all tables for common query patterns.
+- **Row Level Security**: Applied via `migrations/003_row_level_security.sql` - all tables have RLS policies enforcing user data isolation.
+- **Input validation**: UUID format validation, content length limits (50k chars), tag limits (20 tags).
 
 ## Security Considerations
 

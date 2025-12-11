@@ -18,6 +18,29 @@ const SAVE_DEBOUNCE_MS = 1500;
  */
 const SAVED_RESET_DELAY_MS = 1200;
 
+/**
+ * Maximum retry attempts for failed saves
+ */
+const MAX_SAVE_RETRIES = 3;
+
+/**
+ * Local storage key for offline queue
+ */
+const OFFLINE_QUEUE_KEY = "lockin_offline_notes_queue";
+
+interface PendingSave {
+  noteId: string | null;
+  title: string;
+  content: NoteContent;
+  courseCode: string | null;
+  sourceUrl: string | null;
+  sourceSelection: string | null;
+  noteType: string;
+  tags: string[];
+  timestamp: number;
+  retryCount: number;
+}
+
 interface UseNoteEditorOptions {
   noteId?: string | null;
   notesService: NotesService | null | undefined;
@@ -32,11 +55,66 @@ export interface UseNoteEditorResult {
   error: string | null;
   isLoading: boolean;
   activeNoteId: string | null;
+  /** Number of notes queued for offline sync */
+  pendingSaveCount: number;
   setActiveNoteId: (noteId: string | null) => void;
   handleContentChange: (content: NoteContent) => void;
   handleTitleChange: (title: string) => void;
   saveNow: () => Promise<void>;
   resetToNew: () => void;
+  /** Manually trigger sync of offline queue */
+  syncOfflineQueue: () => Promise<void>;
+}
+
+/**
+ * Load offline queue from localStorage
+ */
+function loadOfflineQueue(): PendingSave[] {
+  try {
+    const stored = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!stored) return [];
+    return JSON.parse(stored) as PendingSave[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save offline queue to localStorage
+ */
+function saveOfflineQueue(queue: PendingSave[]): void {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+  } catch {
+    console.error("[NoteEditor] Failed to save offline queue");
+  }
+}
+
+/**
+ * Add a pending save to the offline queue
+ */
+function addToOfflineQueue(save: PendingSave): void {
+  const queue = loadOfflineQueue();
+  // Remove any existing entry for the same note (we only need the latest)
+  const filtered = queue.filter(
+    (s) => s.noteId !== save.noteId || (s.noteId === null && save.noteId === null && s.timestamp !== save.timestamp)
+  );
+  // Keep only the most recent for this note
+  filtered.push(save);
+  // Limit queue size to prevent storage bloat
+  const trimmed = filtered.slice(-50);
+  saveOfflineQueue(trimmed);
+}
+
+/**
+ * Remove a pending save from the offline queue
+ */
+function removeFromOfflineQueue(noteId: string | null, timestamp: number): void {
+  const queue = loadOfflineQueue();
+  const filtered = queue.filter(
+    (s) => !(s.noteId === noteId && s.timestamp === timestamp)
+  );
+  saveOfflineQueue(filtered);
 }
 
 function createDraftNote(opts: {
@@ -195,9 +273,13 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
    * - Fingerprint check prevents unnecessary API calls when content hasn't changed
    * - AbortController cancels in-flight saves if a new save is triggered
    * - Debouncing in scheduleSave limits API calls to ~40/minute max per user
+   * - Offline queue for failed saves with automatic retry
    */
   const noteRef = useRef(note);
   noteRef.current = note;
+  
+  // Track offline queue state
+  const [pendingSaveCount, setPendingSaveCount] = useState(() => loadOfflineQueue().length);
 
   const persist = useCallback(async () => {
     const currentNote = noteRef.current;
@@ -234,6 +316,20 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     abortControllerRef.current = controller;
     setStatus("saving");
     setError(null);
+    
+    // Create pending save for offline queue
+    const pendingSave: PendingSave = {
+      noteId: currentNote.id,
+      title: currentNote.title || "Untitled note",
+      content: currentNote.content,
+      courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
+      sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
+      sourceSelection: currentNote.sourceSelection ?? sourceSelection ?? null,
+      noteType: currentNote.noteType,
+      tags: currentNote.tags,
+      timestamp: Date.now(),
+      retryCount: 0,
+    };
 
     try {
       let saved: Note;
@@ -277,8 +373,21 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
       savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
     } catch (err: any) {
       if (controller.signal.aborted) return;
-      setError(err?.message || "Failed to save note");
-      setStatus("error");
+      
+      // Check if this is a network error or retryable error
+      const isNetworkError = err?.code === "NETWORK_ERROR" || !navigator.onLine;
+      const isRetryable = isNetworkError || err?.code === "RATE_LIMIT" || err?.status === 429 || err?.status >= 500;
+      
+      if (isRetryable && pendingSave.retryCount < MAX_SAVE_RETRIES) {
+        // Add to offline queue for later retry
+        addToOfflineQueue(pendingSave);
+        setPendingSaveCount(loadOfflineQueue().length);
+        setError(isNetworkError ? "Saved offline - will sync when connected" : "Save queued for retry");
+        setStatus("error");
+      } else {
+        setError(err?.message || "Failed to save note");
+        setStatus("error");
+      }
     }
   }, [defaultCourseCode, defaultSourceUrl, notesService, sourceSelection]);
 
@@ -350,16 +459,91 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     setError(null);
   }, [defaultCourseCode, defaultSourceUrl, sourceSelection]);
 
+  /**
+   * Sync offline queue - process any pending saves that failed due to network issues.
+   * Called automatically when coming back online, or manually by the user.
+   */
+  const syncOfflineQueue = useCallback(async () => {
+    if (!notesService) return;
+    
+    const queue = loadOfflineQueue();
+    if (queue.length === 0) return;
+    
+    console.log(`[NoteEditor] Syncing ${queue.length} offline saves`);
+    
+    for (const pendingSave of queue) {
+      try {
+        if (pendingSave.noteId) {
+          // Update existing note
+          const payload: UpdateNoteInput = {
+            title: pendingSave.title,
+            content: pendingSave.content,
+            courseCode: pendingSave.courseCode,
+            sourceUrl: pendingSave.sourceUrl,
+            sourceSelection: pendingSave.sourceSelection,
+            noteType: pendingSave.noteType as any,
+            tags: pendingSave.tags,
+          };
+          await notesService.updateNote(pendingSave.noteId, payload);
+        } else {
+          // Create new note
+          const payload: CreateNoteInput = {
+            title: pendingSave.title,
+            content: pendingSave.content,
+            courseCode: pendingSave.courseCode,
+            sourceUrl: pendingSave.sourceUrl,
+            sourceSelection: pendingSave.sourceSelection,
+            noteType: pendingSave.noteType as any,
+            tags: pendingSave.tags,
+          };
+          await notesService.createNote(payload);
+        }
+        
+        // Successfully saved - remove from queue
+        removeFromOfflineQueue(pendingSave.noteId, pendingSave.timestamp);
+        console.log(`[NoteEditor] Synced offline save for note ${pendingSave.noteId || 'new'}`);
+      } catch (err: any) {
+        console.error(`[NoteEditor] Failed to sync offline save:`, err);
+        
+        // Increment retry count
+        const queue = loadOfflineQueue();
+        const updated = queue.map((s) =>
+          s.noteId === pendingSave.noteId && s.timestamp === pendingSave.timestamp
+            ? { ...s, retryCount: s.retryCount + 1 }
+            : s
+        );
+        // Remove items that have exceeded retry limit
+        const filtered = updated.filter((s) => s.retryCount < MAX_SAVE_RETRIES);
+        saveOfflineQueue(filtered);
+      }
+    }
+    
+    setPendingSaveCount(loadOfflineQueue().length);
+  }, [notesService]);
+
+  // Sync offline queue when coming back online
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log("[NoteEditor] Back online - syncing offline queue");
+      void syncOfflineQueue();
+    };
+    
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [syncOfflineQueue]);
+
   return {
     note,
     status,
     error,
     isLoading,
     activeNoteId,
+    pendingSaveCount,
     setActiveNoteId,
     handleContentChange,
     handleTitleChange,
     saveNow,
     resetToNew,
+    syncOfflineQueue,
   };
 }

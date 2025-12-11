@@ -10,26 +10,30 @@ It exists so future humans and AI agents can understand how data is stored and a
 
 ## High-level Entities
 
-- **User**  
-  - Comes from `auth.users` (Supabase).  
+- **User**
+
+  - Comes from `auth.users` (Supabase).
   - Owns chats, messages, notes, folders, and AI request logs.
 
-- **Chats & Messages**  
-  - `chats` = conversation sessions (e.g. per page, per topic).  
+- **Chats & Messages**
+
+  - `chats` = conversation sessions (e.g. per page, per topic).
   - `chat_messages` = individual turns within a chat (user/assistant/system).
 
-- **Notes & Folders**  
-  - `notes` = saved study notes linked to pages/courses.  
-  - `folders` = user-defined groupings (e.g. "FIT2100 Week 1").  
+- **Notes & Folders**
+
+  - `notes` = saved study notes linked to pages/courses.
+  - `folders` = user-defined groupings (e.g. "FIT2100 Week 1").
   - Currently there is **no explicit FK from notes → folders** – grouping is conceptual only.
 
-- **Note Assets**  
-  - `note_assets` = uploaded files attached to a note (images, PDFs, docs).  
-  - Files live in Supabase Storage bucket `note-assets` at `<user_id>/<note_id>/<asset_id>.<ext>`.  
+- **Note Assets**
+
+  - `note_assets` = uploaded files attached to a note (images, PDFs, docs).
+  - Files live in Supabase Storage bucket `note-assets` at `<user_id>/<note_id>/<asset_id>.<ext>`.
   - Table stores metadata + storage path; URLs are derived with `getPublicUrl`.
 
-- **AI Requests**  
-  - `ai_requests` = per-call log of AI usage (tokens in/out, mode).  
+- **AI Requests**
+  - `ai_requests` = per-call log of AI usage (tokens in/out, mode).
   - Useful for analytics, quotas, and debugging.
 
 ## Access Patterns
@@ -58,6 +62,7 @@ CREATE TABLE public.chats (
 ```
 
 **Fields:**
+
 - `id` - Unique chat identifier
 - `user_id` - Owner (FK to `auth.users`)
 - `title` - Optional chat title (auto-generated or user-set)
@@ -91,6 +96,7 @@ CREATE TABLE public.chat_messages (
 ```
 
 **Fields:**
+
 - `id` - Unique message identifier
 - `chat_id` - Parent chat (FK to `chats`)
 - `user_id` - Owner (FK to `auth.users`)
@@ -131,6 +137,7 @@ CREATE TABLE public.notes (
 ```
 
 **Fields:**
+
 - `id` - Unique note identifier
 - `user_id` - Owner (FK to `auth.users`)
 - `title` - Note title
@@ -149,6 +156,7 @@ CREATE TABLE public.notes (
 **Usage:** Stores user's study notes. Can be created manually or auto-generated from AI responses. Supports semantic search via embeddings.
 
 **Content handling:**
+
 - All notes must have `content_json` (Lexical JSON) and `editor_version` set.
 - `content_plain` is automatically extracted from Lexical JSON and used for embeddings and search.
 - Legacy notes with only HTML content are lazily migrated on read: the app converts HTML → minimal Lexical JSON and immediately persists `content_json` + `editor_version`.
@@ -175,6 +183,7 @@ CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
 ```
 
 **Fields:**
+
 - `id` - Asset id
 - `note_id` - Parent note id (cascade delete)
 - `user_id` - Owner (FK to `auth.users`)
@@ -203,6 +212,7 @@ CREATE TABLE public.folders (
 ```
 
 **Fields:**
+
 - `id` - Unique folder identifier
 - `user_id` - Owner (FK to `auth.users`)
 - `name` - Folder name
@@ -230,6 +240,7 @@ CREATE TABLE public.ai_requests (
 ```
 
 **Fields:**
+
 - `id` - Unique request identifier
 - `user_id` - User who made the request (FK to `auth.users`)
 - `mode` - Study mode used: `"explain"`, `"simplify"`, `"translate"`, `"general"`
@@ -269,65 +280,77 @@ auth.users (Supabase)
 
 **Note:** Currently no explicit relationship between `notes` and `folders`. Organization is done via `course_code` and `tags`.
 
-## Indexes (Recommended)
+## Indexes (Applied)
 
-For performance, consider adding indexes:
+These indexes are in place for performance at scale (thousands of users). Migration applied December 2024 via `backend/migrations/002_performance_indexes.sql`.
 
 ```sql
--- Chat queries
-CREATE INDEX idx_chats_user_id ON public.chats(user_id);
-CREATE INDEX idx_chats_last_message_at ON public.chats(last_message_at DESC);
+-- Notes: Primary listing (user + date)
+CREATE INDEX idx_notes_user_created ON public.notes(user_id, created_at DESC);
 
--- Chat messages
-CREATE INDEX idx_chat_messages_chat_id ON public.chat_messages(chat_id);
-CREATE INDEX idx_chat_messages_created_at ON public.chat_messages(created_at);
+-- Notes: Course code filter
+CREATE INDEX idx_notes_course_code ON public.notes(user_id, course_code);
 
--- Notes queries
-CREATE INDEX idx_notes_user_id ON public.notes(user_id);
-CREATE INDEX idx_notes_course_code ON public.notes(course_code);
-CREATE INDEX idx_notes_source_url ON public.notes(source_url);
-CREATE INDEX idx_notes_updated_at ON public.notes(updated_at DESC);
+-- Notes: Source URL filter
+CREATE INDEX idx_notes_source_url ON public.notes(user_id, source_url);
 
--- Note assets
-CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
+-- Notes: Optimistic locking queries
+CREATE INDEX idx_notes_updated_at ON public.notes(user_id, updated_at DESC);
+
+-- Notes: Semantic search (pgvector)
+CREATE INDEX idx_notes_embedding ON public.notes
+  USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Chats: Listing by user
+CREATE INDEX idx_chats_user_last_message ON public.chats(user_id, last_message_at DESC);
+
+-- Chat messages: History loading
+CREATE INDEX idx_chat_messages_chat_created ON public.chat_messages(chat_id, created_at ASC);
+
+-- Note assets: By note and user
 CREATE INDEX idx_note_assets_note_id ON public.note_assets(note_id);
+CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
 
--- Semantic search (if using pgvector)
-CREATE INDEX idx_notes_embedding ON public.notes USING ivfflat (embedding vector_cosine_ops);
-
--- AI requests (for analytics)
-CREATE INDEX idx_ai_requests_user_id ON public.ai_requests(user_id);
-CREATE INDEX idx_ai_requests_created_at ON public.ai_requests(created_at);
+-- AI requests: Rate limiting + analytics
+CREATE INDEX idx_ai_requests_user_created ON public.ai_requests(user_id, created_at DESC);
+CREATE INDEX idx_ai_requests_created_at ON public.ai_requests(created_at DESC);
 ```
 
 ---
 
-## Row Level Security (RLS)
+## Row Level Security (RLS) - Applied
 
-All tables should have RLS policies ensuring users can only access their own data:
+All tables have RLS policies ensuring users can only access their own data. Migration applied December 2024 via `backend/migrations/003_row_level_security.sql`.
+
+**Critical**: RLS provides defense-in-depth security. Even if application code has bugs, users cannot access each other's data.
+
+**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `folders`, `ai_requests`
 
 ```sql
--- Example for chats
-ALTER TABLE public.chats ENABLE ROW LEVEL SECURITY;
+-- Enable RLS on all tables
+ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
+-- (Repeat for all tables)
 
-CREATE POLICY "Users can view own chats"
-  ON public.chats FOR SELECT
+-- Example policies for notes
+CREATE POLICY "Users can view own notes"
+  ON public.notes FOR SELECT
   USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert own chats"
-  ON public.chats FOR INSERT
+CREATE POLICY "Users can insert own notes"
+  ON public.notes FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own chats"
-  ON public.chats FOR UPDATE
-  USING (auth.uid() = user_id);
+CREATE POLICY "Users can update own notes"
+  ON public.notes FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete own chats"
-  ON public.chats FOR DELETE
+CREATE POLICY "Users can delete own notes"
+  ON public.notes FOR DELETE
   USING (auth.uid() = user_id);
 ```
 
-Apply similar policies to `chat_messages`, `notes`, `note_assets`, `folders`, and `ai_requests`.
+Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, and `ai_requests`.
 
 ---
 
@@ -344,4 +367,3 @@ Apply similar policies to `chat_messages`, `notes`, `note_assets`, `folders`, an
 - Check `/core/domain/types.ts` for TypeScript types
 - Check backend repositories for query patterns
 - Follow RLS policies - never expose user data across users
-
