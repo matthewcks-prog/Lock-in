@@ -9,8 +9,12 @@ import {
   $isListNode,
 } from "@lexical/list";
 import { ListPlugin } from "@lexical/react/LexicalListPlugin";
-import LexicalErrorBoundary from "@lexical/react/LexicalErrorBoundary";
-import { HeadingNode, QuoteNode, $createHeadingNode, $isHeadingNode } from "@lexical/rich-text";
+import {
+  HeadingNode,
+  QuoteNode,
+  $createHeadingNode,
+  $isHeadingNode,
+} from "@lexical/rich-text";
 import { LexicalComposer } from "@lexical/react/LexicalComposer";
 import type { InitialConfigType } from "@lexical/react/LexicalComposer";
 import { ContentEditable } from "@lexical/react/LexicalContentEditable";
@@ -18,6 +22,7 @@ import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { LinkPlugin as ReactLinkPlugin } from "@lexical/react/LexicalLinkPlugin";
 import { OnChangePlugin } from "@lexical/react/LexicalOnChangePlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
+import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { AutoFocusPlugin } from "@lexical/react/LexicalAutoFocusPlugin";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { $generateNodesFromDOM } from "@lexical/html";
@@ -29,6 +34,7 @@ import {
   $getSelection,
   $isRangeSelection,
   $insertNodes,
+  $nodesOfType,
   COMMAND_PRIORITY_LOW,
   FORMAT_ELEMENT_COMMAND,
   FORMAT_TEXT_COMMAND,
@@ -38,12 +44,20 @@ import {
   SELECTION_CHANGE_COMMAND,
   UNDO_COMMAND,
   $getNodeByKey,
-  $nodesOfType,
   EditorState,
   $isElementNode,
 } from "lexical";
-import type { Note, NoteAsset, NoteContent, NoteStatus } from "../../../core/domain/Note.ts";
-import { AttachmentNode, $createAttachmentNode, $isAttachmentNode } from "./nodes/AttachmentNode";
+import type {
+  Note,
+  NoteAsset,
+  NoteContent,
+  NoteStatus,
+} from "../../../core/domain/Note";
+import {
+  AttachmentNode,
+  $createAttachmentNode,
+  $isAttachmentNode,
+} from "./nodes/AttachmentNode";
 import { ImageNode, $createImageNode, $isImageNode } from "./nodes/ImageNode";
 
 interface NoteEditorShellProps {
@@ -69,27 +83,23 @@ const BLOCK_OPTIONS: Array<{ value: BlockType; label: string }> = [
   { value: "h3", label: "Heading 3" },
 ];
 
-const TEXT_COLORS = ["#111827", "#334155", "#2563eb", "#7c3aed", "#dc2626", "#059669", "#f59e0b"];
-const HIGHLIGHT_COLORS = ["#fef3c7", "#e0f2fe", "#f3e8ff", "#dcfce7", "#fee2e2", "transparent"];
-
-function PaperclipIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19" />
-    </svg>
-  );
-}
+const TEXT_COLORS = [
+  "#111827",
+  "#334155",
+  "#2563eb",
+  "#7c3aed",
+  "#dc2626",
+  "#059669",
+  "#f59e0b",
+];
+const HIGHLIGHT_COLORS = [
+  "#fef3c7",
+  "#e0f2fe",
+  "#f3e8ff",
+  "#dcfce7",
+  "#fee2e2",
+  "transparent",
+];
 
 const theme = {
   paragraph: "lockin-note-paragraph",
@@ -131,6 +141,15 @@ function relativeLabel(iso: string | null | undefined) {
   return `${days}d ago`;
 }
 
+/**
+ * NoteContentLoader handles:
+ * 1. Initial hydration signaling (for asset cleanup timing)
+ * 2. Legacy HTML migration for old notes that don't have lexical state
+ *
+ * Since LexicalComposer uses a `key` based on note.id, it remounts when
+ * switching notes. The initialConfig.editorState handles loading the
+ * Lexical state. This plugin only needs to handle the legacy HTML case.
+ */
 function NoteContentLoader({
   note,
   onHydrationChange,
@@ -147,61 +166,48 @@ function NoteContentLoader({
       window.setTimeout(() => onHydrationChange?.(false), 0);
     };
 
-    if (!note) {
-      editor.update(() => {
-        const root = $getRoot();
-        root.clear();
-        root.append($createParagraphNode());
-      });
+    // If we have Lexical state in initialConfig, it's already loaded by LexicalComposer
+    // We only need to handle legacy HTML migration here
+    if (!note || !note.content) {
       finish();
       return;
     }
 
-    const loadLexicalState = () => {
-      const { content } = note;
-      if (content.version === "lexical_v1" && content.editorState) {
-        try {
-          const state = editor.parseEditorState(content.editorState as any);
-          editor.setEditorState(state);
-          finish();
-          return;
-        } catch {
-          // fall through to legacy loader
-        }
-      }
+    const { content } = note;
 
-      if (content.legacyHtml) {
-        try {
-          const parser = new DOMParser();
-          const dom = parser.parseFromString(content.legacyHtml, "text/html");
-          const nodes = $generateNodesFromDOM(editor, dom);
-          editor.update(() => {
-            const root = $getRoot();
-            root.clear();
-            root.append(...nodes);
-          });
-          finish();
-          return;
-        } catch {
-          // ignore
-        }
-      }
-
-      editor.update(() => {
-        const root = $getRoot();
-        root.clear();
-        root.append($createParagraphNode());
-      });
+    // Already loaded via initialConfig.editorState
+    if (content.version === "lexical_v1" && content.editorState) {
       finish();
-    };
+      return;
+    }
 
-    loadLexicalState();
+    // Legacy HTML migration: convert old HTML-only notes to Lexical
+    if (content.legacyHtml) {
+      try {
+        const parser = new DOMParser();
+        const dom = parser.parseFromString(content.legacyHtml, "text/html");
+        const nodes = $generateNodesFromDOM(editor, dom);
+        editor.update(() => {
+          const root = $getRoot();
+          root.clear();
+          root.append(...nodes);
+        });
+      } catch {
+        // On error, just leave editor with default paragraph from initialConfig
+      }
+    }
+
+    finish();
   }, [editor, note, onHydrationChange]);
 
   return null;
 }
 
-function NoteChangePlugin({ onChange }: { onChange: (content: NoteContent) => void }) {
+function NoteChangePlugin({
+  onChange,
+}: {
+  onChange: (content: NoteContent) => void;
+}) {
   return (
     <OnChangePlugin
       onChange={(editorState: EditorState) => {
@@ -223,7 +229,10 @@ function ShortcutsPlugin({ onSaveNow }: { onSaveNow?: () => void }) {
     return editor.registerCommand<KeyboardEvent>(
       KEY_DOWN_COMMAND,
       (event: KeyboardEvent) => {
-        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "s"
+        ) {
           event.preventDefault();
           onSaveNow?.();
           return true;
@@ -246,8 +255,11 @@ function insertAssetIntoEditor(editor: LexicalEditor, asset: NoteAsset) {
     }
 
     const rootElement = editor.getRootElement();
-    const containerWidth = rootElement?.parentElement?.getBoundingClientRect().width ?? null;
-    const defaultWidth = containerWidth ? Math.max(220, Math.min(containerWidth - 24, 640)) : null;
+    const containerWidth =
+      rootElement?.parentElement?.getBoundingClientRect().width ?? null;
+    const defaultWidth = containerWidth
+      ? Math.max(220, Math.min(containerWidth - 24, 640))
+      : null;
 
     if (asset.mimeType?.startsWith("image/") || asset.type === "image") {
       const node = $createImageNode({
@@ -355,7 +367,9 @@ function AssetCleanupPlugin({
   useEffect(() => {
     if (!onDeleteAsset) return;
 
-    const handleMutations = (mutations: Map<string, "created" | "destroyed" | "updated">) => {
+    const handleMutations = (
+      mutations: Map<string, "created" | "destroyed" | "updated">
+    ) => {
       if (isHydrating) return;
       mutations.forEach((mutation, nodeKey) => {
         if (mutation === "created") {
@@ -474,7 +488,9 @@ function NoteToolbar({
 }) {
   const [editor] = useLexicalComposerContext();
   const [blockType, setBlockTypeState] = useState<BlockType>("paragraph");
-  const [selectionFormats, setSelectionFormats] = useState<Set<string>>(new Set());
+  const [selectionFormats, setSelectionFormats] = useState<Set<string>>(
+    new Set()
+  );
   const [alignment, setAlignment] = useState<string>("left");
   const [showColor, setShowColor] = useState(false);
   const [showHighlight, setShowHighlight] = useState(false);
@@ -484,7 +500,10 @@ function NoteToolbar({
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) return;
       const anchorNode = selection.anchor.getNode();
-      const element = anchorNode.getTopLevelElementOrThrow();
+      const element =
+        anchorNode.getKey() === "root"
+          ? anchorNode
+          : anchorNode.getTopLevelElementOrThrow();
 
       const formats = new Set<string>();
       if (selection.hasFormat("bold")) formats.add("bold");
@@ -502,8 +521,10 @@ function NoteToolbar({
         setBlockTypeState(type === "paragraph" ? "paragraph" : "paragraph");
       }
 
+      // Check format type for alignment - only ElementNode has getFormatType
       if ($isElementNode(element)) {
-        setAlignment(element.getFormatType() || "left");
+        const formatType = element.getFormatType();
+        setAlignment(formatType || "left");
       } else {
         setAlignment("left");
       }
@@ -512,9 +533,11 @@ function NoteToolbar({
 
   useEffect(() => {
     return mergeRegister(
-      editor.registerUpdateListener(({ editorState }: { editorState: EditorState }) => {
-        editorState.read(() => updateToolbar());
-      }),
+      editor.registerUpdateListener(
+        ({ editorState }: { editorState: EditorState }) => {
+          editorState.read(() => updateToolbar());
+        }
+      ),
       editor.registerCommand(
         SELECTION_CHANGE_COMMAND,
         () => {
@@ -587,7 +610,9 @@ function NoteToolbar({
         <ToolbarButton
           label="Underline"
           active={selectionFormats.has("underline")}
-          onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "underline")}
+          onClick={() =>
+            editor.dispatchCommand(FORMAT_TEXT_COMMAND, "underline")
+          }
         >
           U
         </ToolbarButton>
@@ -606,7 +631,10 @@ function NoteToolbar({
       <div className="lockin-note-toolbar-divider" />
 
       <div className="lockin-note-toolbar-group lockin-note-toolbar-menu">
-        <ToolbarButton label="Text color" onClick={() => setShowColor((v) => !v)}>
+        <ToolbarButton
+          label="Text color"
+          onClick={() => setShowColor((v) => !v)}
+        >
           Color
         </ToolbarButton>
         {showColor ? (
@@ -646,26 +674,30 @@ function NoteToolbar({
       <div className="lockin-note-toolbar-group">
         <ToolbarButton
           label="Bulleted list"
-          onClick={() => editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)}
+          onClick={() =>
+            editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
+          }
         >
           Bul
         </ToolbarButton>
         <ToolbarButton
           label="Numbered list"
-          onClick={() => editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)}
+          onClick={() =>
+            editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)
+          }
         >
           1.
         </ToolbarButton>
         <ToolbarButton
           label="Code block"
-          onClick={() =>
+          onClick={() => {
             editor.update(() => {
               const selection = $getSelection();
               if ($isRangeSelection(selection)) {
                 $setBlocksType(selection, () => $createCodeNode());
               }
-            })
-          }
+            });
+          }}
         >
           {"{}"}
         </ToolbarButton>
@@ -684,14 +716,18 @@ function NoteToolbar({
         <ToolbarButton
           label="Align center"
           active={alignment === "center"}
-          onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "center")}
+          onClick={() =>
+            editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "center")
+          }
         >
           C
         </ToolbarButton>
         <ToolbarButton
           label="Align right"
           active={alignment === "right" || alignment === "end"}
-          onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "right")}
+          onClick={() =>
+            editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "right")
+          }
         >
           R
         </ToolbarButton>
@@ -705,9 +741,11 @@ function NoteToolbar({
           onClick={onOpenFilePicker}
           disabled={disableAttachment}
         >
-          <PaperclipIcon />
+          Clip
         </ToolbarButton>
-        {isUploading ? <span className="lockin-inline-spinner" aria-label="Uploading" /> : null}
+        {isUploading ? (
+          <span className="lockin-inline-spinner" aria-label="Uploading" />
+        ) : null}
       </div>
 
       <div className="lockin-note-toolbar-divider" />
@@ -742,19 +780,35 @@ function buildStatusLabel({
   error?: string | null;
 }) {
   if (error) {
-    return { label: error || "Error saving - retry soon", tone: "error" as const, spinner: false };
+    return {
+      label: error || "Error saving - retry soon",
+      tone: "error" as const,
+      spinner: false,
+    };
   }
   if (status === "error") {
-    return { label: "Error saving - retry soon", tone: "error" as const, spinner: false };
+    return {
+      label: "Error saving - retry soon",
+      tone: "error" as const,
+      spinner: false,
+    };
   }
   if (status === "saving") {
     return { label: "Saving...", tone: "muted" as const, spinner: true };
   }
   if (isAssetUploading) {
-    return { label: "Uploading attachment...", tone: "muted" as const, spinner: true };
+    return {
+      label: "Uploading attachment...",
+      tone: "muted" as const,
+      spinner: true,
+    };
   }
   if (status === "saved") {
-    return { label: `Saved ${relativeLabel(updatedAt)}`, tone: "success" as const, spinner: false };
+    return {
+      label: `Saved ${relativeLabel(updatedAt)}`,
+      tone: "success" as const,
+      spinner: false,
+    };
   }
   if (status === "editing") {
     return { label: "Editing...", tone: "muted" as const, spinner: false };
@@ -776,22 +830,35 @@ export function NoteEditorShell({
   editorError,
 }: NoteEditorShellProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [composerEditor, setComposerEditor] = useState<LexicalEditor | null>(null);
+  const [composerEditor, setComposerEditor] = useState<LexicalEditor | null>(
+    null
+  );
   const [isHydrating, setIsHydrating] = useState(false);
+
+  // Use note.id for existing notes, or a stable "new" key for drafts
+  // This forces LexicalComposer to remount when switching notes
+  const composerKey = note?.id ?? "new-note";
 
   const initialEditorState = useMemo(() => {
     if (!note?.content) return null;
     if (note.content.version === "lexical_v1" && note.content.editorState) {
-      return note.content.editorState as any;
+      const state = note.content.editorState as any;
+      if (typeof state === "string") return state;
+      try {
+        return JSON.stringify(state);
+      } catch {
+        return null;
+      }
     }
     return null;
-  }, [note]);
+  }, [note?.id, note?.content?.editorState]);
 
   const initialConfig: InitialConfigType = useMemo(
     () => ({
       namespace: "LockInNoteEditor",
       theme,
       editorState: initialEditorState as any,
+      editable: true,
       onError(error: Error) {
         console.error("Lexical editor error", error);
       },
@@ -824,28 +891,26 @@ export function NoteEditorShell({
   return (
     <div className="lockin-note-shell-card">
       <div className="lockin-note-shell-head">
-        <div className="lockin-note-title-row">
-          <input
-            className="lockin-note-title-input"
-            value={title}
-            placeholder="Note title..."
-            onChange={(e) => onTitleChange(e.target.value)}
-          />
-          <div className={`lockin-note-status is-${statusMeta.tone}`}>
-            {statusMeta.spinner ? <span className="lockin-inline-spinner" aria-hidden="true" /> : null}
-            <span>{statusMeta.label}</span>
-          </div>
+        <input
+          className="lockin-note-title-input"
+          value={title}
+          placeholder="Note title..."
+          onChange={(e) => onTitleChange(e.target.value)}
+        />
+        <div className={`lockin-note-status is-${statusMeta.tone}`}>
+          {statusMeta.spinner ? (
+            <span className="lockin-inline-spinner" aria-hidden="true" />
+          ) : null}
+          <span>{statusMeta.label}</span>
         </div>
       </div>
 
-      <LexicalComposer initialConfig={initialConfig}>
-        <div className="lockin-note-toolbar-wrapper">
-          <NoteToolbar
-            onOpenFilePicker={onUploadFile ? handleUploadClick : undefined}
-            disableAttachment={!note?.id || !onUploadFile}
-            isUploading={isAssetUploading}
-          />
-        </div>
+      <LexicalComposer key={composerKey} initialConfig={initialConfig}>
+        <NoteToolbar
+          onOpenFilePicker={onUploadFile ? handleUploadClick : undefined}
+          disableAttachment={!note?.id || !onUploadFile}
+          isUploading={isAssetUploading}
+        />
 
         <div className="lockin-note-editor-surface">
           <div className="lockin-note-editor-scroll">
@@ -856,7 +921,11 @@ export function NoteEditorShell({
                   data-placeholder="Write your note here..."
                 />
               }
-              placeholder={<div className="lockin-note-placeholder">Write your note here...</div>}
+              placeholder={
+                <div className="lockin-note-placeholder">
+                  Write your note here...
+                </div>
+              }
               ErrorBoundary={LexicalErrorBoundary}
             />
           </div>
@@ -869,7 +938,10 @@ export function NoteEditorShell({
         <NoteContentLoader note={note} onHydrationChange={setIsHydrating} />
         <NoteChangePlugin onChange={onContentChange} />
         <ShortcutsPlugin onSaveNow={onSaveNow} />
-        <UploadPlugin onUploadFile={onUploadFile} onEditorReady={setComposerEditor} />
+        <UploadPlugin
+          onUploadFile={onUploadFile}
+          onEditorReady={setComposerEditor}
+        />
         <AssetCleanupPlugin
           noteId={note?.id}
           onDeleteAsset={onDeleteAsset}
@@ -877,7 +949,9 @@ export function NoteEditorShell({
         />
       </LexicalComposer>
 
-      {assetError ? <div className="lockin-note-inline-error">{assetError}</div> : null}
+      {assetError ? (
+        <div className="lockin-note-inline-error">{assetError}</div>
+      ) : null}
 
       <input
         ref={fileInputRef}

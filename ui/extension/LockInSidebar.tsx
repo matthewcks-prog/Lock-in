@@ -181,6 +181,8 @@ export function LockInSidebar({
   const [chatError, setChatError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [isNoteEditing, setIsNoteEditing] = useState(false);
+  const lastForceOpenRef = useRef<number>(0);
 
   const previousSelectionRef = useRef<string | undefined>();
   const layoutTimeoutRef = useRef<number | null>(null);
@@ -289,6 +291,17 @@ export function LockInSidebar({
   useEffect(() => {
     setMode(currentMode);
   }, [currentMode]);
+
+  useEffect(() => {
+    if (isNoteEditing && !isOpen) {
+      const now = Date.now();
+      // throttle force-open attempts to avoid feedback loops
+      if (now - lastForceOpenRef.current > 400) {
+        lastForceOpenRef.current = now;
+        onToggle();
+      }
+    }
+  }, [isNoteEditing, isOpen, onToggle]);
 
   const upsertHistory = useCallback(
     (item: ChatHistoryItem, previousId?: string | null) => {
@@ -823,6 +836,7 @@ export function LockInSidebar({
               onSelectNote={(noteId) => setSelectedNoteId(noteId)}
               courseCode={courseCode}
               pageUrl={pageUrl}
+              onNoteEditingChange={setIsNoteEditing}
             />
           )}
         </div>

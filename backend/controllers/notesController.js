@@ -1,8 +1,8 @@
 // backend/controllers/notesController.js
 
-const notesRepo = require('../repositories/notesRepository');
-const { embedText } = require('../openaiClient');
-const { extractPlainTextFromLexical } = require('../utils/lexicalUtils');
+const notesRepo = require("../repositories/notesRepository");
+const { embedText } = require("../openaiClient");
+const { extractPlainTextFromLexical } = require("../utils/lexicalUtils");
 
 /**
  * Normalize tags to ensure consistent array format
@@ -12,10 +12,15 @@ const { extractPlainTextFromLexical } = require('../utils/lexicalUtils');
 function normaliseTags(tags) {
   if (!tags) return [];
   if (Array.isArray(tags)) {
-    return tags.filter(tag => typeof tag === 'string' && tag.trim().length > 0);
+    return tags.filter(
+      (tag) => typeof tag === "string" && tag.trim().length > 0
+    );
   }
-  if (typeof tags === 'string') {
-    return tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+  if (typeof tags === "string") {
+    return tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
   }
   return [];
 }
@@ -38,72 +43,82 @@ async function createNote(req, res, next) {
     } = req.body;
 
     // Debug logging
-    console.log('createNote request body keys:', Object.keys(req.body));
-    console.log('content_json type:', typeof content_json);
-    console.log('editor_version:', editor_version);
+    console.log("createNote request body keys:", Object.keys(req.body));
+    console.log("content_json type:", typeof content_json);
+    console.log("editor_version:", editor_version);
 
     // Determine which content format we're using
     const hasLexicalContent = content_json && editor_version;
-    const hasLegacyContent = content && typeof content === 'string' && content.trim().length > 0;
+    const hasLegacyContent =
+      content && typeof content === "string" && content.trim().length > 0;
 
     if (!hasLexicalContent && !hasLegacyContent) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: { message: 'content_json and editor_version are required, or legacy content field must be provided' } 
+        error: {
+          message:
+            "content_json and editor_version are required, or legacy content field must be provided",
+        },
       });
     }
 
     // Ensure content_json is always an object (required by database)
     let finalContentJson = {};
-    let finalEditorVersion = 'lexical_v1';
-    
+    let finalEditorVersion = "lexical_v1";
+
     if (hasLexicalContent) {
       // Validate content_json is an object
-      if (typeof content_json === 'string') {
+      if (typeof content_json === "string") {
         try {
           finalContentJson = JSON.parse(content_json);
         } catch {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            error: { message: 'content_json must be a valid JSON object' } 
+            error: { message: "content_json must be a valid JSON object" },
           });
         }
-      } else if (typeof content_json === 'object' && content_json !== null) {
+      } else if (typeof content_json === "object" && content_json !== null) {
         finalContentJson = content_json;
       } else {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          error: { message: 'content_json must be a valid JSON object' } 
+          error: { message: "content_json must be a valid JSON object" },
         });
       }
       finalEditorVersion = editor_version;
     }
 
     // Extract plain text for embedding
-    let plainText = '';
+    let plainText = "";
     if (hasLexicalContent) {
       // Use provided content_text or extract from Lexical JSON
-      plainText = content_text || extractPlainTextFromLexical(finalContentJson) || '';
+      plainText =
+        content_text || extractPlainTextFromLexical(finalContentJson) || "";
     } else {
       // Legacy: use content field (strip HTML if present)
       plainText = content.trim();
       // Basic HTML stripping for legacy content
-      plainText = plainText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      plainText = plainText
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
     }
 
     if (!plainText || plainText.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: { message: 'Note content cannot be empty' } 
+        error: { message: "Note content cannot be empty" },
       });
     }
 
     // Validate content length (prevent extremely long notes)
     const MAX_CONTENT_LENGTH = 50000; // 50k characters
     if (plainText.length > MAX_CONTENT_LENGTH) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: { message: `content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters` } 
+        error: {
+          message: `content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`,
+        },
       });
     }
 
@@ -113,14 +128,14 @@ async function createNote(req, res, next) {
       embedding = await embedText(plainText);
     } catch (embedError) {
       // Log but don't fail - note can still be saved without embedding
-      console.error('Failed to generate embedding:', embedError);
+      console.error("Failed to generate embedding:", embedError);
       // Continue without embedding (note will not be searchable via semantic search)
       embedding = null;
     }
 
     const note = await notesRepo.createNote({
       userId,
-      title: title?.trim() || 'Untitled Note',
+      title: title?.trim() || "Untitled Note",
       contentJson: finalContentJson,
       editorVersion: finalEditorVersion,
       contentPlain: plainText,
@@ -128,7 +143,7 @@ async function createNote(req, res, next) {
       sourceSelection: sourceSelection?.trim() || null,
       sourceUrl: sourceUrl?.trim() || null,
       courseCode: courseCode?.trim() || null,
-      noteType: noteType || 'manual',
+      noteType: noteType || "manual",
       tags: normaliseTags(tags),
       embedding,
     });
@@ -146,7 +161,7 @@ async function listNotes(req, res, next) {
     const { sourceUrl, courseCode, limit } = req.query;
 
     // Validate and limit the limit parameter
-    const noteLimit = limit 
+    const noteLimit = limit
       ? Math.min(Math.max(parseInt(limit, 10), 1), 100) // Between 1 and 100
       : 50;
 
@@ -170,10 +185,10 @@ async function searchNotes(req, res, next) {
     const { q, courseCode, k } = req.query;
 
     // Validate query parameter
-    if (!q || typeof q !== 'string' || q.trim().length === 0) {
-      return res.status(400).json({ 
+    if (!q || typeof q !== "string" || q.trim().length === 0) {
+      return res.status(400).json({
         success: false,
-        error: { message: 'query parameter (q) is required' } 
+        error: { message: "query parameter (q) is required" },
       });
     }
 
@@ -185,10 +200,10 @@ async function searchNotes(req, res, next) {
     try {
       queryEmbedding = await embedText(q.trim());
     } catch (embedError) {
-      console.error('Failed to generate query embedding:', embedError);
-      return res.status(500).json({ 
+      console.error("Failed to generate query embedding:", embedError);
+      return res.status(500).json({
         success: false,
-        error: { message: 'Failed to process search query' } 
+        error: { message: "Failed to process search query" },
       });
     }
 
@@ -205,6 +220,34 @@ async function searchNotes(req, res, next) {
     }
 
     res.json(matches);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/notes/:noteId
+async function getNote(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { noteId } = req.params;
+
+    if (!noteId) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "noteId is required" },
+      });
+    }
+
+    const note = await notesRepo.getNoteForUser({ userId, noteId });
+
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        error: { message: "Note not found" },
+      });
+    }
+
+    res.json(note);
   } catch (err) {
     next(err);
   }
@@ -231,63 +274,71 @@ async function updateNote(req, res, next) {
     if (!noteId) {
       return res.status(400).json({
         success: false,
-        error: { message: 'noteId is required' },
+        error: { message: "noteId is required" },
       });
     }
 
     // Determine which content format we're using
     const hasLexicalContent = content_json && editor_version;
-    const hasLegacyContent = content && typeof content === 'string' && content.trim().length > 0;
+    const hasLegacyContent =
+      content && typeof content === "string" && content.trim().length > 0;
 
     if (!hasLexicalContent && !hasLegacyContent) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: { message: 'content_json and editor_version are required, or legacy content field must be provided' } 
+        error: {
+          message:
+            "content_json and editor_version are required, or legacy content field must be provided",
+        },
       });
     }
 
     // Ensure content_json is always an object (required by database)
     let finalContentJson = {};
-    let finalEditorVersion = 'lexical_v1';
-    
+    let finalEditorVersion = "lexical_v1";
+
     if (hasLexicalContent) {
       // Validate content_json is an object
-      if (typeof content_json === 'string') {
+      if (typeof content_json === "string") {
         try {
           finalContentJson = JSON.parse(content_json);
         } catch {
-          return res.status(400).json({ 
+          return res.status(400).json({
             success: false,
-            error: { message: 'content_json must be a valid JSON object' } 
+            error: { message: "content_json must be a valid JSON object" },
           });
         }
-      } else if (typeof content_json === 'object' && content_json !== null) {
+      } else if (typeof content_json === "object" && content_json !== null) {
         finalContentJson = content_json;
       } else {
-        return res.status(400).json({ 
+        return res.status(400).json({
           success: false,
-          error: { message: 'content_json must be a valid JSON object' } 
+          error: { message: "content_json must be a valid JSON object" },
         });
       }
       finalEditorVersion = editor_version;
     }
 
     // Extract plain text for embedding
-    let plainText = '';
+    let plainText = "";
     if (hasLexicalContent) {
       // Use provided content_text or extract from Lexical JSON
-      plainText = content_text || extractPlainTextFromLexical(finalContentJson) || '';
+      plainText =
+        content_text || extractPlainTextFromLexical(finalContentJson) || "";
     } else {
       // Legacy: use content field (strip HTML if present)
       plainText = content.trim();
       // Basic HTML stripping for legacy content
-      plainText = plainText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      plainText = plainText
+        .replace(/<[^>]*>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
     }
 
     if (!plainText || plainText.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: { message: 'Note content cannot be empty' } 
+        error: { message: "Note content cannot be empty" },
       });
     }
 
@@ -295,14 +346,14 @@ async function updateNote(req, res, next) {
     try {
       embedding = await embedText(plainText);
     } catch (embedError) {
-      console.error('Failed to regenerate embedding:', embedError);
+      console.error("Failed to regenerate embedding:", embedError);
       embedding = null;
     }
 
     const note = await notesRepo.updateNote({
       userId,
       noteId,
-      title: title?.trim() || 'Untitled Note',
+      title: title?.trim() || "Untitled Note",
       contentJson: finalContentJson,
       editorVersion: finalEditorVersion,
       contentPlain: plainText,
@@ -310,7 +361,7 @@ async function updateNote(req, res, next) {
       sourceSelection: sourceSelection?.trim() || null,
       sourceUrl: sourceUrl?.trim() || null,
       courseCode: courseCode?.trim() || null,
-      noteType: noteType || 'manual',
+      noteType: noteType || "manual",
       tags: normaliseTags(tags),
       embedding,
     });
@@ -330,7 +381,7 @@ async function deleteNote(req, res, next) {
     if (!noteId) {
       return res.status(400).json({
         success: false,
-        error: { message: 'noteId is required' },
+        error: { message: "noteId is required" },
       });
     }
 
@@ -345,7 +396,7 @@ module.exports = {
   createNote,
   listNotes,
   searchNotes,
+  getNote,
   updateNote,
   deleteNote,
 };
-

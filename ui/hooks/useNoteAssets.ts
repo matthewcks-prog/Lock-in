@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { NoteAsset } from "../../core/domain/Note.ts";
 import type { NotesService } from "../../core/services/notesService.ts";
 
@@ -12,6 +12,16 @@ export interface UseNoteAssetsResult {
   reloadAssets: () => Promise<void>;
 }
 
+/**
+ * Hook for managing note assets (attachments).
+ * 
+ * IMPORTANT: This hook does NOT auto-fetch assets on mount or when noteId changes.
+ * Assets are only loaded when explicitly requested via `reloadAssets()`.
+ * This prevents excessive API calls during autosave cycles.
+ * 
+ * The hook includes request deduplication - if a request is already in progress
+ * for the same noteId, subsequent calls will be ignored.
+ */
 export function useNoteAssets(
   noteId: string | null | undefined,
   notesService: NotesService | null | undefined
@@ -20,6 +30,9 @@ export function useNoteAssets(
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track in-flight request to prevent duplicate requests
+  const loadingNoteIdRef = useRef<string | null>(null);
 
   const loadAssets = useCallback(async () => {
     if (!noteId || !notesService?.listAssets) {
@@ -28,22 +41,38 @@ export function useNoteAssets(
       return;
     }
 
+    // Prevent duplicate requests for the same noteId
+    if (loadingNoteIdRef.current === noteId) {
+      return;
+    }
+
+    loadingNoteIdRef.current = noteId;
     setIsLoading(true);
     setError(null);
     setNoteAssets([]);
+    
     try {
       const assets = await notesService.listAssets(noteId);
-      setNoteAssets(Array.isArray(assets) ? assets : []);
+      // Only update state if this is still the current request
+      if (loadingNoteIdRef.current === noteId) {
+        setNoteAssets(Array.isArray(assets) ? assets : []);
+      }
     } catch (err: any) {
-      setError(err?.message || "Failed to load attachments");
+      // Only update error if this is still the current request
+      if (loadingNoteIdRef.current === noteId) {
+        setError(err?.message || "Failed to load attachments");
+      }
     } finally {
-      setIsLoading(false);
+      // Only clear loading if this is still the current request
+      if (loadingNoteIdRef.current === noteId) {
+        setIsLoading(false);
+        loadingNoteIdRef.current = null;
+      }
     }
   }, [noteId, notesService]);
 
-  useEffect(() => {
-    loadAssets();
-  }, [loadAssets]);
+  // Do not auto-fetch on mount; we only need assets when explicitly requested.
+  // This avoids piling up GET requests during autosave cycles.
 
   const uploadAsset = useCallback(
     async (file: File): Promise<NoteAsset | null> => {
