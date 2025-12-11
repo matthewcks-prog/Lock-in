@@ -5,6 +5,20 @@ const { embedText } = require("../openaiClient");
 const { extractPlainTextFromLexical } = require("../utils/lexicalUtils");
 
 /**
+ * Notes controller with scalability features:
+ * - Input validation with clear error messages
+ * - Optimistic locking for concurrent edit detection
+ * - Graceful embedding failure handling
+ * - Rate-limit friendly responses
+ */
+
+// Content limits for scalability
+const MAX_CONTENT_LENGTH = 50000; // 50k characters
+const MAX_TITLE_LENGTH = 500;
+const MAX_TAGS = 20;
+const MAX_TAG_LENGTH = 50;
+
+/**
  * Normalize tags to ensure consistent array format
  * @param {any} tags - Tags input (array, string, or null/undefined)
  * @returns {string[]} Normalized array of tags
@@ -12,17 +26,39 @@ const { extractPlainTextFromLexical } = require("../utils/lexicalUtils");
 function normaliseTags(tags) {
   if (!tags) return [];
   if (Array.isArray(tags)) {
-    return tags.filter(
-      (tag) => typeof tag === "string" && tag.trim().length > 0
-    );
+    return tags
+      .filter((tag) => typeof tag === "string" && tag.trim().length > 0)
+      .slice(0, MAX_TAGS) // Limit number of tags
+      .map((tag) => tag.trim().slice(0, MAX_TAG_LENGTH)); // Limit tag length
   }
   if (typeof tags === "string") {
     return tags
       .split(",")
       .map((tag) => tag.trim())
-      .filter((tag) => tag.length > 0);
+      .filter((tag) => tag.length > 0)
+      .slice(0, MAX_TAGS)
+      .map((tag) => tag.slice(0, MAX_TAG_LENGTH));
   }
   return [];
+}
+
+/**
+ * Validate and sanitize title
+ */
+function validateTitle(title) {
+  if (!title || typeof title !== "string") {
+    return "Untitled Note";
+  }
+  return title.trim().slice(0, MAX_TITLE_LENGTH) || "Untitled Note";
+}
+
+/**
+ * Validate UUID format
+ */
+function isValidUUID(str) {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
 }
 
 // POST /api/notes
@@ -42,10 +78,12 @@ async function createNote(req, res, next) {
       tags,
     } = req.body;
 
-    // Debug logging
-    console.log("createNote request body keys:", Object.keys(req.body));
-    console.log("content_json type:", typeof content_json);
-    console.log("editor_version:", editor_version);
+    // Debug logging (remove in production or use proper log levels)
+    if (process.env.NODE_ENV !== "production") {
+      console.log("createNote request body keys:", Object.keys(req.body));
+      console.log("content_json type:", typeof content_json);
+      console.log("editor_version:", editor_version);
+    }
 
     // Determine which content format we're using
     const hasLexicalContent = content_json && editor_version;
@@ -56,6 +94,7 @@ async function createNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
+          code: "INVALID_CONTENT",
           message:
             "content_json and editor_version are required, or legacy content field must be provided",
         },
@@ -74,7 +113,10 @@ async function createNote(req, res, next) {
         } catch {
           return res.status(400).json({
             success: false,
-            error: { message: "content_json must be a valid JSON object" },
+            error: {
+              code: "INVALID_JSON",
+              message: "content_json must be a valid JSON object",
+            },
           });
         }
       } else if (typeof content_json === "object" && content_json !== null) {
@@ -82,7 +124,10 @@ async function createNote(req, res, next) {
       } else {
         return res.status(400).json({
           success: false,
-          error: { message: "content_json must be a valid JSON object" },
+          error: {
+            code: "INVALID_JSON",
+            message: "content_json must be a valid JSON object",
+          },
         });
       }
       finalEditorVersion = editor_version;
@@ -107,16 +152,19 @@ async function createNote(req, res, next) {
     if (!plainText || plainText.length === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: "Note content cannot be empty" },
+        error: {
+          code: "EMPTY_CONTENT",
+          message: "Note content cannot be empty",
+        },
       });
     }
 
     // Validate content length (prevent extremely long notes)
-    const MAX_CONTENT_LENGTH = 50000; // 50k characters
     if (plainText.length > MAX_CONTENT_LENGTH) {
       return res.status(400).json({
         success: false,
         error: {
+          code: "CONTENT_TOO_LONG",
           message: `content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`,
         },
       });
@@ -135,7 +183,7 @@ async function createNote(req, res, next) {
 
     const note = await notesRepo.createNote({
       userId,
-      title: title?.trim() || "Untitled Note",
+      title: validateTitle(title),
       contentJson: finalContentJson,
       editorVersion: finalEditorVersion,
       contentPlain: plainText,
@@ -234,7 +282,21 @@ async function getNote(req, res, next) {
     if (!noteId) {
       return res.status(400).json({
         success: false,
-        error: { message: "noteId is required" },
+        error: {
+          code: "MISSING_NOTE_ID",
+          message: "noteId is required",
+        },
+      });
+    }
+
+    // Validate UUID format to prevent invalid queries
+    if (!isValidUUID(noteId)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_NOTE_ID",
+          message: "noteId must be a valid UUID",
+        },
       });
     }
 
@@ -243,7 +305,10 @@ async function getNote(req, res, next) {
     if (!note) {
       return res.status(404).json({
         success: false,
-        error: { message: "Note not found" },
+        error: {
+          code: "NOT_FOUND",
+          message: "Note not found",
+        },
       });
     }
 
@@ -254,10 +319,12 @@ async function getNote(req, res, next) {
 }
 
 // PUT /api/notes/:noteId
+// Supports optimistic locking via If-Unmodified-Since header
 async function updateNote(req, res, next) {
   try {
     const userId = req.user.id;
     const { noteId } = req.params;
+    const ifUnmodifiedSince = req.headers["if-unmodified-since"];
     const {
       title,
       content, // Legacy field (fallback)
@@ -274,7 +341,21 @@ async function updateNote(req, res, next) {
     if (!noteId) {
       return res.status(400).json({
         success: false,
-        error: { message: "noteId is required" },
+        error: {
+          code: "MISSING_NOTE_ID",
+          message: "noteId is required",
+        },
+      });
+    }
+
+    // Validate UUID format
+    if (!isValidUUID(noteId)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_NOTE_ID",
+          message: "noteId must be a valid UUID",
+        },
       });
     }
 
@@ -287,6 +368,7 @@ async function updateNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
+          code: "INVALID_CONTENT",
           message:
             "content_json and editor_version are required, or legacy content field must be provided",
         },
@@ -305,7 +387,10 @@ async function updateNote(req, res, next) {
         } catch {
           return res.status(400).json({
             success: false,
-            error: { message: "content_json must be a valid JSON object" },
+            error: {
+              code: "INVALID_JSON",
+              message: "content_json must be a valid JSON object",
+            },
           });
         }
       } else if (typeof content_json === "object" && content_json !== null) {
@@ -313,7 +398,10 @@ async function updateNote(req, res, next) {
       } else {
         return res.status(400).json({
           success: false,
-          error: { message: "content_json must be a valid JSON object" },
+          error: {
+            code: "INVALID_JSON",
+            message: "content_json must be a valid JSON object",
+          },
         });
       }
       finalEditorVersion = editor_version;
@@ -338,7 +426,21 @@ async function updateNote(req, res, next) {
     if (!plainText || plainText.length === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: "Note content cannot be empty" },
+        error: {
+          code: "EMPTY_CONTENT",
+          message: "Note content cannot be empty",
+        },
+      });
+    }
+
+    // Validate content length
+    if (plainText.length > MAX_CONTENT_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "CONTENT_TOO_LONG",
+          message: `content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`,
+        },
       });
     }
 
@@ -353,7 +455,7 @@ async function updateNote(req, res, next) {
     const note = await notesRepo.updateNote({
       userId,
       noteId,
-      title: title?.trim() || "Untitled Note",
+      title: validateTitle(title),
       contentJson: finalContentJson,
       editorVersion: finalEditorVersion,
       contentPlain: plainText,
@@ -364,10 +466,34 @@ async function updateNote(req, res, next) {
       noteType: noteType || "manual",
       tags: normaliseTags(tags),
       embedding,
+      ifUnmodifiedSince: ifUnmodifiedSince || null,
     });
 
     res.json(note);
   } catch (err) {
+    // Handle conflict error from optimistic locking
+    if (err.name === "ConflictError" || err.status === 409) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: "CONFLICT",
+          message: err.message || "Note was modified by another session",
+          updatedAt: err.updatedAt,
+        },
+      });
+    }
+
+    // Handle not found
+    if (err.status === 404) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Note not found",
+        },
+      });
+    }
+
     next(err);
   }
 }
