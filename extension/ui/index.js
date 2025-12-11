@@ -7322,8 +7322,16 @@ var __async = (__this, __arguments, generator) => {
     const [notes, setNotes] = reactExports.useState([]);
     const [isLoading, setIsLoading] = reactExports.useState(false);
     const [error, setError] = reactExports.useState(null);
+    const isRefreshingRef = reactExports.useRef(false);
+    const lastParamsRef = reactExports.useRef("");
     const refresh = reactExports.useCallback(() => __async(null, null, function* () {
       if (!notesService) return;
+      const paramsFingerprint = JSON.stringify({ courseCode, sourceUrl, limit });
+      if (isRefreshingRef.current && lastParamsRef.current === paramsFingerprint) {
+        return;
+      }
+      isRefreshingRef.current = true;
+      lastParamsRef.current = paramsFingerprint;
       setIsLoading(true);
       setError(null);
       try {
@@ -7337,6 +7345,7 @@ var __async = (__this, __arguments, generator) => {
         setError((err == null ? void 0 : err.message) || "Failed to load notes");
       } finally {
         setIsLoading(false);
+        isRefreshingRef.current = false;
       }
     }), [courseCode, limit, notesService, sourceUrl]);
     const upsertNote = reactExports.useCallback((note) => {
@@ -7361,27 +7370,36 @@ var __async = (__this, __arguments, generator) => {
     const [isLoading, setIsLoading] = reactExports.useState(false);
     const [isUploading, setIsUploading] = reactExports.useState(false);
     const [error, setError] = reactExports.useState(null);
+    const loadingNoteIdRef = reactExports.useRef(null);
     const loadAssets = reactExports.useCallback(() => __async(null, null, function* () {
       if (!noteId || !(notesService == null ? void 0 : notesService.listAssets)) {
         setNoteAssets([]);
         setIsLoading(false);
         return;
       }
+      if (loadingNoteIdRef.current === noteId) {
+        return;
+      }
+      loadingNoteIdRef.current = noteId;
       setIsLoading(true);
       setError(null);
       setNoteAssets([]);
       try {
         const assets = yield notesService.listAssets(noteId);
-        setNoteAssets(Array.isArray(assets) ? assets : []);
+        if (loadingNoteIdRef.current === noteId) {
+          setNoteAssets(Array.isArray(assets) ? assets : []);
+        }
       } catch (err) {
-        setError((err == null ? void 0 : err.message) || "Failed to load attachments");
+        if (loadingNoteIdRef.current === noteId) {
+          setError((err == null ? void 0 : err.message) || "Failed to load attachments");
+        }
       } finally {
-        setIsLoading(false);
+        if (loadingNoteIdRef.current === noteId) {
+          setIsLoading(false);
+          loadingNoteIdRef.current = null;
+        }
       }
     }), [noteId, notesService]);
-    reactExports.useEffect(() => {
-      loadAssets();
-    }, [loadAssets]);
     const uploadAsset = reactExports.useCallback(
       (file) => __async(null, null, function* () {
         if (!noteId) {
@@ -7481,6 +7499,8 @@ var __async = (__this, __arguments, generator) => {
     const savedResetRef = reactExports.useRef(null);
     const abortControllerRef = reactExports.useRef(null);
     const lastSavedFingerprintRef = reactExports.useRef(null);
+    const loadingNoteIdRef = reactExports.useRef(null);
+    const lastLoadedNoteIdRef = reactExports.useRef(null);
     reactExports.useEffect(() => {
       setActiveNoteId(noteId != null ? noteId : null);
     }, [noteId]);
@@ -7497,63 +7517,85 @@ var __async = (__this, __arguments, generator) => {
         }
       };
     }, []);
-    const loadNote = reactExports.useCallback(
-      (targetId) => __async(null, null, function* () {
-        if (!targetId || !notesService) {
-          setNote(
-            createDraftNote({
-              courseCode: defaultCourseCode,
-              sourceUrl: defaultSourceUrl,
-              sourceSelection
-            })
-          );
-          setStatus("idle");
-          return;
-        }
-        setIsLoading(true);
-        setError(null);
+    const notesServiceRef = reactExports.useRef(notesService);
+    notesServiceRef.current = notesService;
+    const defaultCourseCodeRef = reactExports.useRef(defaultCourseCode);
+    defaultCourseCodeRef.current = defaultCourseCode;
+    const defaultSourceUrlRef = reactExports.useRef(defaultSourceUrl);
+    defaultSourceUrlRef.current = defaultSourceUrl;
+    const sourceSelectionRef = reactExports.useRef(sourceSelection);
+    sourceSelectionRef.current = sourceSelection;
+    reactExports.useEffect(() => {
+      const targetId = activeNoteId;
+      const service = notesServiceRef.current;
+      if (targetId === loadingNoteIdRef.current) {
+        return;
+      }
+      if (targetId === lastLoadedNoteIdRef.current && targetId !== null) {
+        return;
+      }
+      if (!targetId || !service) {
+        loadingNoteIdRef.current = null;
+        lastLoadedNoteIdRef.current = null;
+        setNote(
+          createDraftNote({
+            courseCode: defaultCourseCodeRef.current,
+            sourceUrl: defaultSourceUrlRef.current,
+            sourceSelection: sourceSelectionRef.current
+          })
+        );
+        setStatus("idle");
+        setIsLoading(false);
+        return;
+      }
+      loadingNoteIdRef.current = targetId;
+      setIsLoading(true);
+      setError(null);
+      let cancelled = false;
+      (() => __async(null, null, function* () {
         try {
-          const loaded = yield notesService.getNote(targetId);
+          const loaded = yield service.getNote(targetId);
+          if (cancelled) return;
           setNote(loaded);
           lastSavedFingerprintRef.current = createContentFingerprint(
             loaded.title,
             loaded.content
           );
+          lastLoadedNoteIdRef.current = targetId;
           setStatus("idle");
         } catch (err) {
+          if (cancelled) return;
           setError((err == null ? void 0 : err.message) || "Failed to load note");
           setStatus("error");
         } finally {
-          setIsLoading(false);
+          if (!cancelled) {
+            loadingNoteIdRef.current = null;
+            setIsLoading(false);
+          }
         }
-      }),
-      [defaultCourseCode, defaultSourceUrl, notesService, sourceSelection]
-    );
-    reactExports.useEffect(() => {
-      loadNote(activeNoteId);
-    }, [activeNoteId, loadNote]);
-    const scheduleSave = reactExports.useCallback(() => {
-      if (debounceRef.current) {
-        window.clearTimeout(debounceRef.current);
-      }
-      debounceRef.current = window.setTimeout(() => {
-        void persist();
-      }, SAVE_DEBOUNCE_MS);
-    }, []);
+      }))();
+      return () => {
+        cancelled = true;
+      };
+    }, [activeNoteId]);
+    const noteRef = reactExports.useRef(note);
+    noteRef.current = note;
     const persist = reactExports.useCallback(() => __async(null, null, function* () {
-      var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j, _k, _l, _m;
-      if (!notesService || !note) {
+      var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j, _k, _l;
+      const currentNote = noteRef.current;
+      if (!notesService || !currentNote) {
         setError("Notes service unavailable");
         setStatus("error");
         return;
       }
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
       }
-      if (status === "saving") {
-        (_a = abortControllerRef.current) == null ? void 0 : _a.abort();
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-      const fingerprint = createContentFingerprint(note.title, note.content);
+      const fingerprint = createContentFingerprint(currentNote.title, currentNote.content);
       if (fingerprint === lastSavedFingerprintRef.current) {
         setStatus("saved");
         if (savedResetRef.current) {
@@ -7568,29 +7610,30 @@ var __async = (__this, __arguments, generator) => {
       setError(null);
       try {
         let saved;
-        if (note.id) {
+        if (currentNote.id) {
           const payload = {
-            title: note.title,
-            content: note.content,
-            courseCode: (_c = (_b = note.courseCode) != null ? _b : defaultCourseCode) != null ? _c : null,
-            sourceUrl: (_e2 = (_d = note.sourceUrl) != null ? _d : defaultSourceUrl) != null ? _e2 : null,
-            sourceSelection: (_g = (_f = note.sourceSelection) != null ? _f : sourceSelection) != null ? _g : null,
-            noteType: note.noteType,
-            tags: note.tags
+            title: currentNote.title,
+            content: currentNote.content,
+            courseCode: (_b = (_a = currentNote.courseCode) != null ? _a : defaultCourseCode) != null ? _b : null,
+            sourceUrl: (_d = (_c = currentNote.sourceUrl) != null ? _c : defaultSourceUrl) != null ? _d : null,
+            sourceSelection: (_f = (_e2 = currentNote.sourceSelection) != null ? _e2 : sourceSelection) != null ? _f : null,
+            noteType: currentNote.noteType,
+            tags: currentNote.tags
           };
-          saved = yield notesService.updateNote(note.id, payload);
+          saved = yield notesService.updateNote(currentNote.id, payload);
         } else {
           const payload = {
-            title: note.title || "Untitled note",
-            content: note.content,
-            courseCode: (_i2 = (_h = note.courseCode) != null ? _h : defaultCourseCode) != null ? _i2 : null,
-            sourceUrl: (_k = (_j = note.sourceUrl) != null ? _j : defaultSourceUrl) != null ? _k : null,
-            sourceSelection: (_m = (_l = note.sourceSelection) != null ? _l : sourceSelection) != null ? _m : null,
-            noteType: note.noteType,
-            tags: note.tags
+            title: currentNote.title || "Untitled note",
+            content: currentNote.content,
+            courseCode: (_h = (_g = currentNote.courseCode) != null ? _g : defaultCourseCode) != null ? _h : null,
+            sourceUrl: (_j = (_i2 = currentNote.sourceUrl) != null ? _i2 : defaultSourceUrl) != null ? _j : null,
+            sourceSelection: (_l = (_k = currentNote.sourceSelection) != null ? _k : sourceSelection) != null ? _l : null,
+            noteType: currentNote.noteType,
+            tags: currentNote.tags
           };
           saved = yield notesService.createNote(payload);
         }
+        if (controller.signal.aborted) return;
         setNote(saved);
         setActiveNoteId(saved.id);
         lastSavedFingerprintRef.current = createContentFingerprint(
@@ -7607,14 +7650,15 @@ var __async = (__this, __arguments, generator) => {
         setError((err == null ? void 0 : err.message) || "Failed to save note");
         setStatus("error");
       }
-    }), [
-      defaultCourseCode,
-      defaultSourceUrl,
-      note,
-      notesService,
-      sourceSelection,
-      status
-    ]);
+    }), [defaultCourseCode, defaultSourceUrl, notesService, sourceSelection]);
+    const scheduleSave = reactExports.useCallback(() => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+      }
+      debounceRef.current = window.setTimeout(() => {
+        void persist();
+      }, SAVE_DEBOUNCE_MS);
+    }, [persist]);
     const handleContentChange = reactExports.useCallback(
       (content) => {
         setNote((prev) => {
@@ -7652,6 +7696,7 @@ var __async = (__this, __arguments, generator) => {
       var _a;
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
       }
       (_a = abortControllerRef.current) == null ? void 0 : _a.abort();
       setActiveNoteId(null);
@@ -7661,13 +7706,13 @@ var __async = (__this, __arguments, generator) => {
         sourceSelection
       });
       setNote(draft);
+      lastSavedFingerprintRef.current = null;
       setStatus("idle");
       setError(null);
     }, [defaultCourseCode, defaultSourceUrl, sourceSelection]);
-    const resultStatus = reactExports.useMemo(() => status, [status]);
     return {
       note,
-      status: resultStatus,
+      status,
       error,
       isLoading,
       activeNoteId,
@@ -8104,7 +8149,7 @@ var __async = (__this, __arguments, generator) => {
           },
           plugins: {},
           /**
-           * This is the most high-level function in Prism’s API.
+           * This is the most high-level function in Prism\u2019s API.
            * It fetches all the elements that have a `.language-xxxx` class and then calls {@link Prism.highlightElement} on
            * each one of them.
            *
@@ -8227,7 +8272,7 @@ var __async = (__this, __arguments, generator) => {
             }
           },
           /**
-           * Low-level function, only use if you know what you’re doing. It accepts a string of text as input
+           * Low-level function, only use if you know what you\u2019re doing. It accepts a string of text as input
            * and the language definitions to use, and returns a string with the HTML produced.
            *
            * The following hooks will be run:
@@ -8989,11 +9034,11 @@ var __async = (__this, __arguments, generator) => {
         if (!Element.prototype.matches) {
           Element.prototype.matches = Element.prototype.msMatchesSelector || Element.prototype.webkitMatchesSelector;
         }
-        var LOADING_MESSAGE = "Loading…";
+        var LOADING_MESSAGE = "Loading\u2026";
         var FAILURE_MESSAGE = function(status, message) {
-          return "✖ Error " + status + " while fetching file: " + message;
+          return "\u2716 Error " + status + " while fetching file: " + message;
         };
-        var FAILURE_EMPTY_MESSAGE = "✖ Error: File does not exist or is empty";
+        var FAILURE_EMPTY_MESSAGE = "\u2716 Error: File does not exist or is empty";
         var EXTENSIONS = {
           "js": "javascript",
           "py": "python",
@@ -10649,7 +10694,7 @@ var __async = (__this, __arguments, generator) => {
   function t$2(t2) {
     return {};
   }
-  const e = {}, n$1 = {}, r$2 = {}, i$1 = {}, s$2 = {}, o$5 = {}, l$2 = {}, c$3 = {}, a$4 = {}, u$7 = {}, f$3 = {}, d$3 = {}, h$5 = {}, g$6 = {}, _$3 = {}, p$7 = {}, y$4 = {}, m$7 = {}, x$5 = {}, v$3 = {}, S$3 = {}, T$3 = {}, C$3 = {}, k$4 = {}, b$4 = {}, w$5 = {}, N$3 = {}, E$6 = {}, P$2 = {}, F$2 = {}, D$4 = {}, L$4 = {}, O$4 = {}, I$3 = {}, A$4 = {}, M$5 = {}, W$1 = {}, z$2 = {}, B$3 = {}, R$3 = {}, K$1 = {}, $$2 = {}, J$4 = {}, U$4 = {}, V$2 = {}, j$1 = "undefined" != typeof window && void 0 !== window.document && void 0 !== window.document.createElement, H$1 = j$1 && "documentMode" in document ? document.documentMode : null, q$1 = j$1 && /Mac|iPod|iPhone|iPad/.test(navigator.platform), Q$1 = j$1 && /^(?!.*Seamonkey)(?=.*Firefox).*/i.test(navigator.userAgent), X$1 = !(!j$1 || !("InputEvent" in window) || H$1) && "getTargetRanges" in new window.InputEvent("input"), Y$1 = j$1 && /Version\/[\d.]+.*Safari/.test(navigator.userAgent), Z$1 = j$1 && /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream, G$3 = j$1 && /Android/.test(navigator.userAgent), tt = j$1 && /^(?=.*Chrome).*/i.test(navigator.userAgent), et = j$1 && G$3 && tt, nt = j$1 && /AppleWebKit\/[\d.]+/.test(navigator.userAgent) && !tt, rt = 1, it = 3, st$1 = 0, ot = 1, lt$1 = 2, ct$1 = 0, at$1 = 1, ut$1 = 2, ht$1 = 4, gt$1 = 8, mt$1 = 128, xt$1 = 112 | (3 | ht$1 | gt$1) | mt$1, vt$1 = 1, St = 2, Tt$1 = 3, Ct = 4, kt = 5, bt = 6, wt$1 = Y$1 || Z$1 || nt ? " " : "​", Nt$1 = "\n\n", Et$1 = Q$1 ? " " : wt$1, Pt = "֑-߿יִ-﷽ﹰ-ﻼ", Ft = "A-Za-zÀ-ÖØ-öø-ʸ̀-֐ࠀ-῿‎Ⰰ-﬜︀-﹯﻽-￿", Dt$1 = new RegExp("^[^" + Ft + "]*[" + Pt + "]"), Lt = new RegExp("^[^" + Pt + "]*[" + Ft + "]"), Ot$1 = { bold: 1, code: 16, highlight: mt$1, italic: 2, strikethrough: ht$1, subscript: 32, superscript: 64, underline: gt$1 }, It$1 = { directionless: 1, unmergeable: 2 }, At = { center: St, end: bt, justify: Ct, left: vt$1, right: Tt$1, start: kt }, Mt = { [St]: "center", [bt]: "end", [Ct]: "justify", [vt$1]: "left", [Tt$1]: "right", [kt]: "start" }, Wt = { normal: 0, segmented: 2, token: 1 }, zt = { [ct$1]: "normal", [ut$1]: "segmented", [at$1]: "token" };
+  const e = {}, n$1 = {}, r$2 = {}, i$1 = {}, s$2 = {}, o$5 = {}, l$2 = {}, c$3 = {}, a$4 = {}, u$7 = {}, f$3 = {}, d$3 = {}, h$5 = {}, g$6 = {}, _$3 = {}, p$7 = {}, y$4 = {}, m$7 = {}, x$5 = {}, v$3 = {}, S$3 = {}, T$3 = {}, C$3 = {}, k$4 = {}, b$4 = {}, w$5 = {}, N$3 = {}, E$6 = {}, P$2 = {}, F$2 = {}, D$4 = {}, L$4 = {}, O$4 = {}, I$3 = {}, A$4 = {}, M$5 = {}, W$1 = {}, z$2 = {}, B$3 = {}, R$3 = {}, K$1 = {}, $$2 = {}, J$4 = {}, U$4 = {}, V$2 = {}, j$1 = "undefined" != typeof window && void 0 !== window.document && void 0 !== window.document.createElement, H$1 = j$1 && "documentMode" in document ? document.documentMode : null, q$1 = j$1 && /Mac|iPod|iPhone|iPad/.test(navigator.platform), Q$1 = j$1 && /^(?!.*Seamonkey)(?=.*Firefox).*/i.test(navigator.userAgent), X$1 = !(!j$1 || !("InputEvent" in window) || H$1) && "getTargetRanges" in new window.InputEvent("input"), Y$1 = j$1 && /Version\/[\d.]+.*Safari/.test(navigator.userAgent), Z$1 = j$1 && /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream, G$3 = j$1 && /Android/.test(navigator.userAgent), tt = j$1 && /^(?=.*Chrome).*/i.test(navigator.userAgent), et = j$1 && G$3 && tt, nt = j$1 && /AppleWebKit\/[\d.]+/.test(navigator.userAgent) && !tt, rt = 1, it = 3, st$1 = 0, ot = 1, lt$1 = 2, ct$1 = 0, at$1 = 1, ut$1 = 2, ht$1 = 4, gt$1 = 8, mt$1 = 128, xt$1 = 112 | (3 | ht$1 | gt$1) | mt$1, vt$1 = 1, St = 2, Tt$1 = 3, Ct = 4, kt = 5, bt = 6, wt$1 = Y$1 || Z$1 || nt ? "\u00a0" : "\u200b", Nt$1 = "\n\n", Et$1 = Q$1 ? "\u00a0" : wt$1, Pt = "\u0591-\u07ff\ufb1d-\ufdfd\ufe70-\ufefc", Ft = "A-Za-z\u00c0-\u00d6\u00d8-\u00f6\u00f8-\u02b8\u0300-\u0590\u0800-\u1fff\u200e\u2c00-\ufb1c\ufe00-\ufe6f\ufefd-\uffff", Dt$1 = new RegExp("^[^" + Ft + "]*[" + Pt + "]"), Lt = new RegExp("^[^" + Pt + "]*[" + Ft + "]"), Ot$1 = { bold: 1, code: 16, highlight: mt$1, italic: 2, strikethrough: ht$1, subscript: 32, superscript: 64, underline: gt$1 }, It$1 = { directionless: 1, unmergeable: 2 }, At = { center: St, end: bt, justify: Ct, left: vt$1, right: Tt$1, start: kt }, Mt = { [St]: "center", [bt]: "end", [Ct]: "justify", [vt$1]: "left", [Tt$1]: "right", [kt]: "start" }, Wt = { normal: 0, segmented: 2, token: 1 }, zt = { [ct$1]: "normal", [ut$1]: "segmented", [at$1]: "token" };
   function Bt(t2) {
     return t2 && t2.__esModule && Object.prototype.hasOwnProperty.call(t2, "default") ? t2.default : t2;
   }
@@ -15799,49 +15844,6 @@ var __async = (__this, __arguments, generator) => {
       reactExports.useEffect((() => b$3(n2.registerCommand(q, (() => (b$2(n2, "number"), true)), Fs), n2.registerCommand(j, (() => (b$2(n2, "bullet"), true)), Fs), n2.registerCommand(G, (() => (N$1(n2), true)), Fs), n2.registerCommand(o$5, (() => !!O$1()), Fs))), [n2]);
     })(u2), null;
   }
-  function t(r2, e2) {
-    return t = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(r3, e3) {
-      return r3.__proto__ = e3, r3;
-    }, t(r2, e2);
-  }
-  var o$2 = { error: null }, n = (function(e2) {
-    var n2, a2;
-    function s2() {
-      for (var r2, t2 = arguments.length, n3 = new Array(t2), a3 = 0; a3 < t2; a3++) n3[a3] = arguments[a3];
-      return (r2 = e2.call.apply(e2, [this].concat(n3)) || this).state = o$2, r2.resetErrorBoundary = function() {
-        for (var e3, t3 = arguments.length, o2 = new Array(t3), n4 = 0; n4 < t3; n4++) o2[n4] = arguments[n4];
-        null == r2.props.onReset || (e3 = r2.props).onReset.apply(e3, o2), r2.reset();
-      }, r2;
-    }
-    a2 = e2, (n2 = s2).prototype = Object.create(a2.prototype), n2.prototype.constructor = n2, t(n2, a2), s2.getDerivedStateFromError = function(r2) {
-      return { error: r2 };
-    };
-    var l2 = s2.prototype;
-    return l2.reset = function() {
-      this.setState(o$2);
-    }, l2.componentDidCatch = function(r2, e3) {
-      var t2, o2;
-      null == (t2 = (o2 = this.props).onError) || t2.call(o2, r2, e3);
-    }, l2.componentDidUpdate = function(r2, e3) {
-      var t2, o2, n3, a3, s3 = this.state.error, l3 = this.props.resetKeys;
-      null !== s3 && null !== e3.error && (void 0 === (n3 = r2.resetKeys) && (n3 = []), void 0 === (a3 = l3) && (a3 = []), n3.length !== a3.length || n3.some((function(r3, e4) {
-        return !Object.is(r3, a3[e4]);
-      }))) && (null == (t2 = (o2 = this.props).onResetKeysChange) || t2.call(o2, r2.resetKeys, l3), this.reset());
-    }, l2.render = function() {
-      var e3 = this.state.error, t2 = this.props, o2 = t2.fallbackRender, n3 = t2.FallbackComponent, a3 = t2.fallback;
-      if (null !== e3) {
-        var s3 = { error: e3, resetErrorBoundary: this.resetErrorBoundary };
-        if (reactExports.isValidElement(a3)) return a3;
-        if ("function" == typeof o2) return o2(s3);
-        if (n3) return reactExports.createElement(n3, s3);
-        throw new Error("react-error-boundary requires either a fallback, fallbackRender, or FallbackComponent prop");
-      }
-      return this.props.children;
-    }, s2;
-  })(reactExports.Component);
-  function a$2({ children: r2, onError: t2 }) {
-    return jsxRuntimeExports.jsx(n, { fallback: jsxRuntimeExports.jsx("div", { style: { border: "1px solid #f00", color: "#f00", padding: "8px" }, children: "An error was thrown." }), onError: t2, children: r2 });
-  }
   function p$3(e2, n2) {
     const t2 = n2.body ? n2.body.childNodes : [];
     let o2 = [];
@@ -16647,7 +16649,7 @@ var __async = (__this, __arguments, generator) => {
   function M() {
     return { current: null, redoStack: [], undoStack: [] };
   }
-  function a$1({ delay: a2, externalHistoryState: c2 }) {
+  function a$2({ delay: a2, externalHistoryState: c2 }) {
     const [l2] = u$6();
     return (function(t2, a3, c3 = 1e3) {
       const l3 = reactExports.useMemo((() => a3 || M()), [a3]);
@@ -16689,7 +16691,7 @@ var __async = (__this, __arguments, generator) => {
   function c(e2) {
     return { initialValueFn: () => e2.isEditable(), subscribe: (t2) => e2.registerEditableListener(t2) };
   }
-  function a() {
+  function a$1() {
     return (function(t2) {
       const [n2] = u$6(), c2 = reactExports.useMemo((() => t2(n2)), [n2, t2]), a2 = reactExports.useRef(c2.initialValueFn()), [l2, d2] = reactExports.useState(a2.current);
       return u$1((() => {
@@ -16701,7 +16703,7 @@ var __async = (__this, __arguments, generator) => {
     })(c);
   }
   var reactDomExports = requireReactDom();
-  function o$1(o2) {
+  function o$2(o2) {
     const i2 = window.location.origin, a2 = (a3) => {
       if (a3.origin !== i2) return;
       const r2 = o2.getRootElement();
@@ -16765,7 +16767,7 @@ var __async = (__this, __arguments, generator) => {
       }), [e3, r3, t2]);
     })(E2, n2);
     return (function(t2) {
-      g((() => b$3(Tt(t2), o$1(t2))), [t2]);
+      g((() => b$3(Tt(t2), o$2(t2))), [t2]);
     })(E2), jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [e2, jsxRuntimeExports.jsx(w, { content: r2 }), h2] });
   }
   function w({ content: r2 }) {
@@ -16782,8 +16784,51 @@ var __async = (__this, __arguments, generator) => {
           e3();
         })));
       }), [t2]), e2;
-    })(n2), l2 = a();
+    })(n2), l2 = a$1();
     return i2 ? "function" == typeof r2 ? r2(l2) : r2 : null;
+  }
+  function t(r2, e2) {
+    return t = Object.setPrototypeOf ? Object.setPrototypeOf.bind() : function(r3, e3) {
+      return r3.__proto__ = e3, r3;
+    }, t(r2, e2);
+  }
+  var o$1 = { error: null }, n = (function(e2) {
+    var n2, a2;
+    function s2() {
+      for (var r2, t2 = arguments.length, n3 = new Array(t2), a3 = 0; a3 < t2; a3++) n3[a3] = arguments[a3];
+      return (r2 = e2.call.apply(e2, [this].concat(n3)) || this).state = o$1, r2.resetErrorBoundary = function() {
+        for (var e3, t3 = arguments.length, o2 = new Array(t3), n4 = 0; n4 < t3; n4++) o2[n4] = arguments[n4];
+        null == r2.props.onReset || (e3 = r2.props).onReset.apply(e3, o2), r2.reset();
+      }, r2;
+    }
+    a2 = e2, (n2 = s2).prototype = Object.create(a2.prototype), n2.prototype.constructor = n2, t(n2, a2), s2.getDerivedStateFromError = function(r2) {
+      return { error: r2 };
+    };
+    var l2 = s2.prototype;
+    return l2.reset = function() {
+      this.setState(o$1);
+    }, l2.componentDidCatch = function(r2, e3) {
+      var t2, o2;
+      null == (t2 = (o2 = this.props).onError) || t2.call(o2, r2, e3);
+    }, l2.componentDidUpdate = function(r2, e3) {
+      var t2, o2, n3, a3, s3 = this.state.error, l3 = this.props.resetKeys;
+      null !== s3 && null !== e3.error && (void 0 === (n3 = r2.resetKeys) && (n3 = []), void 0 === (a3 = l3) && (a3 = []), n3.length !== a3.length || n3.some((function(r3, e4) {
+        return !Object.is(r3, a3[e4]);
+      }))) && (null == (t2 = (o2 = this.props).onResetKeysChange) || t2.call(o2, r2.resetKeys, l3), this.reset());
+    }, l2.render = function() {
+      var e3 = this.state.error, t2 = this.props, o2 = t2.fallbackRender, n3 = t2.FallbackComponent, a3 = t2.fallback;
+      if (null !== e3) {
+        var s3 = { error: e3, resetErrorBoundary: this.resetErrorBoundary };
+        if (reactExports.isValidElement(a3)) return a3;
+        if ("function" == typeof o2) return o2(s3);
+        if (n3) return reactExports.createElement(n3, s3);
+        throw new Error("react-error-boundary requires either a fallback, fallbackRender, or FallbackComponent prop");
+      }
+      return this.props.children;
+    }, s2;
+  })(reactExports.Component);
+  function a({ children: r2, onError: t2 }) {
+    return jsxRuntimeExports.jsx(n, { fallback: jsxRuntimeExports.jsx("div", { style: { border: "1px solid #f00", color: "#f00", padding: "8px" }, children: "An error was thrown." }), onError: t2, children: r2 });
   }
   function o({ defaultSelection: o2 }) {
     const [l2] = u$6();
@@ -16794,7 +16839,7 @@ var __async = (__this, __arguments, generator) => {
       }), { defaultSelection: o2 });
     }), [o2, l2]), null;
   }
-  function PaperclipIcon$1() {
+  function PaperclipIcon() {
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       "svg",
       {
@@ -16870,7 +16915,7 @@ var __async = (__this, __arguments, generator) => {
           rel: "noreferrer",
           className: "lockin-note-attachment-chip",
           children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-attachment-chip-icon", children: /* @__PURE__ */ jsxRuntimeExports.jsx(PaperclipIcon$1, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-attachment-chip-icon", children: /* @__PURE__ */ jsxRuntimeExports.jsx(PaperclipIcon, {}) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-attachment-name", children: this.__fileName || "Attachment" }),
             this.__mimeType ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-attachment-meta", children: this.__mimeType }) : null
           ]
@@ -17158,26 +17203,23 @@ var __async = (__this, __arguments, generator) => {
     { value: "h2", label: "Heading 2" },
     { value: "h3", label: "Heading 3" }
   ];
-  const TEXT_COLORS = ["#111827", "#334155", "#2563eb", "#7c3aed", "#dc2626", "#059669", "#f59e0b"];
-  const HIGHLIGHT_COLORS = ["#fef3c7", "#e0f2fe", "#f3e8ff", "#dcfce7", "#fee2e2", "transparent"];
-  function PaperclipIcon() {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "svg",
-      {
-        "aria-hidden": "true",
-        focusable: "false",
-        width: "16",
-        height: "16",
-        viewBox: "0 0 24 24",
-        fill: "none",
-        stroke: "currentColor",
-        strokeWidth: "2",
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        children: /* @__PURE__ */ jsxRuntimeExports.jsx("path", { d: "M21.44 11.05l-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19" })
-      }
-    );
-  }
+  const TEXT_COLORS = [
+    "#111827",
+    "#334155",
+    "#2563eb",
+    "#7c3aed",
+    "#dc2626",
+    "#059669",
+    "#f59e0b"
+  ];
+  const HIGHLIGHT_COLORS = [
+    "#fef3c7",
+    "#e0f2fe",
+    "#f3e8ff",
+    "#dcfce7",
+    "#fee2e2",
+    "transparent"
+  ];
   const theme = {
     paragraph: "lockin-note-paragraph",
     text: {
@@ -17226,53 +17268,35 @@ var __async = (__this, __arguments, generator) => {
       const finish = () => {
         window.setTimeout(() => onHydrationChange == null ? void 0 : onHydrationChange(false), 0);
       };
-      if (!note) {
-        editor.update(() => {
-          const root = we();
-          root.clear();
-          root.append(Ns());
-        });
+      if (!note || !note.content) {
         finish();
         return;
       }
-      const loadLexicalState = () => {
-        const { content } = note;
-        if (content.version === "lexical_v1" && content.editorState) {
-          try {
-            const state = editor.parseEditorState(content.editorState);
-            editor.setEditorState(state);
-            finish();
-            return;
-          } catch (e2) {
-          }
-        }
-        if (content.legacyHtml) {
-          try {
-            const parser = new DOMParser();
-            const dom = parser.parseFromString(content.legacyHtml, "text/html");
-            const nodes = p$3(editor, dom);
-            editor.update(() => {
-              const root = we();
-              root.clear();
-              root.append(...nodes);
-            });
-            finish();
-            return;
-          } catch (e2) {
-          }
-        }
-        editor.update(() => {
-          const root = we();
-          root.clear();
-          root.append(Ns());
-        });
+      const { content } = note;
+      if (content.version === "lexical_v1" && content.editorState) {
         finish();
-      };
-      loadLexicalState();
+        return;
+      }
+      if (content.legacyHtml) {
+        try {
+          const parser = new DOMParser();
+          const dom = parser.parseFromString(content.legacyHtml, "text/html");
+          const nodes = p$3(editor, dom);
+          editor.update(() => {
+            const root = we();
+            root.clear();
+            root.append(...nodes);
+          });
+        } catch (e2) {
+        }
+      }
+      finish();
     }, [editor, note, onHydrationChange]);
     return null;
   }
-  function NoteChangePlugin({ onChange }) {
+  function NoteChangePlugin({
+    onChange
+  }) {
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       i,
       {
@@ -17490,7 +17514,9 @@ var __async = (__this, __arguments, generator) => {
   }) {
     const [editor] = u$6();
     const [blockType, setBlockTypeState] = reactExports.useState("paragraph");
-    const [selectionFormats, setSelectionFormats] = reactExports.useState(/* @__PURE__ */ new Set());
+    const [selectionFormats, setSelectionFormats] = reactExports.useState(
+      /* @__PURE__ */ new Set()
+    );
     const [alignment, setAlignment] = reactExports.useState("left");
     const [showColor, setShowColor] = reactExports.useState(false);
     const [showHighlight, setShowHighlight] = reactExports.useState(false);
@@ -17499,7 +17525,7 @@ var __async = (__this, __arguments, generator) => {
         const selection = Oi();
         if (!yi(selection)) return;
         const anchorNode = selection.anchor.getNode();
-        const element = anchorNode.getTopLevelElementOrThrow();
+        const element = anchorNode.getKey() === "root" ? anchorNode : anchorNode.getTopLevelElementOrThrow();
         const formats = /* @__PURE__ */ new Set();
         if (selection.hasFormat("bold")) formats.add("bold");
         if (selection.hasFormat("italic")) formats.add("italic");
@@ -17515,7 +17541,8 @@ var __async = (__this, __arguments, generator) => {
           setBlockTypeState(type === "paragraph" ? "paragraph" : "paragraph");
         }
         if (_s(element)) {
-          setAlignment(element.getFormatType() || "left");
+          const formatType = element.getFormatType();
+          setAlignment(formatType || "left");
         } else {
           setAlignment("left");
         }
@@ -17523,9 +17550,11 @@ var __async = (__this, __arguments, generator) => {
     }, [editor]);
     reactExports.useEffect(() => {
       return b$3(
-        editor.registerUpdateListener(({ editorState }) => {
-          editorState.read(() => updateToolbar());
-        }),
+        editor.registerUpdateListener(
+          ({ editorState }) => {
+            editorState.read(() => updateToolbar());
+          }
+        ),
         editor.registerCommand(
           e,
           () => {
@@ -17612,7 +17641,14 @@ var __async = (__this, __arguments, generator) => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-toolbar-divider" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar-group lockin-note-toolbar-menu", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ToolbarButton, { label: "Text color", onClick: () => setShowColor((v2) => !v2), children: "Color" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          ToolbarButton,
+          {
+            label: "Text color",
+            onClick: () => setShowColor((v2) => !v2),
+            children: "Color"
+          }
+        ),
         showColor ? /* @__PURE__ */ jsxRuntimeExports.jsx(
           SwatchMenu,
           {
@@ -17670,12 +17706,14 @@ var __async = (__this, __arguments, generator) => {
           ToolbarButton,
           {
             label: "Code block",
-            onClick: () => editor.update(() => {
-              const selection = Oi();
-              if (yi(selection)) {
-                k$3(selection, () => H());
-              }
-            }),
+            onClick: () => {
+              editor.update(() => {
+                const selection = Oi();
+                if (yi(selection)) {
+                  k$3(selection, () => H());
+                }
+              });
+            },
             children: "{}"
           }
         )
@@ -17718,7 +17756,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Attach file",
             onClick: onOpenFilePicker,
             disabled: disableAttachment,
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(PaperclipIcon, {})
+            children: "Clip"
           }
         ),
         isUploading ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-inline-spinner", "aria-label": "Uploading" }) : null
@@ -17751,19 +17789,35 @@ var __async = (__this, __arguments, generator) => {
     error
   }) {
     if (error) {
-      return { label: error || "Error saving - retry soon", tone: "error", spinner: false };
+      return {
+        label: error || "Error saving - retry soon",
+        tone: "error",
+        spinner: false
+      };
     }
     if (status === "error") {
-      return { label: "Error saving - retry soon", tone: "error", spinner: false };
+      return {
+        label: "Error saving - retry soon",
+        tone: "error",
+        spinner: false
+      };
     }
     if (status === "saving") {
       return { label: "Saving...", tone: "muted", spinner: true };
     }
     if (isAssetUploading) {
-      return { label: "Uploading attachment...", tone: "muted", spinner: true };
+      return {
+        label: "Uploading attachment...",
+        tone: "muted",
+        spinner: true
+      };
     }
     if (status === "saved") {
-      return { label: `Saved ${relativeLabel$2(updatedAt)}`, tone: "success", spinner: false };
+      return {
+        label: `Saved ${relativeLabel$2(updatedAt)}`,
+        tone: "success",
+        spinner: false
+      };
     }
     if (status === "editing") {
       return { label: "Editing...", tone: "muted", spinner: false };
@@ -17783,21 +17837,32 @@ var __async = (__this, __arguments, generator) => {
     assetError,
     editorError
   }) {
+    var _a, _b;
     const fileInputRef = reactExports.useRef(null);
-    const [composerEditor, setComposerEditor] = reactExports.useState(null);
+    const [composerEditor, setComposerEditor] = reactExports.useState(
+      null
+    );
     const [isHydrating, setIsHydrating] = reactExports.useState(false);
+    const composerKey = (_a = note == null ? void 0 : note.id) != null ? _a : "new-note";
     const initialEditorState = reactExports.useMemo(() => {
       if (!(note == null ? void 0 : note.content)) return null;
       if (note.content.version === "lexical_v1" && note.content.editorState) {
-        return note.content.editorState;
+        const state = note.content.editorState;
+        if (typeof state === "string") return state;
+        try {
+          return JSON.stringify(state);
+        } catch (e2) {
+          return null;
+        }
       }
       return null;
-    }, [note]);
+    }, [note == null ? void 0 : note.id, (_b = note == null ? void 0 : note.content) == null ? void 0 : _b.editorState]);
     const initialConfig = reactExports.useMemo(
       () => ({
         namespace: "LockInNoteEditor",
         theme,
         editorState: initialEditorState,
+        editable: true,
         onError(error) {
           console.error("Lexical editor error", error);
         },
@@ -17822,11 +17887,11 @@ var __async = (__this, __arguments, generator) => {
       error: assetError || editorError
     });
     const handleUploadClick = reactExports.useCallback(() => {
-      var _a;
-      (_a = fileInputRef.current) == null ? void 0 : _a.click();
+      var _a2;
+      (_a2 = fileInputRef.current) == null ? void 0 : _a2.click();
     }, []);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-shell-card", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-shell-head", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-title-row", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-shell-head", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           "input",
           {
@@ -17840,16 +17905,16 @@ var __async = (__this, __arguments, generator) => {
           statusMeta.spinner ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-inline-spinner", "aria-hidden": "true" }) : null,
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: statusMeta.label })
         ] })
-      ] }) }),
+      ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs(p$2, { initialConfig, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-toolbar-wrapper", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
           NoteToolbar,
           {
             onOpenFilePicker: onUploadFile ? handleUploadClick : void 0,
             disableAttachment: !(note == null ? void 0 : note.id) || !onUploadFile,
             isUploading: isAssetUploading
           }
-        ) }),
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-editor-surface", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-editor-scroll", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
           h,
           {
@@ -17861,17 +17926,23 @@ var __async = (__this, __arguments, generator) => {
               }
             ),
             placeholder: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-placeholder", children: "Write your note here..." }),
-            ErrorBoundary: a$2
+            ErrorBoundary: a
           }
         ) }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(a$1, {}),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(a$2, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx(u$5, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx(u$2, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx(o, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx(NoteContentLoader, { note, onHydrationChange: setIsHydrating }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(NoteChangePlugin, { onChange: onContentChange }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(ShortcutsPlugin, { onSaveNow }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(UploadPlugin, { onUploadFile, onEditorReady: setComposerEditor }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          UploadPlugin,
+          {
+            onUploadFile,
+            onEditorReady: setComposerEditor
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           AssetCleanupPlugin,
           {
@@ -17880,7 +17951,7 @@ var __async = (__this, __arguments, generator) => {
             isHydrating
           }
         )
-      ] }),
+      ] }, composerKey),
       assetError ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-inline-error", children: assetError }) : null,
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "input",
@@ -17890,8 +17961,8 @@ var __async = (__this, __arguments, generator) => {
           accept: "*/*",
           style: { display: "none" },
           onChange: (event) => {
-            var _a;
-            const file = (_a = event.target.files) == null ? void 0 : _a[0];
+            var _a2;
+            const file = (_a2 = event.target.files) == null ? void 0 : _a2[0];
             if (file && onUploadFile && composerEditor) {
               void onUploadFile(file).then((asset) => {
                 if (asset) {
@@ -17941,17 +18012,19 @@ var __async = (__this, __arguments, generator) => {
     activeNoteId,
     onSelectNote,
     courseCode,
-    pageUrl
+    pageUrl,
+    onNoteEditingChange
   }) {
     const [view, setView] = reactExports.useState("current");
-    const [filter, setFilter] = reactExports.useState("course");
+    const [filter, setFilter] = reactExports.useState(
+      "course"
+    );
     const [search, setSearch] = reactExports.useState("");
     const {
       note,
       status,
       error: editorError,
       activeNoteId: editorActiveId,
-      setActiveNoteId,
       handleContentChange,
       handleTitleChange,
       saveNow,
@@ -17962,21 +18035,29 @@ var __async = (__this, __arguments, generator) => {
       defaultCourseCode: courseCode,
       defaultSourceUrl: pageUrl
     });
+    const prevEditorActiveIdRef = reactExports.useRef(editorActiveId);
     reactExports.useEffect(() => {
-      if (activeNoteId && activeNoteId !== editorActiveId) {
-        setActiveNoteId(activeNoteId);
-      }
-    }, [activeNoteId, editorActiveId, setActiveNoteId]);
-    reactExports.useEffect(() => {
-      if (editorActiveId !== activeNoteId) {
+      if (editorActiveId !== prevEditorActiveIdRef.current && editorActiveId !== activeNoteId && editorActiveId !== null) {
         onSelectNote(editorActiveId);
       }
-    }, [activeNoteId, editorActiveId, onSelectNote]);
+      prevEditorActiveIdRef.current = editorActiveId;
+    }, [editorActiveId, activeNoteId, onSelectNote]);
     reactExports.useEffect(() => {
       if (status === "saved" && note) {
         onNoteSaved(note);
       }
     }, [note, onNoteSaved, status]);
+    reactExports.useEffect(() => {
+      const isEditing = status === "editing" || status === "saving";
+      if (isEditing) {
+        onNoteEditingChange == null ? void 0 : onNoteEditingChange(true);
+        return;
+      }
+      const timeout = window.setTimeout(() => {
+        onNoteEditingChange == null ? void 0 : onNoteEditingChange(false);
+      }, 3e3);
+      return () => window.clearTimeout(timeout);
+    }, [onNoteEditingChange, status]);
     const {
       isUploading: isAssetUploading,
       error: noteAssetError,
@@ -17998,42 +18079,67 @@ var __async = (__this, __arguments, generator) => {
       onSelectNote(null);
       setView("current");
     };
+    const handleSelectNote = (noteId) => {
+      onSelectNote(noteId);
+      setView("current");
+    };
     const linkedTarget = (note == null ? void 0 : note.sourceUrl) || pageUrl;
     const linkedLabel = formatLinkedTarget(linkedTarget);
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-view", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header", children: [
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-panel", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "lockin-notes-header", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header-left", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-course-line", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-label", children: "Course:" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-course-code", children: courseCode || "None" })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-course-row", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-label", children: "Course:" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "lockin-notes-course-value", children: courseCode || "None" })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-link-line", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-label", children: "Linked to:" }),
-            linkedTarget ? /* @__PURE__ */ jsxRuntimeExports.jsx("a", { href: linkedTarget, target: "_blank", rel: "noreferrer", className: "lockin-note-link-inline", children: linkedLabel }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-link-empty", children: "Not linked" })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-link-row", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-label", children: "Linked to:" }),
+            linkedTarget ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "a",
+              {
+                href: linkedTarget,
+                target: "_blank",
+                rel: "noreferrer",
+                className: "lockin-notes-link-href",
+                children: linkedLabel
+              }
+            ) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-link-empty", children: "Not linked" })
           ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-header-middle", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-toggle", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header-right", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-toggle", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                className: `lockin-notes-toggle-btn${view === "current" ? " is-active" : ""}`,
+                onClick: () => setView("current"),
+                children: "Current"
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                className: `lockin-notes-toggle-btn${view === "all" ? " is-active" : ""}`,
+                onClick: () => setView("all"),
+                children: "All notes"
+              }
+            )
+          ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
-              className: `lockin-notes-toggle-btn ${view === "current" ? "is-active" : ""}`,
-              onClick: () => setView("current"),
-              children: "Current"
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              className: `lockin-notes-toggle-btn ${view === "all" ? "is-active" : ""}`,
-              onClick: () => setView("all"),
-              children: "All notes"
+              type: "button",
+              className: "lockin-btn-primary",
+              onClick: handleNewNote,
+              children: "+ New note"
             }
           )
-        ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-header-right", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-btn-primary", onClick: handleNewNote, children: "+ New note" }) })
+        ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-body", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `lockin-note-current-view ${view === "current" ? "is-active" : ""}`, children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        view === "current" && /* @__PURE__ */ jsxRuntimeExports.jsx(
           NoteEditor,
           {
             note,
@@ -18048,11 +18154,11 @@ var __async = (__this, __arguments, generator) => {
             assetError: noteAssetError,
             editorError
           }
-        ) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `lockin-all-notes-view ${view === "all" ? "is-active" : ""}`, children: [
+        ),
+        view === "all" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-list-container", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-filter-bar", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-filter-left", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-filter-label", children: "Filter" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-filter-group", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-filter-label", children: "Filter" }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "select",
                 {
@@ -18068,16 +18174,25 @@ var __async = (__this, __arguments, generator) => {
                 }
               )
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-search", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
               "input",
               {
+                type: "text",
                 className: "lockin-notes-search-input",
                 placeholder: "Search notes",
                 value: search,
                 onChange: (e2) => setSearch(e2.target.value)
               }
-            ) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-refresh", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-btn-ghost", onClick: onRefreshNotes, type: "button", children: "Refresh" }) })
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                className: "lockin-btn-ghost",
+                onClick: onRefreshNotes,
+                children: "Refresh"
+              }
+            )
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-list", children: notesLoading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-empty", children: "Loading notes..." }) : filteredNotes.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-empty", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-empty-title", children: "No notes yet" }),
@@ -18085,6 +18200,7 @@ var __async = (__this, __arguments, generator) => {
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
+                type: "button",
                 className: "lockin-btn-ghost lockin-notes-empty-btn",
                 onClick: () => setView("current"),
                 children: "Create a note"
@@ -18095,13 +18211,19 @@ var __async = (__this, __arguments, generator) => {
             return /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "div",
               {
-                className: `lockin-note-card ${item.id && item.id === editorActiveId ? "is-active" : ""}`,
-                onClick: () => onSelectNote(item.id || null),
-                style: { cursor: "pointer" },
+                className: `lockin-note-card${item.id && item.id === editorActiveId ? " is-active" : ""}`,
+                onClick: () => handleSelectNote(item.id || null),
+                role: "button",
+                tabIndex: 0,
+                onKeyDown: (e2) => {
+                  if (e2.key === "Enter" || e2.key === " ") {
+                    handleSelectNote(item.id || null);
+                  }
+                },
                 children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-head", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: item.title }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-badges", children: item.courseCode ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-badge", children: item.courseCode }) : null })
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-header", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: item.title || "Untitled" }),
+                    item.courseCode && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-badge", children: item.courseCode })
                   ] }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-snippet", children: item.previewText || ((_a = item.content) == null ? void 0 : _a.plainText) || "No content" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-meta", children: [
@@ -18262,6 +18384,8 @@ var __async = (__this, __arguments, generator) => {
     const [chatError, setChatError] = reactExports.useState(null);
     const [isSending, setIsSending] = reactExports.useState(false);
     const [selectedNoteId, setSelectedNoteId] = reactExports.useState(null);
+    const [isNoteEditing, setIsNoteEditing] = reactExports.useState(false);
+    const lastForceOpenRef = reactExports.useRef(0);
     const previousSelectionRef = reactExports.useRef();
     const layoutTimeoutRef = reactExports.useRef(null);
     const notesService = reactExports.useMemo(
@@ -18349,6 +18473,15 @@ var __async = (__this, __arguments, generator) => {
     reactExports.useEffect(() => {
       setMode(currentMode);
     }, [currentMode]);
+    reactExports.useEffect(() => {
+      if (isNoteEditing && !isOpen) {
+        const now = Date.now();
+        if (now - lastForceOpenRef.current > 400) {
+          lastForceOpenRef.current = now;
+          onToggle();
+        }
+      }
+    }, [isNoteEditing, isOpen, onToggle]);
     const upsertHistory = reactExports.useCallback(
       (item, previousId) => {
         setRecentChats((prev) => {
@@ -18798,7 +18931,8 @@ var __async = (__this, __arguments, generator) => {
                 activeNoteId: selectedNoteId,
                 onSelectNote: (noteId) => setSelectedNoteId(noteId),
                 courseCode,
-                pageUrl
+                pageUrl,
+                onNoteEditingChange: setIsNoteEditing
               }
             )
           ]

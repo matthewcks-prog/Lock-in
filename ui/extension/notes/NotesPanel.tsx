@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Note } from "../../../core/domain/Note.ts";
 import type { NotesService } from "../../../core/services/notesService.ts";
 import { useNoteAssets } from "../../hooks/useNoteAssets";
@@ -15,6 +15,7 @@ interface NotesPanelProps {
   onSelectNote: (noteId: string | null) => void;
   courseCode: string | null;
   pageUrl: string;
+  onNoteEditingChange?: (editing: boolean) => void;
 }
 
 function relativeLabel(iso: string | null | undefined) {
@@ -36,7 +37,8 @@ function formatLinkedTarget(url: string | null | undefined) {
   try {
     const parsed = new URL(url);
     const cleanPath = parsed.pathname.replace(/\/$/, "") || "/";
-    const shortPath = cleanPath.length > 32 ? `${cleanPath.slice(0, 32)}...` : cleanPath;
+    const shortPath =
+      cleanPath.length > 32 ? `${cleanPath.slice(0, 32)}...` : cleanPath;
     return `${parsed.hostname}${shortPath}`;
   } catch {
     return url.length > 48 ? `${url.slice(0, 48)}...` : url;
@@ -53,9 +55,12 @@ export function NotesPanel({
   onSelectNote,
   courseCode,
   pageUrl,
+  onNoteEditingChange,
 }: NotesPanelProps) {
   const [view, setView] = useState<"current" | "all">("current");
-  const [filter, setFilter] = useState<"page" | "course" | "all" | "starred">("course");
+  const [filter, setFilter] = useState<"page" | "course" | "all" | "starred">(
+    "course"
+  );
   const [search, setSearch] = useState("");
 
   const {
@@ -63,7 +68,6 @@ export function NotesPanel({
     status,
     error: editorError,
     activeNoteId: editorActiveId,
-    setActiveNoteId,
     handleContentChange,
     handleTitleChange,
     saveNow,
@@ -75,23 +79,43 @@ export function NotesPanel({
     defaultSourceUrl: pageUrl,
   });
 
+  // Sync editor's activeNoteId back to parent only when it changes due to save (new note gets ID)
+  // Use a ref to track the previous value and avoid loops
+  const prevEditorActiveIdRef = useRef(editorActiveId);
   useEffect(() => {
-    if (activeNoteId && activeNoteId !== editorActiveId) {
-      setActiveNoteId(activeNoteId);
-    }
-  }, [activeNoteId, editorActiveId, setActiveNoteId]);
-
-  useEffect(() => {
-    if (editorActiveId !== activeNoteId) {
+    // Only notify parent if editorActiveId changed AND it's different from what parent passed in
+    // This handles the case where a new note is saved and gets an ID
+    if (
+      editorActiveId !== prevEditorActiveIdRef.current &&
+      editorActiveId !== activeNoteId &&
+      editorActiveId !== null
+    ) {
       onSelectNote(editorActiveId);
     }
-  }, [activeNoteId, editorActiveId, onSelectNote]);
+    prevEditorActiveIdRef.current = editorActiveId;
+  }, [editorActiveId, activeNoteId, onSelectNote]);
 
   useEffect(() => {
     if (status === "saved" && note) {
       onNoteSaved(note);
     }
   }, [note, onNoteSaved, status]);
+
+  useEffect(() => {
+    // Keep the "editing" signal alive briefly after a save to avoid
+    // collapsing the sidebar mid-autosave.
+    const isEditing = status === "editing" || status === "saving";
+    if (isEditing) {
+      onNoteEditingChange?.(true);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      onNoteEditingChange?.(false);
+    }, 3000);
+
+    return () => window.clearTimeout(timeout);
+  }, [onNoteEditingChange, status]);
 
   const {
     isUploading: isAssetUploading,
@@ -123,53 +147,76 @@ export function NotesPanel({
     setView("current");
   };
 
+  const handleSelectNote = (noteId: string | null) => {
+    onSelectNote(noteId);
+    setView("current");
+  };
+
   const linkedTarget = note?.sourceUrl || pageUrl;
   const linkedLabel = formatLinkedTarget(linkedTarget);
 
   return (
-    <div className="lockin-notes-view">
-      <div className="lockin-notes-header">
+    <div className="lockin-notes-panel">
+      {/* Header: Course/Link on left, toggle+button on right */}
+      <header className="lockin-notes-header">
         <div className="lockin-notes-header-left">
-          <div className="lockin-note-course-line">
-            <span className="lockin-note-label">Course:</span>
-            <span className="lockin-note-course-code">{courseCode || "None"}</span>
+          <div className="lockin-notes-course-row">
+            <span className="lockin-notes-label">Course:</span>
+            <strong className="lockin-notes-course-value">
+              {courseCode || "None"}
+            </strong>
           </div>
-          <div className="lockin-note-link-line">
-            <span className="lockin-note-label">Linked to:</span>
+          <div className="lockin-notes-link-row">
+            <span className="lockin-notes-label">Linked to:</span>
             {linkedTarget ? (
-              <a href={linkedTarget} target="_blank" rel="noreferrer" className="lockin-note-link-inline">
+              <a
+                href={linkedTarget}
+                target="_blank"
+                rel="noreferrer"
+                className="lockin-notes-link-href"
+              >
                 {linkedLabel}
               </a>
             ) : (
-              <span className="lockin-note-link-empty">Not linked</span>
+              <span className="lockin-notes-link-empty">Not linked</span>
             )}
           </div>
         </div>
-        <div className="lockin-notes-header-middle">
+
+        <div className="lockin-notes-header-right">
           <div className="lockin-notes-toggle">
             <button
-              className={`lockin-notes-toggle-btn ${view === "current" ? "is-active" : ""}`}
+              type="button"
+              className={`lockin-notes-toggle-btn${
+                view === "current" ? " is-active" : ""
+              }`}
               onClick={() => setView("current")}
             >
               Current
             </button>
             <button
-              className={`lockin-notes-toggle-btn ${view === "all" ? "is-active" : ""}`}
+              type="button"
+              className={`lockin-notes-toggle-btn${
+                view === "all" ? " is-active" : ""
+              }`}
               onClick={() => setView("all")}
             >
               All notes
             </button>
           </div>
-        </div>
-        <div className="lockin-notes-header-right">
-          <button className="lockin-btn-primary" onClick={handleNewNote}>
+          <button
+            type="button"
+            className="lockin-btn-primary"
+            onClick={handleNewNote}
+          >
             + New note
           </button>
         </div>
-      </div>
+      </header>
 
+      {/* Body: Editor or Notes List */}
       <div className="lockin-notes-body">
-        <div className={`lockin-note-current-view ${view === "current" ? "is-active" : ""}`}>
+        {view === "current" && (
           <NoteEditor
             note={note}
             status={status}
@@ -183,83 +230,97 @@ export function NotesPanel({
             assetError={noteAssetError}
             editorError={editorError}
           />
-        </div>
+        )}
 
-        <div className={`lockin-all-notes-view ${view === "all" ? "is-active" : ""}`}>
-          <div className="lockin-notes-filter-bar">
-            <div className="lockin-notes-filter-left">
-              <span className="lockin-filter-label">Filter</span>
-              <select
-                className="lockin-notes-filter-select"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value as any)}
-              >
-                <option value="page">This page</option>
-                <option value="course">This course</option>
-                <option value="all">All notes</option>
-                <option value="starred">Starred</option>
-              </select>
-            </div>
-            <div className="lockin-notes-search">
+        {view === "all" && (
+          <div className="lockin-notes-list-container">
+            <div className="lockin-notes-filter-bar">
+              <div className="lockin-notes-filter-group">
+                <span className="lockin-notes-filter-label">Filter</span>
+                <select
+                  className="lockin-notes-filter-select"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value as typeof filter)}
+                >
+                  <option value="page">This page</option>
+                  <option value="course">This course</option>
+                  <option value="all">All notes</option>
+                  <option value="starred">Starred</option>
+                </select>
+              </div>
               <input
+                type="text"
                 className="lockin-notes-search-input"
                 placeholder="Search notes"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-            </div>
-            <div className="lockin-notes-refresh">
-              <button className="lockin-btn-ghost" onClick={onRefreshNotes} type="button">
+              <button
+                type="button"
+                className="lockin-btn-ghost"
+                onClick={onRefreshNotes}
+              >
                 Refresh
               </button>
             </div>
-          </div>
 
-          <div className="lockin-notes-list">
-            {notesLoading ? (
-              <div className="lockin-notes-empty">Loading notes...</div>
-            ) : filteredNotes.length === 0 ? (
-              <div className="lockin-notes-empty">
-                <div className="lockin-notes-empty-title">No notes yet</div>
-                <div className="lockin-notes-empty-subtitle">
-                  Capture a note from the current page to see it here.
+            <div className="lockin-notes-list">
+              {notesLoading ? (
+                <div className="lockin-notes-empty">Loading notes...</div>
+              ) : filteredNotes.length === 0 ? (
+                <div className="lockin-notes-empty">
+                  <div className="lockin-notes-empty-title">No notes yet</div>
+                  <div className="lockin-notes-empty-subtitle">
+                    Capture a note from the current page to see it here.
+                  </div>
+                  <button
+                    type="button"
+                    className="lockin-btn-ghost lockin-notes-empty-btn"
+                    onClick={() => setView("current")}
+                  >
+                    Create a note
+                  </button>
                 </div>
-                <button
-                  className="lockin-btn-ghost lockin-notes-empty-btn"
-                  onClick={() => setView("current")}
-                >
-                  Create a note
-                </button>
-              </div>
-            ) : (
-              filteredNotes.map((item) => (
-                <div
-                  key={item.id || item.title}
-                  className={`lockin-note-card ${
-                    item.id && item.id === editorActiveId ? "is-active" : ""
-                  }`}
-                  onClick={() => onSelectNote(item.id || null)}
-                  style={{ cursor: "pointer" }}
-                >
-                  <div className="lockin-note-card-head">
-                    <div className="lockin-note-card-title">{item.title}</div>
-                    <div className="lockin-note-card-badges">
-                      {item.courseCode ? (
-                        <span className="lockin-note-badge">{item.courseCode}</span>
-                      ) : null}
+              ) : (
+                filteredNotes.map((item) => (
+                  <div
+                    key={item.id || item.title}
+                    className={`lockin-note-card${
+                      item.id && item.id === editorActiveId ? " is-active" : ""
+                    }`}
+                    onClick={() => handleSelectNote(item.id || null)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        handleSelectNote(item.id || null);
+                      }
+                    }}
+                  >
+                    <div className="lockin-note-card-header">
+                      <div className="lockin-note-card-title">
+                        {item.title || "Untitled"}
+                      </div>
+                      {item.courseCode && (
+                        <span className="lockin-note-badge">
+                          {item.courseCode}
+                        </span>
+                      )}
+                    </div>
+                    <div className="lockin-note-card-snippet">
+                      {item.previewText ||
+                        item.content?.plainText ||
+                        "No content"}
+                    </div>
+                    <div className="lockin-note-card-meta">
+                      Updated {relativeLabel(item.updatedAt || item.createdAt)}
                     </div>
                   </div>
-                  <div className="lockin-note-card-snippet">
-                    {item.previewText || item.content?.plainText || "No content"}
-                  </div>
-                  <div className="lockin-note-card-meta">
-                    Updated {relativeLabel(item.updatedAt || item.createdAt)}
-                  </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

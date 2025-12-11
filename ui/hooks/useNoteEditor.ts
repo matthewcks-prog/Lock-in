@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Note, NoteContent, NoteStatus } from "../../core/domain/Note.ts";
 import type {
   CreateNoteInput,
@@ -6,7 +6,16 @@ import type {
   UpdateNoteInput,
 } from "../../core/services/notesService.ts";
 
+/**
+ * Autosave debounce delay (ms).
+ * 1500ms is a good balance between responsiveness and reducing API calls.
+ * For thousands of users, this means ~40 saves/minute max per active user.
+ */
 const SAVE_DEBOUNCE_MS = 1500;
+
+/**
+ * How long to show "Saved" status before returning to idle.
+ */
 const SAVED_RESET_DELAY_MS = 1200;
 
 interface UseNoteEditorOptions {
@@ -83,6 +92,9 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
   const savedResetRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const lastSavedFingerprintRef = useRef<string | null>(null);
+  // Track which note ID we're currently loading to prevent duplicate requests
+  const loadingNoteIdRef = useRef<string | null>(null);
+  const lastLoadedNoteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     setActiveNoteId(noteId ?? null);
@@ -102,69 +114,113 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     };
   }, []);
 
-  const loadNote = useCallback(
-    async (targetId: string | null) => {
-      if (!targetId || !notesService) {
-        setNote(
-          createDraftNote({
-            courseCode: defaultCourseCode,
-            sourceUrl: defaultSourceUrl,
-            sourceSelection,
-          })
-        );
-        setStatus("idle");
-        return;
-      }
+  // Load note when activeNoteId changes
+  // Uses refs for dependencies to avoid re-running on every render
+  const notesServiceRef = useRef(notesService);
+  notesServiceRef.current = notesService;
+  const defaultCourseCodeRef = useRef(defaultCourseCode);
+  defaultCourseCodeRef.current = defaultCourseCode;
+  const defaultSourceUrlRef = useRef(defaultSourceUrl);
+  defaultSourceUrlRef.current = defaultSourceUrl;
+  const sourceSelectionRef = useRef(sourceSelection);
+  sourceSelectionRef.current = sourceSelection;
 
-      setIsLoading(true);
-      setError(null);
+  useEffect(() => {
+    const targetId = activeNoteId;
+    const service = notesServiceRef.current;
+    
+    // Skip if we're already loading this note or it's already loaded
+    if (targetId === loadingNoteIdRef.current) {
+      return;
+    }
+    if (targetId === lastLoadedNoteIdRef.current && targetId !== null) {
+      return;
+    }
+    
+    if (!targetId || !service) {
+      loadingNoteIdRef.current = null;
+      lastLoadedNoteIdRef.current = null;
+      setNote(
+        createDraftNote({
+          courseCode: defaultCourseCodeRef.current,
+          sourceUrl: defaultSourceUrlRef.current,
+          sourceSelection: sourceSelectionRef.current,
+        })
+      );
+      setStatus("idle");
+      setIsLoading(false);
+      return;
+    }
+
+    loadingNoteIdRef.current = targetId;
+    setIsLoading(true);
+    setError(null);
+    
+    let cancelled = false;
+    
+    (async () => {
       try {
-        const loaded = await notesService.getNote(targetId);
+        const loaded = await service.getNote(targetId);
+        if (cancelled) return;
+        
         setNote(loaded);
         lastSavedFingerprintRef.current = createContentFingerprint(
           loaded.title,
           loaded.content
         );
+        lastLoadedNoteIdRef.current = targetId;
         setStatus("idle");
       } catch (err: any) {
+        if (cancelled) return;
         setError(err?.message || "Failed to load note");
         setStatus("error");
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          loadingNoteIdRef.current = null;
+          setIsLoading(false);
+        }
       }
-    },
-    [defaultCourseCode, defaultSourceUrl, notesService, sourceSelection]
-  );
+    })();
+    
+    return () => {
+      cancelled = true;
+    };
+  }, [activeNoteId]);
 
-  useEffect(() => {
-    loadNote(activeNoteId);
-  }, [activeNoteId, loadNote]);
-
-  const scheduleSave = useCallback(() => {
-    if (debounceRef.current) {
-      window.clearTimeout(debounceRef.current);
-    }
-    debounceRef.current = window.setTimeout(() => {
-      void persist();
-    }, SAVE_DEBOUNCE_MS);
-  }, []);
+  /**
+   * Persist the current note to the backend.
+   * Uses a ref to always access the latest note state, avoiding stale closures.
+   * 
+   * Scalability considerations:
+   * - Fingerprint check prevents unnecessary API calls when content hasn't changed
+   * - AbortController cancels in-flight saves if a new save is triggered
+   * - Debouncing in scheduleSave limits API calls to ~40/minute max per user
+   */
+  const noteRef = useRef(note);
+  noteRef.current = note;
 
   const persist = useCallback(async () => {
-    if (!notesService || !note) {
+    const currentNote = noteRef.current;
+    
+    if (!notesService || !currentNote) {
       setError("Notes service unavailable");
       setStatus("error");
       return;
     }
 
+    // Clear any pending debounced saves
     if (debounceRef.current) {
       window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
 
-    if (status === "saving") {
-      abortControllerRef.current?.abort();
+    // Cancel any in-flight save request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
 
-    const fingerprint = createContentFingerprint(note.title, note.content);
+    // Skip save if content hasn't changed since last save
+    const fingerprint = createContentFingerprint(currentNote.title, currentNote.content);
     if (fingerprint === lastSavedFingerprintRef.current) {
       setStatus("saved");
       if (savedResetRef.current) {
@@ -181,29 +237,32 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
 
     try {
       let saved: Note;
-      if (note.id) {
+      if (currentNote.id) {
         const payload: UpdateNoteInput = {
-          title: note.title,
-          content: note.content,
-          courseCode: note.courseCode ?? defaultCourseCode ?? null,
-          sourceUrl: note.sourceUrl ?? defaultSourceUrl ?? null,
-          sourceSelection: note.sourceSelection ?? sourceSelection ?? null,
-          noteType: note.noteType,
-          tags: note.tags,
+          title: currentNote.title,
+          content: currentNote.content,
+          courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
+          sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
+          sourceSelection: currentNote.sourceSelection ?? sourceSelection ?? null,
+          noteType: currentNote.noteType,
+          tags: currentNote.tags,
         };
-        saved = await notesService.updateNote(note.id, payload);
+        saved = await notesService.updateNote(currentNote.id, payload);
       } else {
         const payload: CreateNoteInput = {
-          title: note.title || "Untitled note",
-          content: note.content,
-          courseCode: note.courseCode ?? defaultCourseCode ?? null,
-          sourceUrl: note.sourceUrl ?? defaultSourceUrl ?? null,
-          sourceSelection: note.sourceSelection ?? sourceSelection ?? null,
-          noteType: note.noteType,
-          tags: note.tags,
+          title: currentNote.title || "Untitled note",
+          content: currentNote.content,
+          courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
+          sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
+          sourceSelection: currentNote.sourceSelection ?? sourceSelection ?? null,
+          noteType: currentNote.noteType,
+          tags: currentNote.tags,
         };
         saved = await notesService.createNote(payload);
       }
+
+      // Check if this save was aborted while in progress
+      if (controller.signal.aborted) return;
 
       setNote(saved);
       setActiveNoteId(saved.id);
@@ -221,14 +280,21 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
       setError(err?.message || "Failed to save note");
       setStatus("error");
     }
-  }, [
-    defaultCourseCode,
-    defaultSourceUrl,
-    note,
-    notesService,
-    sourceSelection,
-    status,
-  ]);
+  }, [defaultCourseCode, defaultSourceUrl, notesService, sourceSelection]);
+
+  /**
+   * Schedule a debounced save.
+   * The debounce prevents excessive API calls during rapid typing.
+   * At 1500ms debounce, this limits to ~40 saves/minute even if user types continuously.
+   */
+  const scheduleSave = useCallback(() => {
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = window.setTimeout(() => {
+      void persist();
+    }, SAVE_DEBOUNCE_MS);
+  }, [persist]);
 
   const handleContentChange = useCallback(
     (content: NoteContent) => {
@@ -269,6 +335,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
   const resetToNew = useCallback(() => {
     if (debounceRef.current) {
       window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
     }
     abortControllerRef.current?.abort();
     setActiveNoteId(null);
@@ -278,15 +345,14 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
       sourceSelection,
     });
     setNote(draft);
+    lastSavedFingerprintRef.current = null;
     setStatus("idle");
     setError(null);
   }, [defaultCourseCode, defaultSourceUrl, sourceSelection]);
 
-  const resultStatus: NoteStatus = useMemo(() => status, [status]);
-
   return {
     note,
-    status: resultStatus,
+    status,
     error,
     isLoading,
     activeNoteId,
