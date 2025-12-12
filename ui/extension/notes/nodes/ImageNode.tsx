@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   $getNodeByKey,
+  CLICK_COMMAND,
   COMMAND_PRIORITY_LOW,
   DecoratorNode,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
+  LexicalEditor,
   LexicalNode,
   NodeKey,
 } from "lexical";
@@ -22,10 +25,30 @@ export type SerializedImageNode = {
   height?: number | null;
 };
 
-function clamp(value: number, min: number, max: number) {
+// Constants
+const DEFAULT_WIDTH = 320;
+const MIN_WIDTH = 80;
+const MAX_WIDTH = 960;
+
+function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
+function getMaxWidth(editor: LexicalEditor): number {
+  const root = editor.getRootElement();
+  const scrollContainer = root?.closest(
+    ".lockin-note-editor-scroll"
+  ) as HTMLElement | null;
+  const container = scrollContainer ?? root?.parentElement;
+  const measured = container?.getBoundingClientRect().width ?? 0;
+  // Account for padding: 24px left + 24px right
+  return measured > 0 ? clamp(measured - 48, MIN_WIDTH, MAX_WIDTH) : MAX_WIDTH;
+}
+
+/**
+ * ResizableImage component for Lexical editor
+ * Industry-standard resize behavior with corner handles only
+ */
 function ResizableImage({
   src,
   alt,
@@ -42,84 +65,223 @@ function ResizableImage({
   height?: number | null;
 }) {
   const [editor] = useLexicalComposerContext();
-  const [isSelected, setSelected, clearSelection] = useLexicalNodeSelection(nodeKey);
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
+  const [isSelected, setSelected, clearSelection] =
+    useLexicalNodeSelection(nodeKey);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  // Dimensions state
+  const [dimensions, setDimensions] = useState({
+    width: width ?? DEFAULT_WIDTH,
+    height: height ?? DEFAULT_WIDTH,
+    aspectRatio: 1,
+    maxWidth: MAX_WIDTH,
+  });
   const [isResizing, setIsResizing] = useState(false);
-  const [currentWidth, setCurrentWidth] = useState<number | null>(width ?? null);
-  const latestWidthRef = useRef<number | null>(width ?? null);
 
+  // Ref for resize calculations (avoids stale closures)
+  const resizeRef = useRef({
+    startX: 0,
+    startY: 0,
+    startWidth: 0,
+    aspectRatio: 1,
+    maxWidth: MAX_WIDTH,
+  });
+
+  // Sync with prop changes
   useEffect(() => {
-    setCurrentWidth(width ?? null);
-    latestWidthRef.current = width ?? null;
-  }, [width]);
+    if (width != null && height != null) {
+      setDimensions((prev) => ({
+        ...prev,
+        width,
+        height,
+        aspectRatio: width / height || 1,
+      }));
+    }
+  }, [width, height]);
 
-  const commitSize = useCallback(
-    (nextWidth: number | null) => {
+  // Recalculate max width on window resize
+  useEffect(() => {
+    const updateMaxWidth = () => {
+      const maxWidth = getMaxWidth(editor);
+      setDimensions((prev) => {
+        const newWidth = clamp(prev.width, MIN_WIDTH, maxWidth);
+        return {
+          ...prev,
+          maxWidth,
+          width: newWidth,
+          height: newWidth / prev.aspectRatio,
+        };
+      });
+    };
+    updateMaxWidth();
+    window.addEventListener("resize", updateMaxWidth);
+    return () => window.removeEventListener("resize", updateMaxWidth);
+  }, [editor]);
+
+  // Handle image load - set initial dimensions from natural size
+  const handleImageLoad = useCallback(() => {
+    const img = imageRef.current;
+    if (!img) return;
+
+    const { naturalWidth, naturalHeight } = img;
+    const aspectRatio = naturalWidth / naturalHeight || 1;
+    const maxWidth = getMaxWidth(editor);
+
+    // Use saved dimensions or calculate from natural size
+    const targetWidth =
+      width ?? clamp(Math.min(naturalWidth, maxWidth), MIN_WIDTH, maxWidth);
+    const targetHeight = height ?? targetWidth / aspectRatio;
+
+    setDimensions({
+      width: targetWidth,
+      height: targetHeight,
+      aspectRatio,
+      maxWidth,
+    });
+
+    // Persist if not already saved
+    if (width == null || height == null) {
       editor.update(() => {
         const node = $getNodeByKey(nodeKey);
         if ($isImageNode(node)) {
-          node.setWidth(nextWidth);
-          node.setHeight(height ?? null);
+          node.setWidth(targetWidth);
+          node.setHeight(targetHeight);
+        }
+      });
+    }
+  }, [editor, nodeKey, width, height]);
+
+  // Commit dimensions to Lexical node
+  const commitDimensions = useCallback(
+    (w: number, h: number) => {
+      editor.update(() => {
+        const node = $getNodeByKey(nodeKey);
+        if ($isImageNode(node)) {
+          node.setWidth(w);
+          node.setHeight(h);
         }
       });
     },
-    [editor, height, nodeKey]
+    [editor, nodeKey]
   );
 
-  const handleResizeStart = (event: React.MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
+  // Handle corner resize with pointer capture for smooth dragging
+  const handleResizeStart = useCallback(
+    (e: ReactPointerEvent, corner: string) => {
+      e.preventDefault();
+      e.stopPropagation();
 
-    const startX = event.clientX;
-    const rect = imageRef.current?.getBoundingClientRect();
-    const startWidth = rect?.width ?? currentWidth ?? 320;
-    const parentWidth =
-      wrapperRef.current?.parentElement?.getBoundingClientRect().width ?? startWidth;
-    const maxWidth = Math.max(200, parentWidth - 16);
-    const minWidth = 120;
-    setIsResizing(true);
+      const target = e.target as HTMLElement;
+      target.setPointerCapture(e.pointerId);
 
-    const handleMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX;
-      const next = clamp(startWidth + delta, minWidth, maxWidth);
-      setCurrentWidth(next);
-      latestWidthRef.current = next;
-    };
+      const maxWidth = getMaxWidth(editor);
+      resizeRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startWidth: dimensions.width,
+        aspectRatio: dimensions.aspectRatio,
+        maxWidth,
+      };
+      setIsResizing(true);
 
-    const handleUp = (upEvent: MouseEvent) => {
-      upEvent.preventDefault();
-      document.removeEventListener("mousemove", handleMove);
-      document.removeEventListener("mouseup", handleUp);
-      setIsResizing(false);
-      commitSize(latestWidthRef.current ?? null);
-    };
+      const onPointerMove = (moveEvent: PointerEvent) => {
+        const { startX, startY, startWidth, aspectRatio, maxWidth } =
+          resizeRef.current;
+        const deltaX = moveEvent.clientX - startX;
+        const deltaY = moveEvent.clientY - startY;
 
-    document.addEventListener("mousemove", handleMove);
-    document.addEventListener("mouseup", handleUp);
-  };
+        // Calculate new width based on handle being dragged
+        let widthDelta = 0;
+        switch (corner) {
+          // Corner handles (diagonal movement)
+          case "se":
+            widthDelta = Math.max(deltaX, deltaY * aspectRatio);
+            break;
+          case "sw":
+            widthDelta = Math.max(-deltaX, deltaY * aspectRatio);
+            break;
+          case "ne":
+            widthDelta = Math.max(deltaX, -deltaY * aspectRatio);
+            break;
+          case "nw":
+            widthDelta = Math.max(-deltaX, -deltaY * aspectRatio);
+            break;
+          // Horizontal edge handles
+          case "e":
+            widthDelta = deltaX;
+            break;
+          case "w":
+            widthDelta = -deltaX;
+            break;
+          // Vertical edge handles (convert Y to width via aspect ratio)
+          case "s":
+            widthDelta = deltaY * aspectRatio;
+            break;
+          case "n":
+            widthDelta = -deltaY * aspectRatio;
+            break;
+        }
 
-  const onClick = (event: React.MouseEvent) => {
-    if (event.target === imageRef.current) {
-      if (!event.shiftKey) {
-        clearSelection();
-      }
-      setSelected(!isSelected);
-    }
-  };
+        const newWidth = clamp(startWidth + widthDelta, MIN_WIDTH, maxWidth);
+        const newHeight = newWidth / aspectRatio;
 
+        setDimensions((prev) => ({
+          ...prev,
+          width: newWidth,
+          height: newHeight,
+        }));
+      };
+
+      const onPointerUp = (upEvent: PointerEvent) => {
+        target.releasePointerCapture(upEvent.pointerId);
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+        setIsResizing(false);
+
+        // Get final dimensions from ref to avoid stale closure
+        setDimensions((current) => {
+          commitDimensions(current.width, current.height);
+          return current;
+        });
+      };
+
+      document.addEventListener("pointermove", onPointerMove);
+      document.addEventListener("pointerup", onPointerUp);
+    },
+    [editor, dimensions.width, dimensions.aspectRatio, commitDimensions]
+  );
+
+  // Lexical command handlers for click and keyboard
   useEffect(() => {
     return mergeRegister(
       editor.registerCommand(
+        CLICK_COMMAND,
+        (event: MouseEvent) => {
+          if (containerRef.current?.contains(event.target as HTMLElement)) {
+            const target = event.target as HTMLElement;
+            if (target.dataset.resizeHandle) return false;
+
+            if (event.shiftKey) {
+              setSelected(!isSelected);
+            } else {
+              clearSelection();
+              setSelected(true);
+            }
+            return true;
+          }
+          return false;
+        },
+        COMMAND_PRIORITY_LOW
+      ),
+      editor.registerCommand(
         KEY_DELETE_COMMAND,
-        (commandEvent: KeyboardEvent | null) => {
+        (e) => {
           if (isSelected) {
-            commandEvent?.preventDefault();
+            e?.preventDefault();
             editor.update(() => {
               const node = $getNodeByKey(nodeKey);
-              if ($isImageNode(node)) {
-                node.remove();
-              }
+              if ($isImageNode(node)) node.remove();
             });
             return true;
           }
@@ -129,14 +291,12 @@ function ResizableImage({
       ),
       editor.registerCommand(
         KEY_BACKSPACE_COMMAND,
-        (commandEvent: KeyboardEvent | null) => {
+        (e) => {
           if (isSelected) {
-            commandEvent?.preventDefault();
+            e?.preventDefault();
             editor.update(() => {
               const node = $getNodeByKey(nodeKey);
-              if ($isImageNode(node)) {
-                node.remove();
-              }
+              if ($isImageNode(node)) node.remove();
             });
             return true;
           }
@@ -145,41 +305,86 @@ function ResizableImage({
         COMMAND_PRIORITY_LOW
       )
     );
-  }, [editor, isSelected, nodeKey]);
+  }, [editor, isSelected, nodeKey, setSelected, clearSelection]);
+
+  const containerClass = [
+    "lockin-image-container",
+    isSelected && "is-selected",
+    isResizing && "is-resizing",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
-      ref={wrapperRef}
-      className={`lockin-note-image-shell${isSelected ? " is-selected" : ""}${
-        isResizing ? " is-resizing" : ""
-      }`}
-      onClick={onClick}
+      ref={containerRef}
+      className={containerClass}
+      style={{ width: dimensions.width }}
       role="figure"
-      aria-label={alt || "Image attachment"}
-      data-asset-id={assetId || undefined}
+      aria-label={alt || "Image"}
+      data-asset-id={assetId ?? undefined}
     >
       <img
         ref={imageRef}
         src={src}
         alt={alt}
-        className="lockin-note-image-node"
-        style={{
-          width: currentWidth ? `${currentWidth}px` : "100%",
-          maxWidth: "100%",
-          height: height ? `${height}px` : "auto",
-        }}
+        className="lockin-image"
+        draggable={false}
+        onLoad={handleImageLoad}
       />
-      {isSelected ? (
-        <button
-          type="button"
-          className="lockin-image-resize-handle"
-          aria-label="Resize image"
-          onMouseDown={handleResizeStart}
-        />
-      ) : null}
+
+      {/* Resize handles - only show when selected */}
+      {isSelected && (
+        <>
+          {/* Corner handles */}
+          <div
+            className="lockin-resize-handle corner nw"
+            data-resize-handle="nw"
+            onPointerDown={(e) => handleResizeStart(e, "nw")}
+          />
+          <div
+            className="lockin-resize-handle corner ne"
+            data-resize-handle="ne"
+            onPointerDown={(e) => handleResizeStart(e, "ne")}
+          />
+          <div
+            className="lockin-resize-handle corner sw"
+            data-resize-handle="sw"
+            onPointerDown={(e) => handleResizeStart(e, "sw")}
+          />
+          <div
+            className="lockin-resize-handle corner se"
+            data-resize-handle="se"
+            onPointerDown={(e) => handleResizeStart(e, "se")}
+          />
+          {/* Edge handles */}
+          <div
+            className="lockin-resize-handle edge n"
+            data-resize-handle="n"
+            onPointerDown={(e) => handleResizeStart(e, "n")}
+          />
+          <div
+            className="lockin-resize-handle edge s"
+            data-resize-handle="s"
+            onPointerDown={(e) => handleResizeStart(e, "s")}
+          />
+          <div
+            className="lockin-resize-handle edge e"
+            data-resize-handle="e"
+            onPointerDown={(e) => handleResizeStart(e, "e")}
+          />
+          <div
+            className="lockin-resize-handle edge w"
+            data-resize-handle="w"
+            onPointerDown={(e) => handleResizeStart(e, "w")}
+          />
+        </>
+      )}
     </div>
   );
 }
+
+// --- Lexical Node Class ---
 
 export class ImageNode extends DecoratorNode<JSX.Element> {
   __src: string;
@@ -256,7 +461,7 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
 
   createDOM(): HTMLElement {
     const span = document.createElement("span");
-    span.className = "lockin-note-image-wrapper";
+    span.className = "lockin-image-wrapper";
     return span;
   }
 
@@ -294,6 +499,8 @@ export function $createImageNode(params: {
   );
 }
 
-export function $isImageNode(node: LexicalNode | null | undefined): node is ImageNode {
+export function $isImageNode(
+  node: LexicalNode | null | undefined
+): node is ImageNode {
   return node instanceof ImageNode;
 }
