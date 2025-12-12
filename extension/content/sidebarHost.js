@@ -1,35 +1,18 @@
 /**
- * React sidebar host. Responsible for mounting/updating the UI bundle and
- * syncing body layout classes when the sidebar opens/closes.
+ * React sidebar host. Responsible for mounting/updating the UI bundle.
+ * Layout sync (body classes) is handled by the React component itself.
  */
 (function () {
   function createSidebarHost({ Logger, Storage }) {
-    const log = Logger || { debug: () => {}, warn: console.warn, error: console.error };
+    const log = Logger || {
+      debug: () => {},
+      warn: console.warn,
+      error: console.error,
+    };
     let sidebarInstance = null;
-    let layoutTransitionTimeout = null;
 
     function injectStyles() {
       log.debug("Styles verification: CSS should be loaded from manifest");
-    }
-
-    function syncBodySplitState(open) {
-      const body = document.body;
-      const html = document.documentElement;
-      if (!body || !html) return;
-
-      if (open) {
-        body.classList.add("lockin-sidebar-open");
-        html.classList.add("lockin-sidebar-transitioning");
-      } else {
-        body.classList.remove("lockin-sidebar-open");
-      }
-
-      if (layoutTransitionTimeout) {
-        clearTimeout(layoutTransitionTimeout);
-      }
-      layoutTransitionTimeout = setTimeout(() => {
-        html.classList.remove("lockin-sidebar-transitioning");
-      }, 320);
     }
 
     function buildStorageAdapter() {
@@ -55,7 +38,13 @@
       };
     }
 
-    function renderSidebar({ apiClient, adapter, pageContext, state, onToggle }) {
+    function renderSidebar({
+      apiClient,
+      adapter,
+      pageContext,
+      state,
+      onToggle,
+    }) {
       if (!window.LockInUI || !window.LockInUI.createLockInSidebar) {
         log.error("LockInUI.createLockInSidebar not available");
         return;
@@ -63,7 +52,6 @@
 
       const viewState = state || {};
       injectStyles();
-      syncBodySplitState(!!viewState.isSidebarOpen);
 
       const sidebarProps = {
         apiClient,
@@ -87,7 +75,6 @@
 
     function updatePropsFromState(state) {
       if (!sidebarInstance) return;
-      syncBodySplitState(!!state.isSidebarOpen);
       sidebarInstance.updateProps({
         isOpen: !!state.isSidebarOpen,
         currentMode: state.currentMode,
@@ -99,7 +86,6 @@
     return {
       renderSidebar,
       updatePropsFromState,
-      syncBodySplitState,
     };
   }
 

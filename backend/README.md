@@ -5,12 +5,14 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
 ## Quick Start
 
 1. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 2. **Set up environment:**
    Create a `.env` file:
+
    ```env
    OPENAI_API_KEY=your_openai_api_key_here
    SUPABASE_URL=your_supabase_url
@@ -21,6 +23,7 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
    ```
 
 3. **Run development server:**
+
    ```bash
    npm run dev
    ```
@@ -67,6 +70,7 @@ GET /health
 Returns the status of the API.
 
 **Response:**
+
 ```json
 {
   "status": "ok",
@@ -89,6 +93,7 @@ POST /api/lockin
 Process text with AI assistance (Explain, Simplify, Translate).
 
 **Request Body:**
+
 ```json
 {
   "selection": "The text to process",
@@ -102,6 +107,7 @@ Process text with AI assistance (Explain, Simplify, Translate).
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -156,6 +162,7 @@ POST /api/notes
 Create a new note with optional embedding for semantic search.
 
 **Request Body:**
+
 ```json
 {
   "title": "Note title",
@@ -169,6 +176,7 @@ Create a new note with optional embedding for semantic search.
 ```
 
 **Response:**
+
 ```json
 {
   "id": "uuid",
@@ -188,6 +196,7 @@ GET /api/notes?sourceUrl=&courseCode=&limit=
 Get notes filtered by source URL, course code, or all notes.
 
 **Query Parameters:**
+
 - `sourceUrl` (optional): Filter by page URL
 - `courseCode` (optional): Filter by course code
 - `limit` (optional): Max results (default: 50)
@@ -201,6 +210,7 @@ GET /api/notes/search?q=query&courseCode=&k=
 Search notes using semantic similarity (vector embeddings).
 
 **Query Parameters:**
+
 - `q` (required): Search query
 - `courseCode` (optional): Filter by course code
 - `k` (optional): Number of results (default: 10)
@@ -214,6 +224,7 @@ POST /api/notes/chat
 Answer questions using the user's notes as context (Retrieval-Augmented Generation).
 
 **Request Body:**
+
 ```json
 {
   "query": "What did I learn about databases?",
@@ -223,6 +234,7 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 ```
 
 **Response:**
+
 ```json
 {
   "answer": "AI-generated answer based on your notes",
@@ -238,24 +250,26 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 
 ## Environment Variables
 
-| Variable                  | Description                          | Default |
-| ------------------------- | ------------------------------------ | ------- |
-| `OPENAI_API_KEY`          | Your OpenAI API key (required)       | -       |
-| `SUPABASE_URL`            | Supabase project URL (required)      | -       |
+| Variable                    | Description                          | Default |
+| --------------------------- | ------------------------------------ | ------- |
+| `OPENAI_API_KEY`            | Your OpenAI API key (required)       | -       |
+| `SUPABASE_URL`              | Supabase project URL (required)      | -       |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (required) | -       |
-| `PORT`                    | Server port                          | 3000    |
-| `DAILY_REQUEST_LIMIT`     | Requests per user per day            | 100     |
-| `CHAT_LIST_LIMIT`         | Default chat list size               | 5       |
+| `PORT`                      | Server port                          | 3000    |
+| `DAILY_REQUEST_LIMIT`       | Requests per user per day            | 100     |
+| `CHAT_LIST_LIMIT`           | Default chat list size               | 5       |
 
 ## Database Schema
 
 ### Chats Table
+
 - `id` (UUID, primary key)
 - `user_id` (UUID, foreign key)
 - `created_at` (timestamp)
 - `updated_at` (timestamp)
 
 ### Messages Table
+
 - `id` (UUID, primary key)
 - `chat_id` (UUID, foreign key)
 - `role` (text: 'user' | 'assistant')
@@ -263,6 +277,7 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 - `created_at` (timestamp)
 
 ### Notes Table
+
 - `id` (UUID, primary key)
 - `user_id` (UUID, foreign key)
 - `title` (text)
@@ -276,8 +291,19 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 - `created_at` (timestamp)
 - `updated_at` (timestamp)
 
-**Required Supabase Function:**
-- `match_notes(query_embedding vector, match_count int, in_user_id uuid)` - Vector similarity search
+**Required Supabase Configuration:**
+
+1. **pgvector Extension**: Must be enabled in the `extensions` schema
+2. **Search Path**: Database roles must have `search_path = public, extensions`
+   ```sql
+   ALTER ROLE authenticator SET search_path = public, extensions;
+   ALTER ROLE anon SET search_path = public, extensions;
+   ALTER ROLE authenticated SET search_path = public, extensions;
+   ALTER ROLE service_role SET search_path = public, extensions;
+   ```
+3. **Function**: `match_notes(query_embedding vector, match_count int, in_user_id uuid)` - Vector similarity search
+
+See `migrations/004_vector_extension_schema.sql` for full setup.
 
 ## Security
 

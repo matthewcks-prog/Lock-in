@@ -26,31 +26,34 @@
 
 /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
 html {
-  /* Clamp keeps sidebar consistent on large/small screens and leaves ~65% to content */
+  /* Sidebar width: ideal 40vw, min 320px, max 600px */
   --lockin-sidebar-min: 320px;
-  --lockin-sidebar-max: 500px;
-  --lockin-sidebar-ideal: 35vw;
+  --lockin-sidebar-max: 600px;
+  --lockin-sidebar-ideal: 40vw;
   --lockin-sidebar-width: clamp(var(--lockin-sidebar-min), var(--lockin-sidebar-ideal), var(--lockin-sidebar-max));
+  /* Content width is the remaining space after sidebar (100vw - sidebar width) */
   --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
 }
 
-/* Default: page uses 100% width */
+/* Default: page uses 100% viewport width when sidebar is closed */
 body {
-  width: 100% !important;
-  max-width: 100% !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
   margin: 0 !important;
   padding: 0 !important;
   transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   overflow-x: hidden;
+  box-sizing: border-box;
 }
 
-/* When sidebar is expanded (desktop mode), reserve only the clamped sidebar width */
+/* When sidebar is expanded (desktop mode), page content takes remaining space */
 body.lockin-sidebar-open {
   width: var(--lockin-content-width) !important;
   max-width: var(--lockin-content-width) !important;
   overflow-x: hidden !important;
   margin: 0 !important;
   padding: 0 !important;
+  box-sizing: border-box;
 }
 
 /* Prevent horizontal scrollbar during transition */
@@ -82,10 +85,10 @@ body.lockin-sidebar-open .content {
 }
 
 @media (max-width: 1024px) {
-  /* On mobile/tablet, sidebar overlays content, so body always uses 100% */
+  /* On mobile/tablet, sidebar overlays content, so body always uses 100% viewport */
   body.lockin-sidebar-open {
-    width: 100% !important;
-    max-width: 100% !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
   }
 }
 
@@ -836,24 +839,88 @@ body.lockin-sidebar-open .content {
 }
 
 .lockin-notes-header {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
   border-bottom: 1px solid #e5e7eb;
   background: #ffffff;
 }
 
-.lockin-notes-header.lockin-notes-header-compact {
-  grid-template-columns: 1fr auto auto;
+.lockin-notes-header.lockin-notes-header-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
 }
 
 .lockin-notes-header-left {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
   min-width: 0;
+  flex-shrink: 0;
+}
+
+.lockin-notes-header-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.lockin-notes-header-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.lockin-notes-course-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.lockin-notes-label {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.lockin-notes-course-value {
+  font-weight: 700;
+  color: #111827;
+  font-size: 12px;
+}
+
+.lockin-notes-link-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #6b7280;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lockin-notes-link-href {
+  color: #2563eb;
+  text-decoration: none;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.lockin-notes-link-href:hover {
+  text-decoration: underline;
+}
+
+.lockin-notes-link-empty {
+  color: #9ca3af;
+  font-size: 11px;
 }
 
 .lockin-note-course-line {
@@ -906,21 +973,33 @@ body.lockin-sidebar-open .content {
   align-items: center;
   background: #f3f4f6;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 2px;
-  gap: 4px;
+  gap: 2px;
+}
+
+.lockin-notes-toggle.lockin-notes-toggle-sm {
+  border-radius: 6px;
+  padding: 1px;
 }
 
 .lockin-notes-toggle-btn {
   border: none;
   background: transparent;
-  padding: 8px 14px;
-  font-size: 13px;
+  padding: 6px 10px;
+  font-size: 12px;
   font-weight: 600;
   color: #6b7280;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.lockin-notes-toggle-sm .lockin-notes-toggle-btn {
+  padding: 4px 8px;
+  font-size: 11px;
+  border-radius: 5px;
 }
 
 .lockin-notes-toggle-btn:hover {
@@ -942,12 +1021,19 @@ body.lockin-sidebar-open .content {
   background: #111827;
   color: white;
   border: none;
-  border-radius: 8px;
-  padding: 9px 16px;
-  font-size: 13px;
-  font-weight: 700;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
+}
+
+.lockin-btn-primary.lockin-btn-sm {
+  padding: 5px 10px;
+  font-size: 11px;
+  border-radius: 5px;
 }
 
 .lockin-btn-primary:hover {
@@ -998,7 +1084,8 @@ body.lockin-sidebar-open .content {
 
 .lockin-note-shell-card {
   flex: 1;
-  min-height: 0;
+  min-height: 500px;
+  max-height: 700px;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
@@ -1082,11 +1169,14 @@ body.lockin-sidebar-open .content {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 8px 12px;
-  background: #f8fafc;
+  gap: 6px;
+  padding: 10px 16px;
+  background: #fafbfc;
   border-bottom: 1px solid #e5e7eb;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  flex-shrink: 0;
 }
 
 .lockin-note-toolbar-group {
@@ -1103,10 +1193,52 @@ body.lockin-sidebar-open .content {
   margin: 0 4px;
 }
 
+/* === TOOLTIP WRAPPER === */
+.lockin-tooltip-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.lockin-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  background: #1f2937;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  z-index: 100;
+}
+
+.lockin-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1f2937;
+}
+
+.lockin-tooltip-wrapper:hover .lockin-tooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* === TOOLBAR BUTTON === */
 .lockin-note-tool-btn {
-  min-width: 30px;
-  height: 30px;
-  padding: 0 10px;
+  position: relative;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
   border: 1px solid transparent;
   background: transparent;
   border-radius: 8px;
@@ -1115,6 +1247,10 @@ body.lockin-sidebar-open .content {
   color: #374151;
   cursor: pointer;
   transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
 }
 
 .lockin-note-tool-btn:hover {
@@ -1132,6 +1268,18 @@ body.lockin-sidebar-open .content {
 .lockin-note-tool-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Swatch indicator for color/highlight buttons */
+.lockin-tool-swatch {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .lockin-note-block-select {
@@ -1181,33 +1329,68 @@ body.lockin-sidebar-open .content {
   display: flex;
   flex-direction: column;
   background: white;
+  overflow: hidden;
 }
 
 .lockin-note-editor-scroll {
   position: relative;
   flex: 1;
-  min-height: 220px;
-  padding: 14px 16px 18px;
+  padding: 20px 24px 32px;
   overflow-y: auto;
+  overflow-x: hidden;
+  /* Enable smooth scroll for programmatic scrolls, but CaretScrollPlugin
+     controls behavior per-scroll for optimal UX */
+}
+
+/* Scroll-past-end: Allow scrolling so last line can reach the middle of viewport.
+   This is a standard UX pattern in editors (VS Code, Notion, etc.) */
+.lockin-note-editor-scroll::after {
+  content: "";
+  display: block;
+  height: 50vh;
+  pointer-events: none;
+}
+
+/* Custom scrollbar for editor */
+.lockin-note-editor-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lockin-note-editor-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lockin-note-editor-scroll::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+
+.lockin-note-editor-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }
 
 .lockin-note-editor-area {
-  min-height: 200px;
+  min-height: 100%;
   outline: none;
   border: none;
-  line-height: 1.6;
+  line-height: 1.7;
   font-size: 14px;
   color: #111827;
   font-family: inherit;
   direction: ltr;
   white-space: pre-wrap;
   word-wrap: break-word;
+  /* Improve text rendering and selection */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Ensure caret is visible and properly sized */
+  caret-color: #2563eb;
 }
 
 .lockin-note-placeholder {
   position: absolute;
-  top: 14px;
-  left: 18px;
+  top: 20px;
+  left: 24px;
   color: #9ca3af;
   pointer-events: none;
   font-size: 14px;

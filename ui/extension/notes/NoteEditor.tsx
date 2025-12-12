@@ -2,6 +2,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CodeNode, CodeHighlightNode, $createCodeNode } from "@lexical/code";
 import { LinkNode, TOGGLE_LINK_COMMAND } from "@lexical/link";
 import {
+  Undo2,
+  Redo2,
+  Paperclip,
+  Highlighter,
+  Palette,
+  Bold,
+  Italic,
+  Underline,
+  Code,
+  Link,
+  List,
+  ListOrdered,
+  Braces,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+} from "lucide-react";
+import {
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_UNORDERED_LIST_COMMAND,
   ListItemNode,
@@ -205,12 +223,31 @@ function NoteContentLoader({
 
 function NoteChangePlugin({
   onChange,
+  isHydrating,
 }: {
   onChange: (content: NoteContent) => void;
+  isHydrating: boolean;
 }) {
+  const isFirstChangeRef = useRef(true);
+
+  // Reset on mount (when editor remounts for a new note)
+  useEffect(() => {
+    isFirstChangeRef.current = true;
+  }, []);
+
   return (
     <OnChangePlugin
+      ignoreSelectionChange={true}
       onChange={(editorState: EditorState) => {
+        // Skip the initial change event that fires when the editor first loads
+        // and skip changes during hydration to prevent save loops
+        if (isFirstChangeRef.current) {
+          isFirstChangeRef.current = false;
+          return;
+        }
+        if (isHydrating) {
+          return;
+        }
         const plainText = editorState.read(() => $getRoot().getTextContent());
         onChange({
           version: "lexical_v1",
@@ -220,6 +257,162 @@ function NoteChangePlugin({
       }}
     />
   );
+}
+
+/**
+ * CaretScrollPlugin: Smart scrolling that keeps the caret within a "comfort band"
+ *
+ * UX principles:
+ * - Wide comfort band (15%-85%) so scrolling is rare during normal editing
+ * - When scrolling IS needed, scroll minimally (just bring caret slightly inside the band)
+ * - Use 'auto' for small/medium moves to avoid laggy feel; 'smooth' only for big jumps
+ * - Respects prefers-reduced-motion
+ * - Debounced with RAF to prevent jitter
+ */
+function CaretScrollPlugin({
+  topRatio = 0.15,
+  bottomRatio = 0.85,
+  scrollCushion = 24,
+  smoothThreshold = 150,
+}: {
+  /** Top boundary of comfort band (0-1, default 0.15 = 15% from top) */
+  topRatio?: number;
+  /** Bottom boundary of comfort band (0-1, default 0.85 = 85% from top) */
+  bottomRatio?: number;
+  /** Extra pixels to scroll past the band edge for breathing room */
+  scrollCushion?: number;
+  /** Scroll distance threshold above which to use smooth scrolling */
+  smoothThreshold?: number;
+}) {
+  const [editor] = useLexicalComposerContext();
+  const prefersReducedMotion = useRef(false);
+  const lastScrollTime = useRef(0);
+
+  // Check reduced motion preference
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    prefersReducedMotion.current = mediaQuery.matches;
+    const handler = (e: MediaQueryListEvent) => {
+      prefersReducedMotion.current = e.matches;
+    };
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, []);
+
+  useEffect(() => {
+    const scrollToCaret = () => {
+      const rootElement = editor.getRootElement();
+      if (!rootElement) return;
+
+      // Find the scroll container
+      const scrollContainer = rootElement.closest(
+        ".lockin-note-editor-scroll"
+      ) as HTMLElement | null;
+      if (!scrollContainer) return;
+
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+
+      const range = selection.getRangeAt(0);
+      if (!range.collapsed) return; // Only scroll for caret, not text selections
+
+      // Get caret position relative to viewport
+      const caretRect = range.getBoundingClientRect();
+      const containerRect = scrollContainer.getBoundingClientRect();
+
+      // Skip if caret rect is invalid (can happen during DOM updates)
+      if (caretRect.height === 0 && caretRect.width === 0) return;
+
+      // Calculate the comfort band boundaries (in viewport coordinates)
+      const containerHeight = containerRect.height;
+      const topBand = containerRect.top + containerHeight * topRatio;
+      const bottomBand = containerRect.top + containerHeight * bottomRatio;
+
+      const caretY = caretRect.top;
+      const caretBottom = caretRect.bottom;
+
+      // Check if caret is within the comfort band
+      if (caretY >= topBand && caretBottom <= bottomBand) {
+        return; // Caret is comfortable, no scroll needed
+      }
+
+      // Calculate minimal scroll to bring caret just inside the band
+      // We add a small cushion so user sees some context
+      let scrollDelta = 0;
+
+      if (caretY < topBand) {
+        // Caret is above the band - scroll up
+        // Scroll just enough to put caret at topBand + cushion
+        scrollDelta = caretY - topBand - scrollCushion;
+      } else if (caretBottom > bottomBand) {
+        // Caret is below the band - scroll down
+        // Scroll just enough to put caret bottom at bottomBand - cushion
+        scrollDelta = caretBottom - bottomBand + scrollCushion;
+      }
+
+      // Ignore tiny scroll amounts (prevents micro-jitter)
+      if (Math.abs(scrollDelta) < 4) return;
+
+      // Throttle scrolls slightly to prevent rapid-fire during fast typing
+      const now = Date.now();
+      if (now - lastScrollTime.current < 50) return;
+      lastScrollTime.current = now;
+
+      // Determine scroll behavior:
+      // - Always 'auto' if user prefers reduced motion
+      // - 'auto' for small moves (feels snappier)
+      // - 'smooth' only for larger jumps (feels intentional)
+      const useSmooth =
+        !prefersReducedMotion.current &&
+        Math.abs(scrollDelta) > smoothThreshold;
+
+      scrollContainer.scrollBy({
+        top: scrollDelta,
+        behavior: useSmooth ? "smooth" : "auto",
+      });
+    };
+
+    // Debounce with RAF to batch updates within a frame
+    let rafId: number | null = null;
+    const debouncedScroll = () => {
+      if (rafId !== null) return; // Already scheduled
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        scrollToCaret();
+      });
+    };
+
+    // Listen for selection changes (clicks, arrow keys, etc.)
+    const unregister = editor.registerCommand(
+      SELECTION_CHANGE_COMMAND,
+      () => {
+        debouncedScroll();
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    );
+
+    // Handle keyboard input - check scroll after keystroke is processed
+    const unregisterKey = editor.registerCommand(
+      KEY_DOWN_COMMAND,
+      () => {
+        // Use setTimeout to check after the DOM update from the keystroke
+        window.setTimeout(debouncedScroll, 0);
+        return false;
+      },
+      COMMAND_PRIORITY_LOW
+    );
+
+    return () => {
+      unregister();
+      unregisterKey();
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, [editor, topRatio, bottomRatio, scrollCushion, smoothThreshold]);
+
+  return null;
 }
 
 function ShortcutsPlugin({ onSaveNow }: { onSaveNow?: () => void }) {
@@ -402,30 +595,62 @@ function AssetCleanupPlugin({
   return null;
 }
 
+function Tooltip({
+  text,
+  children,
+}: {
+  text: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <span className="lockin-tooltip-wrapper">
+      {children}
+      <span className="lockin-tooltip" role="tooltip">
+        {text}
+      </span>
+    </span>
+  );
+}
+
 function ToolbarButton({
   label,
   onClick,
   active,
   disabled,
   children,
+  swatchColor,
 }: {
   label: string;
   onClick?: () => void;
   active?: boolean;
   disabled?: boolean;
   children?: React.ReactNode;
+  swatchColor?: string | null;
 }) {
   return (
-    <button
-      type="button"
-      className={`lockin-note-tool-btn${active ? " is-active" : ""}`}
-      aria-pressed={active}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {children || label}
-    </button>
+    <Tooltip text={label}>
+      <button
+        type="button"
+        className={`lockin-note-tool-btn${active ? " is-active" : ""}`}
+        aria-pressed={active}
+        aria-label={label}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        {children || label}
+        {swatchColor && (
+          <span
+            className="lockin-tool-swatch"
+            style={{
+              background:
+                swatchColor === "transparent"
+                  ? "linear-gradient(135deg, #fff 45%, #f00 50%, #fff 55%)"
+                  : swatchColor,
+            }}
+          />
+        )}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -494,6 +719,11 @@ function NoteToolbar({
   const [alignment, setAlignment] = useState<string>("left");
   const [showColor, setShowColor] = useState(false);
   const [showHighlight, setShowHighlight] = useState(false);
+  const [currentTextColor, setCurrentTextColor] = useState<string>(
+    TEXT_COLORS[0]
+  );
+  const [currentHighlight, setCurrentHighlight] =
+    useState<string>("transparent");
 
   const updateToolbar = useCallback(() => {
     editor.getEditorState().read(() => {
@@ -598,14 +828,14 @@ function NoteToolbar({
           active={selectionFormats.has("bold")}
           onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "bold")}
         >
-          B
+          <Bold size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Italic"
           active={selectionFormats.has("italic")}
           onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "italic")}
         >
-          I
+          <Italic size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Underline"
@@ -614,17 +844,17 @@ function NoteToolbar({
             editor.dispatchCommand(FORMAT_TEXT_COMMAND, "underline")
           }
         >
-          U
+          <Underline size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Inline code"
           active={selectionFormats.has("code")}
           onClick={() => editor.dispatchCommand(FORMAT_TEXT_COMMAND, "code")}
         >
-          {"</>"}
+          <Code size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton label="Link" onClick={toggleLink}>
-          Link
+          <Link size={16} strokeWidth={2.5} />
         </ToolbarButton>
       </div>
 
@@ -634,8 +864,9 @@ function NoteToolbar({
         <ToolbarButton
           label="Text color"
           onClick={() => setShowColor((v) => !v)}
+          swatchColor={currentTextColor}
         >
-          Color
+          <Palette size={16} strokeWidth={2.5} />
         </ToolbarButton>
         {showColor ? (
           <SwatchMenu
@@ -643,6 +874,7 @@ function NoteToolbar({
             swatches={TEXT_COLORS}
             onSelect={(color) => {
               applyStyle({ color });
+              setCurrentTextColor(color);
               setShowColor(false);
             }}
           />
@@ -650,8 +882,9 @@ function NoteToolbar({
         <ToolbarButton
           label="Highlight"
           onClick={() => setShowHighlight((v) => !v)}
+          swatchColor={currentHighlight}
         >
-          Highlight
+          <Highlighter size={16} strokeWidth={2.5} />
         </ToolbarButton>
         {showHighlight ? (
           <SwatchMenu
@@ -663,6 +896,7 @@ function NoteToolbar({
               } else {
                 applyStyle({ "background-color": color });
               }
+              setCurrentHighlight(color);
               setShowHighlight(false);
             }}
           />
@@ -678,7 +912,7 @@ function NoteToolbar({
             editor.dispatchCommand(INSERT_UNORDERED_LIST_COMMAND, undefined)
           }
         >
-          Bul
+          <List size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Numbered list"
@@ -686,7 +920,7 @@ function NoteToolbar({
             editor.dispatchCommand(INSERT_ORDERED_LIST_COMMAND, undefined)
           }
         >
-          1.
+          <ListOrdered size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Code block"
@@ -699,7 +933,7 @@ function NoteToolbar({
             });
           }}
         >
-          {"{}"}
+          <Braces size={16} strokeWidth={2.5} />
         </ToolbarButton>
       </div>
 
@@ -711,7 +945,7 @@ function NoteToolbar({
           active={alignment === "left" || alignment === "start"}
           onClick={() => editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "left")}
         >
-          L
+          <AlignLeft size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Align center"
@@ -720,7 +954,7 @@ function NoteToolbar({
             editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "center")
           }
         >
-          C
+          <AlignCenter size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Align right"
@@ -729,7 +963,7 @@ function NoteToolbar({
             editor.dispatchCommand(FORMAT_ELEMENT_COMMAND, "right")
           }
         >
-          R
+          <AlignRight size={16} strokeWidth={2.5} />
         </ToolbarButton>
       </div>
 
@@ -741,7 +975,7 @@ function NoteToolbar({
           onClick={onOpenFilePicker}
           disabled={disableAttachment}
         >
-          Clip
+          <Paperclip size={16} strokeWidth={2.5} />
         </ToolbarButton>
         {isUploading ? (
           <span className="lockin-inline-spinner" aria-label="Uploading" />
@@ -755,13 +989,13 @@ function NoteToolbar({
           label="Undo"
           onClick={() => editor.dispatchCommand(UNDO_COMMAND, undefined)}
         >
-          Undo
+          <Undo2 size={16} strokeWidth={2.5} />
         </ToolbarButton>
         <ToolbarButton
           label="Redo"
           onClick={() => editor.dispatchCommand(REDO_COMMAND, undefined)}
         >
-          Redo
+          <Redo2 size={16} strokeWidth={2.5} />
         </ToolbarButton>
       </div>
     </div>
@@ -936,8 +1170,12 @@ export function NoteEditorShell({
         <ReactLinkPlugin />
         <AutoFocusPlugin />
         <NoteContentLoader note={note} onHydrationChange={setIsHydrating} />
-        <NoteChangePlugin onChange={onContentChange} />
+        <NoteChangePlugin
+          onChange={onContentChange}
+          isHydrating={isHydrating}
+        />
         <ShortcutsPlugin onSaveNow={onSaveNow} />
+        <CaretScrollPlugin />
         <UploadPlugin
           onUploadFile={onUploadFile}
           onEditorReady={setComposerEditor}

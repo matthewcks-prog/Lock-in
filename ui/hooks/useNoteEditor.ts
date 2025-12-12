@@ -218,13 +218,14 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     if (!targetId || !service) {
       loadingNoteIdRef.current = null;
       lastLoadedNoteIdRef.current = null;
-      setNote(
-        createDraftNote({
-          courseCode: defaultCourseCodeRef.current,
-          sourceUrl: defaultSourceUrlRef.current,
-          sourceSelection: sourceSelectionRef.current,
-        })
-      );
+      const draft = createDraftNote({
+        courseCode: defaultCourseCodeRef.current,
+        sourceUrl: defaultSourceUrlRef.current,
+        sourceSelection: sourceSelectionRef.current,
+      });
+      setNote(draft);
+      // Set fingerprint for the initial draft to prevent unnecessary save on first change
+      lastSavedFingerprintRef.current = createContentFingerprint(draft.title, draft.content);
       setStatus("idle");
       setIsLoading(false);
       return;
