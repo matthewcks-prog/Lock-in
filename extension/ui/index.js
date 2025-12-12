@@ -7454,6 +7454,40 @@ var __async = (__this, __arguments, generator) => {
   }
   const SAVE_DEBOUNCE_MS = 1500;
   const SAVED_RESET_DELAY_MS = 1200;
+  const MAX_SAVE_RETRIES = 3;
+  const OFFLINE_QUEUE_KEY = "lockin_offline_notes_queue";
+  function loadOfflineQueue() {
+    try {
+      const stored = localStorage.getItem(OFFLINE_QUEUE_KEY);
+      if (!stored) return [];
+      return JSON.parse(stored);
+    } catch (e2) {
+      return [];
+    }
+  }
+  function saveOfflineQueue(queue) {
+    try {
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    } catch (e2) {
+      console.error("[NoteEditor] Failed to save offline queue");
+    }
+  }
+  function addToOfflineQueue(save) {
+    const queue = loadOfflineQueue();
+    const filtered = queue.filter(
+      (s2) => s2.noteId !== save.noteId || s2.noteId === null && save.noteId === null && s2.timestamp !== save.timestamp
+    );
+    filtered.push(save);
+    const trimmed = filtered.slice(-50);
+    saveOfflineQueue(trimmed);
+  }
+  function removeFromOfflineQueue(noteId, timestamp) {
+    const queue = loadOfflineQueue();
+    const filtered = queue.filter(
+      (s2) => !(s2.noteId === noteId && s2.timestamp === timestamp)
+    );
+    saveOfflineQueue(filtered);
+  }
   function createDraftNote(opts) {
     var _a, _b, _c, _d;
     return {
@@ -7537,13 +7571,13 @@ var __async = (__this, __arguments, generator) => {
       if (!targetId || !service) {
         loadingNoteIdRef.current = null;
         lastLoadedNoteIdRef.current = null;
-        setNote(
-          createDraftNote({
-            courseCode: defaultCourseCodeRef.current,
-            sourceUrl: defaultSourceUrlRef.current,
-            sourceSelection: sourceSelectionRef.current
-          })
-        );
+        const draft = createDraftNote({
+          courseCode: defaultCourseCodeRef.current,
+          sourceUrl: defaultSourceUrlRef.current,
+          sourceSelection: sourceSelectionRef.current
+        });
+        setNote(draft);
+        lastSavedFingerprintRef.current = createContentFingerprint(draft.title, draft.content);
         setStatus("idle");
         setIsLoading(false);
         return;
@@ -7580,8 +7614,9 @@ var __async = (__this, __arguments, generator) => {
     }, [activeNoteId]);
     const noteRef = reactExports.useRef(note);
     noteRef.current = note;
+    const [pendingSaveCount, setPendingSaveCount] = reactExports.useState(() => loadOfflineQueue().length);
     const persist = reactExports.useCallback(() => __async(null, null, function* () {
-      var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j, _k, _l;
+      var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j, _k, _l, _m, _n2, _o, _p, _q, _r2;
       const currentNote = noteRef.current;
       if (!notesService || !currentNote) {
         setError("Notes service unavailable");
@@ -7608,15 +7643,27 @@ var __async = (__this, __arguments, generator) => {
       abortControllerRef.current = controller;
       setStatus("saving");
       setError(null);
+      const pendingSave = {
+        noteId: currentNote.id,
+        title: currentNote.title || "Untitled note",
+        content: currentNote.content,
+        courseCode: (_b = (_a = currentNote.courseCode) != null ? _a : defaultCourseCode) != null ? _b : null,
+        sourceUrl: (_d = (_c = currentNote.sourceUrl) != null ? _c : defaultSourceUrl) != null ? _d : null,
+        sourceSelection: (_f = (_e2 = currentNote.sourceSelection) != null ? _e2 : sourceSelection) != null ? _f : null,
+        noteType: currentNote.noteType,
+        tags: currentNote.tags,
+        timestamp: Date.now(),
+        retryCount: 0
+      };
       try {
         let saved;
         if (currentNote.id) {
           const payload = {
             title: currentNote.title,
             content: currentNote.content,
-            courseCode: (_b = (_a = currentNote.courseCode) != null ? _a : defaultCourseCode) != null ? _b : null,
-            sourceUrl: (_d = (_c = currentNote.sourceUrl) != null ? _c : defaultSourceUrl) != null ? _d : null,
-            sourceSelection: (_f = (_e2 = currentNote.sourceSelection) != null ? _e2 : sourceSelection) != null ? _f : null,
+            courseCode: (_h = (_g = currentNote.courseCode) != null ? _g : defaultCourseCode) != null ? _h : null,
+            sourceUrl: (_j = (_i2 = currentNote.sourceUrl) != null ? _i2 : defaultSourceUrl) != null ? _j : null,
+            sourceSelection: (_l = (_k = currentNote.sourceSelection) != null ? _k : sourceSelection) != null ? _l : null,
             noteType: currentNote.noteType,
             tags: currentNote.tags
           };
@@ -7625,9 +7672,9 @@ var __async = (__this, __arguments, generator) => {
           const payload = {
             title: currentNote.title || "Untitled note",
             content: currentNote.content,
-            courseCode: (_h = (_g = currentNote.courseCode) != null ? _g : defaultCourseCode) != null ? _h : null,
-            sourceUrl: (_j = (_i2 = currentNote.sourceUrl) != null ? _i2 : defaultSourceUrl) != null ? _j : null,
-            sourceSelection: (_l = (_k = currentNote.sourceSelection) != null ? _k : sourceSelection) != null ? _l : null,
+            courseCode: (_n2 = (_m = currentNote.courseCode) != null ? _m : defaultCourseCode) != null ? _n2 : null,
+            sourceUrl: (_p = (_o = currentNote.sourceUrl) != null ? _o : defaultSourceUrl) != null ? _p : null,
+            sourceSelection: (_r2 = (_q = currentNote.sourceSelection) != null ? _q : sourceSelection) != null ? _r2 : null,
             noteType: currentNote.noteType,
             tags: currentNote.tags
           };
@@ -7647,8 +7694,17 @@ var __async = (__this, __arguments, generator) => {
         savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
       } catch (err) {
         if (controller.signal.aborted) return;
-        setError((err == null ? void 0 : err.message) || "Failed to save note");
-        setStatus("error");
+        const isNetworkError = (err == null ? void 0 : err.code) === "NETWORK_ERROR" || !navigator.onLine;
+        const isRetryable = isNetworkError || (err == null ? void 0 : err.code) === "RATE_LIMIT" || (err == null ? void 0 : err.status) === 429 || (err == null ? void 0 : err.status) >= 500;
+        if (isRetryable && pendingSave.retryCount < MAX_SAVE_RETRIES) {
+          addToOfflineQueue(pendingSave);
+          setPendingSaveCount(loadOfflineQueue().length);
+          setError(isNetworkError ? "Saved offline - will sync when connected" : "Save queued for retry");
+          setStatus("error");
+        } else {
+          setError((err == null ? void 0 : err.message) || "Failed to save note");
+          setStatus("error");
+        }
       }
     }), [defaultCourseCode, defaultSourceUrl, notesService, sourceSelection]);
     const scheduleSave = reactExports.useCallback(() => {
@@ -7710,17 +7766,71 @@ var __async = (__this, __arguments, generator) => {
       setStatus("idle");
       setError(null);
     }, [defaultCourseCode, defaultSourceUrl, sourceSelection]);
+    const syncOfflineQueue = reactExports.useCallback(() => __async(null, null, function* () {
+      if (!notesService) return;
+      const queue = loadOfflineQueue();
+      if (queue.length === 0) return;
+      console.log(`[NoteEditor] Syncing ${queue.length} offline saves`);
+      for (const pendingSave of queue) {
+        try {
+          if (pendingSave.noteId) {
+            const payload = {
+              title: pendingSave.title,
+              content: pendingSave.content,
+              courseCode: pendingSave.courseCode,
+              sourceUrl: pendingSave.sourceUrl,
+              sourceSelection: pendingSave.sourceSelection,
+              noteType: pendingSave.noteType,
+              tags: pendingSave.tags
+            };
+            yield notesService.updateNote(pendingSave.noteId, payload);
+          } else {
+            const payload = {
+              title: pendingSave.title,
+              content: pendingSave.content,
+              courseCode: pendingSave.courseCode,
+              sourceUrl: pendingSave.sourceUrl,
+              sourceSelection: pendingSave.sourceSelection,
+              noteType: pendingSave.noteType,
+              tags: pendingSave.tags
+            };
+            yield notesService.createNote(payload);
+          }
+          removeFromOfflineQueue(pendingSave.noteId, pendingSave.timestamp);
+          console.log(`[NoteEditor] Synced offline save for note ${pendingSave.noteId || "new"}`);
+        } catch (err) {
+          console.error(`[NoteEditor] Failed to sync offline save:`, err);
+          const queue2 = loadOfflineQueue();
+          const updated = queue2.map(
+            (s2) => s2.noteId === pendingSave.noteId && s2.timestamp === pendingSave.timestamp ? __spreadProps(__spreadValues({}, s2), { retryCount: s2.retryCount + 1 }) : s2
+          );
+          const filtered = updated.filter((s2) => s2.retryCount < MAX_SAVE_RETRIES);
+          saveOfflineQueue(filtered);
+        }
+      }
+      setPendingSaveCount(loadOfflineQueue().length);
+    }), [notesService]);
+    reactExports.useEffect(() => {
+      const handleOnline = () => {
+        console.log("[NoteEditor] Back online - syncing offline queue");
+        void syncOfflineQueue();
+      };
+      window.addEventListener("online", handleOnline);
+      return () => window.removeEventListener("online", handleOnline);
+    }, [syncOfflineQueue]);
     return {
       note,
       status,
       error,
       isLoading,
       activeNoteId,
+      pendingSaveCount,
       setActiveNoteId,
       handleContentChange,
       handleTitleChange,
       saveNow,
-      resetToNew
+      resetToNew,
+      syncOfflineQueue
     };
   }
   var prism = { exports: {} };
@@ -15264,6 +15374,208 @@ var __async = (__this, __arguments, generator) => {
       }));
     }
   }
+  const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  const toCamelCase = (string) => string.replace(
+    /^([A-Z])|[\s-_]+(\w)/g,
+    (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
+  );
+  const toPascalCase = (string) => {
+    const camelCase = toCamelCase(string);
+    return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+  };
+  const mergeClasses = (...classes) => classes.filter((className, index, array) => {
+    return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index;
+  }).join(" ").trim();
+  const hasA11yProp = (props) => {
+    for (const prop in props) {
+      if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
+        return true;
+      }
+    }
+  };
+  var defaultAttributes = {
+    xmlns: "http://www.w3.org/2000/svg",
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  };
+  const Icon = reactExports.forwardRef(
+    (_a, ref) => {
+      var _b = _a, {
+        color = "currentColor",
+        size = 24,
+        strokeWidth = 2,
+        absoluteStrokeWidth,
+        className = "",
+        children,
+        iconNode
+      } = _b, rest = __objRest(_b, [
+        "color",
+        "size",
+        "strokeWidth",
+        "absoluteStrokeWidth",
+        "className",
+        "children",
+        "iconNode"
+      ]);
+      return reactExports.createElement(
+        "svg",
+        __spreadValues(__spreadValues(__spreadProps(__spreadValues({
+          ref
+        }, defaultAttributes), {
+          width: size,
+          height: size,
+          stroke: color,
+          strokeWidth: absoluteStrokeWidth ? Number(strokeWidth) * 24 / Number(size) : strokeWidth,
+          className: mergeClasses("lucide", className)
+        }), !children && !hasA11yProp(rest) && { "aria-hidden": "true" }), rest),
+        [
+          ...iconNode.map(([tag, attrs]) => reactExports.createElement(tag, attrs)),
+          ...Array.isArray(children) ? children : [children]
+        ]
+      );
+    }
+  );
+  const createLucideIcon = (iconName, iconNode) => {
+    const Component = reactExports.forwardRef(
+      (_a, ref) => {
+        var _b = _a, { className } = _b, props = __objRest(_b, ["className"]);
+        return reactExports.createElement(Icon, __spreadValues({
+          ref,
+          iconNode,
+          className: mergeClasses(
+            `lucide-${toKebabCase(toPascalCase(iconName))}`,
+            `lucide-${iconName}`,
+            className
+          )
+        }, props));
+      }
+    );
+    Component.displayName = toPascalCase(iconName);
+    return Component;
+  };
+  const __iconNode$f = [
+    [
+      "path",
+      { d: "M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8", key: "mg9rjx" }
+    ]
+  ];
+  const Bold = createLucideIcon("bold", __iconNode$f);
+  const __iconNode$e = [
+    [
+      "path",
+      { d: "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1", key: "ezmyqa" }
+    ],
+    [
+      "path",
+      {
+        d: "M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1",
+        key: "e1hn23"
+      }
+    ]
+  ];
+  const Braces = createLucideIcon("braces", __iconNode$e);
+  const __iconNode$d = [
+    ["path", { d: "m16 18 6-6-6-6", key: "eg8j8" }],
+    ["path", { d: "m8 6-6 6 6 6", key: "ppft3o" }]
+  ];
+  const Code = createLucideIcon("code", __iconNode$d);
+  const __iconNode$c = [
+    ["path", { d: "m9 11-6 6v3h9l3-3", key: "1a3l36" }],
+    ["path", { d: "m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4", key: "14a9rk" }]
+  ];
+  const Highlighter = createLucideIcon("highlighter", __iconNode$c);
+  const __iconNode$b = [
+    ["line", { x1: "19", x2: "10", y1: "4", y2: "4", key: "15jd3p" }],
+    ["line", { x1: "14", x2: "5", y1: "20", y2: "20", key: "bu0au3" }],
+    ["line", { x1: "15", x2: "9", y1: "4", y2: "20", key: "uljnxc" }]
+  ];
+  const Italic = createLucideIcon("italic", __iconNode$b);
+  const __iconNode$a = [
+    ["path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71", key: "1cjeqo" }],
+    ["path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71", key: "19qd67" }]
+  ];
+  const Link = createLucideIcon("link", __iconNode$a);
+  const __iconNode$9 = [
+    ["path", { d: "M11 5h10", key: "1cz7ny" }],
+    ["path", { d: "M11 12h10", key: "1438ji" }],
+    ["path", { d: "M11 19h10", key: "11t30w" }],
+    ["path", { d: "M4 4h1v5", key: "10yrso" }],
+    ["path", { d: "M4 9h2", key: "r1h2o0" }],
+    ["path", { d: "M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02", key: "xtkcd5" }]
+  ];
+  const ListOrdered = createLucideIcon("list-ordered", __iconNode$9);
+  const __iconNode$8 = [
+    ["path", { d: "M3 5h.01", key: "18ugdj" }],
+    ["path", { d: "M3 12h.01", key: "nlz23k" }],
+    ["path", { d: "M3 19h.01", key: "noohij" }],
+    ["path", { d: "M8 5h13", key: "1pao27" }],
+    ["path", { d: "M8 12h13", key: "1za7za" }],
+    ["path", { d: "M8 19h13", key: "m83p4d" }]
+  ];
+  const List = createLucideIcon("list", __iconNode$8);
+  const __iconNode$7 = [
+    [
+      "path",
+      {
+        d: "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z",
+        key: "e79jfc"
+      }
+    ],
+    ["circle", { cx: "13.5", cy: "6.5", r: ".5", fill: "currentColor", key: "1okk4w" }],
+    ["circle", { cx: "17.5", cy: "10.5", r: ".5", fill: "currentColor", key: "f64h9f" }],
+    ["circle", { cx: "6.5", cy: "12.5", r: ".5", fill: "currentColor", key: "qy21gx" }],
+    ["circle", { cx: "8.5", cy: "7.5", r: ".5", fill: "currentColor", key: "fotxhn" }]
+  ];
+  const Palette = createLucideIcon("palette", __iconNode$7);
+  const __iconNode$6 = [
+    [
+      "path",
+      {
+        d: "m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551",
+        key: "1miecu"
+      }
+    ]
+  ];
+  const Paperclip = createLucideIcon("paperclip", __iconNode$6);
+  const __iconNode$5 = [
+    ["path", { d: "m15 14 5-5-5-5", key: "12vg1m" }],
+    ["path", { d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13", key: "6uklza" }]
+  ];
+  const Redo2 = createLucideIcon("redo-2", __iconNode$5);
+  const __iconNode$4 = [
+    ["path", { d: "M21 5H3", key: "1fi0y6" }],
+    ["path", { d: "M17 12H7", key: "16if0g" }],
+    ["path", { d: "M19 19H5", key: "vjpgq2" }]
+  ];
+  const TextAlignCenter = createLucideIcon("text-align-center", __iconNode$4);
+  const __iconNode$3 = [
+    ["path", { d: "M21 5H3", key: "1fi0y6" }],
+    ["path", { d: "M21 12H9", key: "dn1m92" }],
+    ["path", { d: "M21 19H7", key: "4cu937" }]
+  ];
+  const TextAlignEnd = createLucideIcon("text-align-end", __iconNode$3);
+  const __iconNode$2 = [
+    ["path", { d: "M21 5H3", key: "1fi0y6" }],
+    ["path", { d: "M15 12H3", key: "6jk70r" }],
+    ["path", { d: "M17 19H3", key: "z6ezky" }]
+  ];
+  const TextAlignStart = createLucideIcon("text-align-start", __iconNode$2);
+  const __iconNode$1 = [
+    ["path", { d: "M6 4v6a6 6 0 0 0 12 0V4", key: "9kb039" }],
+    ["line", { x1: "4", x2: "20", y1: "20", y2: "20", key: "nun2al" }]
+  ];
+  const Underline = createLucideIcon("underline", __iconNode$1);
+  const __iconNode = [
+    ["path", { d: "M9 14 4 9l5-5", key: "102s5s" }],
+    ["path", { d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11", key: "f3b9sd" }]
+  ];
+  const Undo2 = createLucideIcon("undo-2", __iconNode);
   function p$4(e2) {
     return e2 && e2.__esModule && Object.prototype.hasOwnProperty.call(e2, "default") ? e2.default : e2;
   }
@@ -16517,8 +16829,8 @@ var __async = (__this, __arguments, generator) => {
     throw Error(`Minified Lexical error #${t2}; visit https://lexical.dev/docs/error?${e2} for the full message or use the non-minified dev environment for full errors and additional helpful warnings.`);
   }));
   const m$1 = "undefined" != typeof window && void 0 !== window.document && void 0 !== window.document.createElement ? reactExports.useLayoutEffect : reactExports.useEffect;
-  function f$1(_a, D2) {
-    var _b = _a, { editor: e2, ariaActiveDescendant: t2, ariaAutoComplete: i2, ariaControls: a2, ariaDescribedBy: d2, ariaExpanded: c2, ariaLabel: s2, ariaLabelledBy: u2, ariaMultiline: f2, ariaOwns: b2, ariaRequired: p2, autoCapitalize: x2, className: E2, id: v2, role: w2 = "textbox", spellCheck: y2 = true, style: C2, tabIndex: h2, "data-testid": L2 } = _b, g2 = __objRest(_b, ["editor", "ariaActiveDescendant", "ariaAutoComplete", "ariaControls", "ariaDescribedBy", "ariaExpanded", "ariaLabel", "ariaLabelledBy", "ariaMultiline", "ariaOwns", "ariaRequired", "autoCapitalize", "className", "id", "role", "spellCheck", "style", "tabIndex", "data-testid"]);
+  function f$1(_c, D2) {
+    var _d = _c, { editor: e2, ariaActiveDescendant: t2, ariaAutoComplete: i2, ariaControls: a2, ariaDescribedBy: d2, ariaExpanded: c2, ariaLabel: s2, ariaLabelledBy: u2, ariaMultiline: f2, ariaOwns: b2, ariaRequired: p2, autoCapitalize: x2, className: E2, id: v2, role: w2 = "textbox", spellCheck: y2 = true, style: C2, tabIndex: h2, "data-testid": L2 } = _d, g2 = __objRest(_d, ["editor", "ariaActiveDescendant", "ariaAutoComplete", "ariaControls", "ariaDescribedBy", "ariaExpanded", "ariaLabel", "ariaLabelledBy", "ariaMultiline", "ariaOwns", "ariaRequired", "autoCapitalize", "className", "id", "role", "spellCheck", "style", "tabIndex", "data-testid"]);
     const [R2, k2] = reactExports.useState(e2.isEditable()), q2 = reactExports.useCallback(((t3) => {
       t3 && t3.ownerDocument && t3.ownerDocument.defaultView ? e2.setRootElement(t3) : e2.setRootElement(null);
     }), [e2]), z2 = reactExports.useMemo((() => /* @__PURE__ */ (function(...e3) {
@@ -17295,12 +17607,25 @@ var __async = (__this, __arguments, generator) => {
     return null;
   }
   function NoteChangePlugin({
-    onChange
+    onChange,
+    isHydrating
   }) {
+    const isFirstChangeRef = reactExports.useRef(true);
+    reactExports.useEffect(() => {
+      isFirstChangeRef.current = true;
+    }, []);
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       i,
       {
+        ignoreSelectionChange: true,
         onChange: (editorState) => {
+          if (isFirstChangeRef.current) {
+            isFirstChangeRef.current = false;
+            return;
+          }
+          if (isHydrating) {
+            return;
+          }
           const plainText = editorState.read(() => we().getTextContent());
           onChange({
             version: "lexical_v1",
@@ -17310,6 +17635,97 @@ var __async = (__this, __arguments, generator) => {
         }
       }
     );
+  }
+  function CaretScrollPlugin({
+    topRatio = 0.15,
+    bottomRatio = 0.85,
+    scrollCushion = 24,
+    smoothThreshold = 150
+  }) {
+    const [editor] = u$6();
+    const prefersReducedMotion = reactExports.useRef(false);
+    const lastScrollTime = reactExports.useRef(0);
+    reactExports.useEffect(() => {
+      const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+      prefersReducedMotion.current = mediaQuery.matches;
+      const handler = (e2) => {
+        prefersReducedMotion.current = e2.matches;
+      };
+      mediaQuery.addEventListener("change", handler);
+      return () => mediaQuery.removeEventListener("change", handler);
+    }, []);
+    reactExports.useEffect(() => {
+      const scrollToCaret = () => {
+        const rootElement = editor.getRootElement();
+        if (!rootElement) return;
+        const scrollContainer = rootElement.closest(
+          ".lockin-note-editor-scroll"
+        );
+        if (!scrollContainer) return;
+        const selection = window.getSelection();
+        if (!selection || selection.rangeCount === 0) return;
+        const range = selection.getRangeAt(0);
+        if (!range.collapsed) return;
+        const caretRect = range.getBoundingClientRect();
+        const containerRect = scrollContainer.getBoundingClientRect();
+        if (caretRect.height === 0 && caretRect.width === 0) return;
+        const containerHeight = containerRect.height;
+        const topBand = containerRect.top + containerHeight * topRatio;
+        const bottomBand = containerRect.top + containerHeight * bottomRatio;
+        const caretY = caretRect.top;
+        const caretBottom = caretRect.bottom;
+        if (caretY >= topBand && caretBottom <= bottomBand) {
+          return;
+        }
+        let scrollDelta = 0;
+        if (caretY < topBand) {
+          scrollDelta = caretY - topBand - scrollCushion;
+        } else if (caretBottom > bottomBand) {
+          scrollDelta = caretBottom - bottomBand + scrollCushion;
+        }
+        if (Math.abs(scrollDelta) < 4) return;
+        const now = Date.now();
+        if (now - lastScrollTime.current < 50) return;
+        lastScrollTime.current = now;
+        const useSmooth = !prefersReducedMotion.current && Math.abs(scrollDelta) > smoothThreshold;
+        scrollContainer.scrollBy({
+          top: scrollDelta,
+          behavior: useSmooth ? "smooth" : "auto"
+        });
+      };
+      let rafId = null;
+      const debouncedScroll = () => {
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          scrollToCaret();
+        });
+      };
+      const unregister = editor.registerCommand(
+        e,
+        () => {
+          debouncedScroll();
+          return false;
+        },
+        Fs
+      );
+      const unregisterKey = editor.registerCommand(
+        _$3,
+        () => {
+          window.setTimeout(debouncedScroll, 0);
+          return false;
+        },
+        Fs
+      );
+      return () => {
+        unregister();
+        unregisterKey();
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+      };
+    }, [editor, topRatio, bottomRatio, scrollCushion, smoothThreshold]);
+    return null;
   }
   function ShortcutsPlugin({ onSaveNow }) {
     const [editor] = u$6();
@@ -17455,14 +17871,24 @@ var __async = (__this, __arguments, generator) => {
     }, [editor, isHydrating, onDeleteAsset]);
     return null;
   }
+  function Tooltip({
+    text,
+    children
+  }) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "lockin-tooltip-wrapper", children: [
+      children,
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-tooltip", role: "tooltip", children: text })
+    ] });
+  }
   function ToolbarButton({
     label,
     onClick,
     active,
     disabled,
-    children
+    children,
+    swatchColor
   }) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(Tooltip, { text: label, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "button",
       {
         type: "button",
@@ -17471,9 +17897,20 @@ var __async = (__this, __arguments, generator) => {
         "aria-label": label,
         disabled,
         onClick,
-        children: children || label
+        children: [
+          children || label,
+          swatchColor && /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "lockin-tool-swatch",
+              style: {
+                background: swatchColor === "transparent" ? "linear-gradient(135deg, #fff 45%, #f00 50%, #fff 55%)" : swatchColor
+              }
+            }
+          )
+        ]
       }
-    );
+    ) });
   }
   function BlockTypeSelect({
     value,
@@ -17520,6 +17957,10 @@ var __async = (__this, __arguments, generator) => {
     const [alignment, setAlignment] = reactExports.useState("left");
     const [showColor, setShowColor] = reactExports.useState(false);
     const [showHighlight, setShowHighlight] = reactExports.useState(false);
+    const [currentTextColor, setCurrentTextColor] = reactExports.useState(
+      TEXT_COLORS[0]
+    );
+    const [currentHighlight, setCurrentHighlight] = reactExports.useState("transparent");
     const updateToolbar = reactExports.useCallback(() => {
       editor.getEditorState().read(() => {
         const selection = Oi();
@@ -17607,7 +18048,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Bold",
             active: selectionFormats.has("bold"),
             onClick: () => editor.dispatchCommand(d$3, "bold"),
-            children: "B"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Bold, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17616,7 +18057,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Italic",
             active: selectionFormats.has("italic"),
             onClick: () => editor.dispatchCommand(d$3, "italic"),
-            children: "I"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Italic, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17625,7 +18066,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Underline",
             active: selectionFormats.has("underline"),
             onClick: () => editor.dispatchCommand(d$3, "underline"),
-            children: "U"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Underline, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17634,10 +18075,10 @@ var __async = (__this, __arguments, generator) => {
             label: "Inline code",
             active: selectionFormats.has("code"),
             onClick: () => editor.dispatchCommand(d$3, "code"),
-            children: "</>"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Code, { size: 16, strokeWidth: 2.5 })
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ToolbarButton, { label: "Link", onClick: toggleLink, children: "Link" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx(ToolbarButton, { label: "Link", onClick: toggleLink, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Link, { size: 16, strokeWidth: 2.5 }) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-toolbar-divider" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-toolbar-group lockin-note-toolbar-menu", children: [
@@ -17646,7 +18087,8 @@ var __async = (__this, __arguments, generator) => {
           {
             label: "Text color",
             onClick: () => setShowColor((v2) => !v2),
-            children: "Color"
+            swatchColor: currentTextColor,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Palette, { size: 16, strokeWidth: 2.5 })
           }
         ),
         showColor ? /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17656,6 +18098,7 @@ var __async = (__this, __arguments, generator) => {
             swatches: TEXT_COLORS,
             onSelect: (color) => {
               applyStyle({ color });
+              setCurrentTextColor(color);
               setShowColor(false);
             }
           }
@@ -17665,7 +18108,8 @@ var __async = (__this, __arguments, generator) => {
           {
             label: "Highlight",
             onClick: () => setShowHighlight((v2) => !v2),
-            children: "Highlight"
+            swatchColor: currentHighlight,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Highlighter, { size: 16, strokeWidth: 2.5 })
           }
         ),
         showHighlight ? /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17679,6 +18123,7 @@ var __async = (__this, __arguments, generator) => {
               } else {
                 applyStyle({ "background-color": color });
               }
+              setCurrentHighlight(color);
               setShowHighlight(false);
             }
           }
@@ -17691,7 +18136,7 @@ var __async = (__this, __arguments, generator) => {
           {
             label: "Bulleted list",
             onClick: () => editor.dispatchCommand(j, void 0),
-            children: "Bul"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(List, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17699,7 +18144,7 @@ var __async = (__this, __arguments, generator) => {
           {
             label: "Numbered list",
             onClick: () => editor.dispatchCommand(q, void 0),
-            children: "1."
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(ListOrdered, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17714,7 +18159,7 @@ var __async = (__this, __arguments, generator) => {
                 }
               });
             },
-            children: "{}"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Braces, { size: 16, strokeWidth: 2.5 })
           }
         )
       ] }),
@@ -17726,7 +18171,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Align left",
             active: alignment === "left" || alignment === "start",
             onClick: () => editor.dispatchCommand(L$4, "left"),
-            children: "L"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(TextAlignStart, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17735,7 +18180,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Align center",
             active: alignment === "center",
             onClick: () => editor.dispatchCommand(L$4, "center"),
-            children: "C"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(TextAlignCenter, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17744,7 +18189,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Align right",
             active: alignment === "right" || alignment === "end",
             onClick: () => editor.dispatchCommand(L$4, "right"),
-            children: "R"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(TextAlignEnd, { size: 16, strokeWidth: 2.5 })
           }
         )
       ] }),
@@ -17756,7 +18201,7 @@ var __async = (__this, __arguments, generator) => {
             label: "Attach file",
             onClick: onOpenFilePicker,
             disabled: disableAttachment,
-            children: "Clip"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Paperclip, { size: 16, strokeWidth: 2.5 })
           }
         ),
         isUploading ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-inline-spinner", "aria-label": "Uploading" }) : null
@@ -17768,7 +18213,7 @@ var __async = (__this, __arguments, generator) => {
           {
             label: "Undo",
             onClick: () => editor.dispatchCommand(h$5, void 0),
-            children: "Undo"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Undo2, { size: 16, strokeWidth: 2.5 })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17776,7 +18221,7 @@ var __async = (__this, __arguments, generator) => {
           {
             label: "Redo",
             onClick: () => editor.dispatchCommand(g$6, void 0),
-            children: "Redo"
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(Redo2, { size: 16, strokeWidth: 2.5 })
           }
         )
       ] })
@@ -17934,8 +18379,15 @@ var __async = (__this, __arguments, generator) => {
         /* @__PURE__ */ jsxRuntimeExports.jsx(u$2, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx(o, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx(NoteContentLoader, { note, onHydrationChange: setIsHydrating }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(NoteChangePlugin, { onChange: onContentChange }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          NoteChangePlugin,
+          {
+            onChange: onContentChange,
+            isHydrating
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx(ShortcutsPlugin, { onSaveNow }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(CaretScrollPlugin, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           UploadPlugin,
           {
@@ -17992,16 +18444,11 @@ var __async = (__this, __arguments, generator) => {
     const days = Math.round(hours / 24);
     return `${days}d ago`;
   }
-  function formatLinkedTarget(url) {
-    if (!url) return null;
-    try {
-      const parsed = new URL(url);
-      const cleanPath = parsed.pathname.replace(/\/$/, "") || "/";
-      const shortPath = cleanPath.length > 32 ? `${cleanPath.slice(0, 32)}...` : cleanPath;
-      return `${parsed.hostname}${shortPath}`;
-    } catch (e2) {
-      return url.length > 48 ? `${url.slice(0, 48)}...` : url;
+  function formatLinkedLabel(week) {
+    if (week != null && week > 0) {
+      return `Week ${week}`;
     }
+    return null;
   }
   function NotesPanel({
     notesService,
@@ -18013,6 +18460,7 @@ var __async = (__this, __arguments, generator) => {
     onSelectNote,
     courseCode,
     pageUrl,
+    currentWeek,
     onNoteEditingChange
   }) {
     const [view, setView] = reactExports.useState("current");
@@ -18084,9 +18532,9 @@ var __async = (__this, __arguments, generator) => {
       setView("current");
     };
     const linkedTarget = (note == null ? void 0 : note.sourceUrl) || pageUrl;
-    const linkedLabel = formatLinkedTarget(linkedTarget);
+    const weekLabel = formatLinkedLabel(currentWeek);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-panel", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "lockin-notes-header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "lockin-notes-header lockin-notes-header-row", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header-left", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-course-row", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-label", children: "Course:" }),
@@ -18094,49 +18542,56 @@ var __async = (__this, __arguments, generator) => {
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-link-row", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-label", children: "Linked to:" }),
-            linkedTarget ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            weekLabel ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "a",
+              {
+                href: linkedTarget || "#",
+                target: "_blank",
+                rel: "noreferrer",
+                className: "lockin-notes-link-href",
+                children: weekLabel
+              }
+            ) : linkedTarget ? /* @__PURE__ */ jsxRuntimeExports.jsx(
               "a",
               {
                 href: linkedTarget,
                 target: "_blank",
                 rel: "noreferrer",
                 className: "lockin-notes-link-href",
-                children: linkedLabel
+                children: "Linked"
               }
             ) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-link-empty", children: "Not linked" })
           ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header-right", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-toggle", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                type: "button",
-                className: `lockin-notes-toggle-btn${view === "current" ? " is-active" : ""}`,
-                onClick: () => setView("current"),
-                children: "Current"
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                type: "button",
-                className: `lockin-notes-toggle-btn${view === "all" ? " is-active" : ""}`,
-                onClick: () => setView("all"),
-                children: "All notes"
-              }
-            )
-          ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-header-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-toggle", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
             {
               type: "button",
-              className: "lockin-btn-primary",
-              onClick: handleNewNote,
-              children: "+ New note"
+              className: `lockin-notes-toggle-btn${view === "current" ? " is-active" : ""}`,
+              onClick: () => setView("current"),
+              children: "Current"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              className: `lockin-notes-toggle-btn${view === "all" ? " is-active" : ""}`,
+              onClick: () => setView("all"),
+              children: "All notes"
             }
           )
-        ] })
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-header-right", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            className: "lockin-btn-primary",
+            onClick: handleNewNote,
+            children: "+ New note"
+          }
+        ) })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-body", children: [
         view === "current" && /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -18280,13 +18735,23 @@ var __async = (__this, __arguments, generator) => {
   const MODE_OPTIONS = [
     { value: "explain", label: "Explain", hint: "Clarify the selection" },
     { value: "simplify", label: "Simplify", hint: "Make it easier to digest" },
-    { value: "translate", label: "Translate", hint: "Switch to another language" },
-    { value: "general", label: "General", hint: "Ask anything about the content" }
+    {
+      value: "translate",
+      label: "Translate",
+      hint: "Switch to another language"
+    },
+    {
+      value: "general",
+      label: "General",
+      hint: "Ask anything about the content"
+    }
   ];
   const CHAT_TAB_ID = "chat";
   const NOTES_TAB_ID = "notes";
   const SIDEBAR_ACTIVE_TAB_KEY = "lockin_sidebar_activeTab";
   const MODE_STORAGE_KEY = "lockinActiveMode";
+  const SELECTED_NOTE_ID_KEY = "lockin_sidebar_selectedNoteId";
+  const ACTIVE_CHAT_ID_KEY = "lockin_sidebar_activeChatId";
   function isValidUUID(value) {
     if (!value) return false;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -18337,31 +18802,46 @@ var __async = (__this, __arguments, generator) => {
       return () => document.removeEventListener("click", handler);
     }, []);
     const current = MODE_OPTIONS.find((option) => option.value === value);
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-mode-selector-container", onClick: (e2) => e2.stopPropagation(), children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "lockin-mode-pill", onClick: toggle, "aria-haspopup": "listbox", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-icon", children: "*" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (current == null ? void 0 : current.label) || "Mode" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-chevron", children: "v" })
-      ] }),
-      isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-mode-expandable", role: "listbox", children: MODE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          className: "lockin-mode-option",
-          onClick: () => {
-            onSelect(option.value);
-            setIsOpen(false);
-          },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-option-icon", children: option.value === "translate" ? "T" : "-" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: option.label }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "11px", color: "#6b7280" }, children: option.hint })
-            ] })
-          ]
-        },
-        option.value
-      )) })
-    ] });
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: "lockin-mode-selector-container",
+        onClick: (e2) => e2.stopPropagation(),
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              className: "lockin-mode-pill",
+              onClick: toggle,
+              "aria-haspopup": "listbox",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-icon", children: "*" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: (current == null ? void 0 : current.label) || "Mode" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-chevron", children: "v" })
+              ]
+            }
+          ),
+          isOpen && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-mode-expandable", role: "listbox", children: MODE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              className: "lockin-mode-option",
+              onClick: () => {
+                onSelect(option.value);
+                setIsOpen(false);
+              },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-option-icon", children: option.value === "translate" ? "T" : "-" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: option.label }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "11px", color: "#6b7280" }, children: option.hint })
+                ] })
+              ]
+            },
+            option.value
+          )) })
+        ]
+      }
+    );
   }
   function LockInSidebar({
     apiClient,
@@ -18373,7 +18853,10 @@ var __async = (__this, __arguments, generator) => {
     storage,
     activeTabExternal
   }) {
-    const [activeTab, setActiveTab] = reactExports.useState(activeTabExternal || CHAT_TAB_ID);
+    var _a;
+    const [activeTab, setActiveTab] = reactExports.useState(
+      activeTabExternal || CHAT_TAB_ID
+    );
     const [mode, setMode] = reactExports.useState(currentMode);
     const [messages, setMessages] = reactExports.useState([]);
     const [recentChats, setRecentChats] = reactExports.useState([]);
@@ -18385,6 +18868,7 @@ var __async = (__this, __arguments, generator) => {
     const [isSending, setIsSending] = reactExports.useState(false);
     const [selectedNoteId, setSelectedNoteId] = reactExports.useState(null);
     const [isNoteEditing, setIsNoteEditing] = reactExports.useState(false);
+    const [isNoteIdLoaded, setIsNoteIdLoaded] = reactExports.useState(false);
     const lastForceOpenRef = reactExports.useRef(0);
     const previousSelectionRef = reactExports.useRef();
     const layoutTimeoutRef = reactExports.useRef(null);
@@ -18405,26 +18889,31 @@ var __async = (__this, __arguments, generator) => {
       sourceUrl: pageUrl,
       limit: 50
     });
-    const applySplitLayout = reactExports.useCallback(
-      (open) => {
-        const body = document.body;
-        const html = document.documentElement;
-        if (!body || !html) return;
-        if (open) {
-          body.classList.add("lockin-sidebar-open");
-          html.classList.add("lockin-sidebar-transitioning");
-        } else {
-          body.classList.remove("lockin-sidebar-open");
-        }
-        if (layoutTimeoutRef.current) {
-          window.clearTimeout(layoutTimeoutRef.current);
-        }
-        layoutTimeoutRef.current = window.setTimeout(() => {
-          html.classList.remove("lockin-sidebar-transitioning");
-        }, 320);
-      },
-      []
-    );
+    const applySplitLayout = reactExports.useCallback((open) => {
+      const body = document.body;
+      const html = document.documentElement;
+      if (!body || !html) return;
+      if (open) {
+        body.classList.add("lockin-sidebar-open");
+        html.classList.add("lockin-sidebar-transitioning");
+      } else {
+        body.classList.remove("lockin-sidebar-open");
+      }
+      if (layoutTimeoutRef.current) {
+        window.clearTimeout(layoutTimeoutRef.current);
+      }
+      layoutTimeoutRef.current = window.setTimeout(() => {
+        html.classList.remove("lockin-sidebar-transitioning");
+      }, 320);
+    }, []);
+    const handleTabChange = reactExports.useCallback((tabId) => {
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
+      setActiveTab(tabId);
+      requestAnimationFrame(() => {
+        window.scrollTo(scrollX, scrollY);
+      });
+    }, []);
     reactExports.useEffect(() => {
       if (!storage) return;
       storage.get(SIDEBAR_ACTIVE_TAB_KEY).then((tab) => {
@@ -18433,6 +18922,65 @@ var __async = (__this, __arguments, generator) => {
         }
       });
     }, [storage]);
+    reactExports.useEffect(() => {
+      if (!storage) {
+        setIsNoteIdLoaded(true);
+        return;
+      }
+      storage.get(SELECTED_NOTE_ID_KEY).then((noteId) => {
+        if (noteId && isValidUUID(noteId)) {
+          setSelectedNoteId(noteId);
+        }
+        setIsNoteIdLoaded(true);
+      }).catch(() => {
+        setIsNoteIdLoaded(true);
+      });
+    }, [storage]);
+    reactExports.useEffect(() => {
+      if (!storage || !isNoteIdLoaded) return;
+      if (selectedNoteId) {
+        storage.set(SELECTED_NOTE_ID_KEY, selectedNoteId).catch(() => {
+        });
+      } else {
+        storage.set(SELECTED_NOTE_ID_KEY, null).catch(() => {
+        });
+      }
+    }, [selectedNoteId, storage, isNoteIdLoaded]);
+    reactExports.useEffect(() => {
+      if (!storage) return;
+      storage.get(ACTIVE_CHAT_ID_KEY).then((storedChatId) => __async(null, null, function* () {
+        if (storedChatId && isValidUUID(storedChatId)) {
+          setChatId(storedChatId);
+          setActiveHistoryId(storedChatId);
+          if (apiClient == null ? void 0 : apiClient.getChatMessages) {
+            try {
+              const response = yield apiClient.getChatMessages(storedChatId);
+              if (Array.isArray(response)) {
+                const normalized = response.map(
+                  (message) => ({
+                    id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
+                    role: message.role === "assistant" ? "assistant" : "user",
+                    content: message.content || message.output_text || message.input_text || "Message",
+                    timestamp: message.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+                    mode: message.mode || mode
+                  })
+                );
+                setMessages(normalized);
+              }
+            } catch (e2) {
+            }
+          }
+        }
+      })).catch(() => {
+      });
+    }, [storage, apiClient, mode]);
+    reactExports.useEffect(() => {
+      if (!storage) return;
+      if (chatId && isValidUUID(chatId)) {
+        storage.set(ACTIVE_CHAT_ID_KEY, chatId).catch(() => {
+        });
+      }
+    }, [chatId, storage]);
     reactExports.useEffect(() => {
       if (!storage) return;
       storage.set(SIDEBAR_ACTIVE_TAB_KEY, activeTab).catch(() => {
@@ -18500,7 +19048,7 @@ var __async = (__this, __arguments, generator) => {
         chatHistory,
         provisionalChatId
       }) {
-        var _a;
+        var _a2;
         const trimmedSelection = selection || selectedText || "";
         if (!trimmedSelection && !newUserMessage) return;
         setChatError(null);
@@ -18530,7 +19078,7 @@ var __async = (__this, __arguments, generator) => {
             pageUrl,
             courseCode: courseCode || void 0
           }) : null;
-          const explanation = ((_a = response == null ? void 0 : response.data) == null ? void 0 : _a.explanation) || `(${mode}) ${newUserMessage || trimmedSelection}`;
+          const explanation = ((_a2 = response == null ? void 0 : response.data) == null ? void 0 : _a2.explanation) || `(${mode}) ${newUserMessage || trimmedSelection}`;
           const resolvedChatId = (response == null ? void 0 : response.chatId) || chatId || provisionalChatId || null;
           const now = (/* @__PURE__ */ new Date()).toISOString();
           setMessages(
@@ -18652,7 +19200,12 @@ var __async = (__this, __arguments, generator) => {
       } else {
         appendSelectionToCurrentChat(selectedText);
       }
-    }, [appendSelectionToCurrentChat, messages.length, selectedText, startNewChat]);
+    }, [
+      appendSelectionToCurrentChat,
+      messages.length,
+      selectedText,
+      startNewChat
+    ]);
     reactExports.useEffect(() => {
       const loadHistory = () => __async(null, null, function* () {
         if (!(apiClient == null ? void 0 : apiClient.getRecentChats)) return;
@@ -18687,13 +19240,15 @@ var __async = (__this, __arguments, generator) => {
         try {
           const response = yield apiClient.getChatMessages(item.id);
           if (Array.isArray(response)) {
-            const normalized = response.map((message) => ({
-              id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
-              role: message.role === "assistant" ? "assistant" : "user",
-              content: message.content || message.output_text || message.input_text || "Message",
-              timestamp: message.created_at || (/* @__PURE__ */ new Date()).toISOString(),
-              mode: message.mode || mode
-            }));
+            const normalized = response.map(
+              (message) => ({
+                id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
+                role: message.role === "assistant" ? "assistant" : "user",
+                content: message.content || message.output_text || message.input_text || "Message",
+                timestamp: message.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+                mode: message.mode || mode
+              })
+            );
             setMessages(normalized);
           }
         } catch (error) {
@@ -18804,7 +19359,7 @@ var __async = (__this, __arguments, generator) => {
                     "button",
                     {
                       className: `lockin-tab ${isActive ? "lockin-tab-active" : ""}`,
-                      onClick: () => setActiveTab(tabId),
+                      onClick: () => handleTabChange(tabId),
                       role: "tab",
                       "aria-selected": isActive,
                       children: label
@@ -18833,18 +19388,38 @@ var __async = (__this, __arguments, generator) => {
                     "aria-label": "Toggle chat history",
                     "aria-pressed": isHistoryOpen,
                     children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "lockin-history-toggle-icon", "aria-hidden": "true", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" })
-                      ] }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                        "span",
+                        {
+                          className: "lockin-history-toggle-icon",
+                          "aria-hidden": "true",
+                          children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-toggle-line" })
+                          ]
+                        }
+                      ),
                       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-sr-only", children: "Toggle chat history" })
                     ]
                   }
                 ) }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-toolbar-right", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(ModeSelector, { value: mode, onSelect: (newMode) => setMode(newMode) }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-new-chat-btn", onClick: startBlankChat, children: "+ New chat" })
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    ModeSelector,
+                    {
+                      value: mode,
+                      onSelect: (newMode) => setMode(newMode)
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "button",
+                    {
+                      className: "lockin-new-chat-btn",
+                      onClick: startBlankChat,
+                      children: "+ New chat"
+                    }
+                  )
                 ] })
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -18861,7 +19436,14 @@ var __async = (__this, __arguments, generator) => {
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-actions", children: [
                             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-label", children: "Chats" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "lockin-new-chat-btn", onClick: startBlankChat, children: "+ New chat" })
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "button",
+                              {
+                                className: "lockin-new-chat-btn",
+                                onClick: startBlankChat,
+                                children: "+ New chat"
+                              }
+                            )
                           ] }),
                           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-list", children: recentChats.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-empty", children: "No chats yet. Start from a highlight or a question." }) : recentChats.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "button",
@@ -18932,6 +19514,7 @@ var __async = (__this, __arguments, generator) => {
                 onSelectNote: (noteId) => setSelectedNoteId(noteId),
                 courseCode,
                 pageUrl,
+                currentWeek: (_a = pageContext == null ? void 0 : pageContext.courseContext) == null ? void 0 : _a.week,
                 onNoteEditingChange: setIsNoteEditing
               }
             )

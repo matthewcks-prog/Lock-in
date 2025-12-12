@@ -15,6 +15,7 @@ interface NotesPanelProps {
   onSelectNote: (noteId: string | null) => void;
   courseCode: string | null;
   pageUrl: string;
+  currentWeek?: number | null;
   onNoteEditingChange?: (editing: boolean) => void;
 }
 
@@ -32,17 +33,11 @@ function relativeLabel(iso: string | null | undefined) {
   return `${days}d ago`;
 }
 
-function formatLinkedTarget(url: string | null | undefined) {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    const cleanPath = parsed.pathname.replace(/\/$/, "") || "/";
-    const shortPath =
-      cleanPath.length > 32 ? `${cleanPath.slice(0, 32)}...` : cleanPath;
-    return `${parsed.hostname}${shortPath}`;
-  } catch {
-    return url.length > 48 ? `${url.slice(0, 48)}...` : url;
+function formatLinkedLabel(week: number | null | undefined): string | null {
+  if (week != null && week > 0) {
+    return `Week ${week}`;
   }
+  return null;
 }
 
 export function NotesPanel({
@@ -55,6 +50,7 @@ export function NotesPanel({
   onSelectNote,
   courseCode,
   pageUrl,
+  currentWeek,
   onNoteEditingChange,
 }: NotesPanelProps) {
   const [view, setView] = useState<"current" | "all">("current");
@@ -153,12 +149,12 @@ export function NotesPanel({
   };
 
   const linkedTarget = note?.sourceUrl || pageUrl;
-  const linkedLabel = formatLinkedTarget(linkedTarget);
+  const weekLabel = formatLinkedLabel(currentWeek);
 
   return (
     <div className="lockin-notes-panel">
-      {/* Header: Course/Link on left, toggle+button on right */}
-      <header className="lockin-notes-header">
+      {/* Header: Left (Course + Week), Middle (toggle), Right (button) */}
+      <header className="lockin-notes-header lockin-notes-header-row">
         <div className="lockin-notes-header-left">
           <div className="lockin-notes-course-row">
             <span className="lockin-notes-label">Course:</span>
@@ -168,14 +164,23 @@ export function NotesPanel({
           </div>
           <div className="lockin-notes-link-row">
             <span className="lockin-notes-label">Linked to:</span>
-            {linkedTarget ? (
+            {weekLabel ? (
+              <a
+                href={linkedTarget || "#"}
+                target="_blank"
+                rel="noreferrer"
+                className="lockin-notes-link-href"
+              >
+                {weekLabel}
+              </a>
+            ) : linkedTarget ? (
               <a
                 href={linkedTarget}
                 target="_blank"
                 rel="noreferrer"
                 className="lockin-notes-link-href"
               >
-                {linkedLabel}
+                Linked
               </a>
             ) : (
               <span className="lockin-notes-link-empty">Not linked</span>
@@ -183,7 +188,7 @@ export function NotesPanel({
           </div>
         </div>
 
-        <div className="lockin-notes-header-right">
+        <div className="lockin-notes-header-center">
           <div className="lockin-notes-toggle">
             <button
               type="button"
@@ -204,6 +209,9 @@ export function NotesPanel({
               All notes
             </button>
           </div>
+        </div>
+
+        <div className="lockin-notes-header-right">
           <button
             type="button"
             className="lockin-btn-primary"

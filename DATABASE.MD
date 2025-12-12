@@ -8,6 +8,29 @@ It exists so future humans and AI agents can understand how data is stored and a
 
 ---
 
+## Extensions & Schema Configuration
+
+### pgvector Extension
+
+The `pgvector` extension is used for semantic search via vector embeddings. It is installed in the `extensions` schema (not `public`).
+
+**Important**: The database `search_path` must include the `extensions` schema for vector operations to work:
+
+```sql
+-- Required search_path configuration (run in Supabase SQL Editor)
+SET search_path = public, extensions;
+
+-- Make persistent for all roles:
+ALTER ROLE authenticator SET search_path = public, extensions;
+ALTER ROLE anon SET search_path = public, extensions;
+ALTER ROLE authenticated SET search_path = public, extensions;
+ALTER ROLE service_role SET search_path = public, extensions;
+```
+
+See `backend/migrations/004_vector_extension_schema.sql` for full migration details.
+
+---
+
 ## High-level Entities
 
 - **User**
@@ -359,6 +382,16 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 - **No breaking changes**: All fields are nullable or have defaults where appropriate
 - **Future additions**: Consider adding `folder_id` to `notes` for explicit folder relationships
 - **Embeddings**: `embedding` field uses pgvector extension for semantic search
+- **pgvector schema** (Dec 2024): The `vector` extension was moved to `extensions` schema. See `backend/migrations/004_vector_extension_schema.sql` for required `search_path` configuration.
+
+### Applied Migrations
+
+| Migration                         | Date     | Description                                    |
+| --------------------------------- | -------- | ---------------------------------------------- |
+| `001_note_assets.sql`             | Dec 2024 | Note assets table for file attachments         |
+| `002_performance_indexes.sql`     | Dec 2024 | Performance indexes for all tables             |
+| `003_row_level_security.sql`      | Dec 2024 | RLS policies for data isolation                |
+| `004_vector_extension_schema.sql` | Dec 2024 | Fix pgvector after moving to extensions schema |
 
 ---
 
