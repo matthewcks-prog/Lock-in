@@ -1522,37 +1522,150 @@ body.lockin-sidebar-open .content {
   color: #6b7280;
 }
 
-.lockin-note-image-shell {
+/* ========================================
+   Image Node - Resizable Image Component
+   Industry-standard patterns (Notion, Figma)
+   ======================================== */
+
+/* Wrapper for Lexical node DOM - inline-block allows text flow */
+.lockin-image-wrapper {
+  display: inline-block;
+  vertical-align: top;
+  max-width: 100%;
+  margin: 4px 0;
+  line-height: 0; /* Prevent extra space below image */
+}
+
+/* Image container with selection state */
+.lockin-image-container {
   position: relative;
   display: inline-block;
   max-width: 100%;
-  margin: 8px 0;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
 }
 
-.lockin-note-image-shell.is-selected {
-  outline: 2px solid #c7d2fe;
-  outline-offset: 4px;
+.lockin-image-container.is-selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
 }
 
-.lockin-note-image-node {
+.lockin-image-container.is-resizing {
+  user-select: none;
+  cursor: nwse-resize;
+}
+
+/* The actual image */
+.lockin-image {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 10px;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+  border-radius: 6px;
+  pointer-events: none;
+  object-fit: contain;
 }
 
-.lockin-image-resize-handle {
+/* Corner resize handles */
+.lockin-resize-handle {
   position: absolute;
+  background: white;
+  border: 2px solid #2563eb;
+  border-radius: 2px;
+  z-index: 10;
+  pointer-events: auto;
+  touch-action: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+
+.lockin-resize-handle:hover {
+  background: #dbeafe;
+  transform: scale(1.15);
+}
+
+/* Corner handle base size */
+.lockin-resize-handle.corner {
+  width: 12px;
+  height: 12px;
+}
+
+/* Corner positions */
+.lockin-resize-handle.corner.nw {
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
+}
+
+.lockin-resize-handle.corner.ne {
+  top: -6px;
   right: -6px;
+  cursor: nesw-resize;
+}
+
+.lockin-resize-handle.corner.sw {
   bottom: -6px;
-  width: 16px;
-  height: 16px;
-  border: 1px solid #94a3b8;
-  background: #ffffff;
-  border-radius: 4px;
-  cursor: se-resize;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  left: -6px;
+  cursor: nesw-resize;
+}
+
+.lockin-resize-handle.corner.se {
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
+}
+
+/* Edge handles */
+.lockin-resize-handle.edge {
+  border-radius: 3px;
+}
+
+/* Horizontal edge handles (top/bottom) */
+.lockin-resize-handle.edge.n,
+.lockin-resize-handle.edge.s {
+  width: 32px;
+  height: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.lockin-resize-handle.edge.n:hover,
+.lockin-resize-handle.edge.s:hover {
+  transform: translateX(-50%) scaleY(1.3);
+}
+
+.lockin-resize-handle.edge.n {
+  top: -3px;
+}
+
+.lockin-resize-handle.edge.s {
+  bottom: -3px;
+}
+
+/* Vertical edge handles (left/right) */
+.lockin-resize-handle.edge.e,
+.lockin-resize-handle.edge.w {
+  width: 6px;
+  height: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.lockin-resize-handle.edge.e:hover,
+.lockin-resize-handle.edge.w:hover {
+  transform: translateY(-50%) scaleX(1.3);
+}
+
+.lockin-resize-handle.edge.e {
+  right: -3px;
+}
+
+.lockin-resize-handle.edge.w {
+  left: -3px;
 }
 
 .lockin-all-notes-view {

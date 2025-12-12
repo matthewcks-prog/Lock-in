@@ -443,8 +443,19 @@ function insertAssetIntoEditor(editor: LexicalEditor, asset: NoteAsset) {
   editor.update(() => {
     const selection = $getSelection();
     const root = $getRoot();
+    
+    // Ensure we have a valid selection, even in an empty editor
     if (!selection || !$isRangeSelection(selection)) {
       root.selectEnd();
+    }
+    
+    // If root is empty, ensure we have at least one paragraph for the image to be inserted into
+    // Lexical's $insertNodes will handle this automatically, but we ensure selection is valid
+    const rootChildren = root.getChildren();
+    if (rootChildren.length === 0) {
+      const paragraph = $createParagraphNode();
+      root.append(paragraph);
+      paragraph.selectEnd();
     }
 
     const rootElement = editor.getRootElement();

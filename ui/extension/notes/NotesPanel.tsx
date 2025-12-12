@@ -59,6 +59,11 @@ export function NotesPanel({
   );
   const [search, setSearch] = useState("");
 
+  // Only store sourceUrl when we have a valid week number
+  // This ensures we only link notes when we're 100% sure about the source
+  const hasValidWeek = currentWeek != null && currentWeek > 0;
+  const effectiveSourceUrl = hasValidWeek ? pageUrl : null;
+
   const {
     note,
     status,
@@ -72,7 +77,7 @@ export function NotesPanel({
     noteId: activeNoteId,
     notesService,
     defaultCourseCode: courseCode,
-    defaultSourceUrl: pageUrl,
+    defaultSourceUrl: effectiveSourceUrl,
   });
 
   // Sync editor's activeNoteId back to parent only when it changes due to save (new note gets ID)
@@ -123,16 +128,39 @@ export function NotesPanel({
   const filteredNotes = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
     return notes.filter((item) => {
-      const matchesFilter =
-        filter === "all" ||
-        (filter === "course" && item.courseCode === courseCode) ||
-        (filter === "page" && item.sourceUrl === pageUrl) ||
-        (filter === "starred" && item.isStarred);
+      // Filter logic
+      let matchesFilter = false;
+      
+      if (filter === "all") {
+        matchesFilter = true;
+      } else if (filter === "course") {
+        // Match notes with the same course code, handling null cases
+        if (courseCode != null) {
+          matchesFilter = item.courseCode === courseCode;
+        } else {
+          // If no course code in context, show notes without a course code
+          matchesFilter = item.courseCode == null;
+        }
+      } else if (filter === "page") {
+        // Match notes from the same page URL
+        if (pageUrl) {
+          matchesFilter = item.sourceUrl === pageUrl;
+        } else {
+          // If no page URL, show notes without a source URL
+          matchesFilter = item.sourceUrl == null;
+        }
+      } else if (filter === "starred") {
+        // Only show notes that are explicitly starred (isStarred === true)
+        matchesFilter = item.isStarred === true;
+      }
+      
+      // Search logic
       const preview = item.previewText || item.content?.plainText || "";
       const matchesSearch =
         !searchTerm ||
         item.title.toLowerCase().includes(searchTerm) ||
         preview.toLowerCase().includes(searchTerm);
+      
       return matchesFilter && matchesSearch;
     });
   }, [courseCode, filter, notes, pageUrl, search]);
@@ -148,8 +176,9 @@ export function NotesPanel({
     setView("current");
   };
 
-  const linkedTarget = note?.sourceUrl || pageUrl;
+  // Only show linked section and store sourceUrl when we have a valid week
   const weekLabel = formatLinkedLabel(currentWeek);
+  const linkedTarget = weekLabel ? note?.sourceUrl || pageUrl : null;
 
   return (
     <div className="lockin-notes-panel">
@@ -162,9 +191,9 @@ export function NotesPanel({
               {courseCode || "None"}
             </strong>
           </div>
-          <div className="lockin-notes-link-row">
-            <span className="lockin-notes-label">Linked to:</span>
-            {weekLabel ? (
+          {weekLabel && (
+            <div className="lockin-notes-link-row">
+              <span className="lockin-notes-label">Linked to:</span>
               <a
                 href={linkedTarget || "#"}
                 target="_blank"
@@ -173,19 +202,8 @@ export function NotesPanel({
               >
                 {weekLabel}
               </a>
-            ) : linkedTarget ? (
-              <a
-                href={linkedTarget}
-                target="_blank"
-                rel="noreferrer"
-                className="lockin-notes-link-href"
-              >
-                Linked
-              </a>
-            ) : (
-              <span className="lockin-notes-link-empty">Not linked</span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="lockin-notes-header-center">

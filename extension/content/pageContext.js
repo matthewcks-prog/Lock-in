@@ -126,8 +126,61 @@ var LockInPageContext = (() => {
     }
     /**
      * Extract week number from Moodle page
+     * 
+     * Looks for the "Week X" label that appears above topic headings on Moodle learning pages.
+     * Only returns a week if found in a specific, reliable location (not in general content).
      */
-    getWeek(_dom) {
+    getWeek(dom) {
+      var _a, _b;
+      const weekPattern = /^\s*Week\s+(\d{1,2})\s*$/i;
+      const preciseSelectors = [
+        // Moodle section info region
+        '[data-region="section-info"] .text-muted',
+        '[data-region="section-info"]',
+        // Activity header area
+        ".activity-header .text-muted",
+        ".page-header-headings .text-muted",
+        // Breadcrumb might have it
+        ".breadcrumb-item.active"
+      ];
+      for (const selector of preciseSelectors) {
+        const elements = dom.querySelectorAll(selector);
+        for (const el of elements) {
+          const text = ((_a = el.textContent) == null ? void 0 : _a.trim()) || "";
+          const match = text.match(weekPattern);
+          if (match) {
+            const weekNum = parseInt(match[1], 10);
+            if (weekNum > 0 && weekNum <= 52) {
+              return weekNum;
+            }
+          }
+        }
+      }
+      const headingSelectors = ["h2", "h3", "h4", "strong", ".section-title"];
+      for (const selector of headingSelectors) {
+        const elements = dom.querySelectorAll(selector);
+        for (const el of elements) {
+          const text = ((_b = el.textContent) == null ? void 0 : _b.trim()) || "";
+          const match = text.match(weekPattern);
+          if (match) {
+            const weekNum = parseInt(match[1], 10);
+            if (weekNum > 0 && weekNum <= 52) {
+              return weekNum;
+            }
+          }
+        }
+      }
+      const sectionContent = dom.querySelector(".course-content .section, #region-main .content");
+      if (sectionContent) {
+        const text = (sectionContent.textContent || "").substring(0, 300);
+        const startMatch = text.match(/^\s*Week\s+(\d{1,2})\b/i);
+        if (startMatch) {
+          const weekNum = parseInt(startMatch[1], 10);
+          if (weekNum > 0 && weekNum <= 52) {
+            return weekNum;
+          }
+        }
+      }
       return null;
     }
     /**
@@ -178,12 +231,14 @@ var LockInPageContext = (() => {
     getCourseContext(dom, url) {
       const courseCode = this.getCourseCode(dom);
       const topic = this.getTopic(dom);
+      const week = this.getWeek(dom);
       return {
         courseCode,
         courseName: courseCode || void 0,
+        week: week || void 0,
         topic: topic || void 0,
         sourceUrl: url,
-        sourceLabel: topic || courseCode || void 0
+        sourceLabel: week ? `Week ${week}` : topic || courseCode || void 0
       };
     }
     /**

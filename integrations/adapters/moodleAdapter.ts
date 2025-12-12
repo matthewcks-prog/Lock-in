@@ -83,10 +83,79 @@ export class MoodleAdapter implements BaseAdapter {
 
   /**
    * Extract week number from Moodle page
+   * 
+   * Looks for the "Week X" label that appears above topic headings on Moodle learning pages.
+   * Only returns a week if found in a specific, reliable location (not in general content).
    */
-  getWeek(_dom: Document): number | null {
-    // TODO: Implement week extraction from Moodle structure
-    // Moodle weeks might be in breadcrumbs, headings, or URL params
+  getWeek(dom: Document): number | null {
+    // Pattern: "Week 1", "Week 2", etc. (case insensitive)
+    const weekPattern = /^\s*Week\s+(\d{1,2})\s*$/i;
+    
+    // First strategy: Look for a standalone "Week X" text element
+    // On Moodle, this appears as a separate element above the topic title
+    // It's often in a <strong> or standalone text near the section header
+    
+    // Check section info areas and headings - these should have ONLY "Week X"
+    const preciseSelectors = [
+      // Moodle section info region
+      '[data-region="section-info"] .text-muted',
+      '[data-region="section-info"]',
+      // Activity header area
+      '.activity-header .text-muted',
+      '.page-header-headings .text-muted',
+      // Breadcrumb might have it
+      '.breadcrumb-item.active',
+    ];
+    
+    for (const selector of preciseSelectors) {
+      const elements = dom.querySelectorAll(selector);
+      for (const el of elements) {
+        const text = el.textContent?.trim() || '';
+        const match = text.match(weekPattern);
+        if (match) {
+          const weekNum = parseInt(match[1], 10);
+          if (weekNum > 0 && weekNum <= 52) {
+            return weekNum;
+          }
+        }
+      }
+    }
+    
+    // Second strategy: Look for "Week X" as a small heading or label
+    // Check h2, h3, strong elements but only if they contain JUST "Week X"
+    const headingSelectors = ['h2', 'h3', 'h4', 'strong', '.section-title'];
+    
+    for (const selector of headingSelectors) {
+      const elements = dom.querySelectorAll(selector);
+      for (const el of elements) {
+        const text = el.textContent?.trim() || '';
+        // Only match if the element contains just "Week X" (possibly with whitespace)
+        const match = text.match(weekPattern);
+        if (match) {
+          const weekNum = parseInt(match[1], 10);
+          if (weekNum > 0 && weekNum <= 52) {
+            return weekNum;
+          }
+        }
+      }
+    }
+    
+    // Third strategy: Look for Week X at the very start of the main content
+    // The week label on Moodle pages is typically in the first 300 chars of section content
+    const sectionContent = dom.querySelector('.course-content .section, #region-main .content');
+    if (sectionContent) {
+      const text = (sectionContent.textContent || '').substring(0, 300);
+      // Look for "Week X" at the start of content (possibly after whitespace)
+      const startMatch = text.match(/^\s*Week\s+(\d{1,2})\b/i);
+      if (startMatch) {
+        const weekNum = parseInt(startMatch[1], 10);
+        if (weekNum > 0 && weekNum <= 52) {
+          return weekNum;
+        }
+      }
+    }
+    
+    // No reliable week indicator found
     return null;
   }
 
@@ -146,13 +215,15 @@ export class MoodleAdapter implements BaseAdapter {
   getCourseContext(dom: Document, url: string): CourseContext {
     const courseCode = this.getCourseCode(dom);
     const topic = this.getTopic(dom);
+    const week = this.getWeek(dom);
 
     return {
       courseCode,
       courseName: courseCode || undefined,
+      week: week || undefined,
       topic: topic || undefined,
       sourceUrl: url,
-      sourceLabel: topic || courseCode || undefined,
+      sourceLabel: week ? `Week ${week}` : (topic || courseCode || undefined),
     };
   }
 

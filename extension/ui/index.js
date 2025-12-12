@@ -17271,8 +17271,21 @@ var __async = (__this, __arguments, generator) => {
       }));
     }), [u2])];
   }
+  const DEFAULT_WIDTH = 320;
+  const MIN_WIDTH = 80;
+  const MAX_WIDTH = 960;
   function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
+  }
+  function getMaxWidth(editor) {
+    var _a;
+    const root = editor.getRootElement();
+    const scrollContainer = root == null ? void 0 : root.closest(
+      ".lockin-note-editor-scroll"
+    );
+    const container = scrollContainer != null ? scrollContainer : root == null ? void 0 : root.parentElement;
+    const measured = (_a = container == null ? void 0 : container.getBoundingClientRect().width) != null ? _a : 0;
+    return measured > 0 ? clamp(measured - 48, MIN_WIDTH, MAX_WIDTH) : MAX_WIDTH;
   }
   function ResizableImage({
     src,
@@ -17284,75 +17297,183 @@ var __async = (__this, __arguments, generator) => {
   }) {
     const [editor] = u$6();
     const [isSelected, setSelected, clearSelection] = u(nodeKey);
-    const wrapperRef = reactExports.useRef(null);
+    const containerRef = reactExports.useRef(null);
     const imageRef = reactExports.useRef(null);
+    const [dimensions, setDimensions] = reactExports.useState({
+      width: width != null ? width : DEFAULT_WIDTH,
+      height: height != null ? height : DEFAULT_WIDTH,
+      aspectRatio: 1,
+      maxWidth: MAX_WIDTH
+    });
     const [isResizing, setIsResizing] = reactExports.useState(false);
-    const [currentWidth, setCurrentWidth] = reactExports.useState(width != null ? width : null);
-    const latestWidthRef = reactExports.useRef(width != null ? width : null);
+    const resizeRef = reactExports.useRef({
+      startX: 0,
+      startY: 0,
+      startWidth: 0,
+      aspectRatio: 1,
+      maxWidth: MAX_WIDTH
+    });
     reactExports.useEffect(() => {
-      setCurrentWidth(width != null ? width : null);
-      latestWidthRef.current = width != null ? width : null;
-    }, [width]);
-    const commitSize = reactExports.useCallback(
-      (nextWidth) => {
+      if (width != null && height != null) {
+        setDimensions((prev) => __spreadProps(__spreadValues({}, prev), {
+          width,
+          height,
+          aspectRatio: width / height || 1
+        }));
+      }
+    }, [width, height]);
+    reactExports.useEffect(() => {
+      const updateMaxWidth = () => {
+        const maxWidth = getMaxWidth(editor);
+        setDimensions((prev) => {
+          const newWidth = clamp(prev.width, MIN_WIDTH, maxWidth);
+          return __spreadProps(__spreadValues({}, prev), {
+            maxWidth,
+            width: newWidth,
+            height: newWidth / prev.aspectRatio
+          });
+        });
+      };
+      updateMaxWidth();
+      window.addEventListener("resize", updateMaxWidth);
+      return () => window.removeEventListener("resize", updateMaxWidth);
+    }, [editor]);
+    const handleImageLoad = reactExports.useCallback(() => {
+      const img = imageRef.current;
+      if (!img) return;
+      const { naturalWidth, naturalHeight } = img;
+      const aspectRatio = naturalWidth / naturalHeight || 1;
+      const maxWidth = getMaxWidth(editor);
+      const targetWidth = width != null ? width : clamp(Math.min(naturalWidth, maxWidth), MIN_WIDTH, maxWidth);
+      const targetHeight = height != null ? height : targetWidth / aspectRatio;
+      setDimensions({
+        width: targetWidth,
+        height: targetHeight,
+        aspectRatio,
+        maxWidth
+      });
+      if (width == null || height == null) {
         editor.update(() => {
           const node = Se(nodeKey);
           if ($isImageNode(node)) {
-            node.setWidth(nextWidth);
-            node.setHeight(height != null ? height : null);
+            node.setWidth(targetWidth);
+            node.setHeight(targetHeight);
+          }
+        });
+      }
+    }, [editor, nodeKey, width, height]);
+    const commitDimensions = reactExports.useCallback(
+      (w2, h2) => {
+        editor.update(() => {
+          const node = Se(nodeKey);
+          if ($isImageNode(node)) {
+            node.setWidth(w2);
+            node.setHeight(h2);
           }
         });
       },
-      [editor, height, nodeKey]
+      [editor, nodeKey]
     );
-    const handleResizeStart = (event) => {
-      var _a, _b, _c, _d, _e2, _f;
-      event.preventDefault();
-      event.stopPropagation();
-      const startX = event.clientX;
-      const rect = (_a = imageRef.current) == null ? void 0 : _a.getBoundingClientRect();
-      const startWidth = (_c = (_b = rect == null ? void 0 : rect.width) != null ? _b : currentWidth) != null ? _c : 320;
-      const parentWidth = (_f = (_e2 = (_d = wrapperRef.current) == null ? void 0 : _d.parentElement) == null ? void 0 : _e2.getBoundingClientRect().width) != null ? _f : startWidth;
-      const maxWidth = Math.max(200, parentWidth - 16);
-      const minWidth = 120;
-      setIsResizing(true);
-      const handleMove = (moveEvent) => {
-        const delta = moveEvent.clientX - startX;
-        const next = clamp(startWidth + delta, minWidth, maxWidth);
-        setCurrentWidth(next);
-        latestWidthRef.current = next;
-      };
-      const handleUp = (upEvent) => {
-        var _a2;
-        upEvent.preventDefault();
-        document.removeEventListener("mousemove", handleMove);
-        document.removeEventListener("mouseup", handleUp);
-        setIsResizing(false);
-        commitSize((_a2 = latestWidthRef.current) != null ? _a2 : null);
-      };
-      document.addEventListener("mousemove", handleMove);
-      document.addEventListener("mouseup", handleUp);
-    };
-    const onClick = (event) => {
-      if (event.target === imageRef.current) {
-        if (!event.shiftKey) {
-          clearSelection();
-        }
-        setSelected(!isSelected);
-      }
-    };
+    const handleResizeStart = reactExports.useCallback(
+      (e2, corner) => {
+        e2.preventDefault();
+        e2.stopPropagation();
+        const target = e2.target;
+        target.setPointerCapture(e2.pointerId);
+        const maxWidth = getMaxWidth(editor);
+        resizeRef.current = {
+          startX: e2.clientX,
+          startY: e2.clientY,
+          startWidth: dimensions.width,
+          aspectRatio: dimensions.aspectRatio,
+          maxWidth
+        };
+        setIsResizing(true);
+        const onPointerMove = (moveEvent) => {
+          const { startX, startY, startWidth, aspectRatio, maxWidth: maxWidth2 } = resizeRef.current;
+          const deltaX = moveEvent.clientX - startX;
+          const deltaY = moveEvent.clientY - startY;
+          let widthDelta = 0;
+          switch (corner) {
+            // Corner handles (diagonal movement)
+            case "se":
+              widthDelta = Math.max(deltaX, deltaY * aspectRatio);
+              break;
+            case "sw":
+              widthDelta = Math.max(-deltaX, deltaY * aspectRatio);
+              break;
+            case "ne":
+              widthDelta = Math.max(deltaX, -deltaY * aspectRatio);
+              break;
+            case "nw":
+              widthDelta = Math.max(-deltaX, -deltaY * aspectRatio);
+              break;
+            // Horizontal edge handles
+            case "e":
+              widthDelta = deltaX;
+              break;
+            case "w":
+              widthDelta = -deltaX;
+              break;
+            // Vertical edge handles (convert Y to width via aspect ratio)
+            case "s":
+              widthDelta = deltaY * aspectRatio;
+              break;
+            case "n":
+              widthDelta = -deltaY * aspectRatio;
+              break;
+          }
+          const newWidth = clamp(startWidth + widthDelta, MIN_WIDTH, maxWidth2);
+          const newHeight = newWidth / aspectRatio;
+          setDimensions((prev) => __spreadProps(__spreadValues({}, prev), {
+            width: newWidth,
+            height: newHeight
+          }));
+        };
+        const onPointerUp = (upEvent) => {
+          target.releasePointerCapture(upEvent.pointerId);
+          document.removeEventListener("pointermove", onPointerMove);
+          document.removeEventListener("pointerup", onPointerUp);
+          setIsResizing(false);
+          setDimensions((current) => {
+            commitDimensions(current.width, current.height);
+            return current;
+          });
+        };
+        document.addEventListener("pointermove", onPointerMove);
+        document.addEventListener("pointerup", onPointerUp);
+      },
+      [editor, dimensions.width, dimensions.aspectRatio, commitDimensions]
+    );
     reactExports.useEffect(() => {
       return b$3(
         editor.registerCommand(
+          r$2,
+          (event) => {
+            var _a;
+            if ((_a = containerRef.current) == null ? void 0 : _a.contains(event.target)) {
+              const target = event.target;
+              if (target.dataset.resizeHandle) return false;
+              if (event.shiftKey) {
+                setSelected(!isSelected);
+              } else {
+                clearSelection();
+                setSelected(true);
+              }
+              return true;
+            }
+            return false;
+          },
+          Fs
+        ),
+        editor.registerCommand(
           w$5,
-          (commandEvent) => {
+          (e2) => {
             if (isSelected) {
-              commandEvent == null ? void 0 : commandEvent.preventDefault();
+              e2 == null ? void 0 : e2.preventDefault();
               editor.update(() => {
                 const node = Se(nodeKey);
-                if ($isImageNode(node)) {
-                  node.remove();
-                }
+                if ($isImageNode(node)) node.remove();
               });
               return true;
             }
@@ -17362,14 +17483,12 @@ var __async = (__this, __arguments, generator) => {
         ),
         editor.registerCommand(
           k$4,
-          (commandEvent) => {
+          (e2) => {
             if (isSelected) {
-              commandEvent == null ? void 0 : commandEvent.preventDefault();
+              e2 == null ? void 0 : e2.preventDefault();
               editor.update(() => {
                 const node = Se(nodeKey);
-                if ($isImageNode(node)) {
-                  node.remove();
-                }
+                if ($isImageNode(node)) node.remove();
               });
               return true;
             }
@@ -17378,16 +17497,21 @@ var __async = (__this, __arguments, generator) => {
           Fs
         )
       );
-    }, [editor, isSelected, nodeKey]);
+    }, [editor, isSelected, nodeKey, setSelected, clearSelection]);
+    const containerClass = [
+      "lockin-image-container",
+      isSelected && "is-selected",
+      isResizing && "is-resizing"
+    ].filter(Boolean).join(" ");
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
-        ref: wrapperRef,
-        className: `lockin-note-image-shell${isSelected ? " is-selected" : ""}${isResizing ? " is-resizing" : ""}`,
-        onClick,
+        ref: containerRef,
+        className: containerClass,
+        style: { width: dimensions.width },
         role: "figure",
-        "aria-label": alt || "Image attachment",
-        "data-asset-id": assetId || void 0,
+        "aria-label": alt || "Image",
+        "data-asset-id": assetId != null ? assetId : void 0,
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "img",
@@ -17395,23 +17519,77 @@ var __async = (__this, __arguments, generator) => {
               ref: imageRef,
               src,
               alt,
-              className: "lockin-note-image-node",
-              style: {
-                width: currentWidth ? `${currentWidth}px` : "100%",
-                maxWidth: "100%",
-                height: height ? `${height}px` : "auto"
-              }
+              className: "lockin-image",
+              draggable: false,
+              onLoad: handleImageLoad
             }
           ),
-          isSelected ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              type: "button",
-              className: "lockin-image-resize-handle",
-              "aria-label": "Resize image",
-              onMouseDown: handleResizeStart
-            }
-          ) : null
+          isSelected && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle corner nw",
+                "data-resize-handle": "nw",
+                onPointerDown: (e2) => handleResizeStart(e2, "nw")
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle corner ne",
+                "data-resize-handle": "ne",
+                onPointerDown: (e2) => handleResizeStart(e2, "ne")
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle corner sw",
+                "data-resize-handle": "sw",
+                onPointerDown: (e2) => handleResizeStart(e2, "sw")
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle corner se",
+                "data-resize-handle": "se",
+                onPointerDown: (e2) => handleResizeStart(e2, "se")
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle edge n",
+                "data-resize-handle": "n",
+                onPointerDown: (e2) => handleResizeStart(e2, "n")
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle edge s",
+                "data-resize-handle": "s",
+                onPointerDown: (e2) => handleResizeStart(e2, "s")
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle edge e",
+                "data-resize-handle": "e",
+                onPointerDown: (e2) => handleResizeStart(e2, "e")
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "lockin-resize-handle edge w",
+                "data-resize-handle": "w",
+                onPointerDown: (e2) => handleResizeStart(e2, "w")
+              }
+            )
+          ] })
         ]
       }
     );
@@ -17476,7 +17654,7 @@ var __async = (__this, __arguments, generator) => {
     }
     createDOM() {
       const span = document.createElement("span");
-      span.className = "lockin-note-image-wrapper";
+      span.className = "lockin-image-wrapper";
       return span;
     }
     updateDOM() {
@@ -17752,6 +17930,12 @@ var __async = (__this, __arguments, generator) => {
       const root = we();
       if (!selection || !yi(selection)) {
         root.selectEnd();
+      }
+      const rootChildren = root.getChildren();
+      if (rootChildren.length === 0) {
+        const paragraph = Ns();
+        root.append(paragraph);
+        paragraph.selectEnd();
       }
       const rootElement = editor.getRootElement();
       const containerWidth = (_b = (_a = rootElement == null ? void 0 : rootElement.parentElement) == null ? void 0 : _a.getBoundingClientRect().width) != null ? _b : null;
@@ -18468,6 +18652,8 @@ var __async = (__this, __arguments, generator) => {
       "course"
     );
     const [search, setSearch] = reactExports.useState("");
+    const hasValidWeek = currentWeek != null && currentWeek > 0;
+    const effectiveSourceUrl = hasValidWeek ? pageUrl : null;
     const {
       note,
       status,
@@ -18481,7 +18667,7 @@ var __async = (__this, __arguments, generator) => {
       noteId: activeNoteId,
       notesService,
       defaultCourseCode: courseCode,
-      defaultSourceUrl: pageUrl
+      defaultSourceUrl: effectiveSourceUrl
     });
     const prevEditorActiveIdRef = reactExports.useRef(editorActiveId);
     reactExports.useEffect(() => {
@@ -18516,7 +18702,24 @@ var __async = (__this, __arguments, generator) => {
       const searchTerm = search.trim().toLowerCase();
       return notes.filter((item) => {
         var _a;
-        const matchesFilter = filter === "all" || filter === "course" && item.courseCode === courseCode || filter === "page" && item.sourceUrl === pageUrl || filter === "starred" && item.isStarred;
+        let matchesFilter = false;
+        if (filter === "all") {
+          matchesFilter = true;
+        } else if (filter === "course") {
+          if (courseCode != null) {
+            matchesFilter = item.courseCode === courseCode;
+          } else {
+            matchesFilter = item.courseCode == null;
+          }
+        } else if (filter === "page") {
+          if (pageUrl) {
+            matchesFilter = item.sourceUrl === pageUrl;
+          } else {
+            matchesFilter = item.sourceUrl == null;
+          }
+        } else if (filter === "starred") {
+          matchesFilter = item.isStarred === true;
+        }
         const preview = item.previewText || ((_a = item.content) == null ? void 0 : _a.plainText) || "";
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm) || preview.toLowerCase().includes(searchTerm);
         return matchesFilter && matchesSearch;
@@ -18531,8 +18734,8 @@ var __async = (__this, __arguments, generator) => {
       onSelectNote(noteId);
       setView("current");
     };
-    const linkedTarget = (note == null ? void 0 : note.sourceUrl) || pageUrl;
     const weekLabel = formatLinkedLabel(currentWeek);
+    const linkedTarget = weekLabel ? (note == null ? void 0 : note.sourceUrl) || pageUrl : null;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-panel", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "lockin-notes-header lockin-notes-header-row", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header-left", children: [
@@ -18540,9 +18743,9 @@ var __async = (__this, __arguments, generator) => {
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-label", children: "Course:" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "lockin-notes-course-value", children: courseCode || "None" })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-link-row", children: [
+          weekLabel && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-link-row", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-label", children: "Linked to:" }),
-            weekLabel ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
               "a",
               {
                 href: linkedTarget || "#",
@@ -18551,16 +18754,7 @@ var __async = (__this, __arguments, generator) => {
                 className: "lockin-notes-link-href",
                 children: weekLabel
               }
-            ) : linkedTarget ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "a",
-              {
-                href: linkedTarget,
-                target: "_blank",
-                rel: "noreferrer",
-                className: "lockin-notes-link-href",
-                children: "Linked"
-              }
-            ) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-notes-link-empty", children: "Not linked" })
+            )
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-header-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-toggle", children: [
