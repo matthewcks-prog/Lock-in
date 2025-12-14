@@ -1,31 +1,196 @@
-"use strict";
-var LockInPageContext = (() => {
-  var __defProp = Object.defineProperty;
-  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-  var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __export = (target, all) => {
-    for (var name in all)
-      __defProp(target, name, { get: all[name], enumerable: true });
-  };
-  var __copyProps = (to, from, except, desc) => {
-    if (from && typeof from === "object" || typeof from === "function") {
-      for (let key of __getOwnPropNames(from))
-        if (!__hasOwnProp.call(to, key) && key !== except)
-          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+var __defProp = Object.defineProperty;
+var __defProps = Object.defineProperties;
+var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
+var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __propIsEnum = Object.prototype.propertyIsEnumerable;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __spreadValues = (a, b) => {
+  for (var prop in b || (b = {}))
+    if (__hasOwnProp.call(b, prop))
+      __defNormalProp(a, prop, b[prop]);
+  if (__getOwnPropSymbols)
+    for (var prop of __getOwnPropSymbols(b)) {
+      if (__propIsEnum.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
     }
-    return to;
+  return a;
+};
+var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+(function(exports) {
+  "use strict";
+  function isDebugEnabled() {
+    if (typeof window === "undefined") return false;
+    const config = window.LOCKIN_CONFIG;
+    return (config == null ? void 0 : config.DEBUG) === true || (config == null ? void 0 : config.DEBUG) === "true";
+  }
+  function createLogger() {
+    const PREFIX = "[Lock-in]";
+    return {
+      debug(...args) {
+        if (isDebugEnabled()) {
+          console.debug(PREFIX, ...args);
+        }
+      },
+      info(...args) {
+        console.info(PREFIX, ...args);
+      },
+      warn(...args) {
+        console.warn(PREFIX, ...args);
+      },
+      error(...args) {
+        console.error(PREFIX, ...args);
+      }
+    };
+  }
+  const logger = createLogger();
+  if (typeof window !== "undefined") {
+    window.LockInLogger = logger;
+  }
+  function createMessaging() {
+    return {
+      sendToBackground(message) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.runtime.sendMessage(message, (response) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve(response);
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      onMessage(callback) {
+        const listener = (message, sender, sendResponse) => {
+          try {
+            const result = callback(message, sender);
+            if (result instanceof Promise) {
+              result.then(sendResponse).catch((err) => {
+                console.error("[Lock-in] Message handler error:", err);
+                sendResponse({ error: err.message });
+              });
+              return true;
+            }
+            if (result !== void 0) {
+              sendResponse(result);
+            }
+          } catch (err) {
+            console.error("[Lock-in] Message handler error:", err);
+            sendResponse({ error: err instanceof Error ? err.message : "Unknown error" });
+          }
+        };
+        chrome.runtime.onMessage.addListener(listener);
+        return () => {
+          chrome.runtime.onMessage.removeListener(listener);
+        };
+      },
+      sendToTab(tabId, message) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.tabs.sendMessage(tabId, message, (response) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve(response);
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    };
+  }
+  const messaging = createMessaging();
+  if (typeof window !== "undefined") {
+    window.LockInMessaging = messaging;
+  }
+  const STORAGE_KEYS = {
+    SIDEBAR_IS_OPEN: "lockin_sidebar_isOpen",
+    SIDEBAR_ACTIVE_TAB: "lockin_sidebar_activeTab",
+    CURRENT_CHAT_ID: "lockinCurrentChatId",
+    ACTIVE_MODE: "lockinActiveMode",
+    MODE_PREFERENCE: "modePreference",
+    DEFAULT_MODE: "defaultMode",
+    LAST_USED_MODE: "lastUsedMode",
+    HIGHLIGHTING_ENABLED: "highlightingEnabled",
+    SELECTED_NOTE_ID: "lockin_selectedNoteId"
   };
-  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
-  // extension/content/pageContext.ts
-  var pageContext_exports = {};
-  __export(pageContext_exports, {
-    resolveAdapterContext: () => resolveAdapterContext
-  });
-
-  // integrations/adapters/baseAdapter.ts
-  var GenericAdapter = class {
+  function createStorage() {
+    return {
+      STORAGE_KEYS,
+      get(keys) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.storage.sync.get(keys, (result) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve(result);
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      set(data) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.storage.sync.set(data, () => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve();
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      remove(keys) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.storage.sync.remove(keys, () => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve();
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      onChanged(callback) {
+        const listener = (changes, areaName) => {
+          const normalizedChanges = {};
+          for (const key in changes) {
+            normalizedChanges[key] = {
+              oldValue: changes[key].oldValue,
+              newValue: changes[key].newValue
+            };
+          }
+          callback(normalizedChanges, areaName);
+        };
+        chrome.storage.onChanged.addListener(listener);
+        return () => {
+          chrome.storage.onChanged.removeListener(listener);
+        };
+      }
+    };
+  }
+  const storage = createStorage();
+  if (typeof window !== "undefined") {
+    window.LockInStorage = storage;
+  }
+  class GenericAdapter {
     canHandle(_url) {
       return true;
     }
@@ -56,17 +221,13 @@ var LockInPageContext = (() => {
         courseContext: this.getCourseContext(dom, url)
       };
     }
-  };
-
-  // core/utils/textUtils.ts
+  }
   function extractCourseCodeFromText(text) {
     if (!text || typeof text !== "string") return null;
     const match = text.match(/\b([A-Z]{3}\d{4})\b/i);
     return match ? match[1].toUpperCase() : null;
   }
-
-  // integrations/adapters/moodleAdapter.ts
-  var MoodleAdapter = class {
+  class MoodleAdapter {
     constructor() {
     }
     canHandle(url) {
@@ -219,7 +380,7 @@ var LockInPageContext = (() => {
       try {
         const existing = this.getStoredCourseMapping(courseId) ? JSON.parse(localStorage.getItem("lockin:monashCourseCodes") || "{}") : {};
         if (existing[courseId] === courseCode) return;
-        const next = { ...existing, [courseId]: courseCode };
+        const next = __spreadProps(__spreadValues({}, existing), { [courseId]: courseCode });
         localStorage.setItem("lockin:monashCourseCodes", JSON.stringify(next));
       } catch (error) {
         console.warn("Failed to persist Monash course code", error);
@@ -255,10 +416,8 @@ var LockInPageContext = (() => {
         courseContext
       };
     }
-  };
-
-  // integrations/adapters/edstemAdapter.ts
-  var EdstemAdapter = class {
+  }
+  class EdstemAdapter {
     canHandle(url) {
       return url.includes("edstem.org");
     }
@@ -302,10 +461,8 @@ var LockInPageContext = (() => {
         courseContext
       };
     }
-  };
-
-  // integrations/index.ts
-  var adapters = [
+  }
+  const adapters = [
     new MoodleAdapter(),
     new EdstemAdapter(),
     new GenericAdapter()
@@ -319,8 +476,6 @@ var LockInPageContext = (() => {
     }
     return new GenericAdapter();
   }
-
-  // extension/content/pageContext.ts
   function inferCourseCode(dom, url) {
     var _a;
     const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
@@ -331,12 +486,12 @@ var LockInPageContext = (() => {
     const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
     return codeMatch ? codeMatch[1].toUpperCase() : null;
   }
-  function resolveAdapterContext(logger) {
+  function resolveAdapterContext(logger2) {
     var _a, _b, _c;
     const log = {
-      error: (_a = logger == null ? void 0 : logger.error) != null ? _a : console.error,
-      warn: (_b = logger == null ? void 0 : logger.warn) != null ? _b : console.warn,
-      debug: (_c = logger == null ? void 0 : logger.debug) != null ? _c : (() => {
+      error: (_a = logger2 == null ? void 0 : logger2.error) != null ? _a : console.error,
+      warn: (_b = logger2 == null ? void 0 : logger2.warn) != null ? _b : console.warn,
+      debug: (_c = logger2 == null ? void 0 : logger2.debug) != null ? _c : (() => {
       })
     };
     let adapter = new GenericAdapter();
@@ -349,17 +504,18 @@ var LockInPageContext = (() => {
     try {
       adapter = getAdapterForUrl(window.location.href) || adapter;
       pageContext = adapter.getPageContext(document, window.location.href);
-      const courseContext = pageContext.courseContext || { courseCode: null, sourceUrl: window.location.href };
+      const courseContext = pageContext.courseContext || {
+        courseCode: null,
+        sourceUrl: window.location.href
+      };
       if (!courseContext.courseCode) {
         const inferred = inferCourseCode(document, window.location.href);
         if (inferred) {
-          pageContext = {
-            ...pageContext,
-            courseContext: {
-              ...courseContext,
+          pageContext = __spreadProps(__spreadValues({}, pageContext), {
+            courseContext: __spreadProps(__spreadValues({}, courseContext), {
               courseCode: inferred
-            }
-          };
+            })
+          });
         }
       }
     } catch (error) {
@@ -371,5 +527,6 @@ var LockInPageContext = (() => {
     window.LockInContent = window.LockInContent || {};
     window.LockInContent.resolveAdapterContext = resolveAdapterContext;
   }
-  return __toCommonJS(pageContext_exports);
-})();
+  exports.resolveAdapterContext = resolveAdapterContext;
+})(this.LockInContentLibs = this.LockInContentLibs || {});
+//# sourceMappingURL=contentLibs.js.map

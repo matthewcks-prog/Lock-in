@@ -38,10 +38,7 @@
       "js": [
         "config.js",
         "libs/initApi.js",
-        "libs/logger.js",
-        "libs/messaging.js",
-        "libs/storage.js",
-        "content/pageContext.js",
+        "libs/contentLibs.js",
         "content/stateStore.js",
         "content/sidebarHost.js",
         "content/sessionManager.js",

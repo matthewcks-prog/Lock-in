@@ -328,12 +328,12 @@ var __async = (__this, __arguments, generator) => {
   }
   function createApiError(response, originalError = null) {
     return __async(this, null, function* () {
-      var _a;
+      var _a2;
       let errorMessage = "API request failed";
       let errorCode = "API_ERROR";
       try {
         const errorBody = yield response.json();
-        errorMessage = ((_a = errorBody == null ? void 0 : errorBody.error) == null ? void 0 : _a.message) || (errorBody == null ? void 0 : errorBody.message) || (typeof (errorBody == null ? void 0 : errorBody.error) === "string" ? errorBody.error : null) || errorMessage;
+        errorMessage = ((_a2 = errorBody == null ? void 0 : errorBody.error) == null ? void 0 : _a2.message) || (errorBody == null ? void 0 : errorBody.message) || (typeof (errorBody == null ? void 0 : errorBody.error) === "string" ? errorBody.error : null) || errorMessage;
         if (response.status === 401 || response.status === 403) {
           errorCode = "AUTH_REQUIRED";
         } else if (response.status === 429) {
@@ -367,11 +367,11 @@ var __async = (__this, __arguments, generator) => {
     function apiRequest(_0) {
       return __async(this, arguments, function* (endpoint, options = {}) {
         var _b, _c, _d, _e, _f, _g, _h;
-        const _a = options, {
+        const _a2 = options, {
           retry = true,
           retryConfig: customRetryConfig,
           ifUnmodifiedSince
-        } = _a, fetchOptions = __objRest(_a, [
+        } = _a2, fetchOptions = __objRest(_a2, [
           "retry",
           "retryConfig",
           "ifUnmodifiedSince"
@@ -725,24 +725,24 @@ var __async = (__this, __arguments, generator) => {
       deleteNoteAsset
     };
   }
-  class ChromeStorage {
+  const chromeStorage = {
     get(key) {
       return __async(this, null, function* () {
         return new Promise((resolve, reject) => {
           try {
-            chrome.storage.sync.get(key, (data) => {
+            chrome.storage.sync.get(key, (result) => {
               if (chrome.runtime.lastError) {
                 reject(new Error(chrome.runtime.lastError.message));
-                return;
+              } else {
+                resolve(result);
               }
-              resolve(data);
             });
-          } catch (error) {
-            reject(error);
+          } catch (err) {
+            reject(err);
           }
         });
       });
-    }
+    },
     set(data) {
       return __async(this, null, function* () {
         return new Promise((resolve, reject) => {
@@ -750,16 +750,16 @@ var __async = (__this, __arguments, generator) => {
             chrome.storage.sync.set(data, () => {
               if (chrome.runtime.lastError) {
                 reject(new Error(chrome.runtime.lastError.message));
-                return;
+              } else {
+                resolve();
               }
-              resolve();
             });
-          } catch (error) {
-            reject(error);
+          } catch (err) {
+            reject(err);
           }
         });
       });
-    }
+    },
     remove(keys) {
       return __async(this, null, function* () {
         return new Promise((resolve, reject) => {
@@ -767,23 +767,23 @@ var __async = (__this, __arguments, generator) => {
             chrome.storage.sync.remove(keys, () => {
               if (chrome.runtime.lastError) {
                 reject(new Error(chrome.runtime.lastError.message));
-                return;
+              } else {
+                resolve();
               }
-              resolve();
             });
-          } catch (error) {
-            reject(error);
+          } catch (err) {
+            reject(err);
           }
         });
       });
-    }
+    },
     onChanged(callback) {
       const listener = (changes, areaName) => {
         const normalizedChanges = {};
-        for (const [key, change] of Object.entries(changes)) {
+        for (const key in changes) {
           normalizedChanges[key] = {
-            oldValue: change.oldValue,
-            newValue: change.newValue
+            oldValue: changes[key].oldValue,
+            newValue: changes[key].newValue
           };
         }
         callback(normalizedChanges, areaName);
@@ -793,8 +793,7 @@ var __async = (__this, __arguments, generator) => {
         chrome.storage.onChanged.removeListener(listener);
       };
     }
-  }
-  const chromeStorage = new ChromeStorage();
+  };
   function getConfig() {
     const config = typeof window !== "undefined" && window.LOCKIN_CONFIG || {};
     return {
@@ -835,18 +834,18 @@ var __async = (__this, __arguments, generator) => {
     if (typeof window !== "undefined") {
       window.LockInAuth = authClient;
       window.LockInAPI = apiClient;
+      window.authClient = authClient;
+      window.apiClient = apiClient;
     }
     return cachedClients;
   }
+  function getClients() {
+    return cachedClients || initClients();
+  }
   if (typeof window !== "undefined") {
     initClients();
-    window.LockInInit = {
-      getConfig,
-      initAuthClient,
-      initApiClient,
-      initClients
-    };
   }
+  exports.getClients = getClients;
   exports.getConfig = getConfig;
   exports.initApiClient = initApiClient;
   exports.initAuthClient = initAuthClient;

@@ -1,28 +1,64 @@
 /**
- * Page context + adapter resolution for the content script.
- *
- * Bundles the shared site adapters directly (no window globals).
+ * Content Script Libraries Entry Point
+ * 
+ * This file bundles all the content script helper libraries and the page context
+ * resolver with adapters. It serves as the single entry point for building
+ * the content script dependencies.
+ * 
+ * Bundled by vite.config.contentLibs.ts into extension/libs/contentLibs.js
+ * 
+ * Exposes on window:
+ * - LockInLogger
+ * - LockInMessaging  
+ * - LockInStorage
+ * - LockInContent.resolveAdapterContext
  */
-import { getAdapterForUrl, GenericAdapter, BaseAdapter } from "../../integrations";
+
+// Import and re-export all libs (side effects expose them on window)
+import "./logger";
+import "./messaging";
+import "./storage";
+
+// Import adapters and page context
+import { getAdapterForUrl, GenericAdapter } from "../../integrations";
+import type { BaseAdapter } from "../../integrations/adapters/baseAdapter";
 import type { PageContext } from "../../core/domain/types";
 
+/**
+ * Infer course code from URL or page content as fallback
+ */
 function inferCourseCode(dom: Document, url: string): string | null {
+  // Try URL first
   const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
   if (urlMatch) {
     return urlMatch[1].toUpperCase();
   }
 
+  // Try page body text (expensive, do last)
   const bodyText = dom.body?.innerText || "";
   const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
   return codeMatch ? codeMatch[1].toUpperCase() : null;
 }
 
-export function resolveAdapterContext(logger?: { error?: (...args: any[]) => void; warn?: (...args: any[]) => void; debug?: (...args: any[]) => void }) {
+interface LoggerInterface {
+  error?: (...args: unknown[]) => void;
+  warn?: (...args: unknown[]) => void;
+  debug?: (...args: unknown[]) => void;
+}
+
+/**
+ * Resolve the appropriate adapter for the current page and extract context
+ */
+export function resolveAdapterContext(logger?: LoggerInterface): {
+  adapter: BaseAdapter;
+  pageContext: PageContext;
+} {
   const log = {
     error: logger?.error ?? console.error,
     warn: logger?.warn ?? console.warn,
     debug: logger?.debug ?? (() => {}),
   };
+
   let adapter: BaseAdapter = new GenericAdapter();
   let pageContext: PageContext = {
     url: window.location.href,
@@ -36,7 +72,11 @@ export function resolveAdapterContext(logger?: { error?: (...args: any[]) => voi
     pageContext = adapter.getPageContext(document, window.location.href);
 
     // Apply lightweight course-code inference if adapter didn't find one
-    const courseContext = pageContext.courseContext || { courseCode: null, sourceUrl: window.location.href };
+    const courseContext = pageContext.courseContext || {
+      courseCode: null,
+      sourceUrl: window.location.href,
+    };
+
     if (!courseContext.courseCode) {
       const inferred = inferCourseCode(document, window.location.href);
       if (inferred) {
