@@ -37,6 +37,8 @@ export interface NotesService {
   createNote(initial: CreateNoteInput): Promise<Note>;
   updateNote(noteId: string, changes: UpdateNoteInput): Promise<Note>;
   deleteNote(noteId: string): Promise<void>;
+  toggleStar(noteId: string): Promise<Note>;
+  setStar(noteId: string, isStarred: boolean): Promise<Note>;
   listAssets(noteId: string): Promise<NoteAsset[]>;
   uploadAsset(noteId: string, file: File | Blob): Promise<NoteAsset>;
   deleteAsset(assetId: string): Promise<void>;
@@ -328,6 +330,39 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
     await apiClient.deleteNote(noteId);
   }
 
+  async function toggleStar(noteId: string): Promise<Note> {
+    ensureService(apiClient);
+    if (!noteId) {
+      throw new Error("Note ID is required to toggle star");
+    }
+    
+    // Validate that toggleNoteStar method exists on the API client
+    if (typeof apiClient.toggleNoteStar !== "function") {
+      const error = new Error(
+        "API client is missing toggleNoteStar method. Please rebuild initApi.js or check your API client initialization."
+      );
+      (error as any).code = "API_CLIENT_ERROR";
+      console.error("[NotesService] toggleStar failed:", error.message);
+      console.error("[NotesService] Available API client methods:", Object.keys(apiClient));
+      throw error;
+    }
+    
+    try {
+      const raw = await apiClient.toggleNoteStar(noteId);
+      return toDomainNote(raw);
+    } catch (error: any) {
+      // Re-throw with preserved error code for better error handling upstream
+      console.error("[NotesService] toggleStar failed:", error?.message || error);
+      throw error;
+    }
+  }
+
+  async function setStar(noteId: string, isStarred: boolean): Promise<Note> {
+    ensureService(apiClient);
+    const raw = await apiClient.setNoteStar(noteId, isStarred);
+    return toDomainNote(raw);
+  }
+
   async function listAssets(noteId: string): Promise<NoteAsset[]> {
     ensureService(apiClient);
     return apiClient.listNoteAssets({ noteId });
@@ -349,6 +384,8 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
     createNote,
     updateNote,
     deleteNote,
+    toggleStar,
+    setStar,
     listAssets,
     uploadAsset,
     deleteAsset,

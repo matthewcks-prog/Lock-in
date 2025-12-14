@@ -24,6 +24,8 @@ router.delete("/note-assets/:assetId", noteAssetsController.deleteNoteAsset);
 router.get("/notes/:noteId", notesController.getNote);
 router.put("/notes/:noteId", notesController.updateNote);
 router.delete("/notes/:noteId", notesController.deleteNote);
+router.patch("/notes/:noteId/star", notesController.toggleStarred);
+router.put("/notes/:noteId/star", notesController.setStarred);
 router.post("/notes/chat", notesChatController.chatWithNotes);
 
 module.exports = router;

@@ -152,6 +152,7 @@ CREATE TABLE public.notes (
   note_type text,
   tags ARRAY DEFAULT '{}'::text[],
   embedding USER-DEFINED,
+  is_starred boolean NOT NULL DEFAULT FALSE,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT notes_pkey PRIMARY KEY (id),
@@ -173,6 +174,7 @@ CREATE TABLE public.notes (
 - `note_type` - Type: `"manual"`, `"definition"`, `"formula"`, `"concept"`, `"general"`, `"ai-generated"`
 - `tags` - Array of tags for organization
 - `embedding` - Vector embedding for semantic search (pgvector)
+- `is_starred` - Whether the note is starred/favorited for quick access (boolean, default `false`)
 - `created_at` - Creation timestamp
 - `updated_at` - Last update timestamp
 
@@ -320,6 +322,10 @@ CREATE INDEX idx_notes_source_url ON public.notes(user_id, source_url);
 -- Notes: Optimistic locking queries
 CREATE INDEX idx_notes_updated_at ON public.notes(user_id, updated_at DESC);
 
+-- Notes: Starred notes filter (partial index for efficiency)
+CREATE INDEX idx_notes_starred ON public.notes(user_id, is_starred, created_at DESC)
+  WHERE is_starred = TRUE;
+
 -- Notes: Semantic search (pgvector)
 CREATE INDEX idx_notes_embedding ON public.notes
   USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
@@ -392,6 +398,7 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 | `002_performance_indexes.sql`     | Dec 2024 | Performance indexes for all tables             |
 | `003_row_level_security.sql`      | Dec 2024 | RLS policies for data isolation                |
 | `004_vector_extension_schema.sql` | Dec 2024 | Fix pgvector after moving to extensions schema |
+| `005_starred_notes.sql`           | Dec 2024 | Add is_starred column for favoriting notes     |
 
 ---
 

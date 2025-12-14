@@ -1,6 +1,7 @@
 # Global AGENTS.md Template
 
 > **Note**: This is a template for `~/.codex/AGENTS.md` (global preferences).
+
 ---
 
 ## Developer Preferences
@@ -106,14 +107,14 @@
 ```typescript
 /**
  * Note Domain Model and Utilities
- * 
+ *
  * Pure domain logic for notes - no Chrome dependencies.
- * 
+ *
  * Responsibilities:
  * - Note creation and normalization
  * - Note content sanitization
  * - Note filtering and matching
- * 
+ *
  * Should NOT:
  * - Access Chrome APIs
  * - Make API calls directly
@@ -126,7 +127,7 @@
 ```typescript
 /**
  * Create an empty note with default values
- * 
+ *
  * @param prefill - Optional partial note data to prefill
  * @returns A new note object with defaults
  */
@@ -160,10 +161,10 @@ try {
   return result;
 } catch (error) {
   // Log for debugging
-  console.error('Operation failed:', error);
-  
+  console.error("Operation failed:", error);
+
   // Return user-friendly error
-  throw new Error('Failed to perform operation. Please try again.');
+  throw new Error("Failed to perform operation. Please try again.");
 }
 ```
 

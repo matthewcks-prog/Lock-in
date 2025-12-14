@@ -22,10 +22,26 @@ Every feature should reinforce this loop:
 
 ---
 
-## Living Docs Expectations
+## Documentation Hierarchy
 
-- Keep this file, `AGENTS._LIVINGDOC.md`, `ARCHITECTURE_AUDIT.md`, `CODE_OVERVIEW.md`, and any folder-level `AGENTS.md` updated whenever you move, add, or remove code.
-- Treat docs as the source of truth for structure and flows; do not leave stale references after refactors.
+This project uses a structured documentation approach:
+
+- **`/AGENTS.md`** (this file) - Canonical stable contract: architecture boundaries, coding rules, workflow patterns
+- **`docs/ARCHITECTURE.md`** - Stable architecture documentation (when created)
+- **`docs/STATUS.md`** - Current snapshot: outstanding issues, recent changes, implementation status
+- **`docs/REPO_MAP.md`** - Repository structure map (when created)
+- **`docs/ADRS/`** - Architecture Decision Records (when created)
+- **`docs/REFACTOR_PLAN.md`** - Phased refactoring plan
+- **`docs/PROMPT_LOG.md`** - Log of refactoring prompts and outcomes
+- **`CODE_OVERVIEW.md`** - Current codebase snapshot (implementation details)
+- **`DATABASE.MD`** - Database schema and migration history
+- **Folder-level `AGENTS.md`** - Folder-specific conventions (e.g., `/extension/AGENTS.md`)
+
+**When to update docs:**
+- **`/AGENTS.md`**: Only when architectural boundaries, coding rules, or workflow patterns change
+- **`DATABASE.MD`**: When schema changes (new tables/columns, migrations)
+- **`CODE_OVERVIEW.md`**: When file structure or implementation patterns change
+- **Folder `AGENTS.md`**: When folder-specific conventions change
 
 ## Architecture Principles
 
@@ -126,79 +142,66 @@ To add a new site integration:
 
 ## File Organization
 
-### Extension Files (`/extension`)
+See `CODE_OVERVIEW.md` for detailed file structure and current implementation patterns.
 
-- `manifest.json` - Extension manifest
-- `background.js` - Service worker (thin, delegates to core)
-- `contentScript.js` - Thin orchestrator (mounts UI, collects context)
-- `popup/` - Popup UI (settings, auth)
-- `libs/` - Extension-specific utilities (Chrome wrappers)
-- `ui/` - Extension-only React components for the sidebar widget
-  - `components/` - LockInSidebar, ChatPanel, NotesPanel, etc.
-  - `hooks/` - React hooks for sidebar functionality
-
-### Core Files (`/core`)
-
-- `domain/` - Domain models and types
-  - `types.ts` - Shared TypeScript types
-  - `Note.ts` - Note domain model and utilities
-  - `Task.ts` - Task domain model (future)
-- `services/` - Business logic services
-- `utils/` - Pure utility functions
-
-### Integration Files (`/integrations`)
-
-- `adapters/` - Site-specific adapters
-  - `baseAdapter.ts` - Base interface
-  - `moodleAdapter.ts` - Moodle/Monash adapter
-  - `edstemAdapter.ts` - Edstem adapter
-  - `genericAdapter.ts` - Fallback adapter
-- `index.ts` - Adapter factory
-
-### API Files (`/api`)
-
-- `client.ts` - Base API client (fetch-based, no Chrome)
-- `auth.ts` - Supabase auth client (no Chrome)
-- `notesApi.ts` - Notes endpoints
-- `chatApi.ts` - Chat endpoints
-
-### Web App Files (`/web` - future)
-
-- Will contain full-page layouts and dashboard components
-- Not reusing the extension sidebar widget
-- Will have its own page components (DashboardLayout, NotesPage, CalendarPage, etc.)
-
-### Optional Shared UI Kit (`/shared/ui` or `/ui-kit` - future)
-
-- Low-level, reusable components only
-- Basic components like `<Button>`, `<Card>`, `<TextInput>`, `<Modal>`
-- Used by both extension and web app for consistent styling
-- **NOT** high-level components like `<LockInSidebar>` or page layouts
+**Key boundaries:**
+- `/extension` - Chrome-specific code only
+- `/core` - Business logic, domain models (NO Chrome dependencies)
+- `/integrations` - Site-specific adapters
+- `/api` - Backend API client (NO Chrome dependencies)
+- `/web` - Future: web app (full pages, not reusing extension sidebar)
+- `/shared/ui` - Optional: Low-level UI kit (basic components only)
 
 ---
 
 ## Making Changes
 
-### Before You Start
+### Workflow
 
-1. **Read this file** (`/AGENTS.md`)
-2. **Check folder-level AGENTS.md** if editing a specific folder
-3. **Understand the architecture** - where does your change fit?
+1. **Scan key docs & structure**
+   - Read `/AGENTS.md` (this file)
+   - Check `DATABASE.MD` if touching schema
+   - Check folder-level `AGENTS.md` if editing specific folders
+   - Review `CODE_OVERVIEW.md` for current implementation patterns
+
+2. **Plan first**
+   - Identify what will change and which files are involved
+   - Determine if changes impact architecture, database, or documented behaviors
+
+3. **Make code changes**
+   - Follow the core loop: Capture → Understand → Distil → Organise → Act
+   - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
+   - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
+   - Single widget: Don't duplicate the sidebar component
+   - Incremental changes: Don't rewrite everything at once
+
+4. **Update living docs (MANDATORY)**
+   - Update `DATABASE.MD` if schema changes (new tables/columns, migrations)
+   - Update `CODE_OVERVIEW.md` if file structure or implementation patterns change
+   - Update folder `AGENTS.md` if folder-specific conventions change
+   - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
+   - **Refactor prep tracking**: If making guardrails/docs/tests/build script changes, update `docs/REFACTOR_PLAN.md` and `docs/PROMPT_LOG.md` (see "Refactor Prep Tracking" section below)
+   - **Refactor prep tracking**: If making guardrails/docs/tests/build script changes, update `docs/REFACTOR_PLAN.md` and `docs/PROMPT_LOG.md` (see "Refactor Prep Tracking" section below)
+
+5. **Summarize what changed**
+   - List code changes (files + purpose)
+   - List doc changes (`.md` files updated and what changed)
+   - Note any TODOs or follow-ups
 
 ### When Adding Features
 
-1. **Follow the core loop**: Capture → Understand → Distil → Organise → Act
-2. **Respect separation**: Extension code in `/extension`, shared code in `/core`/`/api`
-3. **Use adapters**: Site-specific logic goes in adapters, not UI or content scripts
-4. **Single widget**: Don't duplicate the sidebar component
-5. **UI location**: Extension UI goes in `/extension/ui`, web app UI will go in `/web`
+- Follow the core loop: Capture → Understand → Distil → Organise → Act
+- Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
+- Use adapters: Site-specific logic goes in adapters, not UI or content scripts
+- Single widget: Don't duplicate the sidebar component
+- UI location: Extension UI goes in `/extension/ui`, web app UI will go in `/web`
 
 ### When Refactoring
 
-1. **Incremental changes**: Don't rewrite everything at once
-2. **Test after each step**: Ensure extension still works
-3. **Maintain behavior**: Don't remove features without discussion
-4. **Document as you go**: Update comments and docs
+- Incremental changes: Don't rewrite everything at once
+- Test after each step: Ensure extension still works
+- Maintain behavior: Don't remove features without discussion
+- Document as you go: Update comments and docs
 
 ### Code Review Checklist
 
@@ -221,21 +224,19 @@ To add a new site integration:
 3. Test: Verify course code extraction works
 4. Document: Add site to supported sites list
 
-### Notes Editing Flow (extension)
+### Notes Editing Flow
 
-1. Domain types live in `core/domain/Note.ts` (`Note`, `NoteContent`, `NoteStatus`, `NoteAsset`).
-2. All backend calls go through `core/services/notesService.ts` (handles `content_json`/`editor_version`, writes both on create/update, and lazily migrates legacy HTML-only notes by saving a Lexical JSON state).
-3. UI orchestration sits in `ui/extension/LockInSidebar.tsx` and `ui/extension/notes/NotesPanel.tsx`.
-4. Lexical-based editor is in `ui/extension/notes/NoteEditor.tsx` (no contentEditable/innerHTML). Autosave/state comes from `useNoteEditor` + `useNotesList`; assets flow through `useNoteAssets` wired to `notesService`.
-5. When creating notes from chat or selection, generate `NoteContent` (Lexical JSON, `version: lexical_v1`) instead of HTML.
-6. The Notes UI uses a single card shell (title + status + toolbar + editor) with inline attachments: the paperclip inserts `ImageNode`/`AttachmentNode` at the cursor, images are resizable, and there is no separate attachments list.
+- Domain types: `core/domain/Note.ts`
+- Service layer: `core/services/notesService.ts` (handles content format, migrations)
+- UI: `ui/extension/notes/` (Lexical editor, panels)
+- See `CODE_OVERVIEW.md` for detailed implementation patterns
 
 ### Adding a New Extension UI Feature
 
-1. Create component: `/extension/ui/components/NewFeature.tsx` (or source in `/ui` if using build process)
-2. Add hook if needed: `/extension/ui/hooks/useNewFeature.ts`
-3. Integrate: Add to `LockInSidebar.tsx` in the extension UI
-4. Style: Use Tailwind or CSS Modules
+1. Create component in `/extension/ui` (or source in `/ui` if using build process)
+2. Add hook if needed
+3. Integrate into `LockInSidebar.tsx`
+4. Style with Tailwind or CSS Modules
 
 **Note**: Extension UI is specific to the sidebar widget. The future web app will have its own UI components in `/web`.
 
@@ -270,20 +271,43 @@ To add a new site integration:
 
 ## Future Considerations
 
-- **Web app**: Will reuse `/core` and `/api` layers, but will have its own UI in `/web`
-- **UI kit**: May create `/shared/ui` or `/ui-kit` for basic reusable components (Button, Card, etc.)
-- **Tasks feature**: Planned but not yet implemented
-- **Spaced repetition**: Future feature for flashcards
-- **Analytics**: Future feature for study insights
-
 When building new features, consider: Will the core logic work in both extension and web app? The UI will be separate.
+
+- **Web app**: Will reuse `/core` and `/api` layers, but will have its own UI in `/web`
+- **UI kit**: May create `/shared/ui` for basic reusable components (Button, Card, etc.)
+- See `docs/STATUS.md` for current feature status and planned work
+
+---
+
+## Refactor Prep Tracking (MANDATORY)
+
+When making changes related to refactor preparation (guardrails, documentation, tests, build scripts), you **MUST** update:
+
+1. **`docs/REFACTOR_PLAN.md`**
+   - Mark completed phases or update phase descriptions
+   - Update "Definition of Done" checklist if criteria change
+
+2. **`docs/PROMPT_LOG.md`**
+   - Add a new row for the prompt session
+   - Include: Prompt ID, Tool, Mode, Purpose, Output Summary, Date
+
+This ensures the refactor plan and prompt log stay accurate and reflect the current state of refactor preparation work.
+
+**Examples of refactor-prep changes:**
+- Adding TypeScript type definitions for globals
+- Creating/updating build scripts (`verify-build`, etc.)
+- Adding ESLint rules for architectural boundaries
+- Creating smoke test checklists
+- Setting up test harnesses
+- Updating documentation structure
 
 ---
 
 ## Questions?
 
-- Check folder-level AGENTS.md files
-- Review existing code patterns
+- Check folder-level `AGENTS.md` files
+- Review `CODE_OVERVIEW.md` for current implementation patterns
+- Check `docs/STATUS.md` for outstanding issues and recent changes
 - Ask before making large architectural changes
 
 **Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`) Chrome-free. Extension UI (`/extension/ui`) is specific to the sidebar widget and will not be reused by the web app.

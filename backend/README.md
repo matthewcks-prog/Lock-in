@@ -193,13 +193,13 @@ Create a new note with optional embedding for semantic search.
 GET /api/notes?sourceUrl=&courseCode=&limit=
 ```
 
-Get notes filtered by source URL, course code, or all notes.
+Get all notes for the authenticated user. Optional query parameters can be used for server-side filtering, but the client typically fetches all notes and filters client-side.
 
 **Query Parameters:**
 
-- `sourceUrl` (optional): Filter by page URL
-- `courseCode` (optional): Filter by course code
-- `limit` (optional): Max results (default: 50)
+- `sourceUrl` (optional): Filter by page URL (for specific use cases)
+- `courseCode` (optional): Filter by course code (for specific use cases)
+- `limit` (optional): Max results (default: 50, max: 100)
 
 #### Search Notes (Semantic Search)
 
