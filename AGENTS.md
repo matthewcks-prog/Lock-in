@@ -49,7 +49,7 @@ This project uses a structured documentation approach:
 
 - **Chrome Extension** (`/extension`): In-context assistant on learning platforms
   - UI: Sidebar widget with tabs (Chat/Notes/Settings) - specific to extension
-  - Lives in `/extension/ui` - React components for the sidebar widget
+  - Source lives in `/ui/extension` - React components for the sidebar widget (built output in `/extension/ui`)
 - **Web App** (`/web` - future): Study dashboard, knowledge base, analytics
   - UI: Full-page layouts (dashboard, notes library, calendar, analytics pages)
   - Will have its own page/layout components under `/web`
@@ -64,7 +64,8 @@ Both share:
 
 ```
 /extension     → Chrome-specific code only (manifest, background, content script injection)
-  /ui          → Extension-only React components for the sidebar widget
+  /ui          → Built output: React sidebar bundle (source in /ui/extension)
+/ui/extension  → Source: Extension-only React components for the sidebar widget
 /core          → Business logic, domain models (NO Chrome dependencies)
 /integrations  → Site-specific adapters (Moodle, Edstem, etc.)
 /api           → Backend API client (NO Chrome dependencies)
@@ -72,7 +73,7 @@ Both share:
 /shared/ui     → Optional: Low-level UI kit (Button, Card, TextInput, etc.) - basic components only
 ```
 
-**Rule**: If code in `/core` or `/api` needs Chrome APIs, you're doing it wrong. Extract Chrome-specific parts to `/extension`. The extension UI (`/extension/ui`) is Chrome-specific and will not be reused by the web app.
+**Rule**: If code in `/core` or `/api` needs Chrome APIs, you're doing it wrong. Extract Chrome-specific parts to `/extension`. The extension UI source (`/ui/extension`) is Chrome-specific and will not be reused by the web app.
 
 ---
 
@@ -109,7 +110,8 @@ To add a new site integration:
 ### 3. Extension vs Core Separation
 
 - **Extension code** (`/extension`): Chrome-specific code
-  - `/extension/ui` - Sidebar widget React components (extension-specific, not shared)
+  - `/ui/extension` - Source: Sidebar widget React components (extension-specific, not shared)
+  - `/extension/ui` - Built output: React sidebar bundle (built from `/ui/extension`)
   - `chromeStorage` wraps `chrome.storage` → calls shared storage interface
   - `chromeMessaging` wraps `chrome.runtime.sendMessage` → calls shared messaging interface
 
@@ -181,7 +183,6 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
    - Update folder `AGENTS.md` if folder-specific conventions change
    - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
    - **Refactor prep tracking**: If making guardrails/docs/tests/build script changes, update `docs/REFACTOR_PLAN.md` and `docs/PROMPT_LOG.md` (see "Refactor Prep Tracking" section below)
-   - **Refactor prep tracking**: If making guardrails/docs/tests/build script changes, update `docs/REFACTOR_PLAN.md` and `docs/PROMPT_LOG.md` (see "Refactor Prep Tracking" section below)
 
 5. **Summarize what changed**
    - List code changes (files + purpose)
@@ -194,7 +195,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
 - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
 - Single widget: Don't duplicate the sidebar component
-- UI location: Extension UI goes in `/extension/ui`, web app UI will go in `/web`
+- UI location: Extension UI source goes in `/ui/extension` (built to `/extension/ui`), web app UI will go in `/web`
 
 ### When Refactoring
 
@@ -233,12 +234,12 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 
 ### Adding a New Extension UI Feature
 
-1. Create component in `/extension/ui` (or source in `/ui` if using build process)
+1. Create component in `/ui/extension` (source location)
 2. Add hook if needed
 3. Integrate into `LockInSidebar.tsx`
 4. Style with Tailwind or CSS Modules
 
-**Note**: Extension UI is specific to the sidebar widget. The future web app will have its own UI components in `/web`.
+**Note**: Extension UI source is in `/ui/extension` (built to `/extension/ui`). Extension UI is specific to the sidebar widget. The future web app will have its own UI components in `/web`.
 
 ### Adding a New API Endpoint
 
@@ -310,4 +311,4 @@ This ensures the refactor plan and prompt log stay accurate and reflect the curr
 - Check `docs/STATUS.md` for outstanding issues and recent changes
 - Ask before making large architectural changes
 
-**Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`) Chrome-free. Extension UI (`/extension/ui`) is specific to the sidebar widget and will not be reused by the web app.
+**Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`) Chrome-free. Extension UI source (`/ui/extension`, built to `/extension/ui`) is specific to the sidebar widget and will not be reused by the web app.
