@@ -60,6 +60,15 @@ async function bootstrap() {
     Logger.error("API client not available");
     return;
   }
+  
+  // Validate API client has required methods
+  if (typeof apiClient.toggleNoteStar !== "function") {
+    Logger.error(
+      "API client is missing toggleNoteStar method. Available methods:",
+      Object.keys(apiClient)
+    );
+    // Continue anyway - the error will be caught by the notes service
+  }
 
   const { adapter, pageContext } = resolveAdapterContext(Logger);
   const stateStore = createStateStore({ Storage, Logger });

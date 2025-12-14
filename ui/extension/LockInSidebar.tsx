@@ -218,10 +218,10 @@ export function LockInSidebar({
     isLoading: notesLoading,
     refresh: refreshNotes,
     upsertNote,
+    deleteNote: deleteNoteFromList,
+    toggleStar: toggleNoteStar,
   } = useNotesList({
     notesService,
-    courseCode,
-    sourceUrl: pageUrl,
     limit: 50,
   });
 
@@ -964,6 +964,14 @@ export function LockInSidebar({
                 upsertNote(note);
                 setSelectedNoteId(note.id);
               }}
+              onDeleteNote={async (noteId) => {
+                await deleteNoteFromList(noteId);
+                // Clear selection if the deleted note was selected
+                if (selectedNoteId === noteId) {
+                  setSelectedNoteId(null);
+                }
+              }}
+              onToggleStar={toggleNoteStar}
               activeNoteId={selectedNoteId}
               onSelectNote={(noteId) => setSelectedNoteId(noteId)}
               courseCode={courseCode}

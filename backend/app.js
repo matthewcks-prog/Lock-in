@@ -14,6 +14,7 @@ const {
 } = require("./config");
 const lockinRoutes = require("./routes/lockinRoutes");
 const noteRoutes = require("./routes/noteRoutes");
+const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 
 function createApp() {
   const app = express();
@@ -72,40 +73,11 @@ function createApp() {
   app.use("/api", lockinRoutes);
   app.use("/api", noteRoutes);
 
-  // 404 handler
-  app.use((req, res) => {
-    res.status(404).json({
-      error: "Not Found",
-      message: "The requested endpoint does not exist",
-    });
-  });
+  // 404 handler for unmatched routes
+  app.use(notFoundHandler);
 
-  // Error handler middleware (must be last)
-  app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    console.error('Stack:', err.stack);
-    
-    // Log request details for debugging
-    console.error('Request:', {
-      method: req.method,
-      path: req.path,
-      body: req.body,
-      params: req.params,
-      query: req.query,
-    });
-
-    // Send error response
-    const statusCode = err.status || err.statusCode || 500;
-    const message = err.message || 'Internal server error';
-    
-    res.status(statusCode).json({
-      success: false,
-      error: {
-        message,
-        ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-      },
-    });
-  });
+  // Centralized error handler middleware (must be last)
+  app.use(errorHandler);
 
   return app;
 }
@@ -113,5 +85,3 @@ function createApp() {
 module.exports = {
   createApp,
 };
-
-

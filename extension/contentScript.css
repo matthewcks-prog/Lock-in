@@ -1850,6 +1850,151 @@ body.lockin-sidebar-open .content {
   border-color: #9ca3af;
 }
 
+/* === NOTE CARD ACTIONS (Star/Delete buttons) === */
+.lockin-note-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lockin-note-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.lockin-note-star-indicator {
+  color: #eab308;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockin-note-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.lockin-note-card:hover .lockin-note-card-actions {
+  opacity: 1;
+}
+
+/* Always show actions on touch devices */
+@media (hover: none) {
+  .lockin-note-card-actions {
+    opacity: 1;
+  }
+}
+
+.lockin-note-action-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockin-note-action-btn:hover {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+}
+
+.lockin-note-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockin-note-star-btn {
+  color: #9ca3af;
+}
+
+.lockin-note-star-btn:hover {
+  color: #eab308;
+}
+
+.lockin-note-star-btn.is-starred {
+  color: #eab308;
+}
+
+.lockin-note-delete-btn {
+  color: #9ca3af;
+}
+
+.lockin-note-delete-btn:hover {
+  color: #ef4444;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* Starred note card styling */
+.lockin-note-card.is-starred {
+  border-left: 3px solid #eab308;
+}
+
+/* === NOTES HEADER ACTIONS === */
+.lockin-notes-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+.lockin-notes-header-actions .lockin-note-action-btn {
+  font-size: 16px;
+  padding: 6px 8px;
+}
+
+/* Spinner inside action buttons */
+.lockin-note-action-btn .lockin-inline-spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+
+/* === NOTES ERROR MESSAGE === */
+.lockin-notes-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  margin: 8px 16px;
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.lockin-notes-error-dismiss {
+  background: transparent;
+  border: none;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.lockin-notes-error-dismiss:hover {
+  background: #fecaca;
+}
+
 /* === SCROLLBARS === */
 .lockin-chat-messages::-webkit-scrollbar,
 .lockin-history-list::-webkit-scrollbar,
@@ -1888,6 +2033,267 @@ body.lockin-sidebar-open .content {
   border: 0;
 }
 
+/* === CONFIRM DIALOG === */
+.lockin-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  padding: 16px;
+  animation: lockin-fade-in 0.15s ease;
+}
+
+@keyframes lockin-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lockin-confirm-dialog {
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  max-width: 400px;
+  width: 100%;
+  animation: lockin-slide-up 0.2s ease;
+  overflow: hidden;
+}
+
+@keyframes lockin-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.lockin-confirm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 20px 0;
+}
+
+.lockin-confirm-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #d97706;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lockin-confirm-icon.is-danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.lockin-confirm-close {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.lockin-confirm-close:hover {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.lockin-confirm-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockin-confirm-content {
+  padding: 16px 20px;
+}
+
+.lockin-confirm-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.lockin-confirm-description {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.lockin-confirm-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px 20px;
+  justify-content: flex-end;
+}
+
+.lockin-confirm-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 80px;
+  border: 1px solid transparent;
+}
+
+.lockin-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lockin-confirm-btn-cancel {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #e5e7eb;
+}
+
+.lockin-confirm-btn-cancel:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.lockin-confirm-btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.lockin-confirm-btn-primary:hover:not(:disabled) {
+  background: #4f46e5;
+}
+
+.lockin-confirm-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.lockin-confirm-btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.lockin-confirm-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: lockin-spin 0.8s linear infinite;
+}
+
+/* === TOAST NOTIFICATIONS === */
+.lockin-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #1f2937;
+  color: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  font-size: 14px;
+  z-index: 10002;
+  animation: lockin-toast-in 0.3s ease;
+  max-width: 90%;
+}
+
+@keyframes lockin-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.lockin-toast.is-leaving {
+  animation: lockin-toast-out 0.2s ease forwards;
+}
+
+@keyframes lockin-toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+}
+
+.lockin-toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lockin-toast-success .lockin-toast-icon {
+  color: #34d399;
+}
+
+.lockin-toast-error .lockin-toast-icon {
+  color: #f87171;
+}
+
+.lockin-toast-info .lockin-toast-icon {
+  color: #60a5fa;
+}
+
+.lockin-toast-star .lockin-toast-icon {
+  color: #fbbf24;
+}
+
+.lockin-toast-message {
+  flex: 1;
+  min-width: 0;
+}
+
+.lockin-toast-dismiss {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.lockin-toast-dismiss:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
 /* === RESPONSIVE BEHAVIOR === */
 @media (max-width: 1024px) {
   #lockin-sidebar {
@@ -1910,7 +2316,11 @@ body.lockin-sidebar-open .content {
   .lockin-chat-history-panel,
   #lockin-toggle-pill,
   .lockin-mode-pill,
-  .lockin-close-btn {
+  .lockin-close-btn,
+  .lockin-confirm-backdrop,
+  .lockin-confirm-dialog,
+  .lockin-toast {
+    animation: none;
     transition: none;
   }
 }

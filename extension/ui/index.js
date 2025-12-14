@@ -7288,6 +7288,37 @@ var __async = (__this, __arguments, generator) => {
         yield apiClient.deleteNote(noteId);
       });
     }
+    function toggleStar(noteId) {
+      return __async(this, null, function* () {
+        ensureService(apiClient);
+        if (!noteId) {
+          throw new Error("Note ID is required to toggle star");
+        }
+        if (typeof apiClient.toggleNoteStar !== "function") {
+          const error = new Error(
+            "API client is missing toggleNoteStar method. Please rebuild initApi.js or check your API client initialization."
+          );
+          error.code = "API_CLIENT_ERROR";
+          console.error("[NotesService] toggleStar failed:", error.message);
+          console.error("[NotesService] Available API client methods:", Object.keys(apiClient));
+          throw error;
+        }
+        try {
+          const raw = yield apiClient.toggleNoteStar(noteId);
+          return toDomainNote(raw);
+        } catch (error) {
+          console.error("[NotesService] toggleStar failed:", (error == null ? void 0 : error.message) || error);
+          throw error;
+        }
+      });
+    }
+    function setStar(noteId, isStarred) {
+      return __async(this, null, function* () {
+        ensureService(apiClient);
+        const raw = yield apiClient.setNoteStar(noteId, isStarred);
+        return toDomainNote(raw);
+      });
+    }
     function listAssets(noteId) {
       return __async(this, null, function* () {
         ensureService(apiClient);
@@ -7312,13 +7343,15 @@ var __async = (__this, __arguments, generator) => {
       createNote,
       updateNote,
       deleteNote,
+      toggleStar,
+      setStar,
       listAssets,
       uploadAsset,
       deleteAsset
     };
   }
   function useNotesList(options) {
-    const { notesService, courseCode, sourceUrl, limit = 50 } = options;
+    const { notesService, limit = 50 } = options;
     const [notes, setNotes] = reactExports.useState([]);
     const [isLoading, setIsLoading] = reactExports.useState(false);
     const [error, setError] = reactExports.useState(null);
@@ -7326,7 +7359,7 @@ var __async = (__this, __arguments, generator) => {
     const lastParamsRef = reactExports.useRef("");
     const refresh = reactExports.useCallback(() => __async(null, null, function* () {
       if (!notesService) return;
-      const paramsFingerprint = JSON.stringify({ courseCode, sourceUrl, limit });
+      const paramsFingerprint = JSON.stringify({ limit });
       if (isRefreshingRef.current && lastParamsRef.current === paramsFingerprint) {
         return;
       }
@@ -7336,8 +7369,6 @@ var __async = (__this, __arguments, generator) => {
       setError(null);
       try {
         const list = yield notesService.listNotes({
-          courseCode: courseCode != null ? courseCode : void 0,
-          sourceUrl: sourceUrl != null ? sourceUrl : void 0,
           limit
         });
         setNotes(list);
@@ -7347,12 +7378,87 @@ var __async = (__this, __arguments, generator) => {
         setIsLoading(false);
         isRefreshingRef.current = false;
       }
-    }), [courseCode, limit, notesService, sourceUrl]);
+    }), [limit, notesService]);
     const upsertNote = reactExports.useCallback((note) => {
       setNotes((prev) => {
         const filtered = prev.filter((item) => item.id !== note.id);
         return [note, ...filtered];
       });
+    }, []);
+    const deleteNote = reactExports.useCallback((noteId) => __async(null, null, function* () {
+      if (!notesService || !noteId) return;
+      let deletedNote;
+      let deletedIndex = -1;
+      setNotes((prev) => {
+        deletedIndex = prev.findIndex((n2) => n2.id === noteId);
+        if (deletedIndex >= 0) {
+          deletedNote = prev[deletedIndex];
+        }
+        return prev.filter((n2) => n2.id !== noteId);
+      });
+      try {
+        yield notesService.deleteNote(noteId);
+      } catch (err) {
+        if (deletedNote) {
+          setNotes((prev) => {
+            const newList = [...prev];
+            if (deletedIndex >= 0 && deletedIndex <= newList.length) {
+              newList.splice(deletedIndex, 0, deletedNote);
+            } else {
+              newList.unshift(deletedNote);
+            }
+            return newList;
+          });
+        }
+        setError((err == null ? void 0 : err.message) || "Failed to delete note");
+        throw err;
+      }
+    }), [notesService]);
+    const toggleStar = reactExports.useCallback((noteId) => __async(null, null, function* () {
+      if (!notesService) {
+        const error2 = new Error("Notes service not available. Please try again.");
+        setError(error2.message);
+        throw error2;
+      }
+      if (!noteId) {
+        const error2 = new Error("Cannot star note: Note ID is missing");
+        setError(error2.message);
+        throw error2;
+      }
+      let originalNote;
+      setNotes((prev) => {
+        return prev.map((n2) => {
+          if (n2.id === noteId) {
+            originalNote = n2;
+            return __spreadProps(__spreadValues({}, n2), { isStarred: !n2.isStarred });
+          }
+          return n2;
+        });
+      });
+      try {
+        const updated = yield notesService.toggleStar(noteId);
+        setNotes((prev) => prev.map((n2) => n2.id === noteId ? updated : n2));
+        return updated;
+      } catch (err) {
+        if (originalNote) {
+          setNotes((prev) => prev.map((n2) => n2.id === noteId ? originalNote : n2));
+        }
+        let errorMessage = "Failed to toggle star";
+        if ((err == null ? void 0 : err.code) === "AUTH_REQUIRED") {
+          errorMessage = "Please sign in to star notes";
+        } else if ((err == null ? void 0 : err.code) === "NOT_FOUND") {
+          errorMessage = "Note not found";
+        } else if ((err == null ? void 0 : err.code) === "NETWORK_ERROR") {
+          errorMessage = "Network error. Please check your connection.";
+        } else if (err == null ? void 0 : err.message) {
+          errorMessage = err.message;
+        }
+        setError(errorMessage);
+        throw err;
+      }
+    }), [notesService]);
+    const removeFromList = reactExports.useCallback((noteId) => {
+      setNotes((prev) => prev.filter((n2) => n2.id !== noteId));
     }, []);
     reactExports.useEffect(() => {
       refresh();
@@ -7362,9 +7468,257 @@ var __async = (__this, __arguments, generator) => {
       isLoading,
       error,
       refresh,
-      upsertNote
+      upsertNote,
+      deleteNote,
+      toggleStar,
+      removeFromList
     };
   }
+  const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  const toCamelCase = (string) => string.replace(
+    /^([A-Z])|[\s-_]+(\w)/g,
+    (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
+  );
+  const toPascalCase = (string) => {
+    const camelCase = toCamelCase(string);
+    return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
+  };
+  const mergeClasses = (...classes) => classes.filter((className, index, array) => {
+    return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index;
+  }).join(" ").trim();
+  const hasA11yProp = (props) => {
+    for (const prop in props) {
+      if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
+        return true;
+      }
+    }
+  };
+  var defaultAttributes = {
+    xmlns: "http://www.w3.org/2000/svg",
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  };
+  const Icon = reactExports.forwardRef(
+    (_a, ref) => {
+      var _b = _a, {
+        color = "currentColor",
+        size = 24,
+        strokeWidth = 2,
+        absoluteStrokeWidth,
+        className = "",
+        children,
+        iconNode
+      } = _b, rest = __objRest(_b, [
+        "color",
+        "size",
+        "strokeWidth",
+        "absoluteStrokeWidth",
+        "className",
+        "children",
+        "iconNode"
+      ]);
+      return reactExports.createElement(
+        "svg",
+        __spreadValues(__spreadValues(__spreadProps(__spreadValues({
+          ref
+        }, defaultAttributes), {
+          width: size,
+          height: size,
+          stroke: color,
+          strokeWidth: absoluteStrokeWidth ? Number(strokeWidth) * 24 / Number(size) : strokeWidth,
+          className: mergeClasses("lucide", className)
+        }), !children && !hasA11yProp(rest) && { "aria-hidden": "true" }), rest),
+        [
+          ...iconNode.map(([tag, attrs]) => reactExports.createElement(tag, attrs)),
+          ...Array.isArray(children) ? children : [children]
+        ]
+      );
+    }
+  );
+  const createLucideIcon = (iconName, iconNode) => {
+    const Component = reactExports.forwardRef(
+      (_a, ref) => {
+        var _b = _a, { className } = _b, props = __objRest(_b, ["className"]);
+        return reactExports.createElement(Icon, __spreadValues({
+          ref,
+          iconNode,
+          className: mergeClasses(
+            `lucide-${toKebabCase(toPascalCase(iconName))}`,
+            `lucide-${iconName}`,
+            className
+          )
+        }, props));
+      }
+    );
+    Component.displayName = toPascalCase(iconName);
+    return Component;
+  };
+  const __iconNode$l = [
+    [
+      "path",
+      { d: "M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8", key: "mg9rjx" }
+    ]
+  ];
+  const Bold = createLucideIcon("bold", __iconNode$l);
+  const __iconNode$k = [
+    [
+      "path",
+      { d: "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1", key: "ezmyqa" }
+    ],
+    [
+      "path",
+      {
+        d: "M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1",
+        key: "e1hn23"
+      }
+    ]
+  ];
+  const Braces = createLucideIcon("braces", __iconNode$k);
+  const __iconNode$j = [["path", { d: "M20 6 9 17l-5-5", key: "1gmf2c" }]];
+  const Check = createLucideIcon("check", __iconNode$j);
+  const __iconNode$i = [
+    ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
+    ["line", { x1: "12", x2: "12", y1: "8", y2: "12", key: "1pkeuh" }],
+    ["line", { x1: "12", x2: "12.01", y1: "16", y2: "16", key: "4dfq90" }]
+  ];
+  const CircleAlert = createLucideIcon("circle-alert", __iconNode$i);
+  const __iconNode$h = [
+    ["path", { d: "m16 18 6-6-6-6", key: "eg8j8" }],
+    ["path", { d: "m8 6-6 6 6 6", key: "ppft3o" }]
+  ];
+  const Code = createLucideIcon("code", __iconNode$h);
+  const __iconNode$g = [
+    ["path", { d: "m9 11-6 6v3h9l3-3", key: "1a3l36" }],
+    ["path", { d: "m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4", key: "14a9rk" }]
+  ];
+  const Highlighter = createLucideIcon("highlighter", __iconNode$g);
+  const __iconNode$f = [
+    ["line", { x1: "19", x2: "10", y1: "4", y2: "4", key: "15jd3p" }],
+    ["line", { x1: "14", x2: "5", y1: "20", y2: "20", key: "bu0au3" }],
+    ["line", { x1: "15", x2: "9", y1: "4", y2: "20", key: "uljnxc" }]
+  ];
+  const Italic = createLucideIcon("italic", __iconNode$f);
+  const __iconNode$e = [
+    ["path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71", key: "1cjeqo" }],
+    ["path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71", key: "19qd67" }]
+  ];
+  const Link = createLucideIcon("link", __iconNode$e);
+  const __iconNode$d = [
+    ["path", { d: "M11 5h10", key: "1cz7ny" }],
+    ["path", { d: "M11 12h10", key: "1438ji" }],
+    ["path", { d: "M11 19h10", key: "11t30w" }],
+    ["path", { d: "M4 4h1v5", key: "10yrso" }],
+    ["path", { d: "M4 9h2", key: "r1h2o0" }],
+    ["path", { d: "M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02", key: "xtkcd5" }]
+  ];
+  const ListOrdered = createLucideIcon("list-ordered", __iconNode$d);
+  const __iconNode$c = [
+    ["path", { d: "M3 5h.01", key: "18ugdj" }],
+    ["path", { d: "M3 12h.01", key: "nlz23k" }],
+    ["path", { d: "M3 19h.01", key: "noohij" }],
+    ["path", { d: "M8 5h13", key: "1pao27" }],
+    ["path", { d: "M8 12h13", key: "1za7za" }],
+    ["path", { d: "M8 19h13", key: "m83p4d" }]
+  ];
+  const List = createLucideIcon("list", __iconNode$c);
+  const __iconNode$b = [
+    [
+      "path",
+      {
+        d: "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z",
+        key: "e79jfc"
+      }
+    ],
+    ["circle", { cx: "13.5", cy: "6.5", r: ".5", fill: "currentColor", key: "1okk4w" }],
+    ["circle", { cx: "17.5", cy: "10.5", r: ".5", fill: "currentColor", key: "f64h9f" }],
+    ["circle", { cx: "6.5", cy: "12.5", r: ".5", fill: "currentColor", key: "qy21gx" }],
+    ["circle", { cx: "8.5", cy: "7.5", r: ".5", fill: "currentColor", key: "fotxhn" }]
+  ];
+  const Palette = createLucideIcon("palette", __iconNode$b);
+  const __iconNode$a = [
+    [
+      "path",
+      {
+        d: "m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551",
+        key: "1miecu"
+      }
+    ]
+  ];
+  const Paperclip = createLucideIcon("paperclip", __iconNode$a);
+  const __iconNode$9 = [
+    ["path", { d: "m15 14 5-5-5-5", key: "12vg1m" }],
+    ["path", { d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13", key: "6uklza" }]
+  ];
+  const Redo2 = createLucideIcon("redo-2", __iconNode$9);
+  const __iconNode$8 = [
+    [
+      "path",
+      {
+        d: "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z",
+        key: "r04s7s"
+      }
+    ]
+  ];
+  const Star = createLucideIcon("star", __iconNode$8);
+  const __iconNode$7 = [
+    ["path", { d: "M21 5H3", key: "1fi0y6" }],
+    ["path", { d: "M17 12H7", key: "16if0g" }],
+    ["path", { d: "M19 19H5", key: "vjpgq2" }]
+  ];
+  const TextAlignCenter = createLucideIcon("text-align-center", __iconNode$7);
+  const __iconNode$6 = [
+    ["path", { d: "M21 5H3", key: "1fi0y6" }],
+    ["path", { d: "M21 12H9", key: "dn1m92" }],
+    ["path", { d: "M21 19H7", key: "4cu937" }]
+  ];
+  const TextAlignEnd = createLucideIcon("text-align-end", __iconNode$6);
+  const __iconNode$5 = [
+    ["path", { d: "M21 5H3", key: "1fi0y6" }],
+    ["path", { d: "M15 12H3", key: "6jk70r" }],
+    ["path", { d: "M17 19H3", key: "z6ezky" }]
+  ];
+  const TextAlignStart = createLucideIcon("text-align-start", __iconNode$5);
+  const __iconNode$4 = [
+    ["path", { d: "M10 11v6", key: "nco0om" }],
+    ["path", { d: "M14 11v6", key: "outv1u" }],
+    ["path", { d: "M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6", key: "miytrc" }],
+    ["path", { d: "M3 6h18", key: "d0wm0j" }],
+    ["path", { d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2", key: "e791ji" }]
+  ];
+  const Trash2 = createLucideIcon("trash-2", __iconNode$4);
+  const __iconNode$3 = [
+    [
+      "path",
+      {
+        d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",
+        key: "wmoenq"
+      }
+    ],
+    ["path", { d: "M12 9v4", key: "juzpu7" }],
+    ["path", { d: "M12 17h.01", key: "p32p05" }]
+  ];
+  const TriangleAlert = createLucideIcon("triangle-alert", __iconNode$3);
+  const __iconNode$2 = [
+    ["path", { d: "M6 4v6a6 6 0 0 0 12 0V4", key: "9kb039" }],
+    ["line", { x1: "4", x2: "20", y1: "20", y2: "20", key: "nun2al" }]
+  ];
+  const Underline = createLucideIcon("underline", __iconNode$2);
+  const __iconNode$1 = [
+    ["path", { d: "M9 14 4 9l5-5", key: "102s5s" }],
+    ["path", { d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11", key: "f3b9sd" }]
+  ];
+  const Undo2 = createLucideIcon("undo-2", __iconNode$1);
+  const __iconNode = [
+    ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
+    ["path", { d: "m6 6 12 12", key: "d8bk6v" }]
+  ];
+  const X$2 = createLucideIcon("x", __iconNode);
   function useNoteAssets(noteId, notesService) {
     const [noteAssets, setNoteAssets] = reactExports.useState([]);
     const [isLoading, setIsLoading] = reactExports.useState(false);
@@ -7831,6 +8185,200 @@ var __async = (__this, __arguments, generator) => {
       saveNow,
       resetToNew,
       syncOfflineQueue
+    };
+  }
+  function ConfirmDialog({
+    isOpen,
+    onClose,
+    onConfirm,
+    title,
+    description,
+    confirmLabel = "Confirm",
+    cancelLabel = "Cancel",
+    variant = "default",
+    isLoading = false
+  }) {
+    const dialogRef = reactExports.useRef(null);
+    const cancelButtonRef = reactExports.useRef(null);
+    reactExports.useEffect(() => {
+      if (isOpen) {
+        const timer = setTimeout(() => {
+          var _a;
+          (_a = cancelButtonRef.current) == null ? void 0 : _a.focus();
+        }, 50);
+        return () => clearTimeout(timer);
+      }
+    }, [isOpen]);
+    reactExports.useEffect(() => {
+      if (!isOpen) return;
+      const handleKeyDown = (e2) => {
+        if (e2.key === "Escape" && !isLoading) {
+          onClose();
+        }
+      };
+      document.addEventListener("keydown", handleKeyDown);
+      return () => document.removeEventListener("keydown", handleKeyDown);
+    }, [isOpen, isLoading, onClose]);
+    reactExports.useEffect(() => {
+      if (isOpen) {
+        const originalOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => {
+          document.body.style.overflow = originalOverflow;
+        };
+      }
+    }, [isOpen]);
+    const handleBackdropClick = reactExports.useCallback(
+      (e2) => {
+        if (e2.target === e2.currentTarget && !isLoading) {
+          onClose();
+        }
+      },
+      [isLoading, onClose]
+    );
+    const handleConfirm = reactExports.useCallback(() => {
+      if (!isLoading) {
+        onConfirm();
+      }
+    }, [isLoading, onConfirm]);
+    if (!isOpen) return null;
+    const isDanger = variant === "danger";
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: "lockin-confirm-backdrop",
+        onClick: handleBackdropClick,
+        role: "presentation",
+        children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            ref: dialogRef,
+            className: "lockin-confirm-dialog",
+            role: "alertdialog",
+            "aria-modal": "true",
+            "aria-labelledby": "confirm-dialog-title",
+            "aria-describedby": "confirm-dialog-description",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-confirm-header", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: `lockin-confirm-icon ${isDanger ? "is-danger" : ""}`, children: /* @__PURE__ */ jsxRuntimeExports.jsx(TriangleAlert, { size: 24, strokeWidth: 2 }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    className: "lockin-confirm-close",
+                    onClick: onClose,
+                    disabled: isLoading,
+                    "aria-label": "Close dialog",
+                    children: /* @__PURE__ */ jsxRuntimeExports.jsx(X$2, { size: 18, strokeWidth: 2 })
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-confirm-content", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { id: "confirm-dialog-title", className: "lockin-confirm-title", children: title }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "p",
+                  {
+                    id: "confirm-dialog-description",
+                    className: "lockin-confirm-description",
+                    children: description
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-confirm-actions", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    ref: cancelButtonRef,
+                    type: "button",
+                    className: "lockin-confirm-btn lockin-confirm-btn-cancel",
+                    onClick: onClose,
+                    disabled: isLoading,
+                    children: cancelLabel
+                  }
+                ),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    type: "button",
+                    className: `lockin-confirm-btn ${isDanger ? "lockin-confirm-btn-danger" : "lockin-confirm-btn-primary"}`,
+                    onClick: handleConfirm,
+                    disabled: isLoading,
+                    children: isLoading ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-confirm-spinner", "aria-hidden": "true" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Deleting..." })
+                    ] }) : confirmLabel
+                  }
+                )
+              ] })
+            ]
+          }
+        )
+      }
+    );
+  }
+  const ICON_MAP = {
+    success: Check,
+    error: CircleAlert,
+    info: CircleAlert,
+    star: Star
+  };
+  function Toast({
+    message,
+    type = "info",
+    duration = 3e3,
+    onDismiss,
+    isVisible
+  }) {
+    const [isLeaving, setIsLeaving] = reactExports.useState(false);
+    reactExports.useEffect(() => {
+      if (!isVisible || duration === 0) return;
+      const timer = setTimeout(() => {
+        setIsLeaving(true);
+        setTimeout(onDismiss, 200);
+      }, duration);
+      return () => clearTimeout(timer);
+    }, [isVisible, duration, onDismiss]);
+    const handleDismiss = () => {
+      setIsLeaving(true);
+      setTimeout(onDismiss, 200);
+    };
+    if (!isVisible) return null;
+    const Icon2 = ICON_MAP[type];
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: `lockin-toast lockin-toast-${type} ${isLeaving ? "is-leaving" : ""}`,
+        role: "alert",
+        "aria-live": "polite",
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-toast-icon", children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon2, { size: 16, strokeWidth: 2.5 }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-toast-message", children: message }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              className: "lockin-toast-dismiss",
+              onClick: handleDismiss,
+              "aria-label": "Dismiss notification",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(X$2, { size: 14, strokeWidth: 2 })
+            }
+          )
+        ]
+      }
+    );
+  }
+  function useToast() {
+    const [toast, setToast] = reactExports.useState(null);
+    const showToast = (message, type = "info") => {
+      setToast({ message, type, isVisible: true });
+    };
+    const hideToast = () => {
+      setToast(null);
+    };
+    return {
+      toast,
+      showToast,
+      hideToast
     };
   }
   var prism = { exports: {} };
@@ -15374,208 +15922,6 @@ var __async = (__this, __arguments, generator) => {
       }));
     }
   }
-  const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
-  const toCamelCase = (string) => string.replace(
-    /^([A-Z])|[\s-_]+(\w)/g,
-    (match, p1, p2) => p2 ? p2.toUpperCase() : p1.toLowerCase()
-  );
-  const toPascalCase = (string) => {
-    const camelCase = toCamelCase(string);
-    return camelCase.charAt(0).toUpperCase() + camelCase.slice(1);
-  };
-  const mergeClasses = (...classes) => classes.filter((className, index, array) => {
-    return Boolean(className) && className.trim() !== "" && array.indexOf(className) === index;
-  }).join(" ").trim();
-  const hasA11yProp = (props) => {
-    for (const prop in props) {
-      if (prop.startsWith("aria-") || prop === "role" || prop === "title") {
-        return true;
-      }
-    }
-  };
-  var defaultAttributes = {
-    xmlns: "http://www.w3.org/2000/svg",
-    width: 24,
-    height: 24,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 2,
-    strokeLinecap: "round",
-    strokeLinejoin: "round"
-  };
-  const Icon = reactExports.forwardRef(
-    (_a, ref) => {
-      var _b = _a, {
-        color = "currentColor",
-        size = 24,
-        strokeWidth = 2,
-        absoluteStrokeWidth,
-        className = "",
-        children,
-        iconNode
-      } = _b, rest = __objRest(_b, [
-        "color",
-        "size",
-        "strokeWidth",
-        "absoluteStrokeWidth",
-        "className",
-        "children",
-        "iconNode"
-      ]);
-      return reactExports.createElement(
-        "svg",
-        __spreadValues(__spreadValues(__spreadProps(__spreadValues({
-          ref
-        }, defaultAttributes), {
-          width: size,
-          height: size,
-          stroke: color,
-          strokeWidth: absoluteStrokeWidth ? Number(strokeWidth) * 24 / Number(size) : strokeWidth,
-          className: mergeClasses("lucide", className)
-        }), !children && !hasA11yProp(rest) && { "aria-hidden": "true" }), rest),
-        [
-          ...iconNode.map(([tag, attrs]) => reactExports.createElement(tag, attrs)),
-          ...Array.isArray(children) ? children : [children]
-        ]
-      );
-    }
-  );
-  const createLucideIcon = (iconName, iconNode) => {
-    const Component = reactExports.forwardRef(
-      (_a, ref) => {
-        var _b = _a, { className } = _b, props = __objRest(_b, ["className"]);
-        return reactExports.createElement(Icon, __spreadValues({
-          ref,
-          iconNode,
-          className: mergeClasses(
-            `lucide-${toKebabCase(toPascalCase(iconName))}`,
-            `lucide-${iconName}`,
-            className
-          )
-        }, props));
-      }
-    );
-    Component.displayName = toPascalCase(iconName);
-    return Component;
-  };
-  const __iconNode$f = [
-    [
-      "path",
-      { d: "M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8", key: "mg9rjx" }
-    ]
-  ];
-  const Bold = createLucideIcon("bold", __iconNode$f);
-  const __iconNode$e = [
-    [
-      "path",
-      { d: "M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1", key: "ezmyqa" }
-    ],
-    [
-      "path",
-      {
-        d: "M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1",
-        key: "e1hn23"
-      }
-    ]
-  ];
-  const Braces = createLucideIcon("braces", __iconNode$e);
-  const __iconNode$d = [
-    ["path", { d: "m16 18 6-6-6-6", key: "eg8j8" }],
-    ["path", { d: "m8 6-6 6 6 6", key: "ppft3o" }]
-  ];
-  const Code = createLucideIcon("code", __iconNode$d);
-  const __iconNode$c = [
-    ["path", { d: "m9 11-6 6v3h9l3-3", key: "1a3l36" }],
-    ["path", { d: "m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4", key: "14a9rk" }]
-  ];
-  const Highlighter = createLucideIcon("highlighter", __iconNode$c);
-  const __iconNode$b = [
-    ["line", { x1: "19", x2: "10", y1: "4", y2: "4", key: "15jd3p" }],
-    ["line", { x1: "14", x2: "5", y1: "20", y2: "20", key: "bu0au3" }],
-    ["line", { x1: "15", x2: "9", y1: "4", y2: "20", key: "uljnxc" }]
-  ];
-  const Italic = createLucideIcon("italic", __iconNode$b);
-  const __iconNode$a = [
-    ["path", { d: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71", key: "1cjeqo" }],
-    ["path", { d: "M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71", key: "19qd67" }]
-  ];
-  const Link = createLucideIcon("link", __iconNode$a);
-  const __iconNode$9 = [
-    ["path", { d: "M11 5h10", key: "1cz7ny" }],
-    ["path", { d: "M11 12h10", key: "1438ji" }],
-    ["path", { d: "M11 19h10", key: "11t30w" }],
-    ["path", { d: "M4 4h1v5", key: "10yrso" }],
-    ["path", { d: "M4 9h2", key: "r1h2o0" }],
-    ["path", { d: "M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02", key: "xtkcd5" }]
-  ];
-  const ListOrdered = createLucideIcon("list-ordered", __iconNode$9);
-  const __iconNode$8 = [
-    ["path", { d: "M3 5h.01", key: "18ugdj" }],
-    ["path", { d: "M3 12h.01", key: "nlz23k" }],
-    ["path", { d: "M3 19h.01", key: "noohij" }],
-    ["path", { d: "M8 5h13", key: "1pao27" }],
-    ["path", { d: "M8 12h13", key: "1za7za" }],
-    ["path", { d: "M8 19h13", key: "m83p4d" }]
-  ];
-  const List = createLucideIcon("list", __iconNode$8);
-  const __iconNode$7 = [
-    [
-      "path",
-      {
-        d: "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z",
-        key: "e79jfc"
-      }
-    ],
-    ["circle", { cx: "13.5", cy: "6.5", r: ".5", fill: "currentColor", key: "1okk4w" }],
-    ["circle", { cx: "17.5", cy: "10.5", r: ".5", fill: "currentColor", key: "f64h9f" }],
-    ["circle", { cx: "6.5", cy: "12.5", r: ".5", fill: "currentColor", key: "qy21gx" }],
-    ["circle", { cx: "8.5", cy: "7.5", r: ".5", fill: "currentColor", key: "fotxhn" }]
-  ];
-  const Palette = createLucideIcon("palette", __iconNode$7);
-  const __iconNode$6 = [
-    [
-      "path",
-      {
-        d: "m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551",
-        key: "1miecu"
-      }
-    ]
-  ];
-  const Paperclip = createLucideIcon("paperclip", __iconNode$6);
-  const __iconNode$5 = [
-    ["path", { d: "m15 14 5-5-5-5", key: "12vg1m" }],
-    ["path", { d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13", key: "6uklza" }]
-  ];
-  const Redo2 = createLucideIcon("redo-2", __iconNode$5);
-  const __iconNode$4 = [
-    ["path", { d: "M21 5H3", key: "1fi0y6" }],
-    ["path", { d: "M17 12H7", key: "16if0g" }],
-    ["path", { d: "M19 19H5", key: "vjpgq2" }]
-  ];
-  const TextAlignCenter = createLucideIcon("text-align-center", __iconNode$4);
-  const __iconNode$3 = [
-    ["path", { d: "M21 5H3", key: "1fi0y6" }],
-    ["path", { d: "M21 12H9", key: "dn1m92" }],
-    ["path", { d: "M21 19H7", key: "4cu937" }]
-  ];
-  const TextAlignEnd = createLucideIcon("text-align-end", __iconNode$3);
-  const __iconNode$2 = [
-    ["path", { d: "M21 5H3", key: "1fi0y6" }],
-    ["path", { d: "M15 12H3", key: "6jk70r" }],
-    ["path", { d: "M17 19H3", key: "z6ezky" }]
-  ];
-  const TextAlignStart = createLucideIcon("text-align-start", __iconNode$2);
-  const __iconNode$1 = [
-    ["path", { d: "M6 4v6a6 6 0 0 0 12 0V4", key: "9kb039" }],
-    ["line", { x1: "4", x2: "20", y1: "20", y2: "20", key: "nun2al" }]
-  ];
-  const Underline = createLucideIcon("underline", __iconNode$1);
-  const __iconNode = [
-    ["path", { d: "M9 14 4 9l5-5", key: "102s5s" }],
-    ["path", { d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11", key: "f3b9sd" }]
-  ];
-  const Undo2 = createLucideIcon("undo-2", __iconNode);
   function p$4(e2) {
     return e2 && e2.__esModule && Object.prototype.hasOwnProperty.call(e2, "default") ? e2.default : e2;
   }
@@ -18640,6 +18986,8 @@ var __async = (__this, __arguments, generator) => {
     notesLoading,
     onRefreshNotes,
     onNoteSaved,
+    onDeleteNote,
+    onToggleStar,
     activeNoteId,
     onSelectNote,
     courseCode,
@@ -18647,11 +18995,15 @@ var __async = (__this, __arguments, generator) => {
     currentWeek,
     onNoteEditingChange
   }) {
+    var _a, _b;
     const [view, setView] = reactExports.useState("current");
-    const [filter, setFilter] = reactExports.useState(
-      "course"
-    );
+    const [filter, setFilter] = reactExports.useState("course");
     const [search, setSearch] = reactExports.useState("");
+    const [isDeleting, setIsDeleting] = reactExports.useState(null);
+    const [deleteError, setDeleteError] = reactExports.useState(null);
+    const [deleteConfirmId, setDeleteConfirmId] = reactExports.useState(null);
+    const [noteToDeleteTitle, setNoteToDeleteTitle] = reactExports.useState("");
+    const { toast, showToast, hideToast } = useToast();
     const hasValidWeek = currentWeek != null && currentWeek > 0;
     const effectiveSourceUrl = hasValidWeek ? pageUrl : null;
     const {
@@ -18698,10 +19050,15 @@ var __async = (__this, __arguments, generator) => {
       uploadAsset,
       deleteAsset
     } = useNoteAssets(editorActiveId, notesService);
+    const currentNoteFromList = reactExports.useMemo(() => {
+      if (!editorActiveId) return null;
+      return notes.find((n2) => n2.id === editorActiveId) || null;
+    }, [editorActiveId, notes]);
+    const isCurrentNoteStarred = (_b = (_a = currentNoteFromList == null ? void 0 : currentNoteFromList.isStarred) != null ? _a : note == null ? void 0 : note.isStarred) != null ? _b : false;
     const filteredNotes = reactExports.useMemo(() => {
       const searchTerm = search.trim().toLowerCase();
       return notes.filter((item) => {
-        var _a;
+        var _a2;
         let matchesFilter = false;
         if (filter === "all") {
           matchesFilter = true;
@@ -18711,29 +19068,96 @@ var __async = (__this, __arguments, generator) => {
           } else {
             matchesFilter = item.courseCode == null;
           }
-        } else if (filter === "page") {
-          if (pageUrl) {
-            matchesFilter = item.sourceUrl === pageUrl;
-          } else {
-            matchesFilter = item.sourceUrl == null;
-          }
         } else if (filter === "starred") {
           matchesFilter = item.isStarred === true;
         }
-        const preview = item.previewText || ((_a = item.content) == null ? void 0 : _a.plainText) || "";
+        const preview = item.previewText || ((_a2 = item.content) == null ? void 0 : _a2.plainText) || "";
         const matchesSearch = !searchTerm || item.title.toLowerCase().includes(searchTerm) || preview.toLowerCase().includes(searchTerm);
         return matchesFilter && matchesSearch;
       });
-    }, [courseCode, filter, notes, pageUrl, search]);
-    const handleNewNote = () => {
+    }, [courseCode, filter, notes, search]);
+    const handleNewNote = reactExports.useCallback(() => {
       resetToNew();
       onSelectNote(null);
       setView("current");
-    };
-    const handleSelectNote = (noteId) => {
-      onSelectNote(noteId);
-      setView("current");
-    };
+    }, [resetToNew, onSelectNote]);
+    const handleSelectNote = reactExports.useCallback(
+      (noteId) => {
+        onSelectNote(noteId);
+        setView("current");
+      },
+      [onSelectNote]
+    );
+    const openDeleteConfirm = reactExports.useCallback(
+      (noteId, noteTitle, e2) => {
+        e2.stopPropagation();
+        setDeleteConfirmId(noteId);
+        setNoteToDeleteTitle(noteTitle || "Untitled");
+      },
+      []
+    );
+    const closeDeleteConfirm = reactExports.useCallback(() => {
+      setDeleteConfirmId(null);
+      setNoteToDeleteTitle("");
+    }, []);
+    const executeDelete = reactExports.useCallback(() => __async(null, null, function* () {
+      if (!deleteConfirmId || isDeleting) return;
+      setIsDeleting(deleteConfirmId);
+      setDeleteError(null);
+      try {
+        yield onDeleteNote(deleteConfirmId);
+        if (view === "current" && editorActiveId === deleteConfirmId) {
+          resetToNew();
+          setView("all");
+        }
+        showToast("Note deleted successfully", "success");
+      } catch (err) {
+        setDeleteError((err == null ? void 0 : err.message) || "Failed to delete note");
+        showToast("Failed to delete note", "error");
+      } finally {
+        setIsDeleting(null);
+        closeDeleteConfirm();
+      }
+    }), [
+      deleteConfirmId,
+      isDeleting,
+      onDeleteNote,
+      view,
+      editorActiveId,
+      resetToNew,
+      showToast,
+      closeDeleteConfirm
+    ]);
+    const handleToggleStar = reactExports.useCallback(
+      (noteId, e2) => __async(null, null, function* () {
+        e2.stopPropagation();
+        try {
+          const updatedNote = yield onToggleStar(noteId);
+          if (updatedNote && editorActiveId === noteId) {
+            onNoteSaved(updatedNote);
+          }
+          if (updatedNote == null ? void 0 : updatedNote.isStarred) {
+            showToast("Note starred", "star");
+          } else {
+            showToast("Note unstarred", "info");
+          }
+        } catch (err) {
+          let errorMessage = "Failed to update star status";
+          if ((err == null ? void 0 : err.code) === "AUTH_REQUIRED") {
+            errorMessage = "Please sign in to star notes";
+          } else if ((err == null ? void 0 : err.code) === "NOT_FOUND") {
+            errorMessage = "Note not found";
+          } else if ((err == null ? void 0 : err.code) === "NETWORK_ERROR") {
+            errorMessage = "Network error. Check your connection.";
+          } else if ((err == null ? void 0 : err.message) && err.message.length < 60) {
+            errorMessage = err.message;
+          }
+          showToast(errorMessage, "error");
+          console.error("[Lock-in] Toggle star failed:", err);
+        }
+      }),
+      [onToggleStar, editorActiveId, onNoteSaved, showToast]
+    );
     const weekLabel = formatLinkedLabel(currentWeek);
     const linkedTarget = weekLabel ? (note == null ? void 0 : note.sourceUrl) || pageUrl : null;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-panel", children: [
@@ -18777,15 +19201,61 @@ var __async = (__this, __arguments, generator) => {
             }
           )
         ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-notes-header-right", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header-right", children: [
+          view === "current" && editorActiveId && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-header-actions", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                className: `lockin-note-action-btn lockin-note-star-btn${isCurrentNoteStarred ? " is-starred" : ""}`,
+                onClick: (e2) => handleToggleStar(editorActiveId, e2),
+                title: isCurrentNoteStarred ? "Unstar note" : "Star note",
+                "aria-label": isCurrentNoteStarred ? "Unstar note" : "Star note",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Star,
+                  {
+                    size: 16,
+                    strokeWidth: 2,
+                    fill: isCurrentNoteStarred ? "currentColor" : "none"
+                  }
+                )
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                className: "lockin-note-action-btn lockin-note-delete-btn",
+                onClick: (e2) => openDeleteConfirm(editorActiveId, (note == null ? void 0 : note.title) || "", e2),
+                disabled: isDeleting === editorActiveId,
+                title: "Delete note",
+                "aria-label": "Delete note",
+                children: isDeleting === editorActiveId ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-inline-spinner", "aria-hidden": "true" }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { size: 16, strokeWidth: 2 })
+              }
+            )
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              className: "lockin-btn-primary",
+              onClick: handleNewNote,
+              children: "+ New note"
+            }
+          )
+        ] })
+      ] }),
+      deleteError && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-error", children: [
+        deleteError,
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
           "button",
           {
             type: "button",
-            className: "lockin-btn-primary",
-            onClick: handleNewNote,
-            children: "+ New note"
+            className: "lockin-notes-error-dismiss",
+            onClick: () => setDeleteError(null),
+            children: "\u00d7"
           }
-        ) })
+        )
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-notes-body", children: [
         view === "current" && /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -18815,7 +19285,6 @@ var __async = (__this, __arguments, generator) => {
                   value: filter,
                   onChange: (e2) => setFilter(e2.target.value),
                   children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "page", children: "This page" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "course", children: "This course" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All notes" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "starred", children: "Starred" })
@@ -18856,11 +19325,11 @@ var __async = (__this, __arguments, generator) => {
               }
             )
           ] }) : filteredNotes.map((item) => {
-            var _a;
+            var _a2;
             return /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "div",
               {
-                className: `lockin-note-card${item.id && item.id === editorActiveId ? " is-active" : ""}`,
+                className: `lockin-note-card${item.id && item.id === editorActiveId ? " is-active" : ""}${item.isStarred ? " is-starred" : ""}`,
                 onClick: () => handleSelectNote(item.id || null),
                 role: "button",
                 tabIndex: 0,
@@ -18871,10 +19340,64 @@ var __async = (__this, __arguments, generator) => {
                 },
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-header", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: item.title || "Untitled" }),
-                    item.courseCode && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-badge", children: item.courseCode })
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-title-row", children: [
+                      item.isStarred && /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        Star,
+                        {
+                          className: "lockin-note-star-indicator",
+                          size: 14,
+                          strokeWidth: 2,
+                          fill: "currentColor",
+                          "aria-label": "Starred"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-title", children: item.title || "Untitled" })
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-actions", children: item.id && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          className: `lockin-note-action-btn lockin-note-star-btn${item.isStarred ? " is-starred" : ""}`,
+                          onClick: (e2) => handleToggleStar(item.id, e2),
+                          title: item.isStarred ? "Unstar note" : "Star note",
+                          "aria-label": item.isStarred ? "Unstar note" : "Star note",
+                          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            Star,
+                            {
+                              size: 14,
+                              strokeWidth: 2,
+                              fill: item.isStarred ? "currentColor" : "none"
+                            }
+                          )
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        "button",
+                        {
+                          type: "button",
+                          className: "lockin-note-action-btn lockin-note-delete-btn",
+                          onClick: (e2) => openDeleteConfirm(
+                            item.id,
+                            item.title || "Untitled",
+                            e2
+                          ),
+                          disabled: isDeleting === item.id,
+                          title: "Delete note",
+                          "aria-label": "Delete note",
+                          children: isDeleting === item.id ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "span",
+                            {
+                              className: "lockin-inline-spinner",
+                              "aria-hidden": "true"
+                            }
+                          ) : /* @__PURE__ */ jsxRuntimeExports.jsx(Trash2, { size: 14, strokeWidth: 2 })
+                        }
+                      )
+                    ] }) })
                   ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-snippet", children: item.previewText || ((_a = item.content) == null ? void 0 : _a.plainText) || "No content" }),
+                  item.courseCode && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-note-badge", children: item.courseCode }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-note-card-snippet", children: item.previewText || ((_a2 = item.content) == null ? void 0 : _a2.plainText) || "No content" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-note-card-meta", children: [
                     "Updated ",
                     relativeLabel$1(item.updatedAt || item.createdAt)
@@ -18885,7 +19408,30 @@ var __async = (__this, __arguments, generator) => {
             );
           }) })
         ] })
-      ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ConfirmDialog,
+        {
+          isOpen: deleteConfirmId !== null,
+          onClose: closeDeleteConfirm,
+          onConfirm: executeDelete,
+          title: "Delete Note",
+          description: `Are you sure you want to delete "${noteToDeleteTitle}"? This action cannot be undone.`,
+          confirmLabel: "Delete",
+          cancelLabel: "Cancel",
+          variant: "danger",
+          isLoading: isDeleting !== null
+        }
+      ),
+      toast && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Toast,
+        {
+          message: toast.message,
+          type: toast.type,
+          isVisible: toast.isVisible,
+          onDismiss: hideToast
+        }
+      )
     ] });
   }
   function createNoteContentFromPlainText(text) {
@@ -19076,11 +19622,11 @@ var __async = (__this, __arguments, generator) => {
       notes,
       isLoading: notesLoading,
       refresh: refreshNotes,
-      upsertNote
+      upsertNote,
+      deleteNote: deleteNoteFromList,
+      toggleStar: toggleNoteStar
     } = useNotesList({
       notesService,
-      courseCode,
-      sourceUrl: pageUrl,
       limit: 50
     });
     const applySplitLayout = reactExports.useCallback((open) => {
@@ -19704,6 +20250,13 @@ var __async = (__this, __arguments, generator) => {
                   upsertNote(note);
                   setSelectedNoteId(note.id);
                 },
+                onDeleteNote: (noteId) => __async(null, null, function* () {
+                  yield deleteNoteFromList(noteId);
+                  if (selectedNoteId === noteId) {
+                    setSelectedNoteId(null);
+                  }
+                }),
+                onToggleStar: toggleNoteStar,
                 activeNoteId: selectedNoteId,
                 onSelectNote: (noteId) => setSelectedNoteId(noteId),
                 courseCode,

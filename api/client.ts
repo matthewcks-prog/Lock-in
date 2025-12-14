@@ -322,8 +322,22 @@ export function createApiClient(config: ApiClientConfig) {
         throw await createApiError(response);
       }
 
+      // Handle 204 No Content (common for DELETE requests)
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
       // Parse and return response
       try {
+        // Check if there's actually content to parse
+        const contentLength = response.headers.get("content-length");
+        const contentType = response.headers.get("content-type");
+        
+        // If no content or not JSON, return undefined
+        if (contentLength === "0" || !contentType?.includes("application/json")) {
+          return undefined as T;
+        }
+        
         const data = await response.json();
         // Check for success: false in response body (even if HTTP status is 200)
         if (data && data.success === false) {
@@ -508,6 +522,31 @@ export function createApiClient(config: ApiClientConfig) {
   }
 
   /**
+   * Toggle the starred status of a note
+   */
+  async function toggleNoteStar(noteId: string): Promise<any> {
+    if (!noteId) {
+      throw new Error("noteId is required to toggle star");
+    }
+    return apiRequest<any>(`/api/notes/${noteId}/star`, {
+      method: "PATCH",
+    });
+  }
+
+  /**
+   * Set the starred status of a note
+   */
+  async function setNoteStar(noteId: string, isStarred: boolean): Promise<any> {
+    if (!noteId) {
+      throw new Error("noteId is required to set star");
+    }
+    return apiRequest<any>(`/api/notes/${noteId}/star`, {
+      method: "PUT",
+      body: JSON.stringify({ isStarred }),
+    });
+  }
+
+  /**
    * List notes with optional filters
    */
   async function listNotes(params: ListNotesParams = {}): Promise<any[]> {
@@ -634,6 +673,8 @@ export function createApiClient(config: ApiClientConfig) {
     createNote,
     updateNote,
     deleteNote,
+    toggleNoteStar,
+    setNoteStar,
     listNotes,
     searchNotes,
     chatWithNotes,

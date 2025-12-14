@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch --mode development",
-    "build": "vite build",
-    "build:extension": "vite build",
+    "build": "npm run build:initApi && vite build",
+    "build:initApi": "vite build --config vite.config.initApi.ts",
+    "build:extension": "npm run build:initApi && vite build",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

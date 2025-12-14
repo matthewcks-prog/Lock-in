@@ -162,12 +162,13 @@ This is a living overview of the current codebase. Update it whenever files move
 4. **Separation of concerns**: Orchestrator delegates state, session, and UI responsibilities to dedicated helpers.
 5. **API abstraction**: Shared `/api` TypeScript client is bundled into `libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
 6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor`/`useNotesList`, and the Lexical editor resides in `ui/extension/notes/` with inline attachment/image nodes (resizable images, paperclip insertion).
+7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
 
 ### Backend
 
 1. **Layered architecture**: Routes -> Controllers -> Repository -> Database.
 2. **Middleware chain**: Auth -> Rate Limit -> Validation -> Handler.
-3. **Error handling**: Consistent error responses without leaking internal details.
+3. **Centralized error handling**: `middleware/errorHandler.js` provides consistent error responses with proper codes and status mapping.
 4. **Configuration**: All env vars accessed through `config.js`.
 5. **Optimistic locking**: Notes support `If-Unmodified-Since` header for conflict detection.
 6. **Input validation**: UUID validation, content length limits, tag sanitization.
@@ -181,6 +182,13 @@ The system is designed to handle thousands of concurrent users:
 - **Exponential backoff with jitter**: Retries transient failures (429, 502, 503, 504) with randomized delays to prevent thundering herd.
 - **Request deduplication**: AbortController cancels in-flight requests when new ones are triggered.
 - **Optimistic locking**: `ConflictError` thrown when concurrent edits are detected.
+
+### Error Types (`/core/errors/`)
+
+- **Standardized error codes**: `ErrorCodes` constants for consistent error identification across the stack.
+- **Typed error classes**: `AppError`, `AuthError`, `ValidationError`, `NetworkError`, `NotFoundError`, `ConflictError`, `RateLimitError`.
+- **User-friendly messages**: `getUserMessage()` method converts technical errors to user-facing text.
+- **Error utilities**: `isAppError()` and `wrapError()` helpers for error handling.
 
 ### Note Editor (`/ui/hooks/useNoteEditor.ts`)
 

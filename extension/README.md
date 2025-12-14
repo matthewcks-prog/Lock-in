@@ -62,9 +62,9 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
   - Always visible (no toggle needed)
 
 - **Filter Dropdown**: Filter notes by scope
-  - "This page" - Notes from current URL
-  - "This course" - Notes from same course code
-  - "All notes" - All user notes
+  - "This course" - Notes from same course code (filters client-side based on current page context)
+  - "All notes" - All user notes (shows all notes regardless of course or page)
+  - "Starred" - Only starred notes
 
 - **Notes List**: Display saved notes below editor
   - Click to view note details

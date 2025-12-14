@@ -1,6 +1,9 @@
 // backend/controllers/notesController.js
 
 const notesRepo = require("../repositories/notesRepository");
+const noteAssetsRepo = require("../repositories/noteAssetsRepository");
+const { supabase } = require("../supabaseClient");
+const { NOTE_ASSETS_BUCKET } = require("../config");
 const { embedText } = require("../openaiClient");
 const { extractPlainTextFromLexical } = require("../utils/lexicalUtils");
 
@@ -511,9 +514,143 @@ async function deleteNote(req, res, next) {
       });
     }
 
+    // Validate UUID format
+    if (!isValidUUID(noteId)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_NOTE_ID",
+          message: "noteId must be a valid UUID",
+        },
+      });
+    }
+
+    // First, clean up any associated assets from storage
+    // The database records will be deleted via CASCADE when the note is deleted
+    try {
+      const assets = await noteAssetsRepo.listAssetsForNote(noteId, userId);
+      if (assets && assets.length > 0) {
+        const storagePaths = assets.map((asset) => asset.storage_path);
+        const { error: storageError } = await supabase.storage
+          .from(NOTE_ASSETS_BUCKET)
+          .remove(storagePaths);
+
+        if (storageError) {
+          console.error(
+            "Failed to delete asset files from storage:",
+            storageError
+          );
+          // Continue with note deletion even if storage cleanup fails
+          // The orphaned files can be cleaned up later
+        }
+      }
+    } catch (assetErr) {
+      console.error("Error cleaning up assets:", assetErr);
+      // Continue with note deletion even if asset cleanup fails
+    }
+
     await notesRepo.deleteNote({ userId, noteId });
     res.status(204).send();
   } catch (err) {
+    next(err);
+  }
+}
+
+// PATCH /api/notes/:noteId/star
+// Toggle the starred status of a note
+async function toggleStarred(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { noteId } = req.params;
+
+    if (!noteId) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "MISSING_NOTE_ID",
+          message: "noteId is required",
+        },
+      });
+    }
+
+    // Validate UUID format
+    if (!isValidUUID(noteId)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_NOTE_ID",
+          message: "noteId must be a valid UUID",
+        },
+      });
+    }
+
+    const note = await notesRepo.toggleStarred({ userId, noteId });
+    res.json(note);
+  } catch (err) {
+    if (err.status === 404) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Note not found",
+        },
+      });
+    }
+    next(err);
+  }
+}
+
+// PUT /api/notes/:noteId/star
+// Set the starred status of a note to a specific value
+async function setStarred(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { noteId } = req.params;
+    const { isStarred } = req.body;
+
+    if (!noteId) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "MISSING_NOTE_ID",
+          message: "noteId is required",
+        },
+      });
+    }
+
+    // Validate UUID format
+    if (!isValidUUID(noteId)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_NOTE_ID",
+          message: "noteId must be a valid UUID",
+        },
+      });
+    }
+
+    if (typeof isStarred !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_VALUE",
+          message: "isStarred must be a boolean",
+        },
+      });
+    }
+
+    const note = await notesRepo.setStarred({ userId, noteId, isStarred });
+    res.json(note);
+  } catch (err) {
+    if (err.status === 404) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: "NOT_FOUND",
+          message: "Note not found",
+        },
+      });
+    }
     next(err);
   }
 }
@@ -525,4 +662,6 @@ module.exports = {
   getNote,
   updateNote,
   deleteNote,
+  toggleStarred,
+  setStarred,
 };

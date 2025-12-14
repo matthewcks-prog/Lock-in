@@ -211,6 +211,72 @@ async function getNoteForUser({ userId, noteId }) {
   return data;
 }
 
+/**
+ * Toggle the starred status of a note.
+ * Returns the updated note with the new is_starred value.
+ */
+async function toggleStarred({ userId, noteId }) {
+  // First, get the current starred status
+  const { data: currentNote, error: fetchError } = await supabase
+    .from("notes")
+    .select("is_starred")
+    .eq("id", noteId)
+    .eq("user_id", userId)
+    .single();
+
+  if (fetchError) {
+    if (fetchError.code === "PGRST116") {
+      const error = new Error("Note not found");
+      error.status = 404;
+      throw error;
+    }
+    throw fetchError;
+  }
+
+  // Toggle the value
+  const newValue = !currentNote.is_starred;
+
+  const { data, error } = await supabase
+    .from("notes")
+    .update({ is_starred: newValue, updated_at: new Date().toISOString() })
+    .eq("id", noteId)
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Error toggling starred:", error);
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Set the starred status of a note to a specific value.
+ */
+async function setStarred({ userId, noteId, isStarred }) {
+  const { data, error } = await supabase
+    .from("notes")
+    .update({ is_starred: isStarred, updated_at: new Date().toISOString() })
+    .eq("id", noteId)
+    .eq("user_id", userId)
+    .select()
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      const notFoundError = new Error("Note not found");
+      notFoundError.status = 404;
+      throw notFoundError;
+    }
+    console.error("Error setting starred:", error);
+    throw error;
+  }
+
+  return data;
+}
+
 module.exports = {
   createNote,
   listNotes,
@@ -218,5 +284,7 @@ module.exports = {
   deleteNote,
   searchNotesByEmbedding,
   getNoteForUser,
+  toggleStarred,
+  setStarred,
   ConflictError,
 };
