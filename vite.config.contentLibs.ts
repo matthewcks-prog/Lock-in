@@ -1,9 +1,14 @@
 /**
- * Vite config for building initApi.js bundle
+ * Vite config for building content script libraries bundle
  * 
- * Bundles extension/src/initApi.ts and its dependencies (api/client.ts, api/auth.ts)
- * into a single IIFE file at extension/libs/initApi.js that can be loaded by
- * Chrome extension content scripts.
+ * Bundles extension/src/contentLibs.ts and its dependencies into a single IIFE file
+ * at extension/libs/contentLibs.js that can be loaded by Chrome extension content scripts.
+ * 
+ * This includes:
+ * - Logger (window.LockInLogger)
+ * - Messaging (window.LockInMessaging)
+ * - Storage (window.LockInStorage)
+ * - Page context resolver with adapters (window.LockInContent.resolveAdapterContext)
  */
 
 import { defineConfig } from "vite";
@@ -15,7 +20,7 @@ function ensureAsciiSafeOutput() {
   return {
     name: "ensure-ascii-safe-output",
     closeBundle() {
-      const filePath = resolve(process.cwd(), "extension/libs/initApi.js");
+      const filePath = resolve(process.cwd(), "extension/libs/contentLibs.js");
       try {
         let content = readFileSync(filePath, "utf8");
         // Remove BOM if present
@@ -33,9 +38,9 @@ function ensureAsciiSafeOutput() {
           return `\\u${code.toString(16).padStart(4, '0')}`;
         });
         writeFileSync(filePath, content, { encoding: "utf8" });
-        console.log("Processed initApi.js for ASCII compatibility");
+        console.log("Processed contentLibs.js for ASCII compatibility");
       } catch (err) {
-        console.error("Error processing initApi.js:", err);
+        console.error("Error processing contentLibs.js:", err);
       }
     },
   };
@@ -51,17 +56,16 @@ export default defineConfig({
     outDir: "extension/libs",
     emptyOutDir: false, // Don't delete other files in libs/
     lib: {
-      // Source files in extension/src/, output to extension/libs/
-      entry: resolve(process.cwd(), "./extension/src/initApi.ts"),
-      name: "LockInInit",
+      entry: resolve(process.cwd(), "./extension/src/contentLibs.ts"),
+      name: "LockInContentLibs",
       formats: ["iife"],
-      fileName: () => "initApi.js",
+      fileName: () => "contentLibs.js",
     },
     rollupOptions: {
       external: [],
       output: {
         format: "iife",
-        name: "LockInInit",
+        name: "LockInContentLibs",
         extend: true,
         inlineDynamicImports: true,
         generatedCode: {
@@ -76,9 +80,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@core": resolve(process.cwd(), "core"),
-      "@api": resolve(process.cwd(), "api"),
+      "@integrations": resolve(process.cwd(), "integrations"),
     },
     extensions: [".ts", ".js"],
   },
 });
-

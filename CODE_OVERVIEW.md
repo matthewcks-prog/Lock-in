@@ -64,7 +64,12 @@ This is a living overview of the current codebase. Update it whenever files move
   - Wrapper for `chrome.storage` with defaults and async/await helpers.
 
 - **`libs/initApi.js` + `/api` (TS)**
-  - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/libs/initApi.ts`).
+
+  - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/src/initApi.ts`).
+
+- **`src/` (TypeScript source)**
+  - `initApi.ts` - Entry point for bundled API/auth clients
+  - `chromeStorage.ts` - Chrome storage adapter implementing `StorageInterface`
 
 ### Styling
 
