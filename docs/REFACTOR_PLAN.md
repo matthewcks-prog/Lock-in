@@ -37,17 +37,22 @@ Prepare the codebase for Codex refactor without breaking extension/backend funct
 - [x] Include manual verification steps for critical extension/backend functionality
 - [x] Add debug tips section for common issues
 
-### Phase B5: ESLint + boundary rules
+### Phase B5: ESLint + boundary rules ✅
 
-- Add ESLint rules to enforce architectural boundaries
-- Examples: no Chrome APIs in `/core`, no direct DOM manipulation in services
-- Configure rules to catch violations during development
+- [x] **B5A**: Add ESLint baseline tooling with minimal noise (warnings-first)
+- [x] **B5B**: Add boundary rules to enforce architecture
+  - Examples: no Chrome APIs in `/core`, no direct DOM manipulation in services
+  - Configure rules to catch violations during development
 
-### Phase B6: Minimal unit test harness (optional but recommended)
+### Phase B6: Minimal unit test harness (optional but recommended) 🚧
 
-- Set up basic unit test infrastructure
-- Add unit tests for critical paths: adapters, state management, core services
-- Ensure tests can run in CI/CD pipeline
+- [x] **B6A**: Set up basic unit test infrastructure
+  - [x] Add vitest, @vitest/coverage-v8, jsdom dev dependencies
+  - [x] Add test scripts (test, test:watch, test:coverage)
+  - [x] Configure vitest with jsdom environment
+  - [x] Add anchor tests: textUtils.test.ts, moodleAdapter.test.ts
+- [ ] Add unit tests for critical paths: adapters, state management, core services
+- [ ] Ensure tests can run in CI/CD pipeline
 
 ---
 
@@ -63,5 +68,5 @@ Before considering guardrails complete, verify all items below:
 - [ ] **tsconfig/vite alias parity**: Path aliases in `tsconfig.json` match those in `vite.config.ts` (and any other build configs)
 - [ ] **verify-build exists + passes**: A `verify-build` script exists in `package.json` and runs successfully
 - [x] **smoke checklist exists**: A smoke test checklist document exists (`docs/SMOKE_CHECKLIST.md`) with manual verification steps
-- [ ] **eslint boundary rules exist**: ESLint rules enforce architectural boundaries (e.g., no Chrome APIs in `/core`, no direct DOM manipulation in services)
-- [ ] **minimal unit tests exist** (optional but recommended): At least basic unit tests exist for critical paths (adapters, state management, core services)
+- [x] **eslint boundary rules exist**: ESLint rules enforce architectural boundaries (e.g., no Chrome APIs in `/core`, no direct DOM manipulation in services)
+- [x] **minimal unit tests exist** (optional but recommended): At least basic unit tests exist for critical paths (adapters, state management, core services)
