@@ -10,8 +10,9 @@
   };
 
   function createStateStore({ Storage, Logger }) {
+    const storage = Storage;
     const log = Logger || { warn: console.warn };
-    const keys = (Storage && Storage.STORAGE_KEYS) || {};
+    const keys = (storage && storage.STORAGE_KEYS) || {};
     const SIDEBAR_OPEN_KEY = keys.SIDEBAR_IS_OPEN || "lockin_sidebar_isOpen";
     const SIDEBAR_ACTIVE_TAB_KEY =
       keys.SIDEBAR_ACTIVE_TAB || "lockin_sidebar_activeTab";
@@ -50,9 +51,9 @@
     }
 
     async function loadInitial() {
-      if (Storage) {
+      if (storage) {
         try {
-          const data = await Storage.get([
+          const data = await storage.get([
             HIGHLIGHTING_KEY,
             SIDEBAR_OPEN_KEY,
             SIDEBAR_ACTIVE_TAB_KEY,
@@ -77,9 +78,9 @@
     }
 
     async function loadMode() {
-      if (!Storage) return state.currentMode;
+      if (!storage) return state.currentMode;
       try {
-        const data = await Storage.get(MODE_KEY);
+        const data = await storage.get(MODE_KEY);
         if (data[MODE_KEY]) {
           state.currentMode = data[MODE_KEY];
         }
@@ -90,14 +91,14 @@
     }
 
     async function determineDefaultMode() {
-      if (!Storage) {
+      if (!storage) {
         state.currentMode = DEFAULT_MODE;
         notify();
         return state.currentMode;
       }
 
       try {
-        const data = await Storage.get([
+        const data = await storage.get([
           MODE_PREF_KEY,
           DEFAULT_MODE_KEY,
           LAST_USED_MODE_KEY,
@@ -130,17 +131,17 @@
 
     async function persistMode(mode) {
       state.currentMode = mode || DEFAULT_MODE;
-      if (!Storage) {
+      if (!storage) {
         notify();
         return state.currentMode;
       }
 
       try {
-        const data = await Storage.get(MODE_PREF_KEY);
+        const data = await storage.get(MODE_PREF_KEY);
         if (data[MODE_PREF_KEY] === "lastUsed") {
-          await Storage.set(LAST_USED_MODE_KEY, state.currentMode);
+          await storage.set({ [LAST_USED_MODE_KEY]: state.currentMode });
         }
-        await Storage.set({ [MODE_KEY]: state.currentMode });
+        await storage.set({ [MODE_KEY]: state.currentMode });
       } catch (error) {
         log.warn("Storage access error:", error);
       }
@@ -150,12 +151,12 @@
     }
 
     async function loadChatId() {
-      if (!Storage) {
+      if (!storage) {
         state.currentChatId = null;
         return null;
       }
       try {
-        const data = await Storage.getLocal(CHAT_ID_STORAGE_KEY);
+        const data = await storage.getLocal(CHAT_ID_STORAGE_KEY);
         state.currentChatId = data[CHAT_ID_STORAGE_KEY] || null;
       } catch (error) {
         log.warn("Failed to load chat ID:", error);
@@ -166,16 +167,16 @@
 
     async function setChatId(chatId) {
       state.currentChatId = chatId || null;
-      if (!Storage) {
+      if (!storage) {
         notify();
         return;
       }
 
       try {
         if (!chatId) {
-          await Storage.removeLocal(CHAT_ID_STORAGE_KEY);
+          await storage.removeLocal(CHAT_ID_STORAGE_KEY);
         } else {
-          await Storage.setLocal(CHAT_ID_STORAGE_KEY, chatId);
+          await storage.setLocal(CHAT_ID_STORAGE_KEY, chatId);
         }
       } catch (error) {
         log.warn("Failed to save chat ID:", error);
@@ -186,9 +187,9 @@
 
     async function setSidebarOpen(isOpen) {
       state.isSidebarOpen = !!isOpen;
-      if (Storage) {
+      if (storage) {
         try {
-          await Storage.set({ [SIDEBAR_OPEN_KEY]: state.isSidebarOpen });
+          await storage.set({ [SIDEBAR_OPEN_KEY]: state.isSidebarOpen });
         } catch (error) {
           log.warn("Failed to save sidebar state:", error);
         }
@@ -204,8 +205,8 @@
     function setActiveTab(tabId) {
       if (typeof tabId === "string") {
         state.currentActiveTab = tabId;
-        if (Storage) {
-          Storage.set({ [SIDEBAR_ACTIVE_TAB_KEY]: state.currentActiveTab }).catch(
+        if (storage) {
+          storage.set({ [SIDEBAR_ACTIVE_TAB_KEY]: state.currentActiveTab }).catch(
             (error) => log.warn("Failed to save active tab:", error)
           );
         }
@@ -248,9 +249,9 @@
     }
 
     function startSync() {
-      if (!Storage || !Storage.onChanged) return () => {};
+      if (!storage || !storage.onChanged) return () => {};
       stopSync();
-      unsubscribeStorage = Storage.onChanged(handleStorageChanges);
+      unsubscribeStorage = storage.onChanged(handleStorageChanges);
       return unsubscribeStorage;
     }
 

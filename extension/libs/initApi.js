@@ -304,7 +304,6 @@ var __async = (__this, __arguments, generator) => {
     maxRetries: 3,
     baseDelayMs: 500,
     maxDelayMs: 5e3,
-    // 429 = rate limit, 502/503/504 = server overload/temporary issues
     retryableStatuses: [429, 502, 503, 504]
   };
   function calculateRetryDelay(attempt, config) {
@@ -361,21 +360,13 @@ var __async = (__this, __arguments, generator) => {
       return error;
     });
   }
-  function createApiClient(config) {
+  function createFetcher(config) {
     const { backendUrl, authClient } = config;
     const clientConfig = { backendUrl };
     function apiRequest(_0) {
       return __async(this, arguments, function* (endpoint, options = {}) {
         var _b, _c, _d, _e, _f, _g, _h;
-        const _a2 = options, {
-          retry = true,
-          retryConfig: customRetryConfig,
-          ifUnmodifiedSince
-        } = _a2, fetchOptions = __objRest(_a2, [
-          "retry",
-          "retryConfig",
-          "ifUnmodifiedSince"
-        ]);
+        const _a2 = options, { retry = true, retryConfig: customRetryConfig, ifUnmodifiedSince } = _a2, fetchOptions = __objRest(_a2, ["retry", "retryConfig", "ifUnmodifiedSince"]);
         const retryConfig = __spreadValues(__spreadValues({}, DEFAULT_RETRY_CONFIG), customRetryConfig);
         const url = endpoint.startsWith("http") ? endpoint : `${backendUrl}${endpoint}`;
         if ((_b = fetchOptions.signal) == null ? void 0 : _b.aborted) {
@@ -488,6 +479,15 @@ var __async = (__this, __arguments, generator) => {
         throw lastError || new Error("Request failed after retries");
       });
     }
+    function getBackendUrl() {
+      return clientConfig.backendUrl;
+    }
+    return {
+      apiRequest,
+      getBackendUrl
+    };
+  }
+  function createLockinClient(apiRequest) {
     function processText(params) {
       return __async(this, null, function* () {
         const {
@@ -528,6 +528,11 @@ var __async = (__this, __arguments, generator) => {
         });
       });
     }
+    return {
+      processText
+    };
+  }
+  function createChatsClient(apiRequest) {
     function getRecentChats() {
       return __async(this, arguments, function* (params = {}) {
         const { limit = 10 } = params;
@@ -561,6 +566,13 @@ var __async = (__this, __arguments, generator) => {
         });
       });
     }
+    return {
+      getRecentChats,
+      getChatMessages,
+      deleteChat
+    };
+  }
+  function createNotesClient(apiRequest) {
     function createNote(note, options) {
       return __async(this, null, function* () {
         return apiRequest("/api/notes", {
@@ -575,14 +587,11 @@ var __async = (__this, __arguments, generator) => {
         if (!noteId) {
           throw new Error("noteId is required to update a note");
         }
-        return apiRequest(
-          `/api/notes/${noteId}`,
-          {
-            method: "PUT",
-            body: JSON.stringify(note),
-            signal: options == null ? void 0 : options.signal
-          }
-        );
+        return apiRequest(`/api/notes/${noteId}`, {
+          method: "PUT",
+          body: JSON.stringify(note),
+          signal: options == null ? void 0 : options.signal
+        });
       });
     }
     function deleteNote(noteId) {
@@ -647,19 +656,31 @@ var __async = (__this, __arguments, generator) => {
         });
       });
     }
-    function mapNoteAsset(raw) {
-      return {
-        id: raw.id,
-        noteId: raw.note_id,
-        userId: raw.user_id,
-        type: raw.type,
-        mimeType: raw.mime_type,
-        storagePath: raw.storage_path,
-        createdAt: raw.created_at,
-        url: raw.url,
-        fileName: raw.file_name || raw.filename || raw.name || null
-      };
-    }
+    return {
+      createNote,
+      updateNote,
+      deleteNote,
+      toggleNoteStar,
+      setNoteStar,
+      listNotes,
+      searchNotes,
+      chatWithNotes
+    };
+  }
+  function mapNoteAsset(raw) {
+    return {
+      id: raw.id,
+      noteId: raw.note_id,
+      userId: raw.user_id,
+      type: raw.type,
+      mimeType: raw.mime_type,
+      storagePath: raw.storage_path,
+      createdAt: raw.created_at,
+      url: raw.url,
+      fileName: raw.file_name || raw.filename || raw.name || null
+    };
+  }
+  function createAssetsClient(apiRequest) {
     function uploadNoteAsset(params) {
       return __async(this, null, function* () {
         const { noteId, file } = params;
@@ -674,7 +695,6 @@ var __async = (__this, __arguments, generator) => {
         const raw = yield apiRequest(`/api/notes/${noteId}/assets`, {
           method: "POST",
           body: formData
-          // Let the browser set Content-Type with boundary
         });
         return mapNoteAsset(raw);
       });
@@ -702,9 +722,32 @@ var __async = (__this, __arguments, generator) => {
         });
       });
     }
-    function getBackendUrl() {
-      return clientConfig.backendUrl;
-    }
+    return {
+      uploadNoteAsset,
+      listNoteAssets,
+      deleteNoteAsset
+    };
+  }
+  function createApiClient(config) {
+    const fetcher = createFetcher(config);
+    const { apiRequest, getBackendUrl } = fetcher;
+    const { processText } = createLockinClient(apiRequest);
+    const { getRecentChats, getChatMessages, deleteChat } = createChatsClient(apiRequest);
+    const {
+      createNote,
+      updateNote,
+      deleteNote,
+      toggleNoteStar,
+      setNoteStar,
+      listNotes,
+      searchNotes,
+      chatWithNotes
+    } = createNotesClient(apiRequest);
+    const {
+      uploadNoteAsset,
+      listNoteAssets,
+      deleteNoteAsset
+    } = createAssetsClient(apiRequest);
     return {
       apiRequest,
       getBackendUrl,

@@ -1,4 +1,4 @@
-import type { NoteContent } from "../../../core/domain/Note.ts";
+import type { NoteContent } from "@core/domain/Note";
 
 export function createNoteContentFromPlainText(text: string): NoteContent {
   const normalized = text || "";

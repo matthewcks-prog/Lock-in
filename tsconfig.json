@@ -19,7 +19,9 @@
     "paths": {
       "@core/*": ["core/*"],
       "@api/*": ["api/*"],
-      "@ui/*": ["ui/*"]
+      "@ui/*": ["ui/*"],
+      "@shared/ui": ["shared/ui"],
+      "@shared/ui/*": ["shared/ui/*"]
     }
   },
   "include": ["core/**/*", "api/**/*", "ui/**/*", "integrations/**/*", "extension/**/*.ts"],

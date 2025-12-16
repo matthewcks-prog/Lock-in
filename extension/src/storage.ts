@@ -40,6 +40,9 @@ export interface Storage {
   get: <T = unknown>(keys: string | string[]) => Promise<Record<string, T>>;
   set: (data: Record<string, unknown>) => Promise<void>;
   remove: (keys: string | string[]) => Promise<void>;
+  getLocal: <T = unknown>(keys: string | string[]) => Promise<Record<string, T>>;
+  setLocal: (key: string, value: unknown) => Promise<void>;
+  removeLocal: (keys: string | string[]) => Promise<void>;
   onChanged: (
     callback: (changes: Record<string, StorageChange>, areaName: string) => void
   ) => () => void;
@@ -89,6 +92,54 @@ function createStorage(): Storage {
       return new Promise((resolve, reject) => {
         try {
           chrome.storage.sync.remove(keys, () => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve();
+            }
+          });
+        } catch (err) {
+          reject(err);
+        }
+      });
+    },
+
+    getLocal<T = unknown>(keys: string | string[]): Promise<Record<string, T>> {
+      return new Promise((resolve, reject) => {
+        try {
+          chrome.storage.local.get(keys, (result) => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve(result as Record<string, T>);
+            }
+          });
+        } catch (err) {
+          reject(err);
+        }
+      });
+    },
+
+    setLocal(key: string, value: unknown): Promise<void> {
+      return new Promise((resolve, reject) => {
+        try {
+          chrome.storage.local.set({ [key]: value }, () => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message));
+            } else {
+              resolve();
+            }
+          });
+        } catch (err) {
+          reject(err);
+        }
+      });
+    },
+
+    removeLocal(keys: string | string[]): Promise<void> {
+      return new Promise((resolve, reject) => {
+        try {
+          chrome.storage.local.remove(keys, () => {
             if (chrome.runtime.lastError) {
               reject(new Error(chrome.runtime.lastError.message));
             } else {

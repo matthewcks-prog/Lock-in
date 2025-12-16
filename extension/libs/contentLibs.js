@@ -17,6 +17,26 @@ var __spreadValues = (a, b) => {
   return a;
 };
 var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+var __async = (__this, __arguments, generator) => {
+  return new Promise((resolve, reject) => {
+    var fulfilled = (value) => {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    var rejected = (value) => {
+      try {
+        step(generator.throw(value));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    var step = (x) => x.done ? resolve(x.value) : Promise.resolve(x.value).then(fulfilled, rejected);
+    step((generator = generator.apply(__this, __arguments)).next());
+  });
+};
 (function(exports) {
   "use strict";
   function isDebugEnabled() {
@@ -157,6 +177,51 @@ var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
         return new Promise((resolve, reject) => {
           try {
             chrome.storage.sync.remove(keys, () => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve();
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      getLocal(keys) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.storage.local.get(keys, (result) => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve(result);
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      setLocal(key, value) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.storage.local.set({ [key]: value }, () => {
+              if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+              } else {
+                resolve();
+              }
+            });
+          } catch (err) {
+            reject(err);
+          }
+        });
+      },
+      removeLocal(keys) {
+        return new Promise((resolve, reject) => {
+          try {
+            chrome.storage.local.remove(keys, () => {
               if (chrome.runtime.lastError) {
                 reject(new Error(chrome.runtime.lastError.message));
               } else {
@@ -476,6 +541,14 @@ var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
     }
     return new GenericAdapter();
   }
+  const MESSAGE_TYPES = {
+    GET_TAB_ID: "GET_TAB_ID",
+    GET_SESSION: "GET_SESSION",
+    SAVE_SESSION: "SAVE_SESSION",
+    CLEAR_SESSION: "CLEAR_SESSION",
+    GET_SETTINGS: "GET_SETTINGS",
+    UPDATE_SETTINGS: "UPDATE_SETTINGS"
+  };
   function inferCourseCode(dom, url) {
     var _a;
     const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
@@ -486,12 +559,12 @@ var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
     const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
     return codeMatch ? codeMatch[1].toUpperCase() : null;
   }
-  function resolveAdapterContext(logger2) {
+  function resolveAdapterContext(loggerInstance) {
     var _a, _b, _c;
     const log = {
-      error: (_a = logger2 == null ? void 0 : logger2.error) != null ? _a : console.error,
-      warn: (_b = logger2 == null ? void 0 : logger2.warn) != null ? _b : console.warn,
-      debug: (_c = logger2 == null ? void 0 : logger2.debug) != null ? _c : (() => {
+      error: (_a = loggerInstance == null ? void 0 : loggerInstance.error) != null ? _a : console.error,
+      warn: (_b = loggerInstance == null ? void 0 : loggerInstance.warn) != null ? _b : console.warn,
+      debug: (_c = loggerInstance == null ? void 0 : loggerInstance.debug) != null ? _c : (() => {
       })
     };
     let adapter = new GenericAdapter();
@@ -523,10 +596,137 @@ var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
     }
     return { adapter, pageContext };
   }
-  if (typeof window !== "undefined") {
-    window.LockInContent = window.LockInContent || {};
-    window.LockInContent.resolveAdapterContext = resolveAdapterContext;
+  function createStorageApi(log) {
+    return __spreadProps(__spreadValues({}, storage), {
+      getLocal(keys) {
+        return __async(this, null, function* () {
+          try {
+            return yield storage.getLocal(keys);
+          } catch (error) {
+            log.warn("Storage.getLocal failed:", error);
+            throw error;
+          }
+        });
+      },
+      setLocal(key, value) {
+        return __async(this, null, function* () {
+          try {
+            yield storage.setLocal(key, value);
+          } catch (error) {
+            log.warn("Storage.setLocal failed:", error);
+            throw error;
+          }
+        });
+      },
+      removeLocal(keys) {
+        return __async(this, null, function* () {
+          try {
+            yield storage.removeLocal(keys);
+          } catch (error) {
+            log.warn("Storage.removeLocal failed:", error);
+            throw error;
+          }
+        });
+      },
+      onChanged(callback) {
+        return storage.onChanged(callback);
+      }
+    });
   }
-  exports.resolveAdapterContext = resolveAdapterContext;
+  function createMessagingApi(log) {
+    return __spreadProps(__spreadValues({}, messaging), {
+      types: MESSAGE_TYPES,
+      send(type, payload) {
+        return __async(this, null, function* () {
+          try {
+            return yield messaging.sendToBackground({ type, payload });
+          } catch (error) {
+            log.error("[Lock-in] Messaging send failed:", error);
+            throw error;
+          }
+        });
+      }
+    });
+  }
+  function createSessionApi(log, runtimeMessaging, runtimeStorage) {
+    let cachedTabId = null;
+    function getTabId() {
+      return __async(this, null, function* () {
+        var _a, _b, _c;
+        try {
+          const response = yield runtimeMessaging.send(runtimeMessaging.types.GET_TAB_ID);
+          const tabId = (_c = (_b = (_a = response == null ? void 0 : response.data) == null ? void 0 : _a.tabId) != null ? _b : response == null ? void 0 : response.tabId) != null ? _c : null;
+          if (typeof tabId === "number") {
+            cachedTabId = tabId;
+            return tabId;
+          }
+          return cachedTabId;
+        } catch (error) {
+          log.error("[Lock-in] Failed to get tab ID:", error);
+          return cachedTabId;
+        }
+      });
+    }
+    function getSession() {
+      return __async(this, null, function* () {
+        var _a, _b, _c;
+        try {
+          const response = yield runtimeMessaging.send(runtimeMessaging.types.GET_SESSION);
+          return (_c = (_b = (_a = response == null ? void 0 : response.data) == null ? void 0 : _a.session) != null ? _b : response == null ? void 0 : response.session) != null ? _c : null;
+        } catch (error) {
+          log.error("[Lock-in] Failed to get session:", error);
+          return null;
+        }
+      });
+    }
+    function clearSession() {
+      return __async(this, null, function* () {
+        try {
+          yield runtimeMessaging.send(runtimeMessaging.types.CLEAR_SESSION);
+        } catch (error) {
+          log.error("[Lock-in] Failed to clear session:", error);
+        }
+      });
+    }
+    function loadChatId() {
+      return __async(this, null, function* () {
+        try {
+          const data = yield runtimeStorage.getLocal(STORAGE_KEYS.CURRENT_CHAT_ID);
+          const chatId = data[STORAGE_KEYS.CURRENT_CHAT_ID];
+          return typeof chatId === "string" ? chatId : null;
+        } catch (error) {
+          log.warn("Failed to load chat ID:", error);
+          return null;
+        }
+      });
+    }
+    return {
+      getTabId,
+      getSession,
+      clearSession,
+      loadChatId
+    };
+  }
+  function createContentRuntime() {
+    const runtimeLogger = logger;
+    const runtimeStorage = createStorageApi(runtimeLogger);
+    const runtimeMessaging = createMessagingApi(runtimeLogger);
+    const runtimeSession = createSessionApi(runtimeLogger, runtimeMessaging, runtimeStorage);
+    const runtime = {
+      __version: "1.0",
+      logger: runtimeLogger,
+      storage: runtimeStorage,
+      messaging: runtimeMessaging,
+      session: runtimeSession,
+      resolveAdapterContext
+    };
+    return runtime;
+  }
+  if (typeof window !== "undefined") {
+    const runtime = createContentRuntime();
+    window.LockInContent = runtime;
+    window.LockInContent.__version = runtime.__version;
+  }
+  exports.createContentRuntime = createContentRuntime;
 })(this.LockInContentLibs = this.LockInContentLibs || {});
 //# sourceMappingURL=contentLibs.js.map

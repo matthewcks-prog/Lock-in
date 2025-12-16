@@ -12,7 +12,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    include: ["**/__tests__/**/*.test.{ts,tsx}"],
+    include: ["**/__tests__/**/*.test.{ts,tsx}", "**/__tests__/**/*.test.js"],
     exclude: [
       "**/node_modules/**",
       "backend/**",
@@ -23,5 +23,14 @@ export default defineConfig({
     globals: true,
     restoreMocks: true,
     clearMocks: true,
+    // CI/CD optimizations
+    pool: "threads",
+    poolOptions: {
+      threads: {
+        singleThread: false,
+      },
+    },
+    // Ensure tests run headless (default behavior)
+    watch: false,
   },
 });
