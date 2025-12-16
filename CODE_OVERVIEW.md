@@ -63,9 +63,14 @@ This is a living overview of the current codebase. Update it whenever files move
 
   - Wrapper for `chrome.storage` with defaults and async/await helpers.
 
+- **`contentRuntime.ts` + `contentLibs.ts`**
+
+  - Canonical versioned content runtime exposed as `window.LockInContent` (storage/messaging/session/logger + adapter resolver); bundled to `extension/libs/contentLibs.js`. Legacy compat aliases have been removed (canonical API only).
+
 - **`libs/initApi.js` + `/api` (TS)**
 
   - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/src/initApi.ts`).
+  - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets), and `api/client.ts` composes them to keep the same public method bag.
 
 - **`src/` (TypeScript source)**
   - `initApi.ts` - Entry point for bundled API/auth clients

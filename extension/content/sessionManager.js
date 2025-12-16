@@ -5,15 +5,43 @@
   function createSessionManager({ Messaging, Logger, stateStore, origin }) {
     const log = Logger || { debug: () => {}, error: console.error };
     let currentTabId = null;
+    const MESSAGE_TYPES =
+      (Messaging && Messaging.types) || {
+        GET_TAB_ID: "GET_TAB_ID",
+        GET_SESSION: "GET_SESSION",
+        CLEAR_SESSION: "CLEAR_SESSION",
+      };
+
+    async function sendMessage(type, payload) {
+      if (!Messaging || !chrome.runtime) return null;
+
+      try {
+        if (typeof Messaging.send === "function") {
+          return await Messaging.send(type, payload);
+        }
+
+        if (typeof Messaging.sendToBackground === "function") {
+          return await Messaging.sendToBackground({ type, payload });
+        }
+
+        if (typeof Messaging.sendMessage === "function") {
+          return await Messaging.sendMessage({ type, payload });
+        }
+      } catch (error) {
+        log.error("Messaging failed:", error);
+      }
+
+      return null;
+    }
 
     async function getTabId() {
       if (!Messaging || !chrome.runtime) return null;
 
       try {
-        const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.GET_TAB_ID);
-        const response = await Messaging.sendMessage(message);
-        if (response.ok && response.data) {
-          currentTabId = response.data.tabId;
+        const response = await sendMessage(MESSAGE_TYPES.GET_TAB_ID);
+        const tabId = response?.data?.tabId ?? response?.tabId;
+        if (typeof tabId === "number") {
+          currentTabId = tabId;
           log.debug("Tab ID:", currentTabId);
           return currentTabId;
         }
@@ -32,11 +60,10 @@
       if (!currentTabId) return;
 
       try {
-        const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.GET_SESSION);
-        const response = await Messaging.sendMessage(message);
-        if (!response.ok) return;
+        const response = await sendMessage(MESSAGE_TYPES.GET_SESSION);
+        if (response && response.ok === false) return;
 
-        const session = response.data?.session;
+        const session = response?.data?.session || response?.session;
         if (!session || !session.isActive) return;
 
         if (session.origin && origin && session.origin !== origin) {
@@ -73,8 +100,7 @@
       if (!Messaging || !chrome.runtime) return;
 
       try {
-        const message = Messaging.createMessage(Messaging.MESSAGE_TYPES.CLEAR_SESSION);
-        await Messaging.sendMessage(message);
+        await sendMessage(MESSAGE_TYPES.CLEAR_SESSION);
       } catch (error) {
         log.error("Failed to clear session:", error);
       }

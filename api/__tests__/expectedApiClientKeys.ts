@@ -1,0 +1,20 @@
+export const API_CLIENT_EXPECTED_KEYS = [
+  "apiRequest",
+  "chatWithNotes",
+  "createNote",
+  "deleteChat",
+  "deleteNote",
+  "deleteNoteAsset",
+  "getBackendUrl",
+  "getChatMessages",
+  "getRecentChats",
+  "listNoteAssets",
+  "listNotes",
+  "processText",
+  "searchNotes",
+  "setNoteStar",
+  "toggleNoteStar",
+  "updateNote",
+  "uploadNoteAsset",
+] as const;
+

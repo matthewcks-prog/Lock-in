@@ -15,6 +15,49 @@ export default [
       "**/coverage/**",
     ],
   },
+
+  // Legacy globals guardrail: prefer canonical LockInContent runtime
+  {
+    files: ["extension/**/*.{js,mjs,cjs,ts,tsx}"],
+    ignores: ["extension/src/contentRuntime.ts"],
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "Storage",
+          property: "getLocal",
+          message: "Use window.LockInContent.storage.getLocal instead of legacy Storage.getLocal.",
+        },
+        {
+          object: "Storage",
+          property: "setLocal",
+          message: "Use window.LockInContent.storage.setLocal instead of legacy Storage.setLocal.",
+        },
+        {
+          object: "Storage",
+          property: "removeLocal",
+          message:
+            "Use window.LockInContent.storage.removeLocal instead of legacy Storage.removeLocal.",
+        },
+        {
+          object: "MessageTypes",
+          property: "GET_TAB_ID",
+          message:
+            "Use window.LockInContent.messaging.types.GET_TAB_ID instead of legacy MessageTypes.",
+        },
+        {
+          object: "LockInContent",
+          property: "Storage",
+          message: "Legacy compat shim removed. Use window.LockInContent.storage.* instead.",
+        },
+        {
+          object: "LockInContent",
+          property: "MessageTypes",
+          message: "Legacy compat shim removed. Use window.LockInContent.messaging.types instead.",
+        },
+      ],
+    },
+  },
   {
     files: ["**/*.{js,mjs,cjs}"],
     languageOptions: {

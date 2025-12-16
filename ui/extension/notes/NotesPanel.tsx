@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Star, Trash2 } from "lucide-react";
-import type { Note } from "../../../core/domain/Note.ts";
-import type { NotesService } from "../../../core/services/notesService.ts";
+import type { Note } from "@core/domain/Note";
+import type { NotesService } from "@core/services/notesService";
 import { useNoteAssets } from "../../hooks/useNoteAssets";
 import { useNoteEditor } from "../../hooks/useNoteEditor";
-import { ConfirmDialog } from "../../../shared/ui/components/ConfirmDialog";
-import { Toast, useToast } from "../../../shared/ui/components/Toast";
+import { ConfirmDialog, Toast, useToast } from "@shared/ui/components";
 import { NoteEditor } from "./NoteEditor";
 
 interface NotesPanelProps {

@@ -70,7 +70,7 @@ import type {
   NoteAsset,
   NoteContent,
   NoteStatus,
-} from "../../../core/domain/Note";
+} from "@core/domain/Note";
 import {
   AttachmentNode,
   $createAttachmentNode,

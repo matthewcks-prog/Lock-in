@@ -27,15 +27,17 @@ Every feature should reinforce this loop:
 This project uses a structured documentation approach:
 
 - **`/AGENTS.md`** (this file) - Canonical stable contract: architecture boundaries, coding rules, workflow patterns
-- **`docs/ARCHITECTURE.md`** - Stable architecture documentation (when created)
-- **`docs/STATUS.md`** - Current snapshot: outstanding issues, recent changes, implementation status
-- **`docs/REPO_MAP.md`** - Repository structure map (when created)
+- **`docs/ARCHITECTURE.md`** - Stable architecture invariants (surfaces, boundaries, contracts)
+- **`docs/STATUS.md`** - Living snapshot: outstanding issues, recent changes, implementation status
+- **`docs/REPO_MAP.md`** - Repository structure map and entrypoints
 - **`docs/ADRS/`** - Architecture Decision Records (when created)
 - **`docs/REFACTOR_PLAN.md`** - Phased refactoring plan
 - **`docs/PROMPT_LOG.md`** - Log of refactoring prompts and outcomes
 - **`CODE_OVERVIEW.md`** - Current codebase snapshot (implementation details)
 - **`DATABASE.MD`** - Database schema and migration history
 - **Folder-level `AGENTS.md`** - Folder-specific conventions (e.g., `/extension/AGENTS.md`)
+
+**Doc stability**: `/AGENTS.md` and `docs/ARCHITECTURE.md` are stable contracts; `docs/STATUS.md` and `CODE_OVERVIEW.md` are living snapshots; `docs/REPO_MAP.md` is a concise navigation map.
 
 **When to update docs:**
 - **`/AGENTS.md`**: Only when architectural boundaries, coding rules, or workflow patterns change
@@ -49,7 +51,7 @@ This project uses a structured documentation approach:
 
 - **Chrome Extension** (`/extension`): In-context assistant on learning platforms
   - UI: Sidebar widget with tabs (Chat/Notes/Settings) - specific to extension
-  - Source lives in `/ui/extension` - React components for the sidebar widget (built output in `/extension/ui`)
+  - Source lives in `/ui/extension` - React components for the sidebar widget (build output lives in `/extension/ui`, not source)
 - **Web App** (`/web` - future): Study dashboard, knowledge base, analytics
   - UI: Full-page layouts (dashboard, notes library, calendar, analytics pages)
   - Will have its own page/layout components under `/web`
@@ -182,7 +184,6 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
    - Update `CODE_OVERVIEW.md` if file structure or implementation patterns change
    - Update folder `AGENTS.md` if folder-specific conventions change
    - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
-   - **Refactor prep tracking**: If making guardrails/docs/tests/build script changes, update `docs/REFACTOR_PLAN.md` and `docs/PROMPT_LOG.md` (see "Refactor Prep Tracking" section below)
 
 5. **Summarize what changed**
    - List code changes (files + purpose)
