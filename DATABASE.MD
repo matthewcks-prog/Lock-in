@@ -124,7 +124,7 @@ CREATE TABLE public.chat_messages (
 - `chat_id` - Parent chat (FK to `chats`)
 - `user_id` - Owner (FK to `auth.users`)
 - `role` - Message role: `"user"`, `"assistant"`, or `"system"`
-- `mode` - Study mode used: `"explain"`, `"simplify"`, `"translate"`, `"general"`
+- `mode` - Study mode used: `"explain"`, `"general"`
 - `source` - Original selected text (for user messages)
 - `input_text` - User input text
 - `output_text` - Assistant response text
@@ -268,7 +268,7 @@ CREATE TABLE public.ai_requests (
 
 - `id` - Unique request identifier
 - `user_id` - User who made the request (FK to `auth.users`)
-- `mode` - Study mode used: `"explain"`, `"simplify"`, `"translate"`, `"general"`
+- `mode` - Study mode used: `"explain"`, `"general"`
 - `tokens_in` - Input tokens consumed
 - `tokens_out` - Output tokens generated
 - `created_at` - Request timestamp

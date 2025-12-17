@@ -367,9 +367,9 @@ describe("StateStore", () => {
 
   describe("setMode", () => {
     it("should update mode without persisting", () => {
-      stateStore.setMode("simplify");
+      stateStore.setMode("general");
 
-      expect(stateStore.getSnapshot().currentMode).toBe("simplify");
+      expect(stateStore.getSnapshot().currentMode).toBe("general");
       expect(mockStorage.set).not.toHaveBeenCalled();
     });
 
@@ -381,11 +381,11 @@ describe("StateStore", () => {
 
   describe("persistMode", () => {
     it("should update mode and persist to storage", async () => {
-      await stateStore.persistMode("translate");
+      await stateStore.persistMode("general");
 
-      expect(stateStore.getSnapshot().currentMode).toBe("translate");
+      expect(stateStore.getSnapshot().currentMode).toBe("general");
       expect(mockStorage.set).toHaveBeenCalledWith({
-        lockinActiveMode: "translate",
+        lockinActiveMode: "general",
       });
     });
 
@@ -394,15 +394,15 @@ describe("StateStore", () => {
         modePreference: "lastUsed",
       });
 
-      await stateStore.persistMode("simplify");
+      await stateStore.persistMode("general");
 
       // Storage.set is called twice: once for lastUsedMode, once for lockinActiveMode
       expect(mockStorage.set).toHaveBeenCalledTimes(2);
       expect(mockStorage.set).toHaveBeenNthCalledWith(1, {
-        lastUsedMode: "simplify",
+        lastUsedMode: "general",
       });
       expect(mockStorage.set).toHaveBeenNthCalledWith(2, {
-        lockinActiveMode: "simplify",
+        lockinActiveMode: "general",
       });
     });
   });
@@ -502,34 +502,34 @@ describe("StateStore", () => {
   describe("determineDefaultMode", () => {
     it("should use stored mode if available", async () => {
       mockStorage.get.mockResolvedValue({
-        lockinActiveMode: "translate",
+        lockinActiveMode: "general",
       });
 
       const mode = await stateStore.determineDefaultMode();
 
-      expect(mode).toBe("translate");
+      expect(mode).toBe("general");
     });
 
     it("should use lastUsed mode when preference is 'lastUsed'", async () => {
       mockStorage.get.mockResolvedValue({
         modePreference: "lastUsed",
-        lastUsedMode: "simplify",
+        lastUsedMode: "general",
       });
 
       const mode = await stateStore.determineDefaultMode();
 
-      expect(mode).toBe("simplify");
+      expect(mode).toBe("general");
     });
 
     it("should use default mode when preference is 'fixed'", async () => {
       mockStorage.get.mockResolvedValue({
         modePreference: "fixed",
-        defaultMode: "translate",
+        defaultMode: "general",
       });
 
       const mode = await stateStore.determineDefaultMode();
 
-      expect(mode).toBe("translate");
+      expect(mode).toBe("general");
     });
 
     it("should fallback to 'explain' when no preferences found", async () => {
@@ -570,13 +570,13 @@ describe("StateStore", () => {
 
       changeHandler(
         {
-          lockinActiveMode: { newValue: "translate" },
+          lockinActiveMode: { newValue: "general" },
         },
         "sync"
       );
 
       expect(callback).toHaveBeenCalled();
-      expect(stateStore.getSnapshot().currentMode).toBe("translate");
+      expect(stateStore.getSnapshot().currentMode).toBe("general");
     });
   });
 });

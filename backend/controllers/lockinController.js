@@ -43,13 +43,12 @@ const {
  * explain/simplify/translate helpers.
  *
  * - Read from req.body:
- *    - mode: "explain" | "simplify" | "translate" | "general"
+ *    - mode: "explain" | "general"
  *    - selection: string (required)
  *    - pageContext?: string
  *    - pageUrl?: string
  *    - courseCode?: string
  *    - language?: string
- *    - targetLanguage?: string (for translate)
  *
  * - Call openaiClient.generateStructuredStudyResponse({ ...options })
  *   and wait for the result.
@@ -76,7 +75,6 @@ async function handleLockinRequest(req, res) {
       selection: selectionFromBody,
       text: legacyText,
       mode,
-      targetLanguage = "en",
       difficultyLevel = "highschool",
       chatHistory = [],
       newUserMessage,
@@ -95,16 +93,6 @@ async function handleLockinRequest(req, res) {
         error: { message: modeValidation.error },
       });
     }
-
-    // Validate language code
-    const langValidation = validateLanguageCode(targetLanguage);
-    if (!langValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: { message: langValidation.error },
-      });
-    }
-    const normalizedLanguage = langValidation.normalized;
 
     // Validate difficulty level
     const difficultyValidation = validateDifficultyLevel(difficultyLevel);
@@ -255,7 +243,6 @@ async function handleLockinRequest(req, res) {
         pageUrl,
         courseCode,
         language,
-        targetLanguage: effectiveMode === "translate" ? (targetLanguage || language) : undefined,
         difficultyLevel: normalizedDifficulty,
         chatHistory: sanitizedHistory,
         newUserMessage: trimmedUserMessage || undefined,

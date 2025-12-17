@@ -3,8 +3,7 @@ import type { ApiRequest } from "../fetcher";
 
 export interface ProcessTextParams {
   selection: string;
-  mode: "explain" | "simplify" | "translate" | "general";
-  targetLanguage?: string;
+  mode: "explain" | "general";
   difficultyLevel?: "highschool" | "university";
   chatHistory?: ChatMessage[];
   newUserMessage?: string;
@@ -20,7 +19,6 @@ export function createLockinClient(apiRequest: ApiRequest) {
     const {
       selection,
       mode,
-      targetLanguage = "en",
       difficultyLevel = "highschool",
       chatHistory = [],
       newUserMessage,
@@ -46,7 +44,6 @@ export function createLockinClient(apiRequest: ApiRequest) {
     const body: any = {
       selection: selection || "",
       mode,
-      targetLanguage,
       difficultyLevel,
       chatHistory: normalizedHistory,
     };

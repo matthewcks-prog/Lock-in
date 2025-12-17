@@ -176,7 +176,7 @@ chrome.runtime.onInstalled.addListener(() => {
   // Create context menu
   chrome.contextMenus.create({
     id: "lockin-process",
-    title: "Lock-in: Explain/Simplify/Translate",
+    title: "Lock-in: Explain",
     contexts: ["selection"],
   });
   
