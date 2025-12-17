@@ -29,22 +29,16 @@ function toLanguageName(code = "en") {
   return LANGUAGE_LABELS[code.toLowerCase()] || code;
 }
 
-function buildModeDirective(mode, targetLanguage) {
+function buildModeDirective(mode) {
   switch (mode) {
-    case "simplify":
-      return "Simplify the passage using short sentences and accessible vocabulary suitable for university students.";
-    case "translate":
-      return `Translate the passage into ${toLanguageName(
-        targetLanguage
-      )} and include a short explanation in that language tying the translation back to the source.`;
     case "explain":
     default:
       return "Explain the passage clearly, connect the main idea to the reader's studies, and provide at most one short example when helpful.";
   }
 }
 
-function buildSystemMessage({ mode, difficultyLevel, targetLanguage }) {
-  const directive = buildModeDirective(mode, targetLanguage);
+function buildSystemMessage({ mode, difficultyLevel }) {
+  const directive = buildModeDirective(mode);
   const content = [
     "You are Lock-in, an AI study helper that replies as a concise, friendly tutor.",
     `Match the student's ${difficultyLevel} level and keep answers grounded in the provided conversation and original text.`,
@@ -59,12 +53,10 @@ function buildInitialHistory({
   selection,
   mode,
   difficultyLevel,
-  targetLanguage,
 }) {
   const systemMessage = buildSystemMessage({
     mode,
     difficultyLevel,
-    targetLanguage,
   });
 
   // Include the original text only if we have a selection
@@ -131,7 +123,6 @@ async function generateLockInResponse(options) {
     selection,
     mode,
     difficultyLevel,
-    targetLanguage,
     chatHistory = [],
     newUserMessage,
   } = options;
@@ -139,13 +130,12 @@ async function generateLockInResponse(options) {
   const baseHistory = sanitizeHistory(chatHistory);
   let messages = baseHistory.length
     ? baseHistory
-    : buildInitialHistory({ selection, mode, difficultyLevel, targetLanguage });
+    : buildInitialHistory({ selection, mode, difficultyLevel });
 
   // Always replace or add the system message to ensure the current mode directive is used
   const systemMessage = buildSystemMessage({
     mode,
     difficultyLevel,
-    targetLanguage,
   });
   const messagesWithoutSystem = messages.filter((msg) => msg.role !== "system");
   messages = [systemMessage, ...messagesWithoutSystem];
@@ -173,7 +163,7 @@ async function generateLockInResponse(options) {
 
 /**
  * @typedef {Object} StudyResponse
- * @property {string} mode - The mode used ("explain" | "simplify" | "translate" | "general")
+ * @property {string} mode - The mode used ("explain" | "general")
  * @property {string} explanation - The main answer/explanation for the user
  * @property {Array<{title: string, content: string, type: string}>} notes - Array of possible notes to save
  * @property {Array<{title: string, description: string}>} todos - Array of possible tasks
@@ -184,13 +174,12 @@ async function generateLockInResponse(options) {
 /**
  * Generate a structured study response with explanation, notes, todos, tags, and difficulty
  * @param {Object} options - Request options
- * @param {string} options.mode - Mode: "explain" | "simplify" | "translate" | "general"
+ * @param {string} options.mode - Mode: "explain" | "general"
  * @param {string} options.selection - The highlighted text (required)
  * @param {string} [options.pageContext] - Optional extra surrounding text or page summary
  * @param {string} [options.pageUrl] - Optional page URL
  * @param {string} [options.courseCode] - Optional course code (e.g. "FIT2101")
  * @param {string} [options.language] - UI language (e.g. "en")
- * @param {string} [options.targetLanguage] - Target language for translate mode
  * @param {string} [options.difficultyLevel] - Difficulty level (e.g. "highschool", "university")
  * @param {Array<{role: string, content: string}>} [options.chatHistory] - Previous messages
  * @param {string} [options.newUserMessage] - Follow-up question from the user
@@ -204,7 +193,6 @@ async function generateStructuredStudyResponse(options) {
     pageUrl,
     courseCode,
     language = "en",
-    targetLanguage,
     difficultyLevel = "university",
     chatHistory = [],
     newUserMessage,
@@ -220,15 +208,6 @@ async function generateStructuredStudyResponse(options) {
     case "explain":
       modeInstruction =
         "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
-      break;
-    case "simplify":
-      modeInstruction =
-        "Provide a simpler explanation in the 'explanation' field aimed at a university student. Use accessible vocabulary and short sentences.";
-      break;
-    case "translate":
-      modeInstruction = `Translate the selection into ${toLanguageName(
-        targetLanguage || language
-      )} in the 'explanation' field. Still extract notes if sensible for the translated content.`;
       break;
     case "general":
       modeInstruction =
@@ -275,7 +254,7 @@ IMPORTANT: You MUST return ONLY a valid JSON object with this exact structure:
 Do NOT include any markdown, code blocks, or extra text. Return ONLY the JSON object.
 
 Guidelines:
-- explanation: The main answer based on the mode (explain/simplify/translate/general)
+- explanation: The main answer based on the mode (explain/general)
 - notes: Array of study notes that could be saved (title, content, type like "definition", "formula", "concept", etc.)
 - todos: Array of study tasks (title, description)
 - tags: Array of topic tags relevant to the content

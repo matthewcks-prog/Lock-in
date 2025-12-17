@@ -80,7 +80,6 @@
         stateStore.setSelection(session.selection || "");
         stateStore.setMode(session.mode || "explain");
         stateStore.setPreferences({
-          preferredLanguage: session.targetLanguage || "en",
           difficultyLevel: session.difficultyLevel || "highschool",
         });
 

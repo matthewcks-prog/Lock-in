@@ -8,7 +8,7 @@
 /**
  * Study mode types
  */
-export type StudyMode = "explain" | "simplify" | "translate" | "general";
+export type StudyMode = "explain" | "general";
 
 /**
  * Difficulty level

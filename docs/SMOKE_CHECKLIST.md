@@ -69,7 +69,7 @@ Run this checklist:
 2. Select some text on the page
 3. Press `Ctrl+Shift+L` (or `Cmd+Shift+L` on Mac) to open sidebar
 4. Verify the selected text appears in the sidebar input or context
-5. Trigger a mode: click "Explain", "Simplify", or "Translate"
+5. Trigger a mode: click "Explain" or "General"
 6. Wait for AI response
 7. Note the chat ID (if visible in UI or console)
 8. Refresh the page

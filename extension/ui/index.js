@@ -19474,12 +19474,6 @@ var __async = (__this, __arguments, generator) => {
   }
   const MODE_OPTIONS = [
     { value: "explain", label: "Explain", hint: "Clarify the selection" },
-    { value: "simplify", label: "Simplify", hint: "Make it easier to digest" },
-    {
-      value: "translate",
-      label: "Translate",
-      hint: "Switch to another language"
-    },
     {
       value: "general",
       label: "General",
@@ -19570,7 +19564,7 @@ var __async = (__this, __arguments, generator) => {
                 setIsOpen(false);
               },
               children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-option-icon", children: option.value === "translate" ? "T" : "-" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-mode-option-icon", children: "-" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: option.label }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "11px", color: "#6b7280" }, children: option.hint })

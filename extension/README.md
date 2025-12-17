@@ -39,8 +39,6 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 - Sidebar opens automatically with AI response
 - Three processing modes:
   - **Explain**: Get clear explanations with examples
-  - **Simplify**: Convert complex text to simple language
-  - **Translate**: Translate and explain in another language
 
 ### Chat Interface
 

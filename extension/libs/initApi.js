@@ -493,7 +493,6 @@ var __async = (__this, __arguments, generator) => {
         const {
           selection,
           mode,
-          targetLanguage = "en",
           difficultyLevel = "highschool",
           chatHistory = [],
           newUserMessage,
@@ -512,7 +511,6 @@ var __async = (__this, __arguments, generator) => {
         const body = {
           selection: selection || "",
           mode,
-          targetLanguage,
           difficultyLevel,
           chatHistory: normalizedHistory
         };

@@ -1,12 +1,10 @@
 # Lock-in 🔒📚
 
-An AI-powered Chrome extension that helps students learn by providing instant explanations, simplifications, and translations of any text on the web.
+An AI-powered Chrome extension that helps students learn by providing instant explanations of any text on the web.
 
 ## Features
 
 - **Explain**: Get clear, plain-English explanations with concrete examples
-- **Simplify**: Convert complex academic text into easy-to-understand language
-- **Translate**: Translate text into your preferred language with contextual explanations
 - **Sidebar Interface**: Modern right-hand sidebar with chat history and persistent conversations
 - **Split Layout**: Floating toggle pill, Ctrl/Cmd + select to open, 65/35 split (max ~390px) with mobile overlay
 - **Chat History**: Persistent chat sessions saved to Supabase
@@ -97,12 +95,12 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 #### Method 1: Keyboard Selection
 1. Hold **Ctrl** (Windows/Linux) or **Cmd** (Mac) and highlight any text
 2. The sidebar will open automatically
-3. Choose your mode: **Explain**, **Simplify**, or **Translate**
+3. Choose your mode: **Explain** or **General**
 4. View the AI-generated result in the sidebar
 
 #### Method 2: Right-Click Context Menu
 1. Highlight any text on any webpage
-2. Right-click and select "Lock-in: Explain/Simplify/Translate"
+2. Right-click and select "Lock-in: Explain"
 3. The sidebar will open with the selected mode
 
 #### Customizing Settings
@@ -121,8 +119,7 @@ Main endpoint for processing text.
 ```json
 {
   "selection": "The text to process",
-  "mode": "explain | simplify | translate",
-  "targetLanguage": "en",
+  "mode": "explain | general",
   "difficultyLevel": "highschool | university",
   "chatHistory": [],
   "newUserMessage": "Optional follow-up question",

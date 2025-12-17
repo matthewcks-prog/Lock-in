@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Lock-in** is an AI-powered study assistant Chrome extension focused on Monash University students. It helps students understand, simplify, and translate content from learning platforms (Moodle, Edstem, Panopto, etc.) while capturing notes and tasks.
+**Lock-in** is an AI-powered study assistant Chrome extension focused on Monash University students. It helps students understand and explain content from learning platforms (Moodle, Edstem, Panopto, etc.) while capturing notes and tasks.
 
 **Core Philosophy**: Extension-first, web-app-friendly. The extension is the primary surface; a future web app will share the same backend and data.
 
@@ -13,7 +13,7 @@
 Every feature should reinforce this loop:
 
 1. **Capture** → Highlight text / video / assignment spec
-2. **Understand** → Explain / simplify / translate / summarise
+2. **Understand** → Explain / summarise
 3. **Distil** → Turn that into a note, flashcard, or todo
 4. **Organise** → Auto-bucket by unit, week, topic (course metadata)
 5. **Act** → Show upcoming tasks, revision items, questions

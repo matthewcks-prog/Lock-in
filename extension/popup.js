@@ -5,7 +5,6 @@
 
 // DOM elements
 const highlightingToggle = document.getElementById("highlighting-toggle");
-const languageSelect = document.getElementById("language-select");
 const difficultyRadios = document.getElementsByName("difficulty");
 const modePrefRadios = document.getElementsByName("modePreference");
 const defaultModeControl = document.getElementById("default-mode-control");
@@ -44,11 +43,6 @@ function loadSettings() {
         highlightingToggle.checked = data.highlightingEnabled !== false;
       }
 
-      // Set translation language
-      if (data.preferredLanguage) {
-        languageSelect.value = data.preferredLanguage;
-      }
-
       // Set difficulty level
       const difficulty = data.difficultyLevel || "highschool";
       difficultyRadios.forEach((radio) => {
@@ -65,7 +59,7 @@ function loadSettings() {
         }
       });
 
-      // Set default mode (explain, simplify, or translate)
+      // Set default mode (explain)
       const defaultMode = data.defaultMode || "explain";
       setActiveMode(defaultMode);
 
@@ -108,7 +102,6 @@ function saveSettings() {
   const highlightingEnabled = highlightingToggle
     ? highlightingToggle.checked
     : true;
-  const preferredLanguage = languageSelect.value;
 
   let difficultyLevel = "highschool";
   difficultyRadios.forEach((radio) => {
@@ -131,7 +124,6 @@ function saveSettings() {
   chrome.storage.sync.set(
     {
       highlightingEnabled,
-      preferredLanguage,
       difficultyLevel,
       modePreference,
       defaultMode,
@@ -180,8 +172,7 @@ defaultModeControl.addEventListener("click", (e) => {
   saveSettings();
 });
 
-// Language and difficulty changes
-languageSelect.addEventListener("change", saveSettings);
+// Difficulty changes
 difficultyRadios.forEach((radio) => {
   radio.addEventListener("change", saveSettings);
 });

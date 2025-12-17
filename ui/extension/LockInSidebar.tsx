@@ -45,12 +45,6 @@ interface ChatHistoryItem {
 
 const MODE_OPTIONS: Array<{ value: StudyMode; label: string; hint: string }> = [
   { value: "explain", label: "Explain", hint: "Clarify the selection" },
-  { value: "simplify", label: "Simplify", hint: "Make it easier to digest" },
-  {
-    value: "translate",
-    label: "Translate",
-    hint: "Switch to another language",
-  },
   {
     value: "general",
     label: "General",
@@ -156,9 +150,7 @@ function ModeSelector({
                 setIsOpen(false);
               }}
             >
-              <span className="lockin-mode-option-icon">
-                {option.value === "translate" ? "T" : "-"}
-              </span>
+              <span className="lockin-mode-option-icon">-</span>
               <div>
                 <div>{option.label}</div>
                 <div style={{ fontSize: "11px", color: "#6b7280" }}>

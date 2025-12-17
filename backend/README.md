@@ -90,7 +90,7 @@ Returns the status of the API.
 POST /api/lockin
 ```
 
-Process text with AI assistance (Explain, Simplify, Translate).
+Process text with AI assistance (Explain, General).
 
 **Request Body:**
 
@@ -98,7 +98,6 @@ Process text with AI assistance (Explain, Simplify, Translate).
 {
   "selection": "The text to process",
   "mode": "explain",
-  "targetLanguage": "en",
   "difficultyLevel": "highschool",
   "chatHistory": [],
   "newUserMessage": "Optional follow-up question",
