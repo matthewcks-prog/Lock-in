@@ -24,10 +24,16 @@ const DEFAULT_CHAT_LIST_LIMIT =
 const ALLOWED_ORIGINS = [
   // Chrome extensions
   /^chrome-extension:\/\//,
+  // Edge extensions
+  /^ms-browser-extension:\/\//,
   // Local development
   /localhost/,
   // Monash learning environment (e.g. https://learning.monash.edu)
   /^https:\/\/learning\.monash\.edu$/,
+  // Edstem
+  /^https:\/\/edstem\.org$/,
+  // UNSW Moodle
+  /^https:\/\/moodle\.telt\.unsw\.edu\.au$/,
 ];
 
 // Asset uploads (notes)
