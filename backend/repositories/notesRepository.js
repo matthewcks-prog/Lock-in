@@ -25,6 +25,7 @@ class ConflictError extends Error {
 
 async function createNote({
   userId,
+  clientNoteId,
   title,
   contentJson,
   editorVersion,
@@ -38,6 +39,7 @@ async function createNote({
   embedding,
 }) {
   const insertData = {
+    ...(clientNoteId ? { id: clientNoteId } : {}),
     user_id: userId,
     title,
     content_json: contentJson || {}, // Ensure we always provide content_json (defaults to {} in DB but safer to be explicit)
@@ -58,6 +60,30 @@ async function createNote({
     .single();
 
   if (error) {
+    if (clientNoteId && error.code === "23505") {
+      const existing = await getNoteForUser({
+        userId,
+        noteId: clientNoteId,
+      });
+      if (existing) {
+        return updateNote({
+          userId,
+          noteId: clientNoteId,
+          title,
+          contentJson,
+          editorVersion,
+          contentPlain,
+          legacyContent,
+          sourceSelection,
+          sourceUrl,
+          courseCode,
+          noteType,
+          tags,
+          embedding,
+          ifUnmodifiedSince: null,
+        });
+      }
+    }
     console.error("Error creating note:", error);
     throw error;
   }
@@ -106,36 +132,6 @@ async function updateNote({
   embedding,
   ifUnmodifiedSince,
 }) {
-  // If optimistic locking is requested, first check the current version
-  if (ifUnmodifiedSince) {
-    const { data: currentNote, error: fetchError } = await supabase
-      .from("notes")
-      .select("updated_at")
-      .eq("id", noteId)
-      .eq("user_id", userId)
-      .single();
-
-    if (fetchError) {
-      if (fetchError.code === "PGRST116") {
-        const error = new Error("Note not found");
-        error.status = 404;
-        throw error;
-      }
-      throw fetchError;
-    }
-
-    // Compare timestamps - if server version is newer, reject the update
-    const serverTime = new Date(currentNote.updated_at).getTime();
-    const clientTime = new Date(ifUnmodifiedSince).getTime();
-
-    if (serverTime > clientTime) {
-      throw new ConflictError(
-        "Note was modified by another session. Please refresh and try again.",
-        currentNote.updated_at
-      );
-    }
-  }
-
   const updateData = {
     title,
     content_json: contentJson || {}, // Ensure we always provide content_json
@@ -150,17 +146,44 @@ async function updateNote({
     updated_at: new Date().toISOString(), // Explicitly set updated_at for optimistic locking
   };
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("notes")
     .update(updateData)
     .eq("id", noteId)
-    .eq("user_id", userId)
-    .select()
-    .single();
+    .eq("user_id", userId);
+
+  if (ifUnmodifiedSince) {
+    query = query.eq("updated_at", ifUnmodifiedSince);
+  }
+
+  const { data, error } = await query.select().single();
 
   if (error) {
     console.error("Error updating note:", error);
     if (error.code === "PGRST116") {
+      if (ifUnmodifiedSince) {
+        const { data: currentNote, error: fetchError } = await supabase
+          .from("notes")
+          .select("updated_at")
+          .eq("id", noteId)
+          .eq("user_id", userId)
+          .single();
+
+        if (fetchError) {
+          if (fetchError.code === "PGRST116") {
+            const notFoundError = new Error("Note not found");
+            notFoundError.status = 404;
+            throw notFoundError;
+          }
+          throw fetchError;
+        }
+
+        throw new ConflictError(
+          "Note was modified by another session. Please refresh and try again.",
+          currentNote.updated_at
+        );
+      }
+
       const notFoundError = new Error("Note not found");
       notFoundError.status = 404;
       throw notFoundError;

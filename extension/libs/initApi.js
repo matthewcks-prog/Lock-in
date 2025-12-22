@@ -573,11 +573,10 @@ var __async = (__this, __arguments, generator) => {
   function createNotesClient(apiRequest) {
     function createNote(note, options) {
       return __async(this, null, function* () {
-        return apiRequest("/api/notes", {
+        return apiRequest("/api/notes", __spreadValues({
           method: "POST",
-          body: JSON.stringify(note),
-          signal: options == null ? void 0 : options.signal
-        });
+          body: JSON.stringify(note)
+        }, options));
       });
     }
     function updateNote(noteId, note, options) {
@@ -585,11 +584,10 @@ var __async = (__this, __arguments, generator) => {
         if (!noteId) {
           throw new Error("noteId is required to update a note");
         }
-        return apiRequest(`/api/notes/${noteId}`, {
+        return apiRequest(`/api/notes/${noteId}`, __spreadValues({
           method: "PUT",
-          body: JSON.stringify(note),
-          signal: options == null ? void 0 : options.signal
-        });
+          body: JSON.stringify(note)
+        }, options));
       });
     }
     function deleteNote(noteId) {

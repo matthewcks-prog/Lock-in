@@ -153,14 +153,14 @@ export class PanoptoProvider implements TranscriptProviderV2 {
   readonly provider = 'panopto' as const;
 
   canHandle(url: string): boolean {
-    return isPanoptoUrl(url) || this.hasPanoptoIframe(url);
+    return isPanoptoUrl(url) || this.hasPanoptoIframe();
   }
 
   /**
    * Check if URL might contain Panopto content (embedded)
    * This is a heuristic - we check for common LMS domains
    */
-  private hasPanoptoIframe(url: string): boolean {
+  private hasPanoptoIframe(): boolean {
     // Panopto is usually embedded in LMS pages
     // We'll return false here and let DOM detection find iframes
     return false;
@@ -176,12 +176,7 @@ export class PanoptoProvider implements TranscriptProviderV2 {
     const seenIds = new Set<string>();
     let videoIndex = 0;
 
-    const addVideo = (
-      deliveryId: string,
-      tenant: string,
-      title: string,
-      embedUrl: string
-    ): void => {
+    const addVideo = (deliveryId: string, title: string, embedUrl: string): void => {
       if (seenIds.has(deliveryId)) return;
       seenIds.add(deliveryId);
       videoIndex++;
@@ -197,7 +192,7 @@ export class PanoptoProvider implements TranscriptProviderV2 {
     const pageDeliveryId = extractDeliveryId(context.pageUrl);
     const pageTenant = extractTenantDomain(context.pageUrl);
     if (pageDeliveryId && pageTenant) {
-      addVideo(pageDeliveryId, pageTenant, '', context.pageUrl);
+      addVideo(pageDeliveryId, '', context.pageUrl);
     }
 
     // Check all iframes
@@ -206,7 +201,7 @@ export class PanoptoProvider implements TranscriptProviderV2 {
       const deliveryId = extractDeliveryId(iframe.src);
       const tenant = extractTenantDomain(iframe.src);
       if (deliveryId && tenant) {
-        addVideo(deliveryId, tenant, iframe.title || '', iframe.src);
+        addVideo(deliveryId, iframe.title || '', iframe.src);
       }
     }
 

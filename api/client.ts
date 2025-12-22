@@ -43,7 +43,7 @@ export function createApiClient(config: ApiClientConfig) {
   const { apiRequest, getBackendUrl } = fetcher;
 
   const { processText } = createLockinClient(apiRequest);
-  const { getRecentChats, getChatMessages, deleteChat } = createChatsClient(apiRequest);
+  const { getRecentChats, getChatMessages, deleteChat, generateChatTitle } = createChatsClient(apiRequest);
   const {
     createNote,
     updateNote,
@@ -67,6 +67,7 @@ export function createApiClient(config: ApiClientConfig) {
     getRecentChats,
     getChatMessages,
     deleteChat,
+    generateChatTitle,
     createNote,
     updateNote,
     deleteNote,

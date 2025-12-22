@@ -87,6 +87,7 @@ export interface ApiResponse<T = StudyResponse> {
     code?: string;
   };
   chatId?: string;
+  chatTitle?: string;
 }
 
 /**

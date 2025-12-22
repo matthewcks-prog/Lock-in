@@ -5,7 +5,7 @@ const { supabase } = require("./supabaseClient");
  * @param {string} userId
  * @returns {Promise<object>}
  */
-async function createChat(userId) {
+async function createChat(userId, title = null) {
   if (!userId) {
     throw new Error("createChat requires a userId");
   }
@@ -13,7 +13,7 @@ async function createChat(userId) {
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("chats")
-    .insert([{ user_id: userId, last_message_at: now }])
+    .insert([{ user_id: userId, title, last_message_at: now }])
     .select()
     .single();
 
@@ -96,7 +96,7 @@ async function getRecentChats(userId, limit = 5) {
   const cappedLimit = Number.isFinite(limit) && limit > 0 ? limit : 5;
   const { data, error } = await supabase
     .from("chats")
-    .select("id,title,created_at,last_message_at")
+    .select("id,title,created_at,updated_at,last_message_at")
     .eq("user_id", userId)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .limit(cappedLimit);
@@ -131,6 +131,34 @@ async function getChatMessages(userId, chatId) {
   return (data || []).map(({ chat_id, user_id, ...rest }) => rest);
 }
 
+/**
+ * Update the stored chat title for a user's chat.
+ * @param {string} userId
+ * @param {string} chatId
+ * @param {string} title
+ * @returns {Promise<object>}
+ */
+async function updateChatTitle(userId, chatId, title) {
+  if (!userId || !chatId) {
+    throw new Error("updateChatTitle requires userId and chatId");
+  }
+
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("chats")
+    .update({ title, updated_at: now })
+    .eq("id", chatId)
+    .eq("user_id", userId)
+    .select("id,title,updated_at,last_message_at,created_at")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update chat title: ${error.message}`);
+  }
+
+  return data;
+}
+
 module.exports = {
   createChat,
   getChatById,
@@ -138,4 +166,5 @@ module.exports = {
   touchChat,
   getRecentChats,
   getChatMessages,
+  updateChatTitle,
 };

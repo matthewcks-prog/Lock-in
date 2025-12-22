@@ -11,6 +11,7 @@ const {
   listChats,
   deleteChat,
   listChatMessages,
+  generateChatTitle,
 } = require("../controllers/lockinController");
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.post("/lockin", requireSupabaseUser, handleLockinRequest);
 router.get("/chats", requireSupabaseUser, listChats);
 router.delete("/chats/:chatId", requireSupabaseUser, deleteChat);
 router.get("/chats/:chatId/messages", requireSupabaseUser, listChatMessages);
+router.post("/chats/:chatId/title", requireSupabaseUser, generateChatTitle);
 
 module.exports = router;
 

@@ -180,12 +180,6 @@ body.lockin-sidebar-open .content {
   min-width: 0;
 }
 
-.lockin-brand {
-  font-weight: 700;
-  font-size: 14px;
-  color: #111827;
-}
-
 .lockin-mode-selector-wrapper {
   flex-shrink: 0;
 }
@@ -377,24 +371,6 @@ body.lockin-sidebar-open .content {
 .lockin-chat-history-panel[data-state="open"] {
   transform: translateX(0);
   opacity: 1;
-}
-
-.lockin-history-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #e5e7eb;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.lockin-history-label {
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b7280;
 }
 
 .lockin-new-chat-btn {

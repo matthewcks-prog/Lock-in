@@ -5,11 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   isEcho360Domain,
-  isEcho360Url,
-  extractEcho360Origin,
   extractSectionId,
   extractLessonId,
-  extractMediaId,
   extractEcho360Context,
   getEcho360PageType,
   parseEcho360Syllabus,

@@ -74,6 +74,7 @@ async function createNote(req, res, next) {
       content_json, // Lexical JSON state
       editor_version, // Editor version (e.g., 'lexical_v1')
       content_text, // Plain text extracted from Lexical
+      clientNoteId,
       sourceSelection,
       sourceUrl,
       courseCode,
@@ -184,8 +185,22 @@ async function createNote(req, res, next) {
       embedding = null;
     }
 
+    const normalizedClientNoteId =
+      typeof clientNoteId === "string" ? clientNoteId.trim() : null;
+
+    if (normalizedClientNoteId && !isValidUUID(normalizedClientNoteId)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: "INVALID_CLIENT_NOTE_ID",
+          message: "clientNoteId must be a valid UUID",
+        },
+      });
+    }
+
     const note = await notesRepo.createNote({
       userId,
+      clientNoteId: normalizedClientNoteId,
       title: validateTitle(title),
       contentJson: finalContentJson,
       editorVersion: finalEditorVersion,

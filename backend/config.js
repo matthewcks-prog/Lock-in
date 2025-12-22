@@ -36,6 +36,9 @@ const ALLOWED_ORIGINS = [
   /^https:\/\/moodle\.telt\.unsw\.edu\.au$/,
   // Panopto (all regional domains)
   /^https:\/\/([a-z0-9-]+\.)?panopto\.(com|eu)$/,
+  // Echo360 (regional + QA domains)
+  /^https:\/\/([a-z0-9-]+\.)?echo360qa\.(org|dev)$/,
+  /^https:\/\/([a-z0-9-]+\.)?echo360\.(org|org\.au|net\.au|ca|org\.uk)$/,
 ];
 
 // Asset uploads (notes)
