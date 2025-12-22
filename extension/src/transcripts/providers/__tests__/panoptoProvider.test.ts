@@ -127,7 +127,7 @@ describe("PanoptoTranscriptProvider", () => {
   describe("detectVideos", () => {
     it("detects Panopto iframes", () => {
       const context = {
-        url: "https://learning.monash.edu/course/view.php?id=123",
+        pageUrl: "https://learning.monash.edu/",
         iframes: [
           {
             src: "https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678",
@@ -154,7 +154,7 @@ describe("PanoptoTranscriptProvider", () => {
 
     it("uses fallback title when iframe has no title", () => {
       const context = {
-        url: "https://learning.monash.edu/",
+        pageUrl: "https://learning.monash.edu/",
         iframes: [
           {
             src: "https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678",
@@ -170,7 +170,7 @@ describe("PanoptoTranscriptProvider", () => {
 
     it("detects multiple Panopto videos", () => {
       const context = {
-        url: "https://learning.monash.edu/",
+        pageUrl: "https://learning.monash.edu/",
         iframes: [
           {
             src: "https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=11111111-1234-5678-9abc-def012345678",
@@ -192,7 +192,7 @@ describe("PanoptoTranscriptProvider", () => {
 
     it("returns empty array when no Panopto iframes", () => {
       const context = {
-        url: "https://example.com/",
+        pageUrl: "https://example.com/",
         iframes: [
           { src: "https://youtube.com/embed/abc", title: "YouTube" },
         ],

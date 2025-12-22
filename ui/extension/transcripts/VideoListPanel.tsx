@@ -1,6 +1,6 @@
 /**
  * VideoListPanel Component
- * 
+ *
  * Displays a list of detected videos on the current page.
  * User can click a video to extract its transcript.
  */
@@ -22,6 +22,11 @@ interface VideoListPanelProps {
   onClose: () => void;
   /** Error message if detection failed */
   error?: string;
+  /** Auth required info for sign-in prompt */
+  authRequired?: {
+    provider: string;
+    signInUrl: string;
+  };
 }
 
 /**
@@ -34,10 +39,10 @@ function ProviderBadge({ provider }: { provider: string }) {
     youtube: { bg: "#cc0000", text: "#ffffff" },
     unknown: { bg: "#6b7280", text: "#ffffff" },
   };
-  
+
   const colors = badgeColors[provider] || badgeColors.unknown;
   const label = provider.charAt(0).toUpperCase() + provider.slice(1);
-  
+
   return (
     <span
       className="lockin-video-provider-badge"
@@ -46,6 +51,43 @@ function ProviderBadge({ provider }: { provider: string }) {
       {label}
     </span>
   );
+}
+
+/**
+ * Format date for display
+ */
+function formatRecordingDate(dateStr: string | undefined): string | null {
+  if (!dateStr) return null;
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Format duration for display
+ */
+function formatDuration(durationMs: number | undefined): string | null {
+  if (!durationMs) return null;
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(
+      seconds
+    ).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 /**
@@ -60,6 +102,9 @@ function VideoListItem({
   isExtracting: boolean;
   onSelect: () => void;
 }) {
+  const recordingDate = formatRecordingDate(video.recordedAt);
+  const duration = formatDuration(video.durationMs);
+
   return (
     <button
       className={`lockin-video-item ${isExtracting ? "is-extracting" : ""}`}
@@ -72,12 +117,15 @@ function VideoListItem({
           <ProviderBadge provider={video.provider} />
           <span className="lockin-video-item-title">{video.title}</span>
         </div>
-        {video.thumbnailUrl && (
-          <img
-            src={video.thumbnailUrl}
-            alt=""
-            className="lockin-video-thumbnail"
-          />
+        {(recordingDate || duration) && (
+          <div className="lockin-video-item-meta">
+            {recordingDate && (
+              <span className="lockin-video-item-date">{recordingDate}</span>
+            )}
+            {duration && (
+              <span className="lockin-video-item-duration">{duration}</span>
+            )}
+          </div>
         )}
       </div>
       <div className="lockin-video-item-action">
@@ -91,6 +139,41 @@ function VideoListItem({
   );
 }
 
+/**
+ * Auth required prompt component
+ */
+function AuthRequiredPrompt({
+  provider,
+  signInUrl,
+}: {
+  provider: string;
+  signInUrl: string;
+}) {
+  const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
+
+  const handleSignIn = () => {
+    window.open(signInUrl, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div className="lockin-video-auth-required">
+      <p className="lockin-video-auth-message">
+        Please sign in to {providerName} to view recordings.
+      </p>
+      <button
+        className="lockin-video-auth-button"
+        onClick={handleSignIn}
+        type="button"
+      >
+        Open {providerName} Sign In
+      </button>
+      <p className="lockin-video-auth-hint">
+        After signing in, close this panel and try again.
+      </p>
+    </div>
+  );
+}
+
 export function VideoListPanel({
   videos,
   isLoading,
@@ -99,6 +182,7 @@ export function VideoListPanel({
   onSelectVideo,
   onClose,
   error,
+  authRequired,
 }: VideoListPanelProps) {
   // Note: isExtracting is used for global loading state, extractingVideoId for per-video state
   void _isExtracting; // Mark as intentionally unused (parent uses extractingVideoId)
@@ -115,13 +199,18 @@ export function VideoListPanel({
           ×
         </button>
       </div>
-      
+
       <div className="lockin-video-list-body">
         {isLoading ? (
           <div className="lockin-video-list-loading">
             <span className="lockin-inline-spinner" />
             <span>Detecting videos...</span>
           </div>
+        ) : authRequired ? (
+          <AuthRequiredPrompt
+            provider={authRequired.provider}
+            signInUrl={authRequired.signInUrl}
+          />
         ) : error ? (
           <div className="lockin-video-list-error">
             <p>{error}</p>
@@ -130,7 +219,7 @@ export function VideoListPanel({
           <div className="lockin-video-list-empty">
             <p>No videos detected on this page.</p>
             <p className="lockin-video-list-hint">
-              Supported: Panopto embeds
+              Supported: Panopto embeds, Echo360 recordings
             </p>
           </div>
         ) : (
@@ -146,7 +235,7 @@ export function VideoListPanel({
           </div>
         )}
       </div>
-      
+
       <div className="lockin-video-list-footer">
         <p className="lockin-video-list-info">
           {videos.length} video{videos.length !== 1 ? "s" : ""} found
@@ -155,4 +244,3 @@ export function VideoListPanel({
     </div>
   );
 }
-
