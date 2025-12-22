@@ -34,9 +34,20 @@ export function createChatsClient(apiRequest: ApiRequest) {
     });
   }
 
+  async function generateChatTitle(chatId: string): Promise<{ chatId: string; title: string }> {
+    if (!chatId) {
+      throw new Error("Chat ID is required");
+    }
+
+    return apiRequest<{ chatId: string; title: string }>(`/api/chats/${chatId}/title`, {
+      method: "POST",
+    });
+  }
+
   return {
     getRecentChats,
     getChatMessages,
     deleteChat,
+    generateChatTitle,
   };
 }

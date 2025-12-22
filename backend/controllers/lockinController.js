@@ -7,6 +7,7 @@
 const {
   generateLockInResponse,
   generateStructuredStudyResponse,
+  generateChatTitleFromHistory,
 } = require("../openaiClient");
 const { supabase } = require("../supabaseClient");
 const {
@@ -16,6 +17,7 @@ const {
   touchChat,
   getRecentChats,
   getChatMessages,
+  updateChatTitle,
 } = require("../chatRepository");
 const {
   MAX_SELECTION_LENGTH,
@@ -32,6 +34,10 @@ const {
   validateChatHistory,
   validateText,
 } = require("../utils/validation");
+const {
+  buildInitialChatTitle,
+  extractFirstUserMessage,
+} = require("../utils/chatTitle");
 
 /**
  * POST /api/lockin
@@ -169,20 +175,22 @@ async function handleLockinRequest(req, res) {
     // Validate chatId if provided
     if (incomingChatId) {
       const chatIdValidation = validateUUID(incomingChatId);
-      if (!chatIdValidation.valid) {
-        return res.status(400).json({
-          success: false,
-          error: { message: chatIdValidation.error },
-        });
-      }
-    }
-
-    const userId = req.user?.id;
-
-    if (!userId) {
-      // This should not happen if requireSupabaseUser is working correctly
-      return res.status(500).json({
+    if (!chatIdValidation.valid) {
+      return res.status(400).json({
         success: false,
+        error: { message: chatIdValidation.error },
+      });
+    }
+  }
+
+  const userId = req.user?.id;
+  const userInputText = trimmedUserMessage || selection;
+  const initialTitle = buildInitialChatTitle(userInputText || "");
+
+  if (!userId) {
+    // This should not happen if requireSupabaseUser is working correctly
+    return res.status(500).json({
+      success: false,
         error: { message: "User context missing for authenticated request." },
       });
     }
@@ -206,11 +214,10 @@ async function handleLockinRequest(req, res) {
         });
       }
     } else {
-      chatRecord = await createChat(userId);
+      chatRecord = await createChat(userId, initialTitle);
     }
 
     const chatId = chatRecord.id;
-    const userInputText = trimmedUserMessage || selection;
 
     await insertChatMessage({
       chat_id: chatId,
@@ -268,6 +275,20 @@ async function handleLockinRequest(req, res) {
 
     await touchChat(chatId);
 
+    // Automatically generate AI title if chat doesn't have one yet (or has fallback)
+    // Do this asynchronously to avoid blocking the response
+    const shouldGenerateTitle = !chatRecord.title || 
+      chatRecord.title === initialTitle || 
+      chatRecord.title === "New chat";
+    
+    if (shouldGenerateTitle) {
+      // Generate title asynchronously (fire and forget)
+      generateChatTitleAsync(userId, chatId, userInputText).catch((error) => {
+        console.error("Failed to auto-generate chat title:", error);
+        // Non-critical error, don't throw
+      });
+    }
+
     // For now, we don't log token usage from structured responses
     // This can be added later if needed
 
@@ -282,6 +303,7 @@ async function handleLockinRequest(req, res) {
         difficulty: structuredResponse.difficulty,
       },
       chatId,
+      chatTitle: chatRecord.title || initialTitle,
     });
   } catch (error) {
     console.error("Error processing /api/lockin request:", error);
@@ -312,9 +334,8 @@ async function listChats(req, res) {
 
     const response = chats.map((chat) => ({
       ...chat,
-      title:
-        chat.title ||
-        `Chat from ${new Date(chat.created_at).toISOString().split("T")[0]}`,
+      // Return null for empty titles so frontend can handle fallback/generation
+      title: chat.title && chat.title.trim() ? chat.title : null,
     }));
 
     return res.json(response);
@@ -420,11 +441,137 @@ async function listChatMessages(req, res) {
   }
 }
 
+/**
+ * Helper function to generate chat title asynchronously (non-blocking)
+ * Used for automatic title generation after chat messages
+ */
+async function generateChatTitleAsync(userId, chatId, fallbackText = "") {
+  try {
+    const messages = await getChatMessages(userId, chatId);
+    
+    const normalizedHistory = (messages || [])
+      .map((message) => {
+        const content =
+          (typeof message.content === "string" && message.content.trim()) ||
+          (typeof message.input_text === "string" && message.input_text.trim()) ||
+          (typeof message.output_text === "string" && message.output_text.trim()) ||
+          "";
+
+        if (!content) return null;
+
+        return {
+          role: message.role === "assistant" ? "assistant" : "user",
+          content: content.trim(),
+        };
+      })
+      .filter(Boolean);
+
+    // Need at least one user message and one assistant message to generate a meaningful title
+    if (normalizedHistory.length < 2) {
+      return;
+    }
+
+    const fallbackTitle = buildInitialChatTitle(
+      extractFirstUserMessage(messages) || fallbackText || ""
+    );
+
+    const generatedTitle = await generateChatTitleFromHistory({
+      history: normalizedHistory,
+      fallbackTitle,
+    });
+
+    await updateChatTitle(userId, chatId, generatedTitle);
+  } catch (error) {
+    console.error("Error in async title generation:", error);
+    // Don't throw - this is a background operation
+  }
+}
+
+/**
+ * POST /api/chats/:chatId/title
+ * Generate and persist a short chat title using OpenAI, with a safe fallback.
+ */
+async function generateChatTitle(req, res) {
+  const userId = req.user?.id;
+  const { chatId } = req.params;
+  let fallbackTitle = "New chat";
+
+  try {
+    const chatIdValidation = validateUUID(chatId);
+    if (!chatIdValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: { message: chatIdValidation.error },
+      });
+    }
+
+    const chat = await getChatById(userId, chatId);
+    if (!chat) {
+      return res
+        .status(404)
+        .json({ success: false, error: { message: "Chat not found" } });
+    }
+
+    const messages = await getChatMessages(userId, chatId);
+
+    const normalizedHistory = (messages || [])
+      .map((message) => {
+        const content =
+          (typeof message.content === "string" && message.content.trim()) ||
+          (typeof message.input_text === "string" && message.input_text.trim()) ||
+          (typeof message.output_text === "string" && message.output_text.trim()) ||
+          "";
+
+        if (!content) return null;
+
+        return {
+          role: message.role === "assistant" ? "assistant" : "user",
+          content: content.trim(),
+        };
+      })
+      .filter(Boolean);
+
+    fallbackTitle = buildInitialChatTitle(
+      extractFirstUserMessage(messages) || chat.title || ""
+    );
+
+    const generatedTitle = await generateChatTitleFromHistory({
+      history: normalizedHistory,
+      fallbackTitle,
+    });
+
+    const stored = await updateChatTitle(userId, chatId, generatedTitle);
+
+    return res.json({
+      success: true,
+      chatId,
+      title: stored?.title || generatedTitle,
+    });
+  } catch (error) {
+    console.error("Error generating chat title:", error);
+    const safeTitle = buildInitialChatTitle(fallbackTitle || "New chat");
+    try {
+      if (userId && chatId) {
+        await updateChatTitle(userId, chatId, safeTitle);
+      }
+    } catch (storageError) {
+      console.error("Failed to persist fallback chat title:", storageError);
+    }
+
+    return res.status(200).json({
+      success: true,
+      chatId,
+      title: safeTitle,
+    });
+  }
+}
+
 module.exports = {
   handleLockinRequest,
   listChats,
   deleteChat,
   listChatMessages,
+  generateChatTitle,
 };
 
 

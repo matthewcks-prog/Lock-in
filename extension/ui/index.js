@@ -7243,9 +7243,9 @@ var __async = (__this, __arguments, generator) => {
         return toDomainNote(raw);
       });
     }
-    function createNote(initial) {
+    function createNote(initial, options) {
       return __async(this, null, function* () {
-        var _a, _b, _c, _d, _e2, _f, _g, _h, _i2;
+        var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j;
         ensureService(apiClient);
         const payload = __spreadValues({
           title: initial.title,
@@ -7257,15 +7257,17 @@ var __async = (__this, __arguments, generator) => {
           course_code: (_f = initial.courseCode) != null ? _f : null,
           noteType: (_g = initial.noteType) != null ? _g : "manual",
           note_type: (_h = initial.noteType) != null ? _h : "manual",
-          tags: (_i2 = initial.tags) != null ? _i2 : []
+          tags: (_i2 = initial.tags) != null ? _i2 : [],
+          clientNoteId: (_j = initial.clientNoteId) != null ? _j : void 0
         }, toBackendPayload(initial.content));
-        const raw = yield apiClient.createNote(payload, void 0);
+        const requestOptions = (options == null ? void 0 : options.signal) ? { signal: options.signal } : void 0;
+        const raw = yield apiClient.createNote(payload, requestOptions);
         return toDomainNote(raw);
       });
     }
-    function updateNote(noteId, changes) {
+    function updateNote(noteId, changes, options) {
       return __async(this, null, function* () {
-        var _a, _b, _c, _d, _e2, _f, _g, _h, _i2;
+        var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j;
         ensureService(apiClient);
         const payload = __spreadValues(__spreadProps(__spreadValues({}, changes.title ? { title: changes.title } : {}), {
           sourceUrl: (_a = changes.sourceUrl) != null ? _a : void 0,
@@ -7278,7 +7280,11 @@ var __async = (__this, __arguments, generator) => {
           note_type: (_h = changes.noteType) != null ? _h : void 0,
           tags: (_i2 = changes.tags) != null ? _i2 : void 0
         }), toBackendPayload(changes.content));
-        const raw = yield apiClient.updateNote(noteId, payload, void 0);
+        const requestOptions = (options == null ? void 0 : options.signal) || (options == null ? void 0 : options.expectedUpdatedAt) ? {
+          signal: options == null ? void 0 : options.signal,
+          ifUnmodifiedSince: (_j = options == null ? void 0 : options.expectedUpdatedAt) != null ? _j : void 0
+        } : void 0;
+        const raw = yield apiClient.updateNote(noteId, payload, requestOptions);
         return toDomainNote(raw);
       });
     }
@@ -7473,6 +7479,58 @@ var __async = (__this, __arguments, generator) => {
       toggleStar,
       removeFromList
     };
+  }
+  const DEFAULT_SYNC_KEY = "lockin_sync_event";
+  function useCrossTabSync(options) {
+    const { onEvent, storageKey = DEFAULT_SYNC_KEY } = options;
+    const handlerRef = reactExports.useRef(onEvent);
+    const instanceIdRef = reactExports.useRef(
+      `sync-${Date.now()}-${Math.random().toString(16).slice(2)}`
+    );
+    const lastSeenRef = reactExports.useRef({});
+    const lastSentRef = reactExports.useRef({});
+    reactExports.useEffect(() => {
+      handlerRef.current = onEvent;
+    }, [onEvent]);
+    const broadcast = reactExports.useCallback(
+      (type, payload, throttleMs = 0) => {
+        var _a;
+        if (typeof chrome === "undefined" || !((_a = chrome.storage) == null ? void 0 : _a.local)) return;
+        const now = Date.now();
+        const lastSent = lastSentRef.current[type] || 0;
+        if (throttleMs > 0 && now - lastSent < throttleMs) {
+          return;
+        }
+        lastSentRef.current[type] = now;
+        const event = {
+          type,
+          ts: now,
+          source: instanceIdRef.current,
+          payload
+        };
+        chrome.storage.local.set({ [storageKey]: event });
+      },
+      [storageKey]
+    );
+    reactExports.useEffect(() => {
+      var _a;
+      if (typeof chrome === "undefined" || !((_a = chrome.storage) == null ? void 0 : _a.onChanged)) return;
+      const handleStorageChange = (changes, areaName) => {
+        if (areaName !== "local") return;
+        const change = changes[storageKey];
+        if (!(change == null ? void 0 : change.newValue)) return;
+        const event = change.newValue;
+        if (!(event == null ? void 0 : event.type)) return;
+        if (event.source === instanceIdRef.current) return;
+        const lastSeen = lastSeenRef.current[event.type] || 0;
+        if (event.ts && event.ts <= lastSeen) return;
+        lastSeenRef.current[event.type] = event.ts || Date.now();
+        handlerRef.current(event);
+      };
+      chrome.storage.onChanged.addListener(handleStorageChange);
+      return () => chrome.storage.onChanged.removeListener(handleStorageChange);
+    }, [storageKey]);
+    return { broadcast };
   }
   const toKebabCase = (string) => string.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
   const toCamelCase = (string) => string.replace(
@@ -7810,36 +7868,75 @@ var __async = (__this, __arguments, generator) => {
   const SAVED_RESET_DELAY_MS = 1200;
   const MAX_SAVE_RETRIES = 3;
   const OFFLINE_QUEUE_KEY = "lockin_offline_notes_queue";
+  function createClientNoteId() {
+    const globalCrypto = typeof globalThis !== "undefined" ? globalThis.crypto : void 0;
+    if (globalCrypto == null ? void 0 : globalCrypto.randomUUID) {
+      return globalCrypto.randomUUID();
+    }
+    const bytes = new Uint8Array(16);
+    if (globalCrypto == null ? void 0 : globalCrypto.getRandomValues) {
+      globalCrypto.getRandomValues(bytes);
+    } else {
+      for (let i2 = 0; i2 < bytes.length; i2 += 1) {
+        bytes[i2] = Math.floor(Math.random() * 256);
+      }
+    }
+    bytes[6] = bytes[6] & 15 | 64;
+    bytes[8] = bytes[8] & 63 | 128;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+  }
+  function getQueueKey(save) {
+    return save.noteId || save.clientNoteId;
+  }
+  function normalizeOfflineQueue(queue) {
+    const latestByKey = /* @__PURE__ */ new Map();
+    queue.forEach((item) => {
+      var _a, _b;
+      const normalized = __spreadProps(__spreadValues({}, item), {
+        clientNoteId: item.clientNoteId || item.noteId || createClientNoteId(),
+        expectedUpdatedAt: (_a = item.expectedUpdatedAt) != null ? _a : null,
+        retryCount: (_b = item.retryCount) != null ? _b : 0
+      });
+      const key = getQueueKey(normalized);
+      const existing = latestByKey.get(key);
+      if (!existing || normalized.timestamp >= existing.timestamp) {
+        latestByKey.set(key, normalized);
+      }
+    });
+    return Array.from(latestByKey.values()).sort(
+      (a2, b2) => a2.timestamp - b2.timestamp
+    );
+  }
   function loadOfflineQueue() {
     try {
       const stored = localStorage.getItem(OFFLINE_QUEUE_KEY);
       if (!stored) return [];
-      return JSON.parse(stored);
+      const parsed = JSON.parse(stored);
+      return normalizeOfflineQueue(Array.isArray(parsed) ? parsed : []);
     } catch (e2) {
       return [];
     }
   }
   function saveOfflineQueue(queue) {
     try {
-      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+      const normalized = normalizeOfflineQueue(queue);
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(normalized));
     } catch (e2) {
       console.error("[NoteEditor] Failed to save offline queue");
     }
   }
   function addToOfflineQueue(save) {
     const queue = loadOfflineQueue();
-    const filtered = queue.filter(
-      (s2) => s2.noteId !== save.noteId || s2.noteId === null && save.noteId === null && s2.timestamp !== save.timestamp
-    );
+    const key = getQueueKey(save);
+    const filtered = queue.filter((s2) => getQueueKey(s2) !== key);
     filtered.push(save);
     const trimmed = filtered.slice(-50);
     saveOfflineQueue(trimmed);
   }
-  function removeFromOfflineQueue(noteId, timestamp) {
+  function removeFromOfflineQueue(queueKey) {
     const queue = loadOfflineQueue();
-    const filtered = queue.filter(
-      (s2) => !(s2.noteId === noteId && s2.timestamp === timestamp)
-    );
+    const filtered = queue.filter((s2) => getQueueKey(s2) !== queueKey);
     saveOfflineQueue(filtered);
   }
   function createDraftNote(opts) {
@@ -7883,6 +7980,10 @@ var __async = (__this, __arguments, generator) => {
     const [status, setStatus] = reactExports.useState("idle");
     const [error, setError] = reactExports.useState(null);
     const [isLoading, setIsLoading] = reactExports.useState(false);
+    const noteRef = reactExports.useRef(note);
+    noteRef.current = note;
+    const clientNoteIdRef = reactExports.useRef(noteId != null ? noteId : createClientNoteId());
+    const saveSequenceRef = reactExports.useRef(0);
     const debounceRef = reactExports.useRef(null);
     const savedResetRef = reactExports.useRef(null);
     const abortControllerRef = reactExports.useRef(null);
@@ -7916,23 +8017,35 @@ var __async = (__this, __arguments, generator) => {
     reactExports.useEffect(() => {
       const targetId = activeNoteId;
       const service = notesServiceRef.current;
+      const currentNote = noteRef.current;
+      if (targetId) {
+        clientNoteIdRef.current = targetId;
+      }
       if (targetId === loadingNoteIdRef.current) {
         return;
       }
       if (targetId === lastLoadedNoteIdRef.current && targetId !== null) {
         return;
       }
-      if (!targetId || !service) {
+      if (!targetId) {
         loadingNoteIdRef.current = null;
         lastLoadedNoteIdRef.current = null;
-        const draft = createDraftNote({
-          courseCode: defaultCourseCodeRef.current,
-          sourceUrl: defaultSourceUrlRef.current,
-          sourceSelection: sourceSelectionRef.current
-        });
-        setNote(draft);
-        lastSavedFingerprintRef.current = createContentFingerprint(draft.title, draft.content);
+        if (!currentNote || currentNote.id !== null) {
+          clientNoteIdRef.current = createClientNoteId();
+          const draft = createDraftNote({
+            courseCode: defaultCourseCodeRef.current,
+            sourceUrl: defaultSourceUrlRef.current,
+            sourceSelection: sourceSelectionRef.current
+          });
+          setNote(draft);
+          lastSavedFingerprintRef.current = createContentFingerprint(draft.title, draft.content);
+        }
         setStatus("idle");
+        setIsLoading(false);
+        return;
+      }
+      if (!service) {
+        loadingNoteIdRef.current = null;
         setIsLoading(false);
         return;
       }
@@ -7965,12 +8078,10 @@ var __async = (__this, __arguments, generator) => {
       return () => {
         cancelled = true;
       };
-    }, [activeNoteId]);
-    const noteRef = reactExports.useRef(note);
-    noteRef.current = note;
+    }, [activeNoteId, notesService]);
     const [pendingSaveCount, setPendingSaveCount] = reactExports.useState(() => loadOfflineQueue().length);
     const persist = reactExports.useCallback(() => __async(null, null, function* () {
-      var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j, _k, _l, _m, _n2, _o, _p, _q, _r2;
+      var _a, _b, _c, _d, _e2, _f, _g, _h, _i2, _j, _k, _l, _m, _n2, _o, _p, _q, _r2, _s2;
       const currentNote = noteRef.current;
       if (!notesService || !currentNote) {
         setError("Notes service unavailable");
@@ -7993,19 +8104,28 @@ var __async = (__this, __arguments, generator) => {
         savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
         return;
       }
+      const clientNoteId = currentNote.id || clientNoteIdRef.current || createClientNoteId();
+      if (!currentNote.id) {
+        clientNoteIdRef.current = clientNoteId;
+      }
+      const expectedUpdatedAt = (_a = currentNote.updatedAt) != null ? _a : null;
+      const queueKey = currentNote.id || clientNoteId;
+      const saveSequence = ++saveSequenceRef.current;
       const controller = new AbortController();
       abortControllerRef.current = controller;
       setStatus("saving");
       setError(null);
       const pendingSave = {
         noteId: currentNote.id,
+        clientNoteId,
         title: currentNote.title || "Untitled note",
         content: currentNote.content,
-        courseCode: (_b = (_a = currentNote.courseCode) != null ? _a : defaultCourseCode) != null ? _b : null,
-        sourceUrl: (_d = (_c = currentNote.sourceUrl) != null ? _c : defaultSourceUrl) != null ? _d : null,
-        sourceSelection: (_f = (_e2 = currentNote.sourceSelection) != null ? _e2 : sourceSelection) != null ? _f : null,
+        courseCode: (_c = (_b = currentNote.courseCode) != null ? _b : defaultCourseCode) != null ? _c : null,
+        sourceUrl: (_e2 = (_d = currentNote.sourceUrl) != null ? _d : defaultSourceUrl) != null ? _e2 : null,
+        sourceSelection: (_g = (_f = currentNote.sourceSelection) != null ? _f : sourceSelection) != null ? _g : null,
         noteType: currentNote.noteType,
         tags: currentNote.tags,
+        expectedUpdatedAt,
         timestamp: Date.now(),
         retryCount: 0
       };
@@ -8015,28 +8135,52 @@ var __async = (__this, __arguments, generator) => {
           const payload = {
             title: currentNote.title,
             content: currentNote.content,
-            courseCode: (_h = (_g = currentNote.courseCode) != null ? _g : defaultCourseCode) != null ? _h : null,
-            sourceUrl: (_j = (_i2 = currentNote.sourceUrl) != null ? _i2 : defaultSourceUrl) != null ? _j : null,
-            sourceSelection: (_l = (_k = currentNote.sourceSelection) != null ? _k : sourceSelection) != null ? _l : null,
+            courseCode: (_i2 = (_h = currentNote.courseCode) != null ? _h : defaultCourseCode) != null ? _i2 : null,
+            sourceUrl: (_k = (_j = currentNote.sourceUrl) != null ? _j : defaultSourceUrl) != null ? _k : null,
+            sourceSelection: (_m = (_l = currentNote.sourceSelection) != null ? _l : sourceSelection) != null ? _m : null,
             noteType: currentNote.noteType,
             tags: currentNote.tags
           };
-          saved = yield notesService.updateNote(currentNote.id, payload);
+          saved = yield notesService.updateNote(currentNote.id, payload, {
+            signal: controller.signal,
+            expectedUpdatedAt
+          });
         } else {
           const payload = {
             title: currentNote.title || "Untitled note",
             content: currentNote.content,
-            courseCode: (_n2 = (_m = currentNote.courseCode) != null ? _m : defaultCourseCode) != null ? _n2 : null,
-            sourceUrl: (_p = (_o = currentNote.sourceUrl) != null ? _o : defaultSourceUrl) != null ? _p : null,
-            sourceSelection: (_r2 = (_q = currentNote.sourceSelection) != null ? _q : sourceSelection) != null ? _r2 : null,
+            courseCode: (_o = (_n2 = currentNote.courseCode) != null ? _n2 : defaultCourseCode) != null ? _o : null,
+            sourceUrl: (_q = (_p = currentNote.sourceUrl) != null ? _p : defaultSourceUrl) != null ? _q : null,
+            sourceSelection: (_s2 = (_r2 = currentNote.sourceSelection) != null ? _r2 : sourceSelection) != null ? _s2 : null,
             noteType: currentNote.noteType,
-            tags: currentNote.tags
+            tags: currentNote.tags,
+            clientNoteId
           };
-          saved = yield notesService.createNote(payload);
+          saved = yield notesService.createNote(payload, {
+            signal: controller.signal
+          });
         }
         if (controller.signal.aborted) return;
+        if (saveSequence !== saveSequenceRef.current) return;
+        const latestNote = noteRef.current;
+        if ((latestNote == null ? void 0 : latestNote.id) && saved.id && latestNote.id !== saved.id) {
+          return;
+        }
+        if (!(latestNote == null ? void 0 : latestNote.id) && clientNoteIdRef.current !== clientNoteId) {
+          return;
+        }
+        const latestFingerprint = latestNote ? createContentFingerprint(latestNote.title, latestNote.content) : null;
+        if (latestFingerprint && latestFingerprint !== fingerprint) {
+          setStatus("editing");
+          return;
+        }
+        removeFromOfflineQueue(queueKey);
+        setPendingSaveCount(loadOfflineQueue().length);
         setNote(saved);
         setActiveNoteId(saved.id);
+        if (saved.id) {
+          clientNoteIdRef.current = saved.id;
+        }
         lastSavedFingerprintRef.current = createContentFingerprint(
           saved.title,
           saved.content
@@ -8047,7 +8191,7 @@ var __async = (__this, __arguments, generator) => {
         }
         savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
       } catch (err) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || (err == null ? void 0 : err.code) === "ABORTED") return;
         const isNetworkError = (err == null ? void 0 : err.code) === "NETWORK_ERROR" || !navigator.onLine;
         const isRetryable = isNetworkError || (err == null ? void 0 : err.code) === "RATE_LIMIT" || (err == null ? void 0 : err.status) === 429 || (err == null ? void 0 : err.status) >= 500;
         if (isRetryable && pendingSave.retryCount < MAX_SAVE_RETRIES) {
@@ -8109,7 +8253,9 @@ var __async = (__this, __arguments, generator) => {
         debounceRef.current = null;
       }
       (_a = abortControllerRef.current) == null ? void 0 : _a.abort();
+      saveSequenceRef.current += 1;
       setActiveNoteId(null);
+      clientNoteIdRef.current = createClientNoteId();
       const draft = createDraftNote({
         courseCode: defaultCourseCode,
         sourceUrl: defaultSourceUrl,
@@ -8121,12 +8267,15 @@ var __async = (__this, __arguments, generator) => {
       setError(null);
     }, [defaultCourseCode, defaultSourceUrl, sourceSelection]);
     const syncOfflineQueue = reactExports.useCallback(() => __async(null, null, function* () {
+      var _a;
       if (!notesService) return;
       const queue = loadOfflineQueue();
       if (queue.length === 0) return;
       console.log(`[NoteEditor] Syncing ${queue.length} offline saves`);
       for (const pendingSave of queue) {
+        const queueKey = getQueueKey(pendingSave);
         try {
+          let saved = null;
           if (pendingSave.noteId) {
             const payload = {
               title: pendingSave.title,
@@ -8137,7 +8286,9 @@ var __async = (__this, __arguments, generator) => {
               noteType: pendingSave.noteType,
               tags: pendingSave.tags
             };
-            yield notesService.updateNote(pendingSave.noteId, payload);
+            saved = yield notesService.updateNote(pendingSave.noteId, payload, {
+              expectedUpdatedAt: (_a = pendingSave.expectedUpdatedAt) != null ? _a : void 0
+            });
           } else {
             const payload = {
               title: pendingSave.title,
@@ -8146,19 +8297,54 @@ var __async = (__this, __arguments, generator) => {
               sourceUrl: pendingSave.sourceUrl,
               sourceSelection: pendingSave.sourceSelection,
               noteType: pendingSave.noteType,
-              tags: pendingSave.tags
+              tags: pendingSave.tags,
+              clientNoteId: pendingSave.clientNoteId
             };
-            yield notesService.createNote(payload);
+            saved = yield notesService.createNote(payload);
           }
-          removeFromOfflineQueue(pendingSave.noteId, pendingSave.timestamp);
-          console.log(`[NoteEditor] Synced offline save for note ${pendingSave.noteId || "new"}`);
+          removeFromOfflineQueue(queueKey);
+          console.log(`[NoteEditor] Synced offline save for note ${pendingSave.noteId || pendingSave.clientNoteId || "new"}`);
+          if (saved) {
+            const latestNote = noteRef.current;
+            const pendingFingerprint = createContentFingerprint(
+              pendingSave.title,
+              pendingSave.content
+            );
+            const latestFingerprint = latestNote ? createContentFingerprint(latestNote.title, latestNote.content) : null;
+            const isSameDraft = !(latestNote == null ? void 0 : latestNote.id) && clientNoteIdRef.current === pendingSave.clientNoteId;
+            const isSameNote = (latestNote == null ? void 0 : latestNote.id) && latestNote.id === saved.id;
+            if ((isSameDraft || isSameNote) && latestFingerprint === pendingFingerprint) {
+              setNote(saved);
+              setActiveNoteId(saved.id);
+              if (saved.id) {
+                clientNoteIdRef.current = saved.id;
+              }
+              lastSavedFingerprintRef.current = createContentFingerprint(
+                saved.title,
+                saved.content
+              );
+              setStatus("saved");
+              if (savedResetRef.current) {
+                window.clearTimeout(savedResetRef.current);
+              }
+              savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
+            }
+          }
         } catch (err) {
           console.error(`[NoteEditor] Failed to sync offline save:`, err);
+          const isRetryable = (err == null ? void 0 : err.code) === "NETWORK_ERROR" || (err == null ? void 0 : err.code) === "RATE_LIMIT" || (err == null ? void 0 : err.status) === 429 || (err == null ? void 0 : err.status) >= 500;
+          const isStale = (err == null ? void 0 : err.code) === "CONFLICT" || (err == null ? void 0 : err.code) === "NOT_FOUND";
           const queue2 = loadOfflineQueue();
           const updated = queue2.map(
-            (s2) => s2.noteId === pendingSave.noteId && s2.timestamp === pendingSave.timestamp ? __spreadProps(__spreadValues({}, s2), { retryCount: s2.retryCount + 1 }) : s2
+            (s2) => {
+              var _a2;
+              return getQueueKey(s2) === queueKey ? __spreadProps(__spreadValues({}, s2), { retryCount: ((_a2 = s2.retryCount) != null ? _a2 : 0) + 1 }) : s2;
+            }
           );
-          const filtered = updated.filter((s2) => s2.retryCount < MAX_SAVE_RETRIES);
+          let filtered = updated.filter((s2) => s2.retryCount < MAX_SAVE_RETRIES);
+          if (!isRetryable || isStale) {
+            filtered = filtered.filter((s2) => getQueueKey(s2) !== queueKey);
+          }
           saveOfflineQueue(filtered);
         }
       }
@@ -18145,7 +18331,9 @@ var __async = (__this, __arguments, generator) => {
         onChange: (editorState) => {
           if (isFirstChangeRef.current) {
             isFirstChangeRef.current = false;
-            return;
+            if (isHydrating) {
+              return;
+            }
           }
           if (isHydrating) {
             return;
@@ -20245,6 +20433,12 @@ ${transcript.plainText}`;
   const MODE_STORAGE_KEY = "lockinActiveMode";
   const SELECTED_NOTE_ID_KEY = "lockin_sidebar_selectedNoteId";
   const ACTIVE_CHAT_ID_KEY = "lockin_sidebar_activeChatId";
+  const NOTES_SYNC_THROTTLE_MS = 5e3;
+  const CHAT_SYNC_THROTTLE_MS = 0;
+  const SYNC_EVENTS = {
+    NOTES_UPDATED: "notes:updated",
+    CHAT_UPDATED: "chat:updated"
+  };
   function isValidUUID(value) {
     if (!value) return false;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -20403,6 +20597,93 @@ ${transcript.plainText}`;
       notesService,
       limit: 50
     });
+    const lastChatRefreshRef = reactExports.useRef(0);
+    const refreshChatHistory = reactExports.useCallback(
+      (options) => __async(null, null, function* () {
+        if (!(apiClient == null ? void 0 : apiClient.getRecentChats)) return;
+        try {
+          const result = yield apiClient.getRecentChats({ limit: 8 });
+          if (Array.isArray(result)) {
+            const mapped = result.map((item) => ({
+              id: item.id || `chat-${Math.random().toString(16).slice(2)}`,
+              title: item.title || "Conversation",
+              updatedAt: item.updated_at || item.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
+              lastMessage: item.lastMessage || ""
+            }));
+            setRecentChats(mapped);
+          }
+        } catch (e2) {
+          if (!(options == null ? void 0 : options.silent)) ;
+        }
+      }),
+      [apiClient]
+    );
+    const refreshChatMessages = reactExports.useCallback(
+      (targetChatId, options) => __async(null, null, function* () {
+        if (!(apiClient == null ? void 0 : apiClient.getChatMessages) || !targetChatId) return;
+        if (!(options == null ? void 0 : options.silent)) {
+          setIsSending(true);
+          setChatError(null);
+        }
+        try {
+          const response = yield apiClient.getChatMessages(targetChatId);
+          if (Array.isArray(response)) {
+            const normalized = response.map((message) => ({
+              id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
+              role: message.role === "assistant" ? "assistant" : "user",
+              content: message.content || message.output_text || message.input_text || "Message",
+              timestamp: message.created_at || (/* @__PURE__ */ new Date()).toISOString(),
+              mode: message.mode || mode
+            }));
+            setMessages(normalized);
+          }
+        } catch (error) {
+          if (!(options == null ? void 0 : options.silent)) {
+            setChatError(
+              (error == null ? void 0 : error.message) || "Could not load this conversation. Try refreshing the page."
+            );
+          }
+        } finally {
+          if (!(options == null ? void 0 : options.silent)) {
+            setIsSending(false);
+          }
+        }
+      }),
+      [apiClient, mode]
+    );
+    const { broadcast: broadcastSync } = useCrossTabSync({
+      onEvent: (event) => {
+        if (event.type === SYNC_EVENTS.NOTES_UPDATED) {
+          refreshNotes();
+          return;
+        }
+        if (event.type === SYNC_EVENTS.CHAT_UPDATED) {
+          const now = Date.now();
+          if (now - lastChatRefreshRef.current < 1e3) {
+            return;
+          }
+          lastChatRefreshRef.current = now;
+          refreshChatHistory({ silent: true });
+          const payload = event.payload;
+          const activeChatId = isValidUUID(chatId) ? chatId : null;
+          if ((payload == null ? void 0 : payload.chatId) && activeChatId === payload.chatId) {
+            refreshChatMessages(payload.chatId, { silent: true });
+          }
+        }
+      }
+    });
+    const broadcastNotesSync = reactExports.useCallback(
+      (payload) => {
+        broadcastSync(SYNC_EVENTS.NOTES_UPDATED, payload, NOTES_SYNC_THROTTLE_MS);
+      },
+      [broadcastSync]
+    );
+    const broadcastChatSync = reactExports.useCallback(
+      (payload) => {
+        broadcastSync(SYNC_EVENTS.CHAT_UPDATED, payload, CHAT_SYNC_THROTTLE_MS);
+      },
+      [broadcastSync]
+    );
     const {
       state: transcriptState,
       closeVideoList,
@@ -20474,28 +20755,11 @@ ${transcript.plainText}`;
         if (storedChatId && isValidUUID(storedChatId)) {
           setChatId(storedChatId);
           setActiveHistoryId(storedChatId);
-          if (apiClient == null ? void 0 : apiClient.getChatMessages) {
-            try {
-              const response = yield apiClient.getChatMessages(storedChatId);
-              if (Array.isArray(response)) {
-                const normalized = response.map(
-                  (message) => ({
-                    id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
-                    role: message.role === "assistant" ? "assistant" : "user",
-                    content: message.content || message.output_text || message.input_text || "Message",
-                    timestamp: message.created_at || (/* @__PURE__ */ new Date()).toISOString(),
-                    mode: message.mode || mode
-                  })
-                );
-                setMessages(normalized);
-              }
-            } catch (e2) {
-            }
-          }
+          yield refreshChatMessages(storedChatId, { silent: true });
         }
       })).catch(() => {
       });
-    }, [storage, apiClient, mode]);
+    }, [storage, refreshChatMessages]);
     reactExports.useEffect(() => {
       if (!storage) return;
       if (chatId && isValidUUID(chatId)) {
@@ -20620,6 +20884,9 @@ ${transcript.plainText}`;
               },
               provisionalChatId
             );
+            if (isValidUUID(resolvedChatId)) {
+              broadcastChatSync({ chatId: resolvedChatId });
+            }
           }
         } catch (error) {
           const fallback = (error == null ? void 0 : error.message) || "We could not process this request. Try again in a moment.";
@@ -20641,6 +20908,7 @@ ${transcript.plainText}`;
         mode,
         pageUrl,
         selectedText,
+        broadcastChatSync,
         upsertHistory
       ]
     );
@@ -20729,24 +20997,8 @@ ${transcript.plainText}`;
       startNewChat
     ]);
     reactExports.useEffect(() => {
-      const loadHistory = () => __async(null, null, function* () {
-        if (!(apiClient == null ? void 0 : apiClient.getRecentChats)) return;
-        try {
-          const result = yield apiClient.getRecentChats({ limit: 8 });
-          if (Array.isArray(result)) {
-            const mapped = result.map((item) => ({
-              id: item.id || `chat-${Math.random().toString(16).slice(2)}`,
-              title: item.title || "Conversation",
-              updatedAt: item.updated_at || item.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
-              lastMessage: item.lastMessage || ""
-            }));
-            setRecentChats(mapped);
-          }
-        } catch (e2) {
-        }
-      });
-      loadHistory();
-    }, [apiClient]);
+      refreshChatHistory({ silent: true });
+    }, [refreshChatHistory]);
     reactExports.useEffect(() => {
       if (activeTab === NOTES_TAB_ID) {
         refreshNotes();
@@ -20755,33 +21007,11 @@ ${transcript.plainText}`;
     const handleHistorySelect = reactExports.useCallback(
       (item) => __async(null, null, function* () {
         if (!(apiClient == null ? void 0 : apiClient.getChatMessages)) return;
-        setIsSending(true);
-        setChatError(null);
         setActiveHistoryId(item.id);
         setChatId(item.id);
-        try {
-          const response = yield apiClient.getChatMessages(item.id);
-          if (Array.isArray(response)) {
-            const normalized = response.map(
-              (message) => ({
-                id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
-                role: message.role === "assistant" ? "assistant" : "user",
-                content: message.content || message.output_text || message.input_text || "Message",
-                timestamp: message.created_at || (/* @__PURE__ */ new Date()).toISOString(),
-                mode: message.mode || mode
-              })
-            );
-            setMessages(normalized);
-          }
-        } catch (error) {
-          setChatError(
-            (error == null ? void 0 : error.message) || "Could not load this conversation. Try refreshing the page."
-          );
-        } finally {
-          setIsSending(false);
-        }
+        yield refreshChatMessages(item.id);
       }),
-      [apiClient, mode]
+      [apiClient, refreshChatMessages]
     );
     const handleSend = reactExports.useCallback(() => {
       if (!inputValue.trim() || isSending) return;
@@ -20823,12 +21053,13 @@ ${transcript.plainText}`;
           upsertNote(createdNote);
           setSelectedNoteId(createdNote.id);
           setActiveTab(NOTES_TAB_ID);
+          broadcastNotesSync();
         } catch (error) {
           console.error("Failed to save note:", error);
           setActiveTab(NOTES_TAB_ID);
         }
       }),
-      [courseCode, notesService, pageUrl, upsertNote]
+      [broadcastNotesSync, courseCode, notesService, pageUrl, upsertNote]
     );
     const handleExtractTranscriptAction = reactExports.useCallback(() => {
       setActiveTab(CHAT_TAB_ID);
@@ -20919,24 +21150,21 @@ ${transcript.plainText}`;
           "data-state": isOpen ? "expanded" : "collapsed",
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-top-bar", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-top-bar-left", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-brand", children: "Lock-in" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-tabs-wrapper", role: "tablist", children: [CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
-                  const label = tabId === CHAT_TAB_ID ? "Chat" : "Notes";
-                  const isActive = activeTab === tabId;
-                  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "button",
-                    {
-                      className: `lockin-tab ${isActive ? "lockin-tab-active" : ""}`,
-                      onClick: () => handleTabChange(tabId),
-                      role: "tab",
-                      "aria-selected": isActive,
-                      children: label
-                    },
-                    tabId
-                  );
-                }) })
-              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-top-bar-left", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-tabs-wrapper", role: "tablist", children: [CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
+                const label = tabId === CHAT_TAB_ID ? "Chat" : "Notes";
+                const isActive = activeTab === tabId;
+                return /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "button",
+                  {
+                    className: `lockin-tab ${isActive ? "lockin-tab-active" : ""}`,
+                    onClick: () => handleTabChange(tabId),
+                    role: "tab",
+                    "aria-selected": isActive,
+                    children: label
+                  },
+                  tabId
+                );
+              }) }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "button",
                 {
@@ -21011,36 +21239,23 @@ ${transcript.plainText}`;
                   className: "lockin-chat-container",
                   "data-history-state": isHistoryOpen ? "open" : "closed",
                   children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "aside",
                       {
                         className: "lockin-chat-history-panel",
                         "data-state": isHistoryOpen ? "open" : "closed",
-                        children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-actions", children: [
-                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-history-label", children: "Chats" }),
-                            /* @__PURE__ */ jsxRuntimeExports.jsx(
-                              "button",
-                              {
-                                className: "lockin-new-chat-btn",
-                                onClick: startBlankChat,
-                                children: "+ New chat"
-                              }
-                            )
-                          ] }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-list", children: recentChats.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-empty", children: "No chats yet. Start from a highlight or a question." }) : recentChats.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-                            "button",
-                            {
-                              className: `lockin-history-item ${activeHistoryId === item.id ? "active" : ""}`,
-                              onClick: () => handleHistorySelect(item),
-                              children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-item-content", children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-title", children: item.title }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-meta", children: relativeLabel(item.updatedAt) })
-                              ] })
-                            },
-                            item.id
-                          )) })
-                        ]
+                        children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-list", children: recentChats.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-empty", children: "No chats yet. Start from a highlight or a question." }) : recentChats.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                          "button",
+                          {
+                            className: `lockin-history-item ${activeHistoryId === item.id ? "active" : ""}`,
+                            onClick: () => handleHistorySelect(item),
+                            children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-history-item-content", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-title", children: item.title }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-history-meta", children: relativeLabel(item.updatedAt) })
+                            ] })
+                          },
+                          item.id
+                        )) })
                       }
                     ),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-main", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-chat-content", children: [
@@ -21092,14 +21307,22 @@ ${transcript.plainText}`;
                 onNoteSaved: (note) => {
                   upsertNote(note);
                   setSelectedNoteId(note.id);
+                  broadcastNotesSync();
                 },
                 onDeleteNote: (noteId) => __async(null, null, function* () {
                   yield deleteNoteFromList(noteId);
                   if (selectedNoteId === noteId) {
                     setSelectedNoteId(null);
                   }
+                  broadcastNotesSync();
                 }),
-                onToggleStar: toggleNoteStar,
+                onToggleStar: (noteId) => __async(null, null, function* () {
+                  const updated = yield toggleNoteStar(noteId);
+                  if (updated) {
+                    broadcastNotesSync();
+                  }
+                  return updated;
+                }),
                 activeNoteId: selectedNoteId,
                 onSelectNote: (noteId) => setSelectedNoteId(noteId),
                 courseCode,
