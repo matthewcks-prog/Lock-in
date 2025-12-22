@@ -5,156 +5,51 @@
  * Uses the messaging system for typed communication.
  */
 
+// Import shared libraries
+try {
+  importScripts("libs/webvttParser.js");
+} catch (e) {
+  console.warn("Lock-in: Failed to import webvttParser.js:", e);
+}
+
 // Import messaging system (available via global in service worker)
 const Messaging =
   typeof self !== "undefined" && self.LockInMessaging
     ? self.LockInMessaging
     : null;
 
+// Get shared VTT parser
+const WebVtt =
+  typeof self !== "undefined" && self.LockInWebVtt ? self.LockInWebVtt : null;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Transcript Extraction Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Common HTML entities that appear in VTT captions
- */
-const HTML_ENTITIES = {
-  "&#39;": "'",
-  "&#x27;": "'",
-  "&apos;": "'",
-  "&#34;": '"',
-  "&#x22;": '"',
-  "&quot;": '"',
-  "&amp;": "&",
-  "&#38;": "&",
-  "&lt;": "<",
-  "&#60;": "<",
-  "&gt;": ">",
-  "&#62;": ">",
-  "&nbsp;": " ",
-  "&#160;": " ",
-  "&#8217;": "\u2019",
-  "&#8216;": "\u2018",
-  "&#8220;": "\u201C",
-  "&#8221;": "\u201D",
-  "&#8211;": "\u2013",
-  "&#8212;": "\u2014",
-  "&#8230;": "\u2026",
-};
-
-/**
- * Decode HTML entities in text
- */
-function decodeHtmlEntities(text) {
-  let result = text;
-  for (const [entity, char] of Object.entries(HTML_ENTITIES)) {
-    result = result.split(entity).join(char);
-  }
-  result = result.replace(/&#(\d+);/g, (_, code) =>
-    String.fromCharCode(parseInt(code, 10))
-  );
-  result = result.replace(/&#x([0-9a-fA-F]+);/g, (_, code) =>
-    String.fromCharCode(parseInt(code, 16))
-  );
-  return result;
-}
-
-/**
- * Parse a VTT timestamp into milliseconds
- */
-function parseVttTimestamp(timestamp) {
-  const parts = timestamp.trim().split(":");
-  if (parts.length < 2 || parts.length > 3) return 0;
-
-  let hours = 0,
-    minutes,
-    seconds;
-  if (parts.length === 3) {
-    hours = parseInt(parts[0], 10) || 0;
-    minutes = parseInt(parts[1], 10) || 0;
-    seconds = parseFloat(parts[2]) || 0;
-  } else {
-    minutes = parseInt(parts[0], 10) || 0;
-    seconds = parseFloat(parts[1]) || 0;
-  }
-  return Math.round((hours * 3600 + minutes * 60 + seconds) * 1000);
-}
-
-/**
- * Strip VTT formatting tags
- */
-function stripVttTags(text) {
-  let result = text.replace(/<v[^>]*>/gi, "").replace(/<\/v>/gi, "");
-  result = result.replace(/<c[^>]*>/gi, "").replace(/<\/c>/gi, "");
-  result = result.replace(/<\/?(?:b|i|u|ruby|rt|lang)[^>]*>/gi, "");
-  return result.trim();
-}
-
-/**
  * Parse WebVTT content into structured segments
+ * Uses shared parser from libs/webvttParser.js if available, otherwise fallback
  */
 function parseWebVtt(vttContent) {
+  if (WebVtt && typeof WebVtt.parseWebVtt === "function") {
+    return WebVtt.parseWebVtt(vttContent);
+  }
+  // Fallback: minimal parser in case shared lib not loaded
+  console.warn("Lock-in: Using fallback VTT parser");
   const lines = vttContent.split(/\r?\n/);
   const segments = [];
-  let i = 0;
-
-  // Skip WEBVTT header and metadata
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    if (
-      line === "" ||
-      line.startsWith("WEBVTT") ||
-      line.startsWith("NOTE") ||
-      line.startsWith("STYLE")
-    ) {
-      i++;
-      if (line.startsWith("NOTE") || line.startsWith("STYLE")) {
-        while (i < lines.length && lines[i].trim() !== "") i++;
-      }
-      continue;
-    }
-    break;
-  }
-
-  // Parse cues
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    if (line === "") {
-      i++;
-      continue;
-    }
-
-    const timestampMatch = line.match(
-      /^(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)\s*-->\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/
-    );
-    if (!timestampMatch) {
-      i++;
-      continue;
-    }
-
-    const startMs = parseVttTimestamp(timestampMatch[1]);
-    const endMs = parseVttTimestamp(timestampMatch[2]);
-    i++;
-
-    const textLines = [];
-    while (i < lines.length && lines[i].trim() !== "") {
-      textLines.push(lines[i]);
-      i++;
-    }
-
-    if (textLines.length > 0) {
-      let text = textLines.join(" ");
-      text = stripVttTags(text);
-      text = decodeHtmlEntities(text);
-      text = text.replace(/\s+/g, " ").trim();
-      if (text) segments.push({ startMs, endMs, text });
+  const textParts = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("WEBVTT") && !trimmed.includes("-->")) {
+      textParts.push(trimmed);
     }
   }
-
-  const plainText = segments.map((s) => s.text).join(" ");
-  const durationMs =
-    segments.length > 0 ? segments[segments.length - 1].endMs : 0;
-  return { plainText, segments, durationMs };
+  return {
+    plainText: textParts.join(" "),
+    segments,
+    durationMs: 0,
+  };
 }
 
 /**
@@ -184,11 +79,108 @@ function extractCaptionVttUrl(html) {
   return null;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Network Utilities
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Default retry configuration */
+const RETRY_CONFIG = {
+  maxRetries: 2,
+  baseDelayMs: 500,
+  maxDelayMs: 5000,
+};
+
 /**
- * Fetch HTML with credentials
+ * Delay for exponential backoff
+ * @param {number} attempt - Current attempt (0-based)
+ * @returns {Promise<void>}
+ */
+function backoffDelay(attempt) {
+  const delay = Math.min(
+    RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt),
+    RETRY_CONFIG.maxDelayMs
+  );
+  return new Promise((resolve) => setTimeout(resolve, delay));
+}
+
+/**
+ * Determine if an error is retryable
+ * @param {Error} error - The error to check
+ * @param {Response} response - The response object if available
+ * @returns {boolean}
+ */
+function isRetryableError(error, response) {
+  // Don't retry auth errors - user needs to sign in
+  if (response && (response.status === 401 || response.status === 403)) {
+    return false;
+  }
+  // Don't retry 404 - resource doesn't exist
+  if (response && response.status === 404) {
+    return false;
+  }
+  // Retry network errors and 5xx server errors
+  if (!response || response.status >= 500) {
+    return true;
+  }
+  // Retry rate limiting (429)
+  if (response.status === 429) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Fetch with retry and exponential backoff
+ * @param {string} url - URL to fetch
+ * @param {RequestInit} options - Fetch options
+ * @param {number} maxRetries - Maximum retry attempts (default 2)
+ * @returns {Promise<Response>}
+ */
+async function fetchWithRetry(url, options, maxRetries = RETRY_CONFIG.maxRetries) {
+  let lastError;
+  let lastResponse;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      lastResponse = response;
+
+      // If successful or non-retryable error, return
+      if (response.ok || !isRetryableError(null, response)) {
+        return response;
+      }
+
+      // Retryable error
+      lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+    } catch (error) {
+      lastError = error;
+      // Network errors are retryable
+      if (attempt < maxRetries) {
+        console.log(`[Lock-in] Retry ${attempt + 1}/${maxRetries} for ${url}`);
+        await backoffDelay(attempt);
+        continue;
+      }
+    }
+
+    // If this wasn't the last attempt, wait and retry
+    if (attempt < maxRetries && isRetryableError(lastError, lastResponse)) {
+      console.log(`[Lock-in] Retry ${attempt + 1}/${maxRetries} for ${url}`);
+      await backoffDelay(attempt);
+    }
+  }
+
+  // Return last response if we have one, otherwise throw
+  if (lastResponse) {
+    return lastResponse;
+  }
+  throw lastError;
+}
+
+/**
+ * Fetch HTML with credentials (with retry)
  */
 async function fetchWithCredentials(url) {
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     method: "GET",
     credentials: "include",
     headers: {
@@ -205,10 +197,10 @@ async function fetchWithCredentials(url) {
 }
 
 /**
- * Fetch VTT content
+ * Fetch VTT content (with retry)
  */
 async function fetchVttContent(url) {
-  const response = await fetch(url, {
+  const response = await fetchWithRetry(url, {
     method: "GET",
     credentials: "include",
     headers: { Accept: "text/vtt,text/plain,*/*" },
@@ -295,16 +287,38 @@ async function extractPanoptoTranscript(video) {
 // Echo360 Transcript Extraction
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Cache for Echo360 syllabus responses */
+const syllabusCache = new Map();
+/** Cache TTL in milliseconds (5 minutes) */
+const SYLLABUS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Get cache key for syllabus
+ * @param {string} echoOrigin - Echo360 origin
+ * @param {string} sectionId - Section ID
+ * @returns {string} Cache key
+ */
+function getSyllabusCacheKey(echoOrigin, sectionId) {
+  return `${echoOrigin}:${sectionId}`;
+}
+
+/**
+ * Check if cached syllabus is still valid
+ * @param {Object} cached - Cached entry with data and timestamp
+ * @returns {boolean} Whether cache is valid
+ */
+function isCacheValid(cached) {
+  if (!cached || !cached.timestamp) return false;
+  return Date.now() - cached.timestamp < SYLLABUS_CACHE_TTL_MS;
+}
+
 /**
  * Fetch Echo360 syllabus to get list of recordings
+ * Results are cached for 5 minutes to reduce API calls.
  * @param {Object} context - Echo360 context with echoOrigin and sectionId
  * @returns {Promise<Object>} Result with videos array or error
  */
 async function fetchEcho360Syllabus(context) {
-  console.log(
-    "[Lock-in] fetchEcho360Syllabus called with context:",
-    JSON.stringify(context)
-  );
   const { echoOrigin, sectionId } = context;
 
   if (!echoOrigin || !sectionId) {
@@ -319,23 +333,25 @@ async function fetchEcho360Syllabus(context) {
     };
   }
 
+  // Check cache first
+  const cacheKey = getSyllabusCacheKey(echoOrigin, sectionId);
+  const cached = syllabusCache.get(cacheKey);
+  if (isCacheValid(cached)) {
+    console.log("[Lock-in] Using cached Echo360 syllabus for:", cacheKey);
+    return cached.data;
+  }
+
   const syllabusUrl = `${echoOrigin}/section/${sectionId}/syllabus`;
   console.log("[Lock-in] Fetching Echo360 syllabus from:", syllabusUrl);
 
   try {
-    const response = await fetch(syllabusUrl, {
+    const response = await fetchWithRetry(syllabusUrl, {
       method: "GET",
       credentials: "include",
       headers: {
         Accept: "application/json",
       },
     });
-
-    console.log(
-      "[Lock-in] Echo360 syllabus response status:",
-      response.status,
-      response.statusText
-    );
 
     if (!response.ok) {
       console.warn(
@@ -357,11 +373,6 @@ async function fetchEcho360Syllabus(context) {
     }
 
     const data = await response.json();
-    console.log(
-      "[Lock-in] Echo360 syllabus raw response:",
-      JSON.stringify(data).substring(0, 1000)
-    );
-
     const videos = parseEcho360Syllabus(data, echoOrigin, sectionId);
     console.log(
       "[Lock-in] Parsed",
@@ -369,10 +380,18 @@ async function fetchEcho360Syllabus(context) {
       "videos from Echo360 syllabus"
     );
 
-    return {
+    const result = {
       success: true,
       videos,
     };
+
+    // Cache successful response
+    syllabusCache.set(cacheKey, {
+      data: result,
+      timestamp: Date.now(),
+    });
+
+    return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[Lock-in] Echo360 syllabus fetch error:", message);
@@ -743,7 +762,7 @@ async function extractEcho360Transcript(video) {
   console.log("[Lock-in] Fetching transcript from:", transcriptUrl);
 
   try {
-    const response = await fetch(transcriptUrl, {
+    const response = await fetchWithRetry(transcriptUrl, {
       method: "GET",
       credentials: "include",
       headers: {
