@@ -28,6 +28,8 @@ const ALLOWED_ORIGINS = [
   /localhost/,
   // Monash learning environment (e.g. https://learning.monash.edu)
   /^https:\/\/learning\.monash\.edu$/,
+  // Panopto (all regional domains)
+  /^https:\/\/([a-z0-9-]+\.)?panopto\.(com|eu)$/,
 ];
 
 // Asset uploads (notes)
