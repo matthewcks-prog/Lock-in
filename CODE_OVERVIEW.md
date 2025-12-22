@@ -75,6 +75,17 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`src/` (TypeScript source)**
   - `initApi.ts` - Entry point for bundled API/auth clients
   - `chromeStorage.ts` - Chrome storage adapter implementing `StorageInterface`
+  - `transcripts/` - Transcript extraction providers and handlers
+    - `providers/panoptoProvider.ts` - Panopto video detection and caption URL extraction
+    - `transcriptHandler.ts` - Background script handler for transcript extraction (routes to appropriate provider)
+
+### Transcripts (`core/transcripts/` + `extension/src/transcripts/`)
+
+- **`core/transcripts/types.ts`** - Domain types for transcripts (TranscriptSegment, DetectedVideo, etc.)
+- **`core/transcripts/webvttParser.ts`** - WebVTT parsing with HTML entity decoding
+- **`extension/src/transcripts/providers/`** - Provider adapters for different video platforms:
+  - `panoptoProvider.ts` - Panopto embed detection and VTT caption extraction
+- **`ui/extension/transcripts/`** - UI components (VideoListPanel, TranscriptMessage, useTranscripts hook)
 
 ### Styling
 
@@ -173,6 +184,7 @@ This is a living overview of the current codebase. Update it whenever files move
 5. **API abstraction**: Shared `/api` TypeScript client is bundled into `libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
 6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor`/`useNotesList`, and the Lexical editor resides in `ui/extension/notes/` with inline attachment/image nodes (resizable images, paperclip insertion).
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
+8. **Transcript extraction**: Provider-adapter pattern for video transcripts. Panopto provider detects iframes, extracts caption URLs from embed HTML, fetches WebVTT captions. Background script handles cross-origin fetching (requires `host_permissions` for `*.panopto.com`). UI shows video list panel and transcript messages with download options.
 
 ### Backend
 
