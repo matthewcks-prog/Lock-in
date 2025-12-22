@@ -327,6 +327,16 @@ body.lockin-sidebar-open .content {
   font-size: 14px;
 }
 
+.lockin-mode-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 6px 0;
+}
+
+.lockin-mode-option-action {
+  border-top: none;
+}
+
 /* === CHAT CONTAINER (History Panel + Main Chat) === */
 .lockin-chat-container {
   display: grid;
@@ -2292,6 +2302,344 @@ body.lockin-sidebar-open .content {
 .lockin-toast-dismiss:hover {
   background: rgba(255, 255, 255, 0.1);
   color: #ffffff;
+}
+
+/* === TRANSCRIPT EXTRACTION === */
+
+/* Extract Transcript Button */
+.lockin-extract-transcript-btn {
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lockin-extract-transcript-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+/* Video List Panel */
+.lockin-video-list-panel {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  margin: 0 12px 12px;
+  max-height: 350px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lockin-video-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.lockin-video-list-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+}
+
+.lockin-video-list-close {
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.lockin-video-list-close:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.lockin-video-list-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.lockin-video-list-loading,
+.lockin-video-list-empty,
+.lockin-video-list-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.lockin-video-list-error {
+  color: #dc2626;
+  background: #fef2f2;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.lockin-video-list-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.lockin-video-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lockin-video-list-footer {
+  padding: 8px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.lockin-video-list-info {
+  font-size: 11px;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Video Item */
+.lockin-video-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  width: 100%;
+  text-align: left;
+}
+
+.lockin-video-item:hover {
+  border-color: #c7d2fe;
+  background: #f8faff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.lockin-video-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lockin-video-item.is-extracting {
+  border-color: #6366f1;
+  background: #eef2ff;
+}
+
+.lockin-video-item-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.lockin-video-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lockin-video-provider-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.lockin-video-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lockin-video-thumbnail {
+  width: 80px;
+  height: 45px;
+  object-fit: cover;
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.lockin-video-item-action {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.lockin-video-extract-icon {
+  font-size: 16px;
+  color: #6b7280;
+  transition: transform 0.15s ease;
+}
+
+.lockin-video-item:hover .lockin-video-extract-icon {
+  transform: translateX(2px);
+  color: #6366f1;
+}
+
+/* Transcript Message */
+.lockin-transcript-message {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.lockin-transcript-header {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: #ffffff;
+}
+
+.lockin-transcript-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lockin-transcript-icon {
+  font-size: 18px;
+}
+
+.lockin-transcript-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lockin-transcript-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 4px;
+}
+
+.lockin-transcript-content {
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #374151;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.lockin-transcript-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #f3f4f6;
+  border-top: 1px solid #e5e7eb;
+}
+
+.lockin-transcript-action-btn {
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lockin-transcript-action-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.lockin-transcript-action-btn.lockin-transcript-action-primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #ffffff;
+}
+
+.lockin-transcript-action-btn.lockin-transcript-action-primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* AI Fallback Notice */
+.lockin-transcript-ai-fallback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  margin-top: 8px;
+}
+
+.lockin-transcript-ai-fallback-text {
+  font-size: 12px;
+  color: #92400e;
+}
+
+.lockin-transcript-ai-fallback-btn {
+  padding: 4px 10px;
+  background: #f59e0b;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.lockin-transcript-ai-fallback-btn:hover {
+  background: #d97706;
+}
+
+/* TODO: Whisper fallback placeholder */
+.lockin-transcript-ai-fallback-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* === RESPONSIVE BEHAVIOR === */

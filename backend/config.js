@@ -34,6 +34,8 @@ const ALLOWED_ORIGINS = [
   /^https:\/\/edstem\.org$/,
   // UNSW Moodle
   /^https:\/\/moodle\.telt\.unsw\.edu\.au$/,
+  // Panopto (all regional domains)
+  /^https:\/\/([a-z0-9-]+\.)?panopto\.(com|eu)$/,
 ];
 
 // Asset uploads (notes)
