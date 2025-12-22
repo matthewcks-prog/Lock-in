@@ -123,7 +123,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`controllers/lockinController.js`**
 
-  - Handlers for AI processing, chat listing/deletion, and chat messages.
+  - Handlers for AI processing, chat listing/deletion, chat messages, and chat title generation (OpenAI summarization + persistence).
   - Input validation and error handling.
 
 - **`controllers/notesController.js`**
@@ -185,6 +185,7 @@ This is a living overview of the current codebase. Update it whenever files move
 6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor`/`useNotesList`, and the Lexical editor resides in `ui/extension/notes/` with inline attachment/image nodes (resizable images, paperclip insertion).
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
 8. **Transcript extraction**: Provider-adapter pattern for video transcripts. Panopto provider detects iframes, extracts caption URLs from embed HTML, fetches WebVTT captions. Background script handles cross-origin fetching (requires `host_permissions` for `*.panopto.com`). UI shows video list panel and transcript messages with download options.
+9. **Cross-tab sync**: `useCrossTabSync` uses `chrome.storage.local` as a lightweight event bus to refresh notes/chat state across tabs without duplicating feature-specific wiring.
 
 ### Backend
 

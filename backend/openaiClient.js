@@ -3,6 +3,10 @@
  */
 
 const OpenAI = require("openai");
+const {
+  buildInitialChatTitle,
+  coerceGeneratedTitle,
+} = require("./utils/chatTitle");
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const MAX_HISTORY_MESSAGES = 30;
@@ -370,6 +374,65 @@ Using the selected text, the previous conversation, and the mode instructions, a
 }
 
 /**
+ * Generate a concise chat title (5-6 words) from the chat history.
+ * @param {Object} options
+ * @param {Array<{role: string, content: string}>} options.history - Sanitized chat history
+ * @param {string} [options.fallbackTitle] - Title to use if generation fails
+ * @returns {Promise<string>}
+ */
+async function generateChatTitleFromHistory({ history = [], fallbackTitle = "" }) {
+  const sanitizedHistory = sanitizeHistory(history)
+    .map((message) => ({
+      ...message,
+      content: message.content.slice(0, 220),
+    }))
+    .slice(-12); // keep the last messages for context
+
+  const fallback = buildInitialChatTitle(fallbackTitle);
+
+  if (sanitizedHistory.length === 0) {
+    return fallback;
+  }
+
+  const conversation = sanitizedHistory
+    .map((message) => {
+      const speaker = message.role === "assistant" ? "Tutor" : "Student";
+      return `${speaker}: ${message.content}`;
+    })
+    .join("\n");
+
+  const messages = [
+    {
+      role: "system",
+      content:
+        "You are summarizing a study conversation into a short, descriptive title. Reply with a single line of 5-6 words in sentence case. No quotes, no punctuation at the end.",
+    },
+    {
+      role: "user",
+      content: `Conversation transcript:\n${conversation}\n\nReturn only the short title.`,
+    },
+  ];
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: DEFAULT_MODEL,
+      messages,
+      temperature: 0.2,
+      max_tokens: 24,
+    });
+
+    const candidate = (completion.choices[0]?.message?.content || "")
+      .split("\n")[0]
+      .trim();
+
+    return coerceGeneratedTitle(candidate, fallback);
+  } catch (error) {
+    console.error("Failed to generate chat title:", error);
+    return fallback;
+  }
+}
+
+/**
  * Generate embedding for text using OpenAI's embedding model
  * @param {string} text - Text to embed
  * @returns {Promise<number[]>} Array of embedding floats
@@ -407,6 +470,7 @@ async function chatWithModel({ messages }) {
 module.exports = {
   generateLockInResponse,
   generateStructuredStudyResponse,
+  generateChatTitleFromHistory,
   embedText,
   chatWithModel,
 };

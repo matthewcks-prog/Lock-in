@@ -243,7 +243,9 @@ function NoteChangePlugin({
         // and skip changes during hydration to prevent save loops
         if (isFirstChangeRef.current) {
           isFirstChangeRef.current = false;
-          return;
+          if (isHydrating) {
+            return;
+          }
         }
         if (isHydrating) {
           return;

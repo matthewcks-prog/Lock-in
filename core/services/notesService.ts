@@ -15,6 +15,7 @@ export interface CreateNoteInput {
   courseCode?: string | null;
   noteType?: NoteType;
   tags?: string[];
+  clientNoteId?: string;
 }
 
 export interface UpdateNoteInput {
@@ -27,6 +28,11 @@ export interface UpdateNoteInput {
   tags?: string[];
 }
 
+export interface NoteRequestOptions {
+  signal?: AbortSignal;
+  expectedUpdatedAt?: string | null;
+}
+
 export interface NotesService {
   listNotes(params?: {
     courseCode?: string | null;
@@ -34,8 +40,8 @@ export interface NotesService {
     limit?: number;
   }): Promise<Note[]>;
   getNote(noteId: string): Promise<Note>;
-  createNote(initial: CreateNoteInput): Promise<Note>;
-  updateNote(noteId: string, changes: UpdateNoteInput): Promise<Note>;
+  createNote(initial: CreateNoteInput, options?: NoteRequestOptions): Promise<Note>;
+  updateNote(noteId: string, changes: UpdateNoteInput, options?: NoteRequestOptions): Promise<Note>;
   deleteNote(noteId: string): Promise<void>;
   toggleStar(noteId: string): Promise<Note>;
   setStar(noteId: string, isStarred: boolean): Promise<Note>;
@@ -285,7 +291,10 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
     return toDomainNote(raw);
   }
 
-  async function createNote(initial: CreateNoteInput): Promise<Note> {
+  async function createNote(
+    initial: CreateNoteInput,
+    options?: NoteRequestOptions
+  ): Promise<Note> {
     ensureService(apiClient);
     const payload = {
       title: initial.title,
@@ -298,14 +307,21 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
       noteType: initial.noteType ?? "manual",
       note_type: initial.noteType ?? "manual",
       tags: initial.tags ?? [],
+      clientNoteId: initial.clientNoteId ?? undefined,
       ...toBackendPayload(initial.content),
     };
 
-    const raw = await apiClient.createNote(payload, undefined);
+    const requestOptions =
+      options?.signal ? { signal: options.signal } : undefined;
+    const raw = await apiClient.createNote(payload, requestOptions);
     return toDomainNote(raw);
   }
 
-  async function updateNote(noteId: string, changes: UpdateNoteInput): Promise<Note> {
+  async function updateNote(
+    noteId: string,
+    changes: UpdateNoteInput,
+    options?: NoteRequestOptions
+  ): Promise<Note> {
     ensureService(apiClient);
     const payload = {
       ...(changes.title ? { title: changes.title } : {}),
@@ -321,7 +337,14 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
       ...toBackendPayload(changes.content),
     };
 
-    const raw = await apiClient.updateNote(noteId, payload, undefined);
+    const requestOptions =
+      options?.signal || options?.expectedUpdatedAt
+        ? {
+            signal: options?.signal,
+            ifUnmodifiedSince: options?.expectedUpdatedAt ?? undefined,
+          }
+        : undefined;
+    const raw = await apiClient.updateNote(noteId, payload, requestOptions);
     return toDomainNote(raw);
   }
 

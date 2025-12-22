@@ -6,13 +6,6 @@ import type { NotesService } from "../../core/services/notesService.ts";
 import { useNotesList } from "../hooks/useNotesList";
 import { NotesPanel } from "./notes/NotesPanel";
 import { createNoteContentFromPlainText } from "./notes/content";
-import { VideoListPanel } from "./transcripts/VideoListPanel";
-import { TranscriptMessage } from "./transcripts/TranscriptMessage";
-import { useTranscripts } from "./transcripts/useTranscripts";
-import type {
-  DetectedVideo,
-  TranscriptResult,
-} from "../../core/transcripts/types";
 
 interface StorageAdapter {
   get: (key: string) => Promise<any>;
@@ -39,13 +32,8 @@ interface ChatMessageItem {
   content: string;
   timestamp: string;
   mode?: StudyMode;
-  source?: "selection" | "followup" | "transcript";
+  source?: "selection" | "followup";
   isPending?: boolean;
-  /** Transcript data if this is a transcript message */
-  transcript?: {
-    video: DetectedVideo;
-    result: TranscriptResult;
-  };
 }
 
 interface ChatHistoryItem {
@@ -122,11 +110,9 @@ function SaveNoteAction({ onSaveAsNote }: SaveNoteActionProps) {
 function ModeSelector({
   value,
   onSelect,
-  onTranscriptAction,
 }: {
   value: StudyMode;
   onSelect: (mode: StudyMode) => void;
-  onTranscriptAction: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const toggle = () => setIsOpen((prev) => !prev);
@@ -173,26 +159,6 @@ function ModeSelector({
               </div>
             </button>
           ))}
-
-          {/* Divider */}
-          <div className="lockin-mode-divider" />
-
-          {/* Extract video transcript action */}
-          <button
-            className="lockin-mode-option lockin-mode-option-action"
-            onClick={() => {
-              onTranscriptAction();
-              setIsOpen(false);
-            }}
-          >
-            <span className="lockin-mode-option-icon">📹</span>
-            <div>
-              <div>Extract video transcript</div>
-              <div style={{ fontSize: "11px", color: "#6b7280" }}>
-                Get captions from Panopto videos
-              </div>
-            </div>
-          </button>
         </div>
       )}
     </div>
@@ -250,16 +216,6 @@ export function LockInSidebar({
     notesService,
     limit: 50,
   });
-
-  // Transcript extraction hook
-  const {
-    state: transcriptState,
-    closeVideoList,
-    detectAndAutoExtract,
-    extractTranscript,
-    // openVideoList, // Available if manual opening is needed
-    // clearError: clearTranscriptError, // Available for future use (e.g., dismiss error toast)
-  } = useTranscripts();
 
   const applySplitLayout = useCallback((open: boolean) => {
     const body = document.body;
@@ -779,47 +735,6 @@ export function LockInSidebar({
     [courseCode, notesService, pageUrl, upsertNote]
   );
 
-  // Transcript extraction handlers
-  const handleExtractTranscriptAction = useCallback(() => {
-    setActiveTab(CHAT_TAB_ID);
-    detectAndAutoExtract();
-  }, [detectAndAutoExtract]);
-
-  const handleVideoSelect = useCallback(
-    async (video: DetectedVideo) => {
-      // Just trigger extraction - the useEffect watching lastTranscript will add the message
-      await extractTranscript(video);
-    },
-    [extractTranscript]
-  );
-
-  // Track the last processed transcript ID to avoid duplicates
-  const lastProcessedTranscriptRef = useRef<string | null>(null);
-  
-  // Handle auto-extracted transcript (from detectAndAutoExtract)
-  useEffect(() => {
-    if (transcriptState.lastTranscript) {
-      const { video, transcript } = transcriptState.lastTranscript;
-      const transcriptKey = `${video.id}-${transcript.plainText.length}`;
-      
-      // Only process if this is a new transcript (not already processed)
-      if (lastProcessedTranscriptRef.current !== transcriptKey) {
-        lastProcessedTranscriptRef.current = transcriptKey;
-        
-        const now = new Date().toISOString();
-        const transcriptMessage: ChatMessageItem = {
-          id: `transcript-${Date.now()}`,
-          role: "assistant",
-          content: transcript.plainText,
-          timestamp: now,
-          source: "transcript",
-          transcript: { video, result: transcript },
-        };
-        setMessages((prev) => [...prev, transcriptMessage]);
-      }
-    }
-  }, [transcriptState.lastTranscript]);
-
   const renderChatMessages = () => {
     if (!messages.length) {
       return (
@@ -830,22 +745,6 @@ export function LockInSidebar({
     }
 
     return messages.map((message) => {
-      // Render transcript messages with special component
-      if (message.transcript) {
-        return (
-          <div
-            key={message.id}
-            className="lockin-chat-msg lockin-chat-msg-assistant"
-          >
-            <TranscriptMessage
-              transcript={message.transcript.result}
-              videoTitle={message.transcript.video.title}
-              onSaveAsNote={handleSaveAsNote}
-            />
-          </div>
-        );
-      }
-
       const roleClass =
         message.role === "assistant"
           ? "lockin-chat-msg lockin-chat-msg-assistant"
@@ -949,7 +848,6 @@ export function LockInSidebar({
                   <ModeSelector
                     value={mode}
                     onSelect={(newMode) => setMode(newMode)}
-                    onTranscriptAction={handleExtractTranscriptAction}
                   />
                   <button
                     className="lockin-new-chat-btn"
@@ -959,20 +857,6 @@ export function LockInSidebar({
                   </button>
                 </div>
               </div>
-
-              {/* Video List Panel for transcript extraction */}
-              {transcriptState.isVideoListOpen && (
-                <VideoListPanel
-                  videos={transcriptState.videos}
-                  isLoading={transcriptState.isDetecting}
-                  isExtracting={transcriptState.isExtracting}
-                  extractingVideoId={transcriptState.extractingVideoId}
-                  onSelectVideo={handleVideoSelect}
-                  onClose={closeVideoList}
-                  error={transcriptState.error || undefined}
-                  authRequired={transcriptState.authRequired}
-                />
-              )}
 
               <div
                 className="lockin-chat-container"

@@ -97,6 +97,7 @@ export interface ProcessTextResponse {
   success: boolean;
   data?: StudyResponse;
   chatId?: string;
+  chatTitle?: string;
   error?: ApiError;
 }
 
