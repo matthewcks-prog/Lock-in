@@ -6,12 +6,14 @@
 
 import type { TranscriptProvider, DetectedVideo, VideoDetectionContext } from '@core/transcripts/types';
 import { PanoptoTranscriptProvider } from './panoptoProvider';
+import { Echo360TranscriptProvider } from './echo360Provider';
 
 // Registry of all providers
 const providers: TranscriptProvider[] = [
   new PanoptoTranscriptProvider(),
-  // Add more providers here (Echo360, YouTube, etc.)
+  new Echo360TranscriptProvider(),
 ];
+
 
 /**
  * Get the appropriate provider for a given URL
@@ -54,3 +56,15 @@ export {
   createPanoptoProvider,
 } from './panoptoProvider';
 
+export {
+  Echo360TranscriptProvider,
+  ECHO360_HOSTS,
+  isEcho360Domain,
+  isEcho360Url,
+  extractEcho360Origin,
+  extractSectionId,
+  extractLessonId,
+  extractMediaId,
+  extractEcho360Context,
+  createEcho360Provider,
+} from './echo360Provider';

@@ -9,7 +9,10 @@ import { createNoteContentFromPlainText } from "./notes/content";
 import { VideoListPanel } from "./transcripts/VideoListPanel";
 import { TranscriptMessage } from "./transcripts/TranscriptMessage";
 import { useTranscripts } from "./transcripts/useTranscripts";
-import type { DetectedVideo, TranscriptResult } from "../../core/transcripts/types";
+import type {
+  DetectedVideo,
+  TranscriptResult,
+} from "../../core/transcripts/types";
 
 interface StorageAdapter {
   get: (key: string) => Promise<any>;
@@ -170,10 +173,10 @@ function ModeSelector({
               </div>
             </button>
           ))}
-          
+
           {/* Divider */}
           <div className="lockin-mode-divider" />
-          
+
           {/* Extract video transcript action */}
           <button
             className="lockin-mode-option lockin-mode-option-action"
@@ -251,10 +254,10 @@ export function LockInSidebar({
   // Transcript extraction hook
   const {
     state: transcriptState,
-    openVideoList,
     closeVideoList,
-    detectVideos,
+    detectAndAutoExtract,
     extractTranscript,
+    // openVideoList, // Available if manual opening is needed
     // clearError: clearTranscriptError, // Available for future use (e.g., dismiss error toast)
   } = useTranscripts();
 
@@ -779,14 +782,30 @@ export function LockInSidebar({
   // Transcript extraction handlers
   const handleExtractTranscriptAction = useCallback(() => {
     setActiveTab(CHAT_TAB_ID);
-    openVideoList();
-    detectVideos();
-  }, [openVideoList, detectVideos]);
+    detectAndAutoExtract();
+  }, [detectAndAutoExtract]);
 
   const handleVideoSelect = useCallback(
     async (video: DetectedVideo) => {
-      const transcript = await extractTranscript(video);
-      if (transcript) {
+      // Just trigger extraction - the useEffect watching lastTranscript will add the message
+      await extractTranscript(video);
+    },
+    [extractTranscript]
+  );
+
+  // Track the last processed transcript ID to avoid duplicates
+  const lastProcessedTranscriptRef = useRef<string | null>(null);
+  
+  // Handle auto-extracted transcript (from detectAndAutoExtract)
+  useEffect(() => {
+    if (transcriptState.lastTranscript) {
+      const { video, transcript } = transcriptState.lastTranscript;
+      const transcriptKey = `${video.id}-${transcript.plainText.length}`;
+      
+      // Only process if this is a new transcript (not already processed)
+      if (lastProcessedTranscriptRef.current !== transcriptKey) {
+        lastProcessedTranscriptRef.current = transcriptKey;
+        
         const now = new Date().toISOString();
         const transcriptMessage: ChatMessageItem = {
           id: `transcript-${Date.now()}`,
@@ -798,9 +817,8 @@ export function LockInSidebar({
         };
         setMessages((prev) => [...prev, transcriptMessage]);
       }
-    },
-    [extractTranscript]
-  );
+    }
+  }, [transcriptState.lastTranscript]);
 
   const renderChatMessages = () => {
     if (!messages.length) {
@@ -815,7 +833,10 @@ export function LockInSidebar({
       // Render transcript messages with special component
       if (message.transcript) {
         return (
-          <div key={message.id} className="lockin-chat-msg lockin-chat-msg-assistant">
+          <div
+            key={message.id}
+            className="lockin-chat-msg lockin-chat-msg-assistant"
+          >
             <TranscriptMessage
               transcript={message.transcript.result}
               videoTitle={message.transcript.video.title}
@@ -949,6 +970,7 @@ export function LockInSidebar({
                   onSelectVideo={handleVideoSelect}
                   onClose={closeVideoList}
                   error={transcriptState.error || undefined}
+                  authRequired={transcriptState.authRequired}
                 />
               )}
 
