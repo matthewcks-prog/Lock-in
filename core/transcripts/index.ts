@@ -7,4 +7,7 @@
 
 export * from './types';
 export * from './webvttParser';
+export * from './videoDetection';
+export * from './providerRegistry';
+export * from './providers';
 
