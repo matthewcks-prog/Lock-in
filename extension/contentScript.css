@@ -2502,6 +2502,69 @@ body.lockin-sidebar-open .content {
   height: 32px;
 }
 
+.lockin-video-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.lockin-video-item-date {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lockin-video-item-duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+/* Auth Required Prompt */
+.lockin-video-auth-required {
+  padding: 20px;
+  text-align: center;
+}
+
+.lockin-video-auth-message {
+  font-size: 14px;
+  color: #374151;
+  margin: 0 0 16px 0;
+}
+
+.lockin-video-auth-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #4a1d96 0%, #6d28d9 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lockin-video-auth-button:hover {
+  background: linear-gradient(135deg, #5b21b6 0%, #7c3aed 100%);
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.3);
+  transform: translateY(-1px);
+}
+
+.lockin-video-auth-hint {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 12px 0 0 0;
+}
+
 .lockin-video-extract-icon {
   font-size: 16px;
   color: #6b7280;
@@ -2557,7 +2620,7 @@ body.lockin-sidebar-open .content {
   font-size: 13px;
   line-height: 1.6;
   color: #374151;
-  max-height: 300px;
+  max-height: 500px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;

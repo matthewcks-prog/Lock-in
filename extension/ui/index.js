@@ -19475,18 +19475,12 @@ var __async = (__this, __arguments, generator) => {
   function ProviderBadge({ provider }) {
     const badgeColors = {
       panopto: { bg: "#1e3a5f", text: "#ffffff" },
-      echo360: { bg: "#0066cc", text: "#ffffff" },
+      echo360: { bg: "#4a1d96", text: "#ffffff" },
       youtube: { bg: "#cc0000", text: "#ffffff" },
       unknown: { bg: "#6b7280", text: "#ffffff" }
     };
     const colors = badgeColors[provider] || badgeColors.unknown;
-    const labelMap = {
-      panopto: "Panopto",
-      echo360: "Echo360",
-      youtube: "YouTube",
-      unknown: "Unknown"
-    };
-    const label = labelMap[provider] || provider.charAt(0).toUpperCase() + provider.slice(1);
+    const label = provider.charAt(0).toUpperCase() + provider.slice(1);
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
       "span",
       {
@@ -19496,11 +19490,41 @@ var __async = (__this, __arguments, generator) => {
       }
     );
   }
+  function formatRecordingDate(dateStr) {
+    if (!dateStr) return null;
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString(void 0, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    } catch (e2) {
+      return null;
+    }
+  }
+  function formatDuration(durationMs) {
+    if (!durationMs) return null;
+    const totalSeconds = Math.floor(durationMs / 1e3);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor(totalSeconds % 3600 / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(
+        seconds
+      ).padStart(2, "0")}`;
+    }
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }
   function VideoListItem({
     video,
     isExtracting,
     onSelect
   }) {
+    const recordingDate = formatRecordingDate(video.recordedAt);
+    const duration = formatDuration(video.durationMs);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "button",
       {
@@ -19514,19 +19538,45 @@ var __async = (__this, __arguments, generator) => {
               /* @__PURE__ */ jsxRuntimeExports.jsx(ProviderBadge, { provider: video.provider }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-video-item-title", children: video.title })
             ] }),
-            video.thumbnailUrl && /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "img",
-              {
-                src: video.thumbnailUrl,
-                alt: "",
-                className: "lockin-video-thumbnail"
-              }
-            )
+            (recordingDate || duration) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-video-item-meta", children: [
+              recordingDate && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-video-item-date", children: recordingDate }),
+              duration && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-video-item-duration", children: duration })
+            ] })
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-video-item-action", children: isExtracting ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-inline-spinner" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-video-extract-icon", children: "\u2192" }) })
         ]
       }
     );
+  }
+  function AuthRequiredPrompt({
+    provider,
+    signInUrl
+  }) {
+    const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
+    const handleSignIn = () => {
+      window.open(signInUrl, "_blank", "noopener,noreferrer");
+    };
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-video-auth-required", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "lockin-video-auth-message", children: [
+        "Please sign in to ",
+        providerName,
+        " to view recordings."
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          className: "lockin-video-auth-button",
+          onClick: handleSignIn,
+          type: "button",
+          children: [
+            "Open ",
+            providerName,
+            " Sign In"
+          ]
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-video-auth-hint", children: "After signing in, close this panel and try again." })
+    ] });
   }
   function VideoListPanel({
     videos,
@@ -19535,7 +19585,8 @@ var __async = (__this, __arguments, generator) => {
     extractingVideoId,
     onSelectVideo,
     onClose,
-    error
+    error,
+    authRequired
   }) {
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-video-list-panel", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-video-list-header", children: [
@@ -19554,9 +19605,15 @@ var __async = (__this, __arguments, generator) => {
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-video-list-body", children: isLoading ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-video-list-loading", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "lockin-inline-spinner" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Detecting videos..." })
-      ] }) : error ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-video-list-error", children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: error }) }) : videos.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-video-list-empty", children: [
+      ] }) : authRequired ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        AuthRequiredPrompt,
+        {
+          provider: authRequired.provider,
+          signInUrl: authRequired.signInUrl
+        }
+      ) : error ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-video-list-error", children: /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: error }) }) : videos.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lockin-video-list-empty", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No videos detected on this page." }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-video-list-hint", children: "Supported: Panopto, Echo360" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "lockin-video-list-hint", children: "Supported: Panopto embeds, Echo360 recordings" })
       ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-video-list", children: videos.map((video) => /* @__PURE__ */ jsxRuntimeExports.jsx(
         VideoListItem,
         {
@@ -19695,17 +19752,189 @@ ${transcript.plainText}`;
     /https?:\/\/([^/]+\.panopto\.com)\/Panopto\/Pages\/Embed\.aspx\?.*\bid=([a-f0-9-]+)/i,
     /https?:\/\/([^/]+\.panopto\.com)\/Panopto\/Pages\/Viewer\.aspx\?.*\bid=([a-f0-9-]+)/i
   ];
-  const ECHO360_DOMAIN_PATTERNS = [
-    /echo360\.org(?:\.au|\.uk)?$/i,
-    /echo360\.net(?:\.au)?$/i,
-    /echo360\.com$/i,
-    /echo360\.ca$/i,
-    /echo360\.de$/i,
-    /echo360\.eu$/i
+  const ECHO360_HOSTS = [
+    "echo360qa.org",
+    "echo360qa.dev",
+    "echo360.org",
+    "echo360.org.au",
+    "echo360.net.au",
+    "echo360.ca",
+    "echo360.org.uk"
   ];
-  const SECTION_ID_REGEX = /\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
-  const LESSON_ID_REGEX = /\/lessons?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
-  const MEDIA_ID_REGEX = /\/medias?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+  function isEcho360Domain(hostname) {
+    const lowerHost = hostname.toLowerCase();
+    return ECHO360_HOSTS.some(
+      (domain) => lowerHost === domain || lowerHost.endsWith("." + domain)
+    );
+  }
+  function extractEcho360Context(url) {
+    try {
+      const urlObj = new URL(url);
+      if (!isEcho360Domain(urlObj.hostname)) {
+        return null;
+      }
+      const echoOrigin = urlObj.origin;
+      const pathname = urlObj.pathname;
+      const sectionMatch = pathname.match(/\/section\/([^/]+)/i);
+      const sectionId = sectionMatch ? decodeURIComponent(sectionMatch[1]) : void 0;
+      const lessonMatch = pathname.match(/\/lesson\/([^/]+)/i);
+      let lessonId = lessonMatch ? decodeURIComponent(lessonMatch[1]) : void 0;
+      const mediaId = urlObj.searchParams.get("mediaId") || urlObj.searchParams.get("media") || urlObj.searchParams.get("mid") || void 0;
+      if (!lessonId) {
+        lessonId = urlObj.searchParams.get("lessonId") || urlObj.searchParams.get("lesson") || urlObj.searchParams.get("lid") || void 0;
+      }
+      if (!lessonId && !sectionId && urlObj.hash) {
+        const hashLessonMatch = urlObj.hash.match(/lesson[=/]([^&/#]+)/i);
+        if (hashLessonMatch) {
+          lessonId = decodeURIComponent(hashLessonMatch[1]);
+        }
+        const hashSectionMatch = urlObj.hash.match(/section[=/]([^&/#]+)/i);
+        if (hashSectionMatch) {
+          const potentialSectionId = decodeURIComponent(hashSectionMatch[1]);
+          if (/^[a-f0-9-]{8,}$/i.test(potentialSectionId)) {
+          }
+        }
+      }
+      return {
+        echoOrigin,
+        sectionId,
+        lessonId,
+        mediaId
+      };
+    } catch (e2) {
+      console.warn("[Lock-in] Failed to extract Echo360 context:", e2);
+      return null;
+    }
+  }
+  function extractEcho360PageTitle() {
+    var _a, _b, _c;
+    const titleSelectors = [
+      '[data-testid="lesson-title"]',
+      '[class*="lesson-title"]',
+      '[class*="video-title"]',
+      ".classroom-title",
+      'h1[class*="title"]',
+      ".header-title"
+    ];
+    for (const selector of titleSelectors) {
+      try {
+        const el = document.querySelector(selector);
+        const text = (_a = el == null ? void 0 : el.textContent) == null ? void 0 : _a.trim();
+        if (text && text.length > 2 && text.length < 500) {
+          return text;
+        }
+      } catch (e2) {
+      }
+    }
+    const metaTitle = ((_b = document.querySelector('meta[property="og:title"]')) == null ? void 0 : _b.getAttribute("content")) || ((_c = document.querySelector('meta[name="title"]')) == null ? void 0 : _c.getAttribute("content"));
+    if (metaTitle == null ? void 0 : metaTitle.trim()) {
+      return metaTitle.trim();
+    }
+    let pageTitle = document.title || "";
+    pageTitle = pageTitle.replace(/\s*[-|\u2013\u2014]\s*(Echo360|Classroom|Player).*$/i, "").trim();
+    pageTitle = pageTitle.replace(/^(Video|Recording|Lecture):\s*/i, "").trim();
+    if (pageTitle && pageTitle.length > 2) {
+      return pageTitle;
+    }
+    return "Echo360 Recording";
+  }
+  function extractMediaIdFromDom() {
+    const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+    try {
+      const mediaElements = document.querySelectorAll("[data-media-id], [data-mediaid], [data-video-id]");
+      for (const el of mediaElements) {
+        const mediaId = el.getAttribute("data-media-id") || el.getAttribute("data-mediaid") || el.getAttribute("data-video-id");
+        if (mediaId && UUID_PATTERN.test(mediaId)) {
+          console.log("[Lock-in] Found mediaId from data attribute:", mediaId);
+          return mediaId;
+        }
+      }
+    } catch (e2) {
+      console.warn("[Lock-in] Failed to extract mediaId from data attributes:", e2);
+    }
+    try {
+      const videos = document.querySelectorAll("video[data-id], video[id], video[data-media-id]");
+      for (const video of videos) {
+        const id = video.getAttribute("data-id") || video.getAttribute("data-media-id") || video.id;
+        if (id && UUID_PATTERN.test(id)) {
+          console.log("[Lock-in] Found mediaId from video element:", id);
+          return id;
+        }
+      }
+    } catch (e2) {
+      console.warn("[Lock-in] Failed to extract mediaId from video elements:", e2);
+    }
+    try {
+      const scripts = Array.from(document.querySelectorAll("script:not([src])")).slice(0, 20);
+      for (const script of scripts) {
+        const content = script.textContent || "";
+        if (content.length > 50 && content.length < 1e5) {
+          const patterns = [
+            /"mediaId"\s*:\s*"([a-f0-9-]{36})"/i,
+            /"media[_-]?id"\s*[=:]\s*"([a-f0-9-]{36})"/i,
+            /medias\/([a-f0-9-]{36})\/transcript/i,
+            /medias\/([a-f0-9-]{36})(?:\/|\?|"|')/i
+          ];
+          for (const pattern of patterns) {
+            const match = content.match(pattern);
+            if (match && match[1] && UUID_PATTERN.test(match[1])) {
+              console.log("[Lock-in] Found mediaId from script:", match[1]);
+              return match[1];
+            }
+          }
+        }
+      }
+    } catch (e2) {
+      console.warn("[Lock-in] Failed to extract mediaId from scripts:", e2);
+    }
+    try {
+      const sourceElements = document.querySelectorAll('[src*="/medias/"], [data-src*="/medias/"]');
+      for (const el of sourceElements) {
+        const src = el.getAttribute("src") || el.getAttribute("data-src") || "";
+        const match = src.match(/\/medias\/([a-f0-9-]{36})/i);
+        if (match && match[1] && UUID_PATTERN.test(match[1])) {
+          console.log("[Lock-in] Found mediaId from src attribute:", match[1]);
+          return match[1];
+        }
+      }
+    } catch (e2) {
+      console.warn("[Lock-in] Failed to extract mediaId from src attributes:", e2);
+    }
+    try {
+      const htmlContent = document.documentElement.innerHTML;
+      const transcriptMatch = htmlContent.match(/\/medias\/([a-f0-9-]{36})\/transcript/i);
+      if (transcriptMatch && transcriptMatch[1] && UUID_PATTERN.test(transcriptMatch[1])) {
+        console.log("[Lock-in] Found mediaId from HTML transcript URL:", transcriptMatch[1]);
+        return transcriptMatch[1];
+      }
+      const mediaMatch = htmlContent.match(/\/medias\/([a-f0-9-]{36})(?:\/|"|'|\?)/i);
+      if (mediaMatch && mediaMatch[1] && UUID_PATTERN.test(mediaMatch[1])) {
+        console.log("[Lock-in] Found mediaId from HTML media URL:", mediaMatch[1]);
+        return mediaMatch[1];
+      }
+    } catch (e2) {
+      console.warn("[Lock-in] Failed to extract mediaId from HTML content:", e2);
+    }
+    try {
+      const win = window;
+      const possibleVars = ["__ECHO360__", "Echo360", "echoPlayerData", "playerConfig"];
+      for (const varName of possibleVars) {
+        const obj = win[varName];
+        if (obj && typeof obj === "object") {
+          const jsonStr = JSON.stringify(obj);
+          const match = jsonStr.match(/"mediaId"\s*:\s*"([a-f0-9-]{36})"/i) || jsonStr.match(/\/medias\/([a-f0-9-]{36})/i);
+          if (match && match[1] && UUID_PATTERN.test(match[1])) {
+            console.log("[Lock-in] Found mediaId from global variable:", match[1]);
+            return match[1];
+          }
+        }
+      }
+    } catch (e2) {
+      console.warn("[Lock-in] Failed to extract mediaId from global variables:", e2);
+    }
+    console.log("[Lock-in] Could not find mediaId from DOM");
+    return void 0;
+  }
   function extractPanoptoInfo(url) {
     for (const pattern of PANOPTO_URL_PATTERNS) {
       const match = url.match(pattern);
@@ -19714,96 +19943,6 @@ ${transcript.plainText}`;
       }
     }
     return null;
-  }
-  function isEcho360Domain(hostname) {
-    const lowerHostname = hostname.toLowerCase();
-    console.log("[Lock-in Echo360] isEcho360Domain checking:", lowerHostname);
-    if (lowerHostname.includes("echo360")) {
-      console.log('[Lock-in Echo360] Found "echo360" in hostname');
-      return true;
-    }
-    for (const pattern of ECHO360_DOMAIN_PATTERNS) {
-      if (pattern.test(lowerHostname)) {
-        console.log("[Lock-in Echo360] Matched pattern:", pattern);
-        return true;
-      }
-    }
-    console.log("[Lock-in Echo360] Not an Echo360 domain");
-    return false;
-  }
-  function extractEchoOrigin(url) {
-    console.log("[Lock-in Echo360] extractEchoOrigin called with:", url);
-    try {
-      const urlObj = new URL(url);
-      console.log("[Lock-in Echo360] Parsed hostname:", urlObj.hostname);
-      if (isEcho360Domain(urlObj.hostname)) {
-        console.log("[Lock-in Echo360] Is Echo360 domain, returning origin:", urlObj.origin);
-        return urlObj.origin;
-      }
-      console.log("[Lock-in Echo360] Not an Echo360 domain");
-    } catch (e2) {
-      console.log("[Lock-in Echo360] Failed to parse URL:", e2);
-    }
-    return null;
-  }
-  function extractSectionId(url) {
-    const match = url.match(SECTION_ID_REGEX);
-    return match ? match[1] : null;
-  }
-  function extractLessonId(url) {
-    const match = url.match(LESSON_ID_REGEX);
-    return match ? match[1] : null;
-  }
-  function extractMediaId(url) {
-    const match = url.match(MEDIA_ID_REGEX);
-    return match ? match[1] : null;
-  }
-  function detectEchoContext(pageUrl, iframeSrcs) {
-    console.log("[Lock-in Echo360] detectEchoContext called");
-    console.log("[Lock-in Echo360] Page URL:", pageUrl);
-    console.log("[Lock-in Echo360] Iframe sources:", iframeSrcs);
-    let echoOrigin = null;
-    let sectionId = null;
-    let lessonId = null;
-    let mediaId = null;
-    echoOrigin = extractEchoOrigin(pageUrl);
-    console.log("[Lock-in Echo360] Extracted echoOrigin from page:", echoOrigin);
-    if (echoOrigin) {
-      sectionId = extractSectionId(pageUrl);
-      lessonId = extractLessonId(pageUrl);
-      mediaId = extractMediaId(pageUrl);
-      console.log("[Lock-in Echo360] From page URL - sectionId:", sectionId, "lessonId:", lessonId, "mediaId:", mediaId);
-    }
-    for (const src of iframeSrcs) {
-      console.log("[Lock-in Echo360] Checking iframe src:", src);
-      const iframeOrigin = extractEchoOrigin(src);
-      console.log("[Lock-in Echo360] Iframe echoOrigin:", iframeOrigin);
-      if (iframeOrigin) {
-        if (!echoOrigin) {
-          echoOrigin = iframeOrigin;
-        }
-        const iframeSectionId = extractSectionId(src);
-        const iframeLessonId = extractLessonId(src);
-        const iframeMediaId = extractMediaId(src);
-        console.log("[Lock-in Echo360] From iframe - sectionId:", iframeSectionId, "lessonId:", iframeLessonId, "mediaId:", iframeMediaId);
-        if (!sectionId && iframeSectionId) sectionId = iframeSectionId;
-        if (!lessonId && iframeLessonId) lessonId = iframeLessonId;
-        if (!mediaId && iframeMediaId) mediaId = iframeMediaId;
-      }
-    }
-    console.log("[Lock-in Echo360] Final echoOrigin:", echoOrigin);
-    if (!echoOrigin) {
-      console.log("[Lock-in Echo360] No Echo360 context found");
-      return null;
-    }
-    const context = {
-      echoOrigin,
-      sectionId: sectionId || void 0,
-      lessonId: lessonId || void 0,
-      mediaId: mediaId || void 0
-    };
-    console.log("[Lock-in Echo360] Detected context:", context);
-    return context;
   }
   function getIframeSrc(iframe) {
     return iframe.src || iframe.getAttribute("data-src") || iframe.dataset.src || "";
@@ -19823,7 +19962,7 @@ ${transcript.plainText}`;
     }
     return result;
   }
-  function addVideo(videos, info, title, embedUrl, videoIndex) {
+  function addPanoptoVideo(videos, info, title, embedUrl, videoIndex) {
     if (videos.some((v2) => v2.id === info.deliveryId)) {
       return videoIndex;
     }
@@ -19844,7 +19983,7 @@ ${transcript.plainText}`;
     if (currentPageInfo) {
       const pageTitle = (_a = document.title) == null ? void 0 : _a.trim();
       const title = pageTitle && !pageTitle.toLowerCase().includes("panopto") ? pageTitle : `Panopto video ${videoIndex + 1}`;
-      videoIndex = addVideo(videos, currentPageInfo, title, currentUrl, videoIndex);
+      videoIndex = addPanoptoVideo(videos, currentPageInfo, title, currentUrl, videoIndex);
     }
     const allIframes = collectIframes(document);
     for (const iframe of allIframes) {
@@ -19853,7 +19992,7 @@ ${transcript.plainText}`;
       const info = extractPanoptoInfo(src);
       if (info) {
         const title = ((_b = iframe.title) == null ? void 0 : _b.trim()) || "";
-        videoIndex = addVideo(videos, info, title, src, videoIndex);
+        videoIndex = addPanoptoVideo(videos, info, title, src, videoIndex);
       }
     }
     const mediaElements = document.querySelectorAll(
@@ -19863,7 +20002,7 @@ ${transcript.plainText}`;
       const src = el.data || el.src || "";
       const info = extractPanoptoInfo(src);
       if (info) {
-        videoIndex = addVideo(videos, info, "", src, videoIndex);
+        videoIndex = addPanoptoVideo(videos, info, "", src, videoIndex);
       }
     }
     const panoptoContainers = document.querySelectorAll(
@@ -19876,7 +20015,7 @@ ${transcript.plainText}`;
         const info = extractPanoptoInfo(src);
         if (info) {
           const title = ((_c = iframe.title) == null ? void 0 : _c.trim()) || "";
-          videoIndex = addVideo(videos, info, title, src, videoIndex);
+          videoIndex = addPanoptoVideo(videos, info, title, src, videoIndex);
         }
       }
     }
@@ -19888,184 +20027,11 @@ ${transcript.plainText}`;
         if (info) {
           const linkText = (_d = link.textContent) == null ? void 0 : _d.trim();
           const title = linkText && linkText.length > 3 && linkText.length < 100 ? linkText : "";
-          videoIndex = addVideo(videos, info, title, href, videoIndex);
+          videoIndex = addPanoptoVideo(videos, info, title, href, videoIndex);
         }
       }
     }
     return videos;
-  }
-  function extractEcho360OriginFromString(str) {
-    const match = str.match(/https?:\/\/[\w.-]*echo360[\w.-]*/i);
-    if (match) {
-      let origin = match[0];
-      origin = origin.replace(/[.-]+$/, "");
-      return origin;
-    }
-    return null;
-  }
-  function detectEcho360FromDOM() {
-    var _a;
-    console.log("[Lock-in Echo360] detectEcho360FromDOM - scanning page content");
-    let echoOrigin = null;
-    let sectionId = null;
-    const scripts = document.querySelectorAll("script");
-    for (const script of scripts) {
-      const content = script.textContent || "";
-      const srcAttr = script.src || "";
-      if (srcAttr.includes("echo360")) {
-        console.log("[Lock-in Echo360] Found echo360 in script src:", srcAttr);
-        const origin = extractEcho360OriginFromString(srcAttr);
-        if (origin && !echoOrigin) echoOrigin = origin;
-      }
-      if (content.includes("echo360")) {
-        console.log("[Lock-in Echo360] Found echo360 in script content");
-        const origin = extractEcho360OriginFromString(content);
-        if (origin && !echoOrigin) echoOrigin = origin;
-        const secMatch = content.match(/\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-        if (secMatch && !sectionId) {
-          sectionId = secMatch[1];
-          console.log("[Lock-in Echo360] Found sectionId in script:", sectionId);
-        }
-        const jsonSecMatch = content.match(/["']sectionId["']\s*:\s*["']([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})["']/i);
-        if (jsonSecMatch && !sectionId) {
-          sectionId = jsonSecMatch[1];
-          console.log("[Lock-in Echo360] Found sectionId in JSON:", sectionId);
-        }
-      }
-    }
-    const echoElements = document.querySelectorAll('[data-echo], [data-echo360], [class*="echo360"], [class*="echovideo"]');
-    console.log("[Lock-in Echo360] Found echo-related elements:", echoElements.length);
-    const iframes = document.querySelectorAll("iframe");
-    for (const iframe of iframes) {
-      const allowAttr = iframe.getAttribute("allow") || "";
-      const srcAttr = iframe.src || "";
-      if (allowAttr.includes("echo360")) {
-        console.log("[Lock-in Echo360] Found echo360 in iframe allow attribute:", allowAttr);
-        const origin = extractEcho360OriginFromString(allowAttr);
-        if (origin && !echoOrigin) {
-          echoOrigin = origin;
-          console.log("[Lock-in Echo360] Extracted origin from allow attr:", echoOrigin);
-        }
-      }
-      if (srcAttr.includes("section")) {
-        const secMatch = srcAttr.match(/section[=\/]([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-        if (secMatch && !sectionId) {
-          sectionId = secMatch[1];
-          console.log("[Lock-in Echo360] Found sectionId in iframe src:", sectionId);
-        }
-      }
-      try {
-        const iframeDoc = iframe.contentDocument;
-        if (iframeDoc) {
-          console.log("[Lock-in Echo360] Accessing iframe content (same-origin)");
-          const iframeUrl = (_a = iframeDoc.location) == null ? void 0 : _a.href;
-          if (iframeUrl) {
-            console.log("[Lock-in Echo360] Iframe URL:", iframeUrl);
-            const origin = extractEcho360OriginFromString(iframeUrl);
-            if (origin && !echoOrigin) echoOrigin = origin;
-            const secMatch = iframeUrl.match(/\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-            if (secMatch && !sectionId) sectionId = secMatch[1];
-          }
-          const iframeScripts = iframeDoc.querySelectorAll("script");
-          for (const script of iframeScripts) {
-            const content = script.textContent || "";
-            if (content.includes("echo360") || content.includes("section")) {
-              const origin = extractEcho360OriginFromString(content);
-              if (origin && !echoOrigin) echoOrigin = origin;
-              const secMatch = content.match(/\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-              if (secMatch && !sectionId) sectionId = secMatch[1];
-            }
-          }
-        }
-      } catch (e2) {
-        console.log("[Lock-in Echo360] Cannot access iframe content (cross-origin)");
-      }
-    }
-    const links = document.querySelectorAll('a[href*="echo360"]');
-    for (const link of links) {
-      const href = link.href;
-      console.log("[Lock-in Echo360] Found echo360 link:", href);
-      const origin = extractEcho360OriginFromString(href);
-      if (origin && !echoOrigin) echoOrigin = origin;
-      const secMatch = href.match(/\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
-      if (secMatch && !sectionId) sectionId = secMatch[1];
-    }
-    const allDataAttrs = document.querySelectorAll("[data-section-id], [data-sectionid], [data-echo-section]");
-    for (const el of allDataAttrs) {
-      const secId = el.getAttribute("data-section-id") || el.getAttribute("data-sectionid") || el.getAttribute("data-echo-section");
-      if (secId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(secId)) {
-        sectionId = secId;
-        console.log("[Lock-in Echo360] Found sectionId in data attribute:", sectionId);
-      }
-    }
-    console.log("[Lock-in Echo360] DOM detection result - echoOrigin:", echoOrigin, "sectionId:", sectionId);
-    return { echoOrigin, sectionId };
-  }
-  function detectEcho360Videos() {
-    console.log("[Lock-in Echo360] detectEcho360Videos called");
-    console.log("[Lock-in Echo360] Current URL:", window.location.href);
-    console.log("[Lock-in Echo360] Current hostname:", window.location.hostname);
-    const allIframes = collectIframes(document);
-    console.log("[Lock-in Echo360] Found iframes:", allIframes.length);
-    const iframeSrcs = allIframes.map((iframe) => getIframeSrc(iframe)).filter(Boolean);
-    console.log("[Lock-in Echo360] Iframe srcs:", iframeSrcs);
-    let context = detectEchoContext(window.location.href, iframeSrcs);
-    if (!context) {
-      console.log("[Lock-in Echo360] URL-based detection failed, trying DOM detection");
-      const domResult = detectEcho360FromDOM();
-      if (domResult.echoOrigin) {
-        context = {
-          echoOrigin: domResult.echoOrigin,
-          sectionId: domResult.sectionId || void 0
-        };
-        console.log("[Lock-in Echo360] DOM detection found context:", context);
-      }
-    }
-    if (!context) {
-      console.log("[Lock-in Echo360] No context detected, returning empty");
-      return { context: null, videos: [] };
-    }
-    const videos = [];
-    if (context.lessonId && context.mediaId) {
-      console.log("[Lock-in Echo360] Found specific lesson/media, creating single entry");
-      videos.push({
-        id: `${context.lessonId}|${context.mediaId}`,
-        provider: "echo360",
-        title: "Current Echo360 video",
-        embedUrl: `${context.echoOrigin}/lesson/${context.lessonId}/media/${context.mediaId}`
-      });
-    } else if (context.sectionId) {
-      console.log("[Lock-in Echo360] Found section, creating placeholder entry");
-      videos.push({
-        id: `section:${context.sectionId}`,
-        provider: "echo360",
-        title: "Echo360 course (click to load videos)",
-        embedUrl: `${context.echoOrigin}/section/${context.sectionId}`
-      });
-    } else {
-      console.log("[Lock-in Echo360] Have echoOrigin but no sectionId - LTI embed detected");
-      videos.push({
-        id: `lti:${context.echoOrigin}`,
-        provider: "echo360",
-        title: '\u26a0\ufe0f Echo360 detected - Right-click the video area and "Open frame in new tab" to extract transcripts',
-        embedUrl: context.echoOrigin
-      });
-    }
-    console.log("[Lock-in Echo360] Returning videos:", videos);
-    return { context, videos };
-  }
-  function detectAllVideos() {
-    console.log("[Lock-in] detectAllVideos called");
-    const panoptoVideos = detectPanoptoVideos();
-    console.log("[Lock-in] Panopto videos found:", panoptoVideos.length);
-    const { context: echoContext, videos: echoVideos } = detectEcho360Videos();
-    console.log("[Lock-in] Echo360 videos found:", echoVideos.length, "context:", echoContext);
-    const allVideos = [...panoptoVideos, ...echoVideos];
-    console.log("[Lock-in] Total videos:", allVideos.length);
-    return {
-      videos: allVideos,
-      echoContext
-    };
   }
   function sendToBackground(message) {
     return __async(this, null, function* () {
@@ -20100,9 +20066,7 @@ ${transcript.plainText}`;
     isExtracting: false,
     extractingVideoId: null,
     error: null,
-    lastTranscript: null,
-    echoContext: null,
-    isFetchingEchoVideos: false
+    lastTranscript: null
   };
   function useTranscripts() {
     const [state, setState] = reactExports.useState(INITIAL_STATE);
@@ -20112,102 +20076,145 @@ ${transcript.plainText}`;
     const closeVideoList = reactExports.useCallback(() => {
       setState((prev) => __spreadProps(__spreadValues({}, prev), { isVideoListOpen: false }));
     }, []);
-    const fetchEchoVideoList = reactExports.useCallback((context) => __async(null, null, function* () {
-      console.log("[Lock-in Echo360] fetchEchoVideoList called with context:", context);
-      setState((prev) => __spreadProps(__spreadValues({}, prev), { isFetchingEchoVideos: true }));
-      try {
-        console.log("[Lock-in Echo360] Sending FETCH_ECHO360_VIDEOS to background...");
-        const response = yield sendToBackground({
-          type: "FETCH_ECHO360_VIDEOS",
-          payload: { context }
-        });
-        console.log("[Lock-in Echo360] Background response:", response);
-        if (response.success && response.videos) {
-          console.log("[Lock-in Echo360] Got videos:", response.videos.length);
-          setState((prev) => {
-            const nonEchoVideos = prev.videos.filter((v2) => v2.provider !== "echo360");
-            const echoVideos = response.videos.filter(
-              (v2) => !v2.id.startsWith("section:")
-            );
-            console.log("[Lock-in Echo360] Merging videos - non-echo:", nonEchoVideos.length, "echo:", echoVideos.length);
-            return __spreadProps(__spreadValues({}, prev), {
-              videos: [...nonEchoVideos, ...echoVideos],
-              isFetchingEchoVideos: false
-            });
-          });
-        } else {
-          console.log("[Lock-in Echo360] Error response:", response.error);
-          setState((prev) => __spreadProps(__spreadValues({}, prev), {
-            isFetchingEchoVideos: false,
-            error: response.error || "Failed to fetch Echo360 videos"
-          }));
+    const detectVideosInternal = reactExports.useCallback(() => __async(null, null, function* () {
+      var _a;
+      const currentUrl = window.location.href;
+      const echo360Context = extractEcho360Context(currentUrl);
+      if (echo360Context && echo360Context.lessonId) {
+        console.log("[Lock-in] Echo360 lesson page detected, lessonId:", echo360Context.lessonId);
+        const title = extractEcho360PageTitle();
+        const mediaId = echo360Context.mediaId || extractMediaIdFromDom();
+        if (mediaId) {
+          console.log("[Lock-in] Found mediaId:", mediaId);
         }
-      } catch (error) {
-        console.error("[Lock-in Echo360] fetchEchoVideoList error:", error);
-        setState((prev) => __spreadProps(__spreadValues({}, prev), {
-          isFetchingEchoVideos: false,
-          error: error instanceof Error ? error.message : "Failed to fetch Echo360 videos"
-        }));
+        const singleVideo = {
+          id: echo360Context.lessonId,
+          provider: "echo360",
+          title,
+          embedUrl: currentUrl,
+          echoOrigin: echo360Context.echoOrigin,
+          lessonId: echo360Context.lessonId,
+          mediaId
+        };
+        console.log("[Lock-in] Single Echo360 video detected:", singleVideo.title);
+        return [singleVideo];
+      } else if (echo360Context && echo360Context.sectionId) {
+        console.log("[Lock-in] Echo360 section page detected, context:", JSON.stringify(echo360Context));
+        console.log("[Lock-in] Sending FETCH_ECHO360_SYLLABUS to background...");
+        const response = yield sendToBackground({
+          type: "FETCH_ECHO360_SYLLABUS",
+          payload: { context: echo360Context }
+        });
+        console.log("[Lock-in] Background response:", JSON.stringify(response).substring(0, 500));
+        if (response.success && response.videos) {
+          console.log(`[Lock-in] Found ${response.videos.length} Echo360 videos`);
+          return response.videos;
+        } else {
+          const errorCode = (_a = response.data) == null ? void 0 : _a.errorCode;
+          if (errorCode === "AUTH_REQUIRED") {
+            throw { type: "AUTH_REQUIRED", provider: "echo360", signInUrl: echo360Context.echoOrigin };
+          } else {
+            throw new Error(response.error || "Failed to fetch Echo360 recordings");
+          }
+        }
+      } else {
+        const videos = detectPanoptoVideos();
+        console.log(`[Lock-in] Found ${videos.length} Panopto videos`);
+        return videos;
       }
     }), []);
-    const detectVideos = reactExports.useCallback(() => {
-      console.log("[Lock-in] detectVideos callback starting...");
-      setState((prev) => __spreadProps(__spreadValues({}, prev), { isDetecting: true, error: null }));
+    const detectVideos = reactExports.useCallback(() => __async(null, null, function* () {
+      var _a;
+      setState((prev) => __spreadProps(__spreadValues({}, prev), { isDetecting: true, error: null, authRequired: void 0 }));
       try {
-        const { videos, echoContext } = detectAllVideos();
-        console.log("[Lock-in] detectAllVideos result - videos:", videos.length, "echoContext:", echoContext);
-        setState((prev) => __spreadProps(__spreadValues({}, prev), { videos, echoContext, isDetecting: false }));
-        if (echoContext == null ? void 0 : echoContext.sectionId) {
-          console.log("[Lock-in] Echo360 sectionId found, calling fetchEchoVideoList...");
-          fetchEchoVideoList(echoContext);
+        const currentUrl = window.location.href;
+        const echo360Context = extractEcho360Context(currentUrl);
+        if (echo360Context && echo360Context.lessonId) {
+          console.log("[Lock-in] Echo360 lesson page detected, lessonId:", echo360Context.lessonId);
+          const title = extractEcho360PageTitle();
+          const mediaId = echo360Context.mediaId || extractMediaIdFromDom();
+          if (mediaId) {
+            console.log("[Lock-in] Found mediaId:", mediaId);
+          }
+          const singleVideo = {
+            id: echo360Context.lessonId,
+            provider: "echo360",
+            title,
+            embedUrl: currentUrl,
+            echoOrigin: echo360Context.echoOrigin,
+            lessonId: echo360Context.lessonId,
+            mediaId
+          };
+          console.log("[Lock-in] Single Echo360 video detected:", singleVideo.title);
+          setState((prev) => __spreadProps(__spreadValues({}, prev), {
+            videos: [singleVideo],
+            isDetecting: false
+          }));
+        } else if (echo360Context && echo360Context.sectionId) {
+          console.log("[Lock-in] Echo360 section page detected, context:", JSON.stringify(echo360Context));
+          console.log("[Lock-in] Sending FETCH_ECHO360_SYLLABUS to background...");
+          const response = yield sendToBackground({
+            type: "FETCH_ECHO360_SYLLABUS",
+            payload: { context: echo360Context }
+          });
+          console.log("[Lock-in] Background response:", JSON.stringify(response).substring(0, 500));
+          if (response.success && response.videos) {
+            console.log(`[Lock-in] Found ${response.videos.length} Echo360 videos`);
+            setState((prev) => __spreadProps(__spreadValues({}, prev), {
+              videos: response.videos,
+              isDetecting: false
+            }));
+          } else {
+            const errorCode = (_a = response.data) == null ? void 0 : _a.errorCode;
+            if (errorCode === "AUTH_REQUIRED") {
+              setState((prev) => __spreadProps(__spreadValues({}, prev), {
+                isDetecting: false,
+                error: "Please sign in to Echo360 to view recordings.",
+                authRequired: {
+                  provider: "echo360",
+                  signInUrl: echo360Context.echoOrigin
+                }
+              }));
+            } else {
+              setState((prev) => __spreadProps(__spreadValues({}, prev), {
+                isDetecting: false,
+                error: response.error || "Failed to fetch Echo360 recordings"
+              }));
+            }
+          }
         } else {
-          console.log("[Lock-in] No Echo360 sectionId, skipping video list fetch");
+          const videos = detectPanoptoVideos();
+          console.log(`[Lock-in] Found ${videos.length} Panopto videos`);
+          setState((prev) => __spreadProps(__spreadValues({}, prev), { videos, isDetecting: false }));
         }
       } catch (error) {
-        console.error("[Lock-in] detectVideos error:", error);
+        console.error("[Lock-in] Video detection failed:", error);
         setState((prev) => __spreadProps(__spreadValues({}, prev), {
           isDetecting: false,
           error: error instanceof Error ? error.message : "Failed to detect videos"
         }));
       }
-    }, [fetchEchoVideoList]);
+    }), []);
     const extractTranscript = reactExports.useCallback(
       (video) => __async(null, null, function* () {
-        if (video.id.startsWith("lti:")) {
-          setState((prev) => __spreadProps(__spreadValues({}, prev), {
-            error: 'To extract Echo360 transcripts: Right-click on the video area below and select "Open frame in new tab", then try again from the new tab.'
-          }));
-          return null;
-        }
-        if (video.id.startsWith("section:")) {
-          setState((prev) => __spreadProps(__spreadValues({}, prev), {
-            error: "Please wait for the video list to load, then select a specific video."
-          }));
-          return null;
-        }
         setState((prev) => __spreadProps(__spreadValues({}, prev), {
           isExtracting: true,
           extractingVideoId: video.id,
           error: null
         }));
         try {
-          let videoPayload = video;
-          if (video.provider === "echo360") {
-            const [lessonId, mediaId] = video.id.split("|");
-            const echoVideo = video;
-            videoPayload = __spreadProps(__spreadValues({}, video), {
-              echoOrigin: echoVideo.echoOrigin || extractEchoOrigin(video.embedUrl) || "",
-              lessonId: echoVideo.lessonId || lessonId,
-              mediaId: echoVideo.mediaId || mediaId,
-              sectionId: echoVideo.sectionId
-            });
-          }
+          console.log(`[Lock-in] Extracting transcript for ${video.provider} video: ${video.id}`);
           const response = yield sendToBackground({
             type: "EXTRACT_TRANSCRIPT",
-            payload: { video: videoPayload }
+            payload: { video }
           });
           const result = normalizeTranscriptResponse(response);
           if (result.success && result.transcript) {
+            console.log("[Lock-in] Transcript extracted successfully:", {
+              segments: result.transcript.segments.length,
+              plainTextLength: result.transcript.plainText.length,
+              durationMs: result.transcript.durationMs
+            });
             setState((prev) => __spreadProps(__spreadValues({}, prev), {
               isExtracting: false,
               extractingVideoId: null,
@@ -20217,13 +20224,27 @@ ${transcript.plainText}`;
             return result.transcript;
           }
           const errorMessage = result.error || "Failed to extract transcript";
-          setState((prev) => __spreadProps(__spreadValues({}, prev), {
-            isExtracting: false,
-            extractingVideoId: null,
-            error: result.aiTranscriptionAvailable ? `${errorMessage} (AI transcription available as fallback)` : errorMessage
-          }));
+          console.warn("[Lock-in] Transcript extraction failed:", errorMessage);
+          if (result.errorCode === "AUTH_REQUIRED" && video.provider === "echo360") {
+            setState((prev) => __spreadProps(__spreadValues({}, prev), {
+              isExtracting: false,
+              extractingVideoId: null,
+              error: errorMessage,
+              authRequired: {
+                provider: "echo360",
+                signInUrl: video.echoOrigin || "https://echo360.net.au"
+              }
+            }));
+          } else {
+            setState((prev) => __spreadProps(__spreadValues({}, prev), {
+              isExtracting: false,
+              extractingVideoId: null,
+              error: result.aiTranscriptionAvailable ? `${errorMessage} (AI transcription available as fallback)` : errorMessage
+            }));
+          }
           return null;
         } catch (error) {
+          console.error("[Lock-in] Transcript extraction error:", error);
           setState((prev) => __spreadProps(__spreadValues({}, prev), {
             isExtracting: false,
             extractingVideoId: null,
@@ -20235,13 +20256,80 @@ ${transcript.plainText}`;
       []
     );
     const clearError = reactExports.useCallback(() => {
-      setState((prev) => __spreadProps(__spreadValues({}, prev), { error: null }));
+      setState((prev) => __spreadProps(__spreadValues({}, prev), { error: null, authRequired: void 0 }));
     }, []);
+    const detectAndAutoExtract = reactExports.useCallback(() => __async(null, null, function* () {
+      setState((prev) => __spreadProps(__spreadValues({}, prev), { isVideoListOpen: true, isDetecting: true, error: null, authRequired: void 0 }));
+      try {
+        const videos = yield detectVideosInternal();
+        if (videos.length === 1) {
+          console.log("[Lock-in] Single video detected, auto-extracting transcript");
+          setState((prev) => __spreadProps(__spreadValues({}, prev), {
+            videos,
+            isDetecting: false,
+            isVideoListOpen: false,
+            // Close the panel immediately
+            isExtracting: true,
+            extractingVideoId: videos[0].id
+          }));
+          const video = videos[0];
+          console.log(`[Lock-in] Auto-extracting transcript for ${video.provider} video: ${video.id}`);
+          const response = yield sendToBackground({
+            type: "EXTRACT_TRANSCRIPT",
+            payload: { video }
+          });
+          const result = normalizeTranscriptResponse(response);
+          if (result.success && result.transcript) {
+            console.log("[Lock-in] Auto-extract: Transcript extracted successfully");
+            setState((prev) => __spreadProps(__spreadValues({}, prev), {
+              isExtracting: false,
+              extractingVideoId: null,
+              lastTranscript: { video, transcript: result.transcript }
+            }));
+          } else {
+            const errorMessage = result.error || "Failed to extract transcript";
+            console.warn("[Lock-in] Auto-extract: Transcript extraction failed:", errorMessage);
+            setState((prev) => __spreadProps(__spreadValues({}, prev), {
+              isExtracting: false,
+              extractingVideoId: null,
+              isVideoListOpen: true,
+              // Re-open panel to show error
+              error: result.aiTranscriptionAvailable ? `${errorMessage} (AI transcription available as fallback)` : errorMessage
+            }));
+          }
+        } else {
+          console.log(`[Lock-in] Found ${videos.length} videos, showing selection UI`);
+          setState((prev) => __spreadProps(__spreadValues({}, prev), {
+            videos,
+            isDetecting: false
+          }));
+        }
+      } catch (error) {
+        console.error("[Lock-in] detectAndAutoExtract failed:", error);
+        if (error && typeof error === "object" && "type" in error && error.type === "AUTH_REQUIRED") {
+          const authError = error;
+          setState((prev) => __spreadProps(__spreadValues({}, prev), {
+            isDetecting: false,
+            error: "Please sign in to Echo360 to view recordings.",
+            authRequired: {
+              provider: authError.provider,
+              signInUrl: authError.signInUrl
+            }
+          }));
+        } else {
+          setState((prev) => __spreadProps(__spreadValues({}, prev), {
+            isDetecting: false,
+            error: error instanceof Error ? error.message : "Failed to detect videos"
+          }));
+        }
+      }
+    }), [detectVideosInternal]);
     return {
       state,
       openVideoList,
       closeVideoList,
       detectVideos,
+      detectAndAutoExtract,
       extractTranscript,
       clearError
     };
@@ -20420,10 +20508,10 @@ ${transcript.plainText}`;
     });
     const {
       state: transcriptState,
-      openVideoList,
       closeVideoList,
-      detectVideos,
+      detectAndAutoExtract,
       extractTranscript
+      // openVideoList, // Available if manual opening is needed
       // clearError: clearTranscriptError, // Available for future use (e.g., dismiss error toast)
     } = useTranscripts();
     const applySplitLayout = reactExports.useCallback((open) => {
@@ -20847,13 +20935,21 @@ ${transcript.plainText}`;
     );
     const handleExtractTranscriptAction = reactExports.useCallback(() => {
       setActiveTab(CHAT_TAB_ID);
-      openVideoList();
-      detectVideos();
-    }, [openVideoList, detectVideos]);
+      detectAndAutoExtract();
+    }, [detectAndAutoExtract]);
     const handleVideoSelect = reactExports.useCallback(
       (video) => __async(null, null, function* () {
-        const transcript = yield extractTranscript(video);
-        if (transcript) {
+        yield extractTranscript(video);
+      }),
+      [extractTranscript]
+    );
+    const lastProcessedTranscriptRef = reactExports.useRef(null);
+    reactExports.useEffect(() => {
+      if (transcriptState.lastTranscript) {
+        const { video, transcript } = transcriptState.lastTranscript;
+        const transcriptKey = `${video.id}-${transcript.plainText.length}`;
+        if (lastProcessedTranscriptRef.current !== transcriptKey) {
+          lastProcessedTranscriptRef.current = transcriptKey;
           const now = (/* @__PURE__ */ new Date()).toISOString();
           const transcriptMessage = {
             id: `transcript-${Date.now()}`,
@@ -20865,23 +20961,29 @@ ${transcript.plainText}`;
           };
           setMessages((prev) => [...prev, transcriptMessage]);
         }
-      }),
-      [extractTranscript]
-    );
+      }
+    }, [transcriptState.lastTranscript]);
     const renderChatMessages = () => {
       if (!messages.length) {
         return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-empty", children: "Ask anything about this page to start a new chat." });
       }
       return messages.map((message) => {
         if (message.transcript) {
-          return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lockin-chat-msg lockin-chat-msg-assistant", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            TranscriptMessage,
+          return /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
             {
-              transcript: message.transcript.result,
-              videoTitle: message.transcript.video.title,
-              onSaveAsNote: handleSaveAsNote
-            }
-          ) }, message.id);
+              className: "lockin-chat-msg lockin-chat-msg-assistant",
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                TranscriptMessage,
+                {
+                  transcript: message.transcript.result,
+                  videoTitle: message.transcript.video.title,
+                  onSaveAsNote: handleSaveAsNote
+                }
+              )
+            },
+            message.id
+          );
         }
         const roleClass = message.role === "assistant" ? "lockin-chat-msg lockin-chat-msg-assistant" : "lockin-chat-msg lockin-chat-msg-user";
         const bubbleClass = message.role === "assistant" ? "lockin-chat-bubble" : "lockin-chat-bubble";
@@ -21002,7 +21104,8 @@ ${transcript.plainText}`;
                   extractingVideoId: transcriptState.extractingVideoId,
                   onSelectVideo: handleVideoSelect,
                   onClose: closeVideoList,
-                  error: transcriptState.error || void 0
+                  error: transcriptState.error || void 0,
+                  authRequired: transcriptState.authRequired
                 }
               ),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(

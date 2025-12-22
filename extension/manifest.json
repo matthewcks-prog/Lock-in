@@ -11,7 +11,25 @@
     "tabs",
     "webNavigation"
   ],
-  "host_permissions": ["http://localhost:3000/*", "https://*.supabase.co/*"],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*.supabase.co/*",
+    "https://*.panopto.com/*",
+    "https://echo360qa.org/*",
+    "https://*.echo360qa.org/*",
+    "https://echo360qa.dev/*",
+    "https://*.echo360qa.dev/*",
+    "https://echo360.org/*",
+    "https://*.echo360.org/*",
+    "https://echo360.org.au/*",
+    "https://*.echo360.org.au/*",
+    "https://echo360.net.au/*",
+    "https://*.echo360.net.au/*",
+    "https://echo360.ca/*",
+    "https://*.echo360.ca/*",
+    "https://echo360.org.uk/*",
+    "https://*.echo360.org.uk/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -32,8 +50,20 @@
         "https://monash.au.panopto.com/*",
         "https://pollev.com/*",
         "https://*.pollev.com/*",
+        "https://echo360qa.org/*",
+        "https://*.echo360qa.org/*",
+        "https://echo360qa.dev/*",
+        "https://*.echo360qa.dev/*",
+        "https://echo360.org/*",
+        "https://*.echo360.org/*",
+        "https://echo360.org.au/*",
+        "https://*.echo360.org.au/*",
         "https://echo360.net.au/*",
-        "https://*.echo360.net.au/*"
+        "https://*.echo360.net.au/*",
+        "https://echo360.ca/*",
+        "https://*.echo360.ca/*",
+        "https://echo360.org.uk/*",
+        "https://*.echo360.org.uk/*"
       ],
       "js": [
         "config.js",
