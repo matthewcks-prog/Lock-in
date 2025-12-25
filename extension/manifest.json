@@ -33,7 +33,8 @@
         "https://pollev.com/*",
         "https://*.pollev.com/*",
         "https://echo360.net.au/*",
-        "https://*.echo360.net.au/*"
+        "https://*.echo360.net.au/*",
+        "https://moodle.telt.unsw.edu.au/*"
       ],
       "js": [
         "config.js",
