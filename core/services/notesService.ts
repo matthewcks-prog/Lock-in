@@ -6,6 +6,8 @@ import type {
   NoteContentVersion,
   NoteType,
 } from "../domain/Note.ts";
+import { AppError, ErrorCodes } from "../errors";
+import { createLogger } from "../utils/logger";
 
 export interface CreateNoteInput {
   title: string;
@@ -56,6 +58,8 @@ const DEFAULT_CONTENT: NoteContent = {
   legacyHtml: null,
   plainText: "",
 };
+
+const logger = createLogger("NotesService");
 
 function isJson(value: unknown): boolean {
   return typeof value === "object" && value !== null;
@@ -361,21 +365,22 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
     
     // Validate that toggleNoteStar method exists on the API client
     if (typeof apiClient.toggleNoteStar !== "function") {
-      const error = new Error(
-        "API client is missing toggleNoteStar method. Please rebuild initApi.js or check your API client initialization."
+      const availableMethods = Object.keys(apiClient);
+      const error = new AppError(
+        "API client is missing toggleNoteStar method. Please rebuild initApi.js or check your API client initialization.",
+        ErrorCodes.INTERNAL_ERROR,
+        { details: { reason: "API_CLIENT_ERROR", availableMethods } },
       );
-      (error as any).code = "API_CLIENT_ERROR";
-      console.error("[NotesService] toggleStar failed:", error.message);
-      console.error("[NotesService] Available API client methods:", Object.keys(apiClient));
+      logger.error("toggleStar failed: missing toggleNoteStar", { availableMethods });
       throw error;
     }
     
     try {
       const raw = await apiClient.toggleNoteStar(noteId);
       return toDomainNote(raw);
-    } catch (error: any) {
+    } catch (error) {
       // Re-throw with preserved error code for better error handling upstream
-      console.error("[NotesService] toggleStar failed:", error?.message || error);
+      logger.error("toggleStar failed", error);
       throw error;
     }
   }

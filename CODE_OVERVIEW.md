@@ -213,6 +213,10 @@ The system is designed to handle thousands of concurrent users:
 - **User-friendly messages**: `getUserMessage()` method converts technical errors to user-facing text.
 - **Error utilities**: `isAppError()` and `wrapError()` helpers for error handling.
 
+### Logging (`/core/utils/logger.ts`)
+
+- **Centralized logging**: Shared logger for core/api modules with level gating via `LOCKIN_CONFIG.DEBUG` (and optional `LOCKIN_CONFIG.LOG_LEVEL`).
+
 ### Note Editor (`/ui/hooks/useNoteEditor.ts`)
 
 - **Offline queue**: Failed saves are queued in localStorage and synced when back online.

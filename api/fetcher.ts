@@ -1,4 +1,16 @@
 import type { AuthClient } from "./auth";
+import {
+  AppError,
+  AuthError,
+  ConflictError,
+  ErrorCodes,
+  type ErrorCode,
+  NetworkError,
+  NotFoundError,
+  RateLimitError,
+  ValidationError,
+} from "../core/errors";
+import { createLogger } from "../core/utils/logger";
 
 interface RetryConfig {
   maxRetries: number;
@@ -14,6 +26,8 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   retryableStatuses: [429, 502, 503, 504],
 };
 
+const logger = createLogger("ApiFetcher");
+
 function calculateRetryDelay(attempt: number, config: RetryConfig): number {
   const exponentialDelay = config.baseDelayMs * Math.pow(2, attempt);
   const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
@@ -25,6 +39,110 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isErrorCode(value: unknown): value is ErrorCode {
+  return typeof value === "string" && Object.values(ErrorCodes).includes(value as ErrorCode);
+}
+
+function extractErrorMessage(body: unknown, fallback: string): string {
+  if (typeof body === "string" && body.trim()) {
+    return body;
+  }
+
+  if (!isRecord(body)) {
+    return fallback;
+  }
+
+  const errorValue = body.error;
+  if (isRecord(errorValue) && typeof errorValue.message === "string") {
+    return errorValue.message;
+  }
+
+  if (typeof errorValue === "string") {
+    return errorValue;
+  }
+
+  if (typeof body.message === "string") {
+    return body.message;
+  }
+
+  return fallback;
+}
+
+function extractErrorCode(body: unknown): string | undefined {
+  if (!isRecord(body)) {
+    return undefined;
+  }
+
+  const errorValue = body.error;
+  if (isRecord(errorValue) && typeof errorValue.code === "string") {
+    return errorValue.code;
+  }
+
+  if (typeof body.code === "string") {
+    return body.code;
+  }
+
+  return undefined;
+}
+
+function parseRetryAfterMs(response: Response): number | undefined {
+  const value = response.headers.get("retry-after");
+  if (!value) return undefined;
+
+  const seconds = Number(value);
+  if (!Number.isNaN(seconds)) {
+    return Math.max(0, seconds * 1000);
+  }
+
+  const dateMs = Date.parse(value);
+  if (!Number.isNaN(dateMs)) {
+    return Math.max(0, dateMs - Date.now());
+  }
+
+  return undefined;
+}
+
+function resolveErrorCode(status: number, code: string | undefined): ErrorCode {
+  if (code && isErrorCode(code)) {
+    return code;
+  }
+
+  switch (status) {
+    case 400:
+      return ErrorCodes.VALIDATION_ERROR;
+    case 401:
+    case 403:
+      return ErrorCodes.AUTH_REQUIRED;
+    case 404:
+      return ErrorCodes.NOT_FOUND;
+    case 408:
+      return ErrorCodes.TIMEOUT;
+    case 409:
+      return ErrorCodes.CONFLICT;
+    case 429:
+      return ErrorCodes.RATE_LIMIT;
+    case 502:
+      return ErrorCodes.BAD_GATEWAY;
+    case 503:
+      return ErrorCodes.SERVICE_UNAVAILABLE;
+    case 504:
+      return ErrorCodes.TIMEOUT;
+    default:
+      if (status >= 500) {
+        return ErrorCodes.INTERNAL_ERROR;
+      }
+      return ErrorCodes.INTERNAL_ERROR;
+  }
+}
+
+function createAbortError(): AppError {
+  return new AppError("Request was aborted", ErrorCodes.ABORTED);
+}
+
 export interface ApiRequestOptions extends RequestInit {
   signal?: AbortSignal;
   retry?: boolean;
@@ -32,60 +150,55 @@ export interface ApiRequestOptions extends RequestInit {
   ifUnmodifiedSince?: string;
 }
 
-export class ConflictError extends Error {
-  code = "CONFLICT";
-  status = 409;
-  serverVersion?: string;
-
-  constructor(message: string, serverVersion?: string) {
-    super(message);
-    this.name = "ConflictError";
-    this.serverVersion = serverVersion;
-  }
-}
-
-async function createApiError(response: Response, originalError: Error | null = null): Promise<Error> {
-  let errorMessage = "API request failed";
-  let errorCode = "API_ERROR";
+async function createApiError(response: Response, originalError?: Error): Promise<AppError> {
+  let body: unknown = null;
 
   try {
-    const errorBody = await response.json();
-    errorMessage =
-      errorBody?.error?.message ||
-      errorBody?.message ||
-      (typeof errorBody?.error === "string" ? errorBody.error : null) ||
-      errorMessage;
-
-    if (response.status === 401 || response.status === 403) {
-      errorCode = "AUTH_REQUIRED";
-    } else if (response.status === 429) {
-      errorCode = "RATE_LIMIT";
-    } else if (response.status === 400) {
-      errorCode = "BAD_REQUEST";
-    } else if (response.status >= 500) {
-      errorCode = "SERVER_ERROR";
-    }
-  } catch (_) {
+    body = await response.json();
+  } catch {
     try {
       const text = await response.text();
-      if (text) {
-        errorMessage = text;
-      }
-    } catch (_) {
-      // Ignore parse errors
+      body = text || null;
+    } catch {
+      body = null;
     }
   }
 
-  const error = new Error(errorMessage);
-  (error as any).code = errorCode;
-  (error as any).status = response.status;
-  if (originalError) {
-    (error as any).cause = originalError;
+  const message = extractErrorMessage(body, "API request failed");
+  const code = resolveErrorCode(response.status, extractErrorCode(body));
+  const details = isRecord(body) ? body : body ? { body } : undefined;
+  const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response) : undefined;
+  const isRetryable =
+    response.status >= 500 ||
+    code === ErrorCodes.TIMEOUT ||
+    code === ErrorCodes.SERVICE_UNAVAILABLE ||
+    code === ErrorCodes.BAD_GATEWAY;
+
+  switch (code) {
+    case ErrorCodes.AUTH_REQUIRED:
+    case ErrorCodes.INVALID_TOKEN:
+    case ErrorCodes.SESSION_EXPIRED:
+      return new AuthError(message, code, { status: response.status, details, cause: originalError });
+    case ErrorCodes.RATE_LIMIT:
+      return new RateLimitError(message, retryAfterMs, { cause: originalError });
+    case ErrorCodes.VALIDATION_ERROR:
+      return new ValidationError(message, undefined, { details, cause: originalError });
+    case ErrorCodes.NOT_FOUND:
+      return new NotFoundError(message, undefined, undefined, { cause: originalError });
+    case ErrorCodes.CONFLICT:
+      return new ConflictError(message, undefined, { cause: originalError });
+    default:
+      return new AppError(message, code, {
+        status: response.status,
+        details,
+        isRetryable,
+        cause: originalError,
+      });
   }
-  return error;
 }
 
-export type ApiRequest = <T = any>(endpoint: string, options?: ApiRequestOptions) => Promise<T>;
+export type ApiRequest = <T = unknown>(endpoint: string, options?: ApiRequestOptions) => Promise<T>;
+export { ConflictError };
 
 export interface FetcherConfig {
   backendUrl: string;
@@ -96,29 +209,23 @@ export function createFetcher(config: FetcherConfig) {
   const { backendUrl, authClient } = config;
   const clientConfig = { backendUrl };
 
-  async function apiRequest<T = any>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
+  async function apiRequest<T = unknown>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
     const { retry = true, retryConfig: customRetryConfig, ifUnmodifiedSince, ...fetchOptions } = options;
 
     const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...customRetryConfig };
     const url = endpoint.startsWith("http") ? endpoint : `${backendUrl}${endpoint}`;
 
     if (fetchOptions.signal?.aborted) {
-      const error = new Error("Request was aborted");
-      (error as any).code = "ABORTED";
-      throw error;
+      throw createAbortError();
     }
 
     const accessToken = await authClient.getValidAccessToken();
     if (!accessToken) {
-      const error = new Error("Please sign in via the Lock-in popup before using the assistant.");
-      (error as any).code = "AUTH_REQUIRED";
-      throw error;
+      throw new AuthError("Please sign in via the Lock-in popup before using the assistant.", ErrorCodes.AUTH_REQUIRED);
     }
 
     if (fetchOptions.signal?.aborted) {
-      const error = new Error("Request was aborted");
-      (error as any).code = "ABORTED";
-      throw error;
+      throw createAbortError();
     }
 
     const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
@@ -135,40 +242,36 @@ export function createFetcher(config: FetcherConfig) {
       signal: fetchOptions.signal,
     };
 
-    let lastError: Error | null = null;
+    let lastError: AppError | null = null;
     for (let attempt = 0; attempt <= (retry ? retryConfig.maxRetries : 0); attempt++) {
       if (fetchOptions.signal?.aborted) {
-        const error = new Error("Request was aborted");
-        (error as any).code = "ABORTED";
-        throw error;
+        throw createAbortError();
       }
 
       if (attempt > 0) {
         const delay = calculateRetryDelay(attempt - 1, retryConfig);
-        // eslint-disable-next-line no-console
-        console.log(`[API] Retry attempt ${attempt}/${retryConfig.maxRetries} after ${delay}ms`);
+        logger.debug(`Retry attempt ${attempt}/${retryConfig.maxRetries} after ${delay}ms`);
         await sleep(delay);
 
         if (fetchOptions.signal?.aborted) {
-          const error = new Error("Request was aborted");
-          (error as any).code = "ABORTED";
-          throw error;
+          throw createAbortError();
         }
       }
 
       let response: Response;
       try {
         response = await fetch(url, requestOptions);
-      } catch (networkError: any) {
-        if (networkError.name === "AbortError" || fetchOptions.signal?.aborted) {
-          const error = new Error("Request was aborted");
-          (error as any).code = "ABORTED";
-          throw error;
+      } catch (networkError) {
+        if (fetchOptions.signal?.aborted) {
+          throw createAbortError();
         }
 
-        lastError = new Error("Unable to reach Lock-in. Please check your connection.");
-        (lastError as any).code = "NETWORK_ERROR";
-        (lastError as any).cause = networkError;
+        if (networkError instanceof Error && networkError.name === "AbortError") {
+          throw createAbortError();
+        }
+
+        const cause = networkError instanceof Error ? networkError : undefined;
+        lastError = new NetworkError("Unable to reach Lock-in. Please check your connection.", { cause });
 
         if (retry && attempt < retryConfig.maxRetries) {
           continue;
@@ -179,9 +282,17 @@ export function createFetcher(config: FetcherConfig) {
       if (response.status === 409) {
         let serverVersion: string | undefined;
         try {
-          const body = await response.json();
-          serverVersion = body?.updatedAt || body?.updated_at;
-        } catch {}
+          const body: unknown = await response.json();
+          if (isRecord(body)) {
+            if (typeof body.updatedAt === "string") {
+              serverVersion = body.updatedAt;
+            } else if (typeof body.updated_at === "string") {
+              serverVersion = body.updated_at;
+            }
+          }
+        } catch {
+          // ignore parse errors
+        }
         throw new ConflictError(
           "Note was modified by another session. Please refresh and try again.",
           serverVersion,
@@ -213,25 +324,32 @@ export function createFetcher(config: FetcherConfig) {
           return undefined as T;
         }
 
-        const data = await response.json();
-        if (data && data.success === false) {
-          const error = new Error(data.error?.message || "Request failed");
-          (error as any).code = data.error?.code || "API_ERROR";
-          throw error;
+        const data: unknown = await response.json();
+        if (isRecord(data) && data.success === false) {
+          const errorValue = data.error;
+          const errorDetails = isRecord(errorValue) ? errorValue : undefined;
+          const message =
+            (typeof errorValue === "string" && errorValue) ||
+            (errorDetails && typeof errorDetails.message === "string" && errorDetails.message) ||
+            "Request failed";
+          const errorCode = isRecord(errorValue) ? errorValue.code : undefined;
+          throw new AppError(
+            message,
+            resolveErrorCode(response.status, typeof errorCode === "string" ? errorCode : undefined),
+            { status: response.status, details: errorDetails },
+          );
         }
-        return data;
-      } catch (parseError: any) {
-        if (parseError instanceof Error && (parseError as any).code) {
+        return data as T;
+      } catch (parseError) {
+        if (parseError instanceof AppError) {
           throw parseError;
         }
-        const error = new Error("Failed to parse API response");
-        (error as any).code = "PARSE_ERROR";
-        (error as any).cause = parseError;
-        throw error;
+        const cause = parseError instanceof Error ? parseError : undefined;
+        throw new AppError("Failed to parse API response", ErrorCodes.PARSE_ERROR, { cause });
       }
     }
 
-    throw lastError || new Error("Request failed after retries");
+    throw lastError || new AppError("Request failed after retries", ErrorCodes.INTERNAL_ERROR);
   }
 
   function getBackendUrl(): string {
