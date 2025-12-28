@@ -8,8 +8,7 @@ export default [
     ignores: [
       "**/node_modules/**",
       "backend/**",
-      "extension/libs/**",
-      "extension/ui/**",
+      "extension/dist/**",
       "**/dist/**",
       "**/build/**",
       "**/coverage/**",

@@ -4,7 +4,7 @@
  * Provides storage abstraction with both sync and local storage support.
  * Exposes window.LockInStorage for use by content scripts.
  * 
- * This is bundled by vite.config.contentLibs.ts into extension/libs/
+ * This is bundled by vite.config.contentLibs.ts into extension/dist/libs/
  */
 
 /**

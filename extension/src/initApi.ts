@@ -4,7 +4,7 @@
  * This file wires together the Chrome-specific storage with the Chrome-agnostic
  * API and auth clients. It is the bridge between extension code and shared code.
  * 
- * This is bundled by vite.config.initApi.ts into extension/libs/initApi.js (IIFE format)
+ * This is bundled by vite.config.initApi.ts into extension/dist/libs/initApi.js (IIFE format)
  * and exposes window.LockInAuth and window.LockInAPI for use by content scripts.
  */
 

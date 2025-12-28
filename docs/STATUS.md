@@ -34,7 +34,7 @@
 - `backend/controllers/*` (error handling and validation paths).
 
 ## Known Issues
-- **ESLint**: 126 warnings (all `any` types) across api/client/core/extension/ui. Guardrail tolerated for now but blocks "lint clean" DoD.
+- **ESLint**: 126 warnings (all `any` types) across api/client/core/ui/extension and extension/src. Guardrail tolerated for now but blocks "lint clean" DoD.
 - **Sidebar bundle size**: 771.89 kB (172.47 kB gzipped) in dev build (unminified IIFE); monitor when optimizing.
 
 ## Current Quality Gates

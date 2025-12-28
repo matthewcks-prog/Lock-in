@@ -61,13 +61,13 @@ All quality gates are **PASSING** (lint: 0 errors, test: 136 passing, type-check
 ```json
 "js": [
   "config.js",              // Sets window.LOCKIN_CONFIG
-  "libs/initApi.js",        // Requires window.LOCKIN_CONFIG, sets window.LockInAPI/Auth
-  "libs/contentLibs.js",    // Sets window.LockInContent
+  "dist/libs/initApi.js",   // Requires window.LOCKIN_CONFIG, sets window.LockInAPI/Auth
+  "dist/libs/contentLibs.js", // Sets window.LockInContent
   "content/stateStore.js",  // Uses window.LockInContent
   "content/sidebarHost.js", // Uses window.LockInUI
   "content/sessionManager.js",
   "content/interactions.js",
-  "ui/index.js",            // Sets window.LockInUI
+  "dist/ui/index.js",       // Sets window.LockInUI
   "contentScript-react.js"  // Requires all above
 ]
 ```

@@ -67,13 +67,13 @@
       ],
       "js": [
         "config.js",
-        "libs/initApi.js",
-        "libs/contentLibs.js",
+        "dist/libs/initApi.js",
+        "dist/libs/contentLibs.js",
         "content/stateStore.js",
         "content/sidebarHost.js",
         "content/sessionManager.js",
         "content/interactions.js",
-        "ui/index.js",
+        "dist/ui/index.js",
         "contentScript-react.js"
       ],
       "css": ["contentScript.css"],

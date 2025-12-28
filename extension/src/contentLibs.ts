@@ -2,7 +2,7 @@
  * Content Script Libraries Entry Point
  *
  * Bundles the canonical LockIn content runtime for content scripts.
- * Bundled by vite.config.contentLibs.ts into extension/libs/contentLibs.js.
+ * Bundled by vite.config.contentLibs.ts into extension/dist/libs/contentLibs.js.
  */
 
 import "./logger";

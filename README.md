@@ -16,7 +16,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 **Core Components:**
 - `contentScript-react.js` - React-based content script that mounts the sidebar bundle, handles Ctrl/Cmd selection triggers, and syncs the 65/35 layout class
-- `ui/index.js` - Built React sidebar bundle (source lives in `/ui/extension`)
+- `dist/ui/index.js` - Built React sidebar bundle (source lives in `/ui/extension`)
 - `background.js` - Service worker for context menus and session management
 - `popup.js` - Settings and authentication UI (reads `window.LockInAuth` from the bundled client)
 
@@ -24,7 +24,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 - `config.js` - Runtime configuration (backend URL, Supabase credentials)
 - `messaging.js` - Typed message system for extension communication
 - `storage.js` - Wrapper for chrome.storage operations
-- `libs/initApi.js` - Bundled `/api` TypeScript client/auth (exposes `window.LockInAPI` + `window.LockInAuth`)
+- `dist/libs/initApi.js` - Bundled `/api` TypeScript client/auth (exposes `window.LockInAPI` + `window.LockInAuth`)
 
 ### Backend (`backend/`)
 

@@ -5,7 +5,7 @@
  * and other extension components.
  * Exposes window.LockInMessaging for use by content scripts.
  * 
- * This is bundled by vite.config.contentLibs.ts into extension/libs/
+ * This is bundled by vite.config.contentLibs.ts into extension/dist/libs/
  */
 
 export interface Messaging {

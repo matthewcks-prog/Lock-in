@@ -16,8 +16,7 @@ export default defineConfig({
     exclude: [
       "**/node_modules/**",
       "backend/**",
-      "extension/ui/**",
-      "extension/libs/**",
+      "extension/dist/**",
       "dist/**",
     ],
     globals: true,

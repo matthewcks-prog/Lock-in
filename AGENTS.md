@@ -51,7 +51,7 @@ This project uses a structured documentation approach:
 
 - **Chrome Extension** (`/extension`): In-context assistant on learning platforms
   - UI: Sidebar widget with tabs (Chat/Notes/Settings) - specific to extension
-  - Source lives in `/ui/extension` - React components for the sidebar widget (build output lives in `/extension/ui`, not source)
+  - Source lives in `/ui/extension` - React components for the sidebar widget (build output lives in `/extension/dist/ui`, not source)
 - **Web App** (`/web` - future): Study dashboard, knowledge base, analytics
   - UI: Full-page layouts (dashboard, notes library, calendar, analytics pages)
   - Will have its own page/layout components under `/web`
@@ -66,8 +66,10 @@ Both share:
 
 ```
 /extension     → Chrome-specific code only (manifest, background, content script injection)
-  /ui          → Built output: React sidebar bundle (source in /ui/extension)
-/ui/extension  → Source: Extension-only React components for the sidebar widget
+  /dist/ui     → Built output: React sidebar bundle (source in /ui/extension)
+  /dist/libs   → Built outputs: initApi/contentLibs/webvttParser bundles
+/ui           → UI source (shared hooks + extension UI source)
+/ui/extension → Source: Extension-only React components for the sidebar widget
 /core          → Business logic, domain models (NO Chrome dependencies)
 /integrations  → Site-specific adapters (Moodle, Edstem, etc.)
 /api           → Backend API client (NO Chrome dependencies)
@@ -113,7 +115,8 @@ To add a new site integration:
 
 - **Extension code** (`/extension`): Chrome-specific code
   - `/ui/extension` - Source: Sidebar widget React components (extension-specific, not shared)
-  - `/extension/ui` - Built output: React sidebar bundle (built from `/ui/extension`)
+  - `/extension/dist/ui` - Built output: React sidebar bundle (built from `/ui/extension`)
+  - `/extension/dist/libs` - Built output: initApi/contentLibs/webvttParser bundles (built from `/extension/src`)
   - `chromeStorage` wraps `chrome.storage` → calls shared storage interface
   - `chromeMessaging` wraps `chrome.runtime.sendMessage` → calls shared messaging interface
 
@@ -196,7 +199,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
 - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
 - Single widget: Don't duplicate the sidebar component
-- UI location: Extension UI source goes in `/ui/extension` (built to `/extension/ui`), web app UI will go in `/web`
+- UI location: Extension UI source goes in `/ui/extension` (built to `/extension/dist/ui`), web app UI will go in `/web`
 
 ### When Refactoring
 
@@ -240,7 +243,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 3. Integrate into `LockInSidebar.tsx`
 4. Style with Tailwind or CSS Modules
 
-**Note**: Extension UI source is in `/ui/extension` (built to `/extension/ui`). Extension UI is specific to the sidebar widget. The future web app will have its own UI components in `/web`.
+**Note**: Extension UI source is in `/ui/extension` (built to `/extension/dist/ui`). Extension UI is specific to the sidebar widget. The future web app will have its own UI components in `/web`.
 
 ### Adding a New API Endpoint
 
@@ -312,4 +315,4 @@ This ensures the refactor plan and prompt log stay accurate and reflect the curr
 - Check `docs/STATUS.md` for outstanding issues and recent changes
 - Ask before making large architectural changes
 
-**Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`) Chrome-free. Extension UI source (`/ui/extension`, built to `/extension/ui`) is specific to the sidebar widget and will not be reused by the web app.
+**Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`) Chrome-free. Extension UI source (`/ui/extension`, built to `/extension/dist/ui`) is specific to the sidebar widget and will not be reused by the web app.
