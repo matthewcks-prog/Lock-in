@@ -4,7 +4,7 @@
  * Provides structured logging with levels and consistent formatting.
  * Exposes window.LockInLogger for use by content scripts.
  * 
- * This is bundled by vite.config.contentLibs.ts into extension/libs/
+ * This is bundled by vite.config.contentLibs.ts into extension/dist/libs/
  */
 
 export interface Logger {

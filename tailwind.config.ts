@@ -3,7 +3,7 @@ export default {
   content: [
     "./ui/**/*.{tsx,ts}",
     "./shared/ui/**/*.{tsx,ts}",
-    "./extension/ui/*.js",
+    "./extension/dist/ui/*.js",
   ],
   theme: {
     extend: {

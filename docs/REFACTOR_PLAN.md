@@ -69,6 +69,8 @@ Prepare the codebase for Codex refactor without breaking extension/backend funct
 - **C5C: Manifest content_scripts order contract** - Complete (added manifest order guardrail test to lock script list and critical ordering constraints ahead of init sequence).
 - **C5D: Content bootstrap init-order guardrail** - Complete (Vitest suite covering late UI/runtime availability and idempotent bootstrap to prevent race regressions).
 - **C5E: Refactor gate (CI + local check)** - Complete (added GitHub Actions refactor gate running lint → test → type-check → build → verify-build plus backend npm ci/test, and a root `check` script mirroring the gate).
+- **C5F: Extension build output contract** - Complete (moved UI/libs bundles to `extension/dist/**`, updated build configs, manifest/script references, tests, and docs to match).
+- **C5G: Build output banner guardrail** - Complete (added generated-file banner to Vite IIFE outputs to discourage manual edits and clarify source-of-truth entries).
 
 ---
 

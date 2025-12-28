@@ -61,7 +61,7 @@ See `backend/migrations/004_vector_extension_schema.sql` for full migration deta
 
 ## Access Patterns
 
-- Extension/web app clients call the backend through the shared TypeScript client (`/api`, bundled to `extension/libs/initApi.js`) and attach the Supabase JWT from `window.LockInAuth`.
+- Extension/web app clients call the backend through the shared TypeScript client (`/api`, bundled to `extension/dist/libs/initApi.js`) and attach the Supabase JWT from `window.LockInAuth`.
 
 ---
 

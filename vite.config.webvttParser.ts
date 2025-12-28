@@ -2,7 +2,7 @@
  * Vite config for building WebVTT parser for background script
  *
  * Bundles core/transcripts/webvttParser.ts into an IIFE file
- * at extension/libs/webvttParser.js that can be loaded by the background script.
+ * at extension/dist/libs/webvttParser.js that can be loaded by the background script.
  *
  * This exposes window.LockInWebVtt with:
  * - parseWebVtt
@@ -24,13 +24,13 @@ export default defineConfig({
   define: sharedDefines,
   plugins: [
     ensureAsciiSafeOutput(
-      resolve(process.cwd(), 'extension/libs/webvttParser.js'),
+      resolve(process.cwd(), 'extension/dist/libs/webvttParser.js'),
       'Processed webvttParser.js for ASCII compatibility'
     ),
   ],
   build: createIifeBuildConfig({
-    outDir: 'extension/libs',
-    emptyOutDir: false, // Don't delete other files in libs/
+    outDir: 'extension/dist/libs',
+    emptyOutDir: false, // Don't delete other files in dist/libs/
     entry: './core/transcripts/webvttParser.ts',
     name: 'LockInWebVtt',
     fileName: 'webvttParser.js',

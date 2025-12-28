@@ -16,12 +16,12 @@ export default defineConfig({
   plugins: [
     react(),
     ensureAsciiSafeOutput(
-      resolve(process.cwd(), "extension/ui/index.js"),
+      resolve(process.cwd(), "extension/dist/ui/index.js"),
       "Processed output file for ASCII compatibility"
     ),
   ],
   build: createIifeBuildConfig({
-    outDir: "extension/ui",
+    outDir: "extension/dist/ui",
     entry: "ui/extension/index.tsx",
     name: "LockInUI",
     fileName: "index.js",

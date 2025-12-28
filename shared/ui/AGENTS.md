@@ -89,7 +89,7 @@ import { Button, Card, TextInput } from "@shared/ui/components";
 - Add business logic to these components
 - Make components specific to extension or web app
 - Use Chrome APIs or Next.js-specific features
-- Create high-level components (those go in extension/ui or web/)
+- Create high-level components (those go in ui/extension or web/)
 - Mix styling approaches (use Tailwind consistently)
 
 ---
@@ -108,4 +108,4 @@ import { Button, Card, TextInput } from "@shared/ui/components";
 ## Questions?
 
 - Check `/AGENTS.md` for project-level rules
-- These are basic UI primitives only - complex components belong in extension/ui or web/
+- These are basic UI primitives only - complex components belong in ui/extension or web/

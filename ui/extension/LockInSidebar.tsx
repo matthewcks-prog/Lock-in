@@ -6,6 +6,9 @@ import type { NotesService } from "../../core/services/notesService.ts";
 import { useNotesList } from "../hooks/useNotesList";
 import { NotesPanel } from "./notes/NotesPanel";
 import { createNoteContentFromPlainText } from "./notes/content";
+import { TranscriptMessage } from "./transcripts/TranscriptMessage";
+import { VideoListPanel } from "./transcripts/VideoListPanel";
+import { useTranscripts } from "./transcripts/useTranscripts";
 
 interface StorageAdapter {
   get: (key: string) => Promise<any>;
@@ -217,6 +220,14 @@ export function LockInSidebar({
     limit: 50,
   });
 
+  const {
+    state: transcriptState,
+    detectAndAutoExtract,
+    closeVideoList,
+    extractTranscript,
+    clearError,
+  } = useTranscripts();
+
   const applySplitLayout = useCallback((open: boolean) => {
     const body = document.body;
     const html = document.documentElement;
@@ -248,6 +259,16 @@ export function LockInSidebar({
       window.scrollTo(scrollX, scrollY);
     });
   }, []);
+
+  const handleTranscriptClick = useCallback(() => {
+    setIsHistoryOpen(false);
+    detectAndAutoExtract();
+  }, [detectAndAutoExtract]);
+
+  const handleTranscriptPanelClose = useCallback(() => {
+    closeVideoList();
+    clearError();
+  }, [closeVideoList, clearError]);
 
   useEffect(() => {
     if (!storage) return;
@@ -793,7 +814,6 @@ export function LockInSidebar({
         >
           <div className="lockin-top-bar">
             <div className="lockin-top-bar-left">
-              <div className="lockin-brand">Lock-in</div>
               <div className="lockin-tabs-wrapper" role="tablist">
                 {[CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
                   const label = tabId === CHAT_TAB_ID ? "Chat" : "Notes";
@@ -845,6 +865,28 @@ export function LockInSidebar({
                   </button>
                 </div>
                 <div className="lockin-chat-toolbar-right">
+                  <button
+                    className="lockin-extract-transcript-btn"
+                    onClick={handleTranscriptClick}
+                    type="button"
+                    disabled={
+                      transcriptState.isDetecting || transcriptState.isExtracting
+                    }
+                  >
+                    {transcriptState.isDetecting ||
+                    transcriptState.isExtracting ? (
+                      <>
+                        <span className="lockin-inline-spinner" />
+                        <span>
+                          {transcriptState.isExtracting
+                            ? "Extracting..."
+                            : "Detecting..."}
+                        </span>
+                      </>
+                    ) : (
+                      <span>Transcript</span>
+                    )}
+                  </button>
                   <ModeSelector
                     value={mode}
                     onSelect={(newMode) => setMode(newMode)}
@@ -907,6 +949,29 @@ export function LockInSidebar({
                   <div className="lockin-chat-content">
                     <div className="lockin-chat-messages-wrapper">
                       <div className="lockin-chat-messages">
+                        {transcriptState.lastTranscript && (
+                          <TranscriptMessage
+                            transcript={transcriptState.lastTranscript.transcript}
+                            videoTitle={
+                              transcriptState.lastTranscript.video.title || "Video"
+                            }
+                            onSaveAsNote={handleSaveAsNote}
+                          />
+                        )}
+                        {transcriptState.isVideoListOpen && (
+                          <VideoListPanel
+                            videos={transcriptState.videos}
+                            isLoading={transcriptState.isDetecting}
+                            isExtracting={transcriptState.isExtracting}
+                            extractingVideoId={transcriptState.extractingVideoId}
+                            onSelectVideo={(video) => {
+                              void extractTranscript(video);
+                            }}
+                            onClose={handleTranscriptPanelClose}
+                            error={transcriptState.error || undefined}
+                            authRequired={transcriptState.authRequired}
+                          />
+                        )}
                         {renderChatMessages()}
                         {chatError && (
                           <div className="lockin-chat-error">{chatError}</div>

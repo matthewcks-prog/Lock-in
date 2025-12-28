@@ -3,7 +3,7 @@
 Purpose: Stable guardrails for how Lock-in is structured. Implementation details and current snapshots live in `CODE_OVERVIEW.md` and `docs/STATUS.md`.
 
 ## Surfaces
-- **Chrome Extension (`/extension` + `/ui/extension`)**: Primary surface. Uses Chrome APIs only inside extension code. React sidebar UI source in `ui/extension/**`, built bundle in `extension/ui/**`.
+- **Chrome Extension (`/extension` + `/ui/extension`)**: Primary surface. Uses Chrome APIs only inside extension code. React sidebar UI source in `ui/extension/**`, built bundle in `extension/dist/ui/**`.
 - **Backend (`/backend`)**: Node/Express API (Supabase-backed) serving chat, notes, and assets.
 - **Future Web App (`/web`, placeholder)**: Will reuse `/core` + `/api`; separate UI stack when built.
 
@@ -16,12 +16,12 @@ Purpose: Stable guardrails for how Lock-in is structured. Implementation details
 
 ## Build Outputs vs Source
 - **Sources**: `ui/extension/**`, `extension/src/**`, `/core`, `/api`, `/integrations`, `/shared/ui`.
-- **Build outputs (do not edit)**: `extension/ui/**` (sidebar bundle built from `ui/extension`), `extension/libs/**` (initApi/contentLibs bundles built from `extension/src`).
+- **Build outputs (do not edit)**: `extension/dist/ui/**` (sidebar bundle built from `ui/extension`), `extension/dist/libs/**` (initApi/contentLibs bundles built from `extension/src`).
 
 ## Global Contracts
-- `window.LockInUI`: Sidebar bundle (from `extension/ui/index.js`).
-- `window.LockInAPI` / `window.LockInAuth`: API/auth clients bundled from `/api` via `extension/src/initApi.ts` -> `extension/libs/initApi.js`.
-- `window.LockInContent.*`: Content helpers bundled from `extension/src/contentLibs.ts` -> `extension/libs/contentLibs.js`.
+- `window.LockInUI`: Sidebar bundle (from `extension/dist/ui/index.js`).
+- `window.LockInAPI` / `window.LockInAuth`: API/auth clients bundled from `/api` via `extension/src/initApi.ts` -> `extension/dist/libs/initApi.js`.
+- `window.LockInContent.*`: Content helpers bundled from `extension/src/contentLibs.ts` -> `extension/dist/libs/contentLibs.js`.
 
 ## Where to Look for Details
 - **Current snapshot**: `CODE_OVERVIEW.md`.

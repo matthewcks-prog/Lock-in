@@ -50,7 +50,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
   - Toolbar popup UI logic, settings, and auth UI.
 
-- **`ui/index.js`**
+- **`dist/ui/index.js`**
   - Built React sidebar bundle consumed by the content script (source entry in `ui/extension/index.tsx`, sidebar orchestration in `ui/extension/LockInSidebar.tsx`, Lexical note editor in `ui/extension/notes/`).
 
 ### Shared Modules
@@ -65,9 +65,9 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`contentRuntime.ts` + `contentLibs.ts`**
 
-  - Canonical versioned content runtime exposed as `window.LockInContent` (storage/messaging/session/logger + adapter resolver); bundled to `extension/libs/contentLibs.js`. Legacy compat aliases have been removed (canonical API only).
+  - Canonical versioned content runtime exposed as `window.LockInContent` (storage/messaging/session/logger + adapter resolver); bundled to `extension/dist/libs/contentLibs.js`. Legacy compat aliases have been removed (canonical API only).
 
-- **`libs/initApi.js` + `/api` (TS)**
+- **`dist/libs/initApi.js` + `/api` (TS)**
 
   - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/src/initApi.ts`).
   - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets), and `api/client.ts` composes them to keep the same public method bag.
@@ -181,7 +181,7 @@ This is a living overview of the current codebase. Update it whenever files move
 2. **Single widget**: One React sidebar bundle rendered via `contentScript-react.js` and `sidebarHost.js`.
 3. **Storage/messaging abstractions**: `storage.js` and `messaging.js` hide Chrome APIs behind async helpers.
 4. **Separation of concerns**: Orchestrator delegates state, session, and UI responsibilities to dedicated helpers.
-5. **API abstraction**: Shared `/api` TypeScript client is bundled into `libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
+5. **API abstraction**: Shared `/api` TypeScript client is bundled into `dist/libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
 6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor`/`useNotesList`, and the Lexical editor resides in `ui/extension/notes/` with inline attachment/image nodes (resizable images, paperclip insertion).
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
 8. **Transcript extraction**: Provider-adapter pattern for video transcripts. Panopto provider detects iframes, extracts caption URLs from embed HTML, fetches WebVTT captions. Background script handles cross-origin fetching (requires `host_permissions` for `*.panopto.com`). UI shows video list panel and transcript messages with download options.
@@ -240,7 +240,7 @@ The system is designed to handle thousands of concurrent users:
 
 ## Where to Start Reading
 
-- **Extension behavior & UI**: Start with `extension/contentScript-react.js` and helpers in `extension/content/`, then the built React bundle `extension/ui/index.js` (source in `ui/extension/index.tsx`).
+- **Extension behavior & UI**: Start with `extension/contentScript-react.js` and helpers in `extension/content/`, then the built React bundle `extension/dist/ui/index.js` (source in `ui/extension/index.tsx`).
 - **Backend request flow**: Start with `backend/routes/lockinRoutes.js`, then `controllers/lockinController.js`.
-- **Auth & persistence**: Supabase auth client lives in `/api/auth.ts` and is bundled to the extension via `extension/libs/initApi.js` (`window.LockInAuth`); backend enforcement via `backend/middleware/authMiddleware.js`.
-- **API communication**: Use the bundled `/api/client.ts` exposed through `extension/libs/initApi.js` (`window.LockInAPI`); backend logic in `openaiClient.js`. The client includes typed methods for note assets (`uploadNoteAsset`, `listNoteAssets`, `deleteNoteAsset`) that return `NoteAsset` objects with camelCase fields.
+- **Auth & persistence**: Supabase auth client lives in `/api/auth.ts` and is bundled to the extension via `extension/dist/libs/initApi.js` (`window.LockInAuth`); backend enforcement via `backend/middleware/authMiddleware.js`.
+- **API communication**: Use the bundled `/api/client.ts` exposed through `extension/dist/libs/initApi.js` (`window.LockInAPI`); backend logic in `openaiClient.js`. The client includes typed methods for note assets (`uploadNoteAsset`, `listNoteAssets`, `deleteNoteAsset`) that return `NoteAsset` objects with camelCase fields.

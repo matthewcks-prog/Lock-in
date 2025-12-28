@@ -5,6 +5,7 @@ export const API_CLIENT_EXPECTED_KEYS = [
   "deleteChat",
   "deleteNote",
   "deleteNoteAsset",
+  "generateChatTitle",
   "getBackendUrl",
   "getChatMessages",
   "getRecentChats",

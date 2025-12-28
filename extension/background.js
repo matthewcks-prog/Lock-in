@@ -7,7 +7,7 @@
 
 // Import shared libraries
 try {
-  importScripts("libs/webvttParser.js");
+  importScripts("dist/libs/webvttParser.js");
 } catch (e) {
   console.warn("Lock-in: Failed to import webvttParser.js:", e);
 }
@@ -28,7 +28,7 @@ const WebVtt =
 
 /**
  * Parse WebVTT content into structured segments
- * Uses shared parser from libs/webvttParser.js if available, otherwise fallback
+ * Uses shared parser from dist/libs/webvttParser.js if available, otherwise fallback
  */
 function parseWebVtt(vttContent) {
   if (WebVtt && typeof WebVtt.parseWebVtt === "function") {

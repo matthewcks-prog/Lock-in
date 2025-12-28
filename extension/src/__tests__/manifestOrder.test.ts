@@ -18,13 +18,13 @@ describe("manifest content_scripts order", () => {
 
     const expectedScripts = Object.freeze([
       "config.js",
-      "libs/initApi.js",
-      "libs/contentLibs.js",
+      "dist/libs/initApi.js",
+      "dist/libs/contentLibs.js",
       "content/stateStore.js",
       "content/sidebarHost.js",
       "content/sessionManager.js",
       "content/interactions.js",
-      "ui/index.js",
+      "dist/ui/index.js",
       "contentScript-react.js",
     ]);
 
@@ -32,10 +32,10 @@ describe("manifest content_scripts order", () => {
     expect(scripts).toEqual(expectedScripts);
 
     expect(scripts[0]).toBe("config.js");
-    expect(scripts.indexOf("libs/initApi.js")).toBeLessThan(
-      scripts.indexOf("libs/contentLibs.js")
+    expect(scripts.indexOf("dist/libs/initApi.js")).toBeLessThan(
+      scripts.indexOf("dist/libs/contentLibs.js")
     );
-    expect(scripts.indexOf("ui/index.js")).toBeLessThan(
+    expect(scripts.indexOf("dist/ui/index.js")).toBeLessThan(
       scripts.indexOf("contentScript-react.js")
     );
     expect(scripts[scripts.length - 1]).toBe("contentScript-react.js");
