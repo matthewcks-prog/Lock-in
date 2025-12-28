@@ -134,7 +134,7 @@ export interface UserPreferences {
 export interface AuthUser {
   id: string;
   email?: string;
-  [key: string]: any; // Supabase user object may have additional fields
+  [key: string]: unknown; // Supabase user object may have additional fields
 }
 
 /**
