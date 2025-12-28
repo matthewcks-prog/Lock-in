@@ -908,15 +908,6 @@ export function LockInSidebar({
                   className="lockin-chat-history-panel"
                   data-state={isHistoryOpen ? "open" : "closed"}
                 >
-                  <div className="lockin-history-actions">
-                    <span className="lockin-history-label">Chats</span>
-                    <button
-                      className="lockin-new-chat-btn"
-                      onClick={startBlankChat}
-                    >
-                      + New chat
-                    </button>
-                  </div>
                   <div className="lockin-history-list">
                     {recentChats.length === 0 ? (
                       <div className="lockin-history-empty">
