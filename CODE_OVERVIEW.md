@@ -38,7 +38,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
   - `pageContext.js` (adapter + page context resolution, imports `/integrations` bundle with fallback inference).
   - `stateStore.js` (sidebar/selection/mode state + storage sync).
-  - `sidebarHost.js` (mounts/upgrades React sidebar and body classes).
+  - `sidebarHost.js` (mounts/upgrades React sidebar, injects the page wrapper used for layout shifts, and keeps new body nodes inside it).
   - `sessionManager.js` (tab ID + session restore/clear).
   - `interactions.js` (selection + Escape handlers).
 
