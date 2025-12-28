@@ -48,7 +48,7 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - Thin orchestrator only: detect site adapter, extract context, and mount React sidebar bundle from `/extension/dist/ui`
 - Delegates to helpers in `extension/content/` for page context, state store, sidebar host, session restore, and interactions
 - Handles Chrome-specific events (text selection, Ctrl/Cmd modifier, Escape close)
-- Applies body class `lockin-sidebar-open` so the page shrinks by the clamped sidebar width (35vw target, 320-390px) when open; mobile overlays instead of resizing
+- Applies body class `lockin-sidebar-open` so the injected `#lockin-page-wrapper` reserves space for the sidebar; a MutationObserver keeps new body nodes inside the wrapper; mobile overlays instead of resizing
 - **DO NOT** contain:
   - Business logic (use `/core/services`)
   - UI rendering (use React components from `/ui/extension`)

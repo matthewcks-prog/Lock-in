@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { PageContext, StudyMode } from "../../core/domain/types";
 import type { ApiClient } from "../../api/client";
 import { createNotesService } from "../../core/services/notesService.ts";
@@ -13,6 +20,8 @@ import { useTranscripts } from "./transcripts/useTranscripts";
 interface StorageAdapter {
   get: (key: string) => Promise<any>;
   set: (key: string, value: any) => Promise<void>;
+  getLocal?: (key: string) => Promise<any>;
+  setLocal?: (key: string, value: any) => Promise<void>;
 }
 
 export interface LockInSidebarProps {
@@ -61,6 +70,11 @@ const SIDEBAR_ACTIVE_TAB_KEY = "lockin_sidebar_activeTab";
 const MODE_STORAGE_KEY = "lockinActiveMode";
 const SELECTED_NOTE_ID_KEY = "lockin_sidebar_selectedNoteId";
 const ACTIVE_CHAT_ID_KEY = "lockin_sidebar_activeChatId";
+const SIDEBAR_WIDTH_KEY = "lockin_sidebar_width";
+const SIDEBAR_OPEN_KEY = "lockin_sidebar_isOpen";
+const SIDEBAR_MIN_WIDTH = 360;
+const SIDEBAR_MAX_WIDTH = 1500;
+const SIDEBAR_MAX_VW = 0.75;
 
 function isValidUUID(value: string | null | undefined) {
   if (!value) return false;
@@ -197,6 +211,42 @@ export function LockInSidebar({
 
   const previousSelectionRef = useRef<string | undefined>();
   const layoutTimeoutRef = useRef<number | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const isResizingRef = useRef(false);
+  const resizeRafRef = useRef<number | null>(null);
+  const pendingWidthRef = useRef<number | null>(null);
+  const currentWidthRef = useRef<number | null>(null);
+  const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+  const getMaxSidebarWidth = useCallback(() => {
+    if (typeof window === "undefined") return SIDEBAR_MAX_WIDTH;
+    return Math.min(
+      SIDEBAR_MAX_WIDTH,
+      Math.floor(window.innerWidth * SIDEBAR_MAX_VW)
+    );
+  }, []);
+
+  const clampSidebarWidth = useCallback(
+    (width: number) => {
+      const maxWidth = getMaxSidebarWidth();
+      const minWidth = Math.min(SIDEBAR_MIN_WIDTH, maxWidth);
+      return Math.min(maxWidth, Math.max(minWidth, Math.round(width)));
+    },
+    [getMaxSidebarWidth]
+  );
+
+  const applySidebarWidth = useCallback(
+    (width: number) => {
+      if (typeof document === "undefined") return;
+      const clamped = clampSidebarWidth(width);
+      currentWidthRef.current = clamped;
+      document.documentElement.style.setProperty(
+        "--lockin-sidebar-width",
+        `${clamped}px`
+      );
+    },
+    [clampSidebarWidth]
+  );
 
   const notesService: NotesService | null = useMemo(
     () => (apiClient ? createNotesService(apiClient) : null),
@@ -245,6 +295,80 @@ export function LockInSidebar({
       html.classList.remove("lockin-sidebar-transitioning");
     }, 320);
   }, []);
+
+  const handleResizeStart = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      if (typeof window === "undefined") return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const handle = event.currentTarget;
+      const pointerId = event.pointerId;
+
+      const updateWidth = (clientX: number) => {
+        const nextWidth = window.innerWidth - clientX;
+        pendingWidthRef.current = nextWidth;
+        if (resizeRafRef.current !== null) return;
+        resizeRafRef.current = window.requestAnimationFrame(() => {
+          resizeRafRef.current = null;
+          if (pendingWidthRef.current === null) return;
+          applySidebarWidth(pendingWidthRef.current);
+          pendingWidthRef.current = null;
+        });
+      };
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        if (!isResizingRef.current) return;
+        updateWidth(moveEvent.clientX);
+      };
+
+      const stopResize = () => {
+        if (!isResizingRef.current) return;
+        isResizingRef.current = false;
+        resizeCleanupRef.current = null;
+
+        if (handle.hasPointerCapture?.(pointerId)) {
+          handle.releasePointerCapture?.(pointerId);
+        }
+
+        document.documentElement.classList.remove("lockin-sidebar-resizing");
+        window.removeEventListener("pointermove", handlePointerMove);
+        window.removeEventListener("pointerup", stopResize);
+        window.removeEventListener("pointercancel", stopResize);
+
+        if (resizeRafRef.current !== null) {
+          window.cancelAnimationFrame(resizeRafRef.current);
+          resizeRafRef.current = null;
+        }
+
+        if (pendingWidthRef.current !== null) {
+          applySidebarWidth(pendingWidthRef.current);
+          pendingWidthRef.current = null;
+        }
+
+        if (currentWidthRef.current !== null) {
+          storage
+            ?.setLocal?.(SIDEBAR_WIDTH_KEY, currentWidthRef.current)
+            .catch(() => {
+              /* ignore */
+            });
+        }
+      };
+
+      isResizingRef.current = true;
+      resizeCleanupRef.current = stopResize;
+
+      handle.setPointerCapture?.(pointerId);
+      document.documentElement.classList.add("lockin-sidebar-resizing");
+      window.addEventListener("pointermove", handlePointerMove);
+      window.addEventListener("pointerup", stopResize);
+      window.addEventListener("pointercancel", stopResize);
+
+      updateWidth(event.clientX);
+    },
+    [applySidebarWidth, storage]
+  );
 
   // Handle tab change while preserving page scroll position
   const handleTabChange = useCallback((tabId: string) => {
@@ -379,6 +503,63 @@ export function LockInSidebar({
       /* ignore */
     });
   }, [mode, storage]);
+
+  useEffect(() => {
+    if (!storage?.getLocal) return;
+    let cancelled = false;
+    storage
+      .getLocal(SIDEBAR_WIDTH_KEY)
+      .then((storedWidth) => {
+        if (cancelled) return;
+        const numeric =
+          typeof storedWidth === "number"
+            ? storedWidth
+            : typeof storedWidth === "string"
+              ? Number.parseFloat(storedWidth)
+              : null;
+        if (typeof numeric === "number" && !Number.isNaN(numeric) && numeric > 0) {
+          applySidebarWidth(numeric);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [applySidebarWidth, storage]);
+
+  useEffect(() => {
+    if (!storage?.setLocal) return;
+    storage.setLocal(SIDEBAR_OPEN_KEY, isOpen).catch(() => {
+      /* ignore */
+    });
+  }, [isOpen, storage]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const handleResize = () => {
+      if (currentWidthRef.current === null) return;
+      applySidebarWidth(currentWidthRef.current);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [applySidebarWidth]);
+
+  useEffect(() => {
+    if (!isOpen || activeTab !== CHAT_TAB_ID) return;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, [activeTab, isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (resizeCleanupRef.current) {
+        resizeCleanupRef.current();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeTabExternal) return;
@@ -812,6 +993,11 @@ export function LockInSidebar({
           className="lockin-sidebar"
           data-state={isOpen ? "expanded" : "collapsed"}
         >
+          <div
+            className="lockin-sidebar-resize-handle"
+            onPointerDown={handleResizeStart}
+            aria-hidden="true"
+          />
           <div className="lockin-top-bar">
             <div className="lockin-top-bar-left">
               <div className="lockin-tabs-wrapper" role="tablist">
@@ -976,6 +1162,7 @@ export function LockInSidebar({
                           className="lockin-chat-input-field"
                           placeholder="Ask a follow-up question..."
                           value={inputValue}
+                          ref={inputRef}
                           onChange={(e) => setInputValue(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {

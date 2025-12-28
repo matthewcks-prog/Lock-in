@@ -26,34 +26,44 @@
 
 /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
 html {
-  /* Sidebar width: ideal 40vw, min 320px, max 600px */
-  --lockin-sidebar-min: 320px;
-  --lockin-sidebar-max: 600px;
-  --lockin-sidebar-ideal: 40vw;
+  /* Sidebar width: ideal 35vw, min 360px, max min(1500px, 75vw) */
+  --lockin-sidebar-min: 360px;
+  --lockin-sidebar-max: min(1500px, 75vw);
+  --lockin-sidebar-ideal: 35vw;
   --lockin-sidebar-width: clamp(var(--lockin-sidebar-min), var(--lockin-sidebar-ideal), var(--lockin-sidebar-max));
   /* Content width is the remaining space after sidebar (100vw - sidebar width) */
   --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
 }
 
-/* Default: page uses 100% viewport width when sidebar is closed */
+/* Default: page uses 100% viewport width */
 body {
   width: 100vw !important;
   max-width: 100vw !important;
   margin: 0 !important;
   padding: 0 !important;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   overflow-x: hidden;
   box-sizing: border-box;
 }
 
-/* When sidebar is expanded (desktop mode), page content takes remaining space */
-body.lockin-sidebar-open {
-  width: var(--lockin-content-width) !important;
-  max-width: var(--lockin-content-width) !important;
-  overflow-x: hidden !important;
-  margin: 0 !important;
-  padding: 0 !important;
+/* Page content wrapper (injected) */
+#lockin-page-wrapper {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  min-height: 100vh;
   box-sizing: border-box;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-inline-end 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* When sidebar is expanded (desktop mode), page content wrapper takes remaining space */
+body.lockin-sidebar-open #lockin-page-wrapper {
+  width: var(--lockin-content-width);
+  max-width: var(--lockin-content-width);
+  margin-right: var(--lockin-sidebar-width);
+  margin-inline-end: var(--lockin-sidebar-width);
 }
 
 /* Prevent horizontal scrollbar during transition */
@@ -86,9 +96,11 @@ body.lockin-sidebar-open .content {
 
 @media (max-width: 1024px) {
   /* On mobile/tablet, sidebar overlays content, so body always uses 100% viewport */
-  body.lockin-sidebar-open {
-    width: 100vw !important;
-    max-width: 100vw !important;
+  body.lockin-sidebar-open #lockin-page-wrapper {
+    width: 100%;
+    max-width: 100%;
+    margin-right: 0;
+    margin-inline-end: 0;
   }
 }
 
@@ -113,8 +125,41 @@ body.lockin-sidebar-open .content {
   overflow: hidden;
 }
 
+.lockin-sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+
+.lockin-sidebar-resize-handle:focus,
+.lockin-sidebar-resize-handle:focus-visible {
+  outline: none;
+}
+
 #lockin-sidebar[data-state="collapsed"] {
   transform: translateX(100%);
+}
+
+html.lockin-sidebar-resizing,
+html.lockin-sidebar-resizing body {
+  cursor: col-resize !important;
+}
+
+html.lockin-sidebar-resizing body {
+  user-select: none !important;
+  transition: none !important;
+}
+
+html.lockin-sidebar-resizing #lockin-sidebar {
+  transition: none !important;
 }
 
 /* === TOGGLE PILL (COLLAPSED STATE) === */
@@ -2686,6 +2731,10 @@ body.lockin-sidebar-open .content {
   #lockin-sidebar {
     width: 100%;
     max-width: 100%;
+  }
+
+  .lockin-sidebar-resize-handle {
+    display: none;
   }
   
   .lockin-chat-history-panel {
