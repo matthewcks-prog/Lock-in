@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -370,6 +371,27 @@ export function LockInSidebar({
     [applySidebarWidth, storage]
   );
 
+  const syncTextareaHeight = useCallback(
+    (target?: HTMLTextAreaElement | null) => {
+      if (typeof window === "undefined") return;
+      const input = target ?? inputRef.current;
+      if (!input) return;
+      input.style.height = "auto";
+      const maxHeightValue = window.getComputedStyle(input).maxHeight;
+      const maxHeight =
+        maxHeightValue === "none" ? 0 : Number.parseFloat(maxHeightValue);
+      const nextHeight = input.scrollHeight;
+      if (!maxHeight || Number.isNaN(maxHeight)) {
+        input.style.height = `${nextHeight}px`;
+        input.style.overflowY = "hidden";
+        return;
+      }
+      input.style.height = `${Math.min(nextHeight, maxHeight)}px`;
+      input.style.overflowY = nextHeight > maxHeight ? "auto" : "hidden";
+    },
+    []
+  );
+
   // Handle tab change while preserving page scroll position
   const handleTabChange = useCallback((tabId: string) => {
     // Capture current scroll position before state change
@@ -553,6 +575,11 @@ export function LockInSidebar({
     });
   }, [activeTab, isOpen]);
 
+  useLayoutEffect(() => {
+    if (!isOpen || activeTab !== CHAT_TAB_ID) return;
+    syncTextareaHeight();
+  }, [activeTab, inputValue, isOpen, syncTextareaHeight]);
+
   useEffect(() => {
     return () => {
       if (resizeCleanupRef.current) {
@@ -698,7 +725,6 @@ export function LockInSidebar({
         const fallback =
           error?.message ||
           "We could not process this request. Try again in a moment.";
-        setChatError(fallback);
         setMessages((prev) =>
           prev.map((message) =>
             message.id === pendingId
@@ -1163,7 +1189,10 @@ export function LockInSidebar({
                           placeholder="Ask a follow-up question..."
                           value={inputValue}
                           ref={inputRef}
-                          onChange={(e) => setInputValue(e.target.value)}
+                          onChange={(e) => {
+                            setInputValue(e.target.value);
+                            syncTextareaHeight(e.currentTarget);
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && !e.shiftKey) {
                               e.preventDefault();
