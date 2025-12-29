@@ -809,6 +809,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   line-height: 1.4;
   word-break: break-word;
   overflow-wrap: anywhere;
+  overflow-y: hidden;
 }
 
 .lockin-chat-input-field:focus {
