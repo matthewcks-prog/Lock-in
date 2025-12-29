@@ -56,6 +56,8 @@ interface ChatHistoryItem {
   lastMessage?: string;
 }
 
+type HistoryTitleSource = "local" | "server";
+
 const MODE_OPTIONS: Array<{ value: StudyMode; label: string; hint: string }> = [
   { value: "explain", label: "Explain", hint: "Clarify the selection" },
   {
@@ -76,6 +78,9 @@ const SIDEBAR_OPEN_KEY = "lockin_sidebar_isOpen";
 const SIDEBAR_MIN_WIDTH = 360;
 const SIDEBAR_MAX_WIDTH = 1500;
 const SIDEBAR_MAX_VW = 0.75;
+const CHAT_TITLE_MAX_WORDS = 6;
+const CHAT_TITLE_MAX_LENGTH = 80;
+const FALLBACK_CHAT_TITLE = "New chat";
 
 function isValidUUID(value: string | null | undefined) {
   if (!value) return false;
@@ -98,10 +103,37 @@ function relativeLabel(iso: string | null | undefined) {
   return `${days}d ago`;
 }
 
-function textSnippet(text: string, length = 80) {
-  if (!text) return "Untitled chat";
-  if (text.length <= length) return text;
-  return `${text.slice(0, length)}...`;
+function normalizeSpaces(text: string) {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function clampChatTitle(text = "") {
+  const normalized = normalizeSpaces(text);
+  if (!normalized) return "";
+
+  const limitedWords = normalized
+    .split(" ")
+    .slice(0, CHAT_TITLE_MAX_WORDS)
+    .join(" ")
+    .trim();
+
+  if (limitedWords.length <= CHAT_TITLE_MAX_LENGTH) {
+    return limitedWords;
+  }
+
+  return limitedWords.slice(0, CHAT_TITLE_MAX_LENGTH).trim();
+}
+
+function coerceChatTitle(candidate?: string | null, fallback?: string) {
+  const normalizedCandidate = clampChatTitle(candidate || "");
+  if (normalizedCandidate) return normalizedCandidate;
+
+  const normalizedFallback = clampChatTitle(fallback || "");
+  return normalizedFallback || FALLBACK_CHAT_TITLE;
+}
+
+function buildInitialChatTitle(text: string) {
+  return coerceChatTitle(text, FALLBACK_CHAT_TITLE);
 }
 
 interface SaveNoteActionProps {
@@ -636,13 +668,40 @@ export function LockInSidebar({
   }, [isNoteEditing, isOpen, onToggle]);
 
   const upsertHistory = useCallback(
-    (item: ChatHistoryItem, previousId?: string | null) => {
+    (
+      item: ChatHistoryItem,
+      previousId?: string | null,
+      titleSource: HistoryTitleSource = "local"
+    ) => {
       setRecentChats((prev) => {
+        const existing = prev.find(
+          (history) =>
+            history.id === item.id || (previousId && history.id === previousId)
+        );
+        const existingTitle = existing?.title || "";
+        const incomingTitle = coerceChatTitle(
+          item.title,
+          existingTitle || FALLBACK_CHAT_TITLE
+        );
+        const normalizedExisting = clampChatTitle(existingTitle);
+        const hasMeaningfulTitle =
+          Boolean(normalizedExisting) &&
+          normalizedExisting !== FALLBACK_CHAT_TITLE;
+        const shouldOverrideTitle = titleSource === "server" || !hasMeaningfulTitle;
+
+        const merged = {
+          ...existing,
+          ...item,
+          title: shouldOverrideTitle
+            ? incomingTitle
+            : existingTitle || FALLBACK_CHAT_TITLE,
+        };
+
         const filtered = prev.filter(
           (history) =>
             history.id !== item.id && (!previousId || history.id !== previousId)
         );
-        return [item, ...filtered].slice(0, 12);
+        return [merged, ...filtered].slice(0, 12);
       });
     },
     []
@@ -700,6 +759,14 @@ export function LockInSidebar({
         const resolvedChatId =
           response?.chatId || chatId || provisionalChatId || null;
         const now = new Date().toISOString();
+        const fallbackTitle = buildInitialChatTitle(
+          newUserMessage || trimmedSelection
+        );
+        const serverTitle = response?.chatTitle;
+        const resolvedTitle = serverTitle
+          ? coerceChatTitle(serverTitle, fallbackTitle)
+          : fallbackTitle;
+        const titleSource: HistoryTitleSource = serverTitle ? "server" : "local";
 
         setMessages((prev) =>
           prev.map((message) =>
@@ -714,11 +781,12 @@ export function LockInSidebar({
           upsertHistory(
             {
               id: resolvedChatId,
-              title: textSnippet(newUserMessage || trimmedSelection, 48),
+              title: resolvedTitle,
               updatedAt: now,
               lastMessage: explanation,
             },
-            provisionalChatId
+            provisionalChatId,
+            titleSource
           );
         }
       } catch (error: any) {
@@ -769,12 +837,16 @@ export function LockInSidebar({
       setMessages([userMessage]);
       setChatId(null);
       setActiveHistoryId(provisionalChatId);
-      upsertHistory({
-        id: provisionalChatId,
-        title: textSnippet(trimmed, 48),
-        updatedAt: now,
-        lastMessage: trimmed,
-      });
+      upsertHistory(
+        {
+          id: provisionalChatId,
+          title: buildInitialChatTitle(trimmed),
+          updatedAt: now,
+          lastMessage: trimmed,
+        },
+        undefined,
+        "local"
+      );
 
       triggerProcess({
         selection: trimmed,
@@ -810,12 +882,16 @@ export function LockInSidebar({
       const nextMessages = [...messages, userMessage];
       setMessages(nextMessages);
 
-      upsertHistory({
-        id: provisionalChatId,
-        title: textSnippet(trimmed, 48),
-        updatedAt: now,
-        lastMessage: trimmed,
-      });
+      upsertHistory(
+        {
+          id: provisionalChatId,
+          title: buildInitialChatTitle(trimmed),
+          updatedAt: now,
+          lastMessage: trimmed,
+        },
+        undefined,
+        "local"
+      );
 
       triggerProcess({
         selection: trimmed,
@@ -851,7 +927,7 @@ export function LockInSidebar({
         if (Array.isArray(result)) {
           const mapped = result.map((item: any) => ({
             id: item.id || `chat-${Math.random().toString(16).slice(2)}`,
-            title: item.title || "Conversation",
+            title: coerceChatTitle(item.title, FALLBACK_CHAT_TITLE),
             updatedAt:
               item.updated_at || item.updatedAt || new Date().toISOString(),
             lastMessage: item.lastMessage || "",
@@ -925,12 +1001,16 @@ export function LockInSidebar({
     setInputValue("");
     setChatId(null);
     setActiveHistoryId(provisionalChatId);
-    upsertHistory({
-      id: provisionalChatId,
-      title: "New chat",
-      updatedAt: now,
-      lastMessage: "",
-    });
+    upsertHistory(
+      {
+        id: provisionalChatId,
+        title: FALLBACK_CHAT_TITLE,
+        updatedAt: now,
+        lastMessage: "",
+      },
+      undefined,
+      "local"
+    );
   };
 
   const handleSaveAsNote = useCallback(

@@ -37,6 +37,7 @@ const {
 const {
   buildInitialChatTitle,
   extractFirstUserMessage,
+  FALLBACK_TITLE,
 } = require("../utils/chatTitle");
 
 /**
@@ -186,6 +187,10 @@ async function handleLockinRequest(req, res) {
   const userId = req.user?.id;
   const userInputText = trimmedUserMessage || selection;
   const initialTitle = buildInitialChatTitle(userInputText || "");
+  const firstUserMessage = extractFirstUserMessage(sanitizedHistory);
+  const initialTitleFromHistory = buildInitialChatTitle(
+    firstUserMessage || userInputText || ""
+  );
 
   if (!userId) {
     // This should not happen if requireSupabaseUser is working correctly
@@ -277,13 +282,20 @@ async function handleLockinRequest(req, res) {
 
     // Automatically generate AI title if chat doesn't have one yet (or has fallback)
     // Do this asynchronously to avoid blocking the response
-    const shouldGenerateTitle = !chatRecord.title || 
-      chatRecord.title === initialTitle || 
-      chatRecord.title === "New chat";
+    const existingTitle =
+      typeof chatRecord.title === "string" ? chatRecord.title.trim() : "";
+    const shouldGenerateTitle =
+      !existingTitle ||
+      existingTitle === FALLBACK_TITLE ||
+      existingTitle === initialTitleFromHistory;
     
     if (shouldGenerateTitle) {
       // Generate title asynchronously (fire and forget)
-      generateChatTitleAsync(userId, chatId, userInputText).catch((error) => {
+      generateChatTitleAsync(
+        userId,
+        chatId,
+        firstUserMessage || userInputText
+      ).catch((error) => {
         console.error("Failed to auto-generate chat title:", error);
         // Non-critical error, don't throw
       });
@@ -303,7 +315,7 @@ async function handleLockinRequest(req, res) {
         difficulty: structuredResponse.difficulty,
       },
       chatId,
-      chatTitle: chatRecord.title || initialTitle,
+      chatTitle: existingTitle || initialTitle,
     });
   } catch (error) {
     console.error("Error processing /api/lockin request:", error);
@@ -467,7 +479,10 @@ async function generateChatTitleAsync(userId, chatId, fallbackText = "") {
       .filter(Boolean);
 
     // Need at least one user message and one assistant message to generate a meaningful title
-    if (normalizedHistory.length < 2) {
+    const hasUser = normalizedHistory.some((message) => message.role === "user");
+    const hasAssistant = normalizedHistory.some((message) => message.role === "assistant");
+
+    if (normalizedHistory.length < 2 || !hasUser || !hasAssistant) {
       return;
     }
 
@@ -494,7 +509,7 @@ async function generateChatTitleAsync(userId, chatId, fallbackText = "") {
 async function generateChatTitle(req, res) {
   const userId = req.user?.id;
   const { chatId } = req.params;
-  let fallbackTitle = "New chat";
+  let fallbackTitle = FALLBACK_TITLE;
 
   try {
     const chatIdValidation = validateUUID(chatId);
@@ -549,7 +564,7 @@ async function generateChatTitle(req, res) {
     });
   } catch (error) {
     console.error("Error generating chat title:", error);
-    const safeTitle = buildInitialChatTitle(fallbackTitle || "New chat");
+    const safeTitle = buildInitialChatTitle(fallbackTitle || FALLBACK_TITLE);
     try {
       if (userId && chatId) {
         await updateChatTitle(userId, chatId, safeTitle);
@@ -573,5 +588,3 @@ module.exports = {
   listChatMessages,
   generateChatTitle,
 };
-
-
