@@ -20,6 +20,12 @@
     ]);
     let sidebarInstance = null;
     let pageObserver = null;
+    const runtimeStorage =
+      typeof window !== "undefined" &&
+      window.LockInContent &&
+      window.LockInContent.storage
+        ? window.LockInContent.storage
+        : Storage;
 
     function injectStyles() {
       log.debug("Styles verification: CSS should be loaded from manifest");
@@ -115,9 +121,9 @@
     function buildStorageAdapter() {
       return {
         get: async (key) => {
-          if (!Storage) return null;
+          if (!runtimeStorage) return null;
           try {
-            const data = await Storage.get(key);
+            const data = await runtimeStorage.get(key);
             return data[key];
           } catch (error) {
             log.warn("Storage get error:", error);
@@ -125,17 +131,17 @@
           }
         },
         set: async (key, value) => {
-          if (!Storage) return;
+          if (!runtimeStorage) return;
           try {
-            await Storage.set({ [key]: value });
+            await runtimeStorage.set({ [key]: value });
           } catch (error) {
             log.warn("Storage set error:", error);
           }
         },
         getLocal: async (key) => {
-          if (!Storage || !Storage.getLocal) return null;
+          if (!runtimeStorage || !runtimeStorage.getLocal) return null;
           try {
-            const data = await Storage.getLocal(key);
+            const data = await runtimeStorage.getLocal(key);
             return data[key];
           } catch (error) {
             log.warn("Storage getLocal error:", error);
@@ -143,9 +149,9 @@
           }
         },
         setLocal: async (key, value) => {
-          if (!Storage || !Storage.setLocal) return;
+          if (!runtimeStorage || !runtimeStorage.setLocal) return;
           try {
-            await Storage.setLocal(key, value);
+            await runtimeStorage.setLocal(key, value);
           } catch (error) {
             log.warn("Storage setLocal error:", error);
           }
