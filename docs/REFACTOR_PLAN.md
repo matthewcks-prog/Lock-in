@@ -52,6 +52,7 @@ Prepare the codebase for Codex refactor without breaking extension/backend funct
   - [x] Configure vitest with jsdom environment
 - [x] Add anchor tests: textUtils.test.ts, moodleAdapter.test.ts
 - [x] Add unit tests for critical paths: adapters, state management, core services
+- [x] Add UI chat history component tests (history load/select/restore)
 - [x] Ensure tests can run in CI/CD pipeline
 
 ## Codex Phase

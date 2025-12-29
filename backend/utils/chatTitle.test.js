@@ -14,6 +14,14 @@ test("buildInitialChatTitle trims to six words and normalizes whitespace", () =>
   assert.equal(title, "Intro to distributed systems and concurrency");
 });
 
+test("buildInitialChatTitle clamps to max length", () => {
+  const longWord = "abcdefghijklmnopqrst";
+  const text = Array.from({ length: 6 }, () => longWord).join(" ");
+  const title = buildInitialChatTitle(text);
+  assert.ok(title.length <= 80, "Title should be clamped to 80 characters");
+  assert.ok(title.split(" ").length <= 6, "Title should be clamped to 6 words");
+});
+
 test("buildInitialChatTitle falls back to default when empty", () => {
   const title = buildInitialChatTitle("   ");
   assert.equal(title, "New chat");
