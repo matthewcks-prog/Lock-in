@@ -59,6 +59,11 @@ See `backend/migrations/004_vector_extension_schema.sql` for full migration deta
   - `ai_requests` = per-call log of AI usage (tokens in/out, mode).
   - Useful for analytics, quotas, and debugging.
 
+- **Transcripts**
+  - `transcripts` = per-user cached AI transcripts keyed by media fingerprint.
+  - `transcript_jobs` = per-user AI transcription jobs (upload, processing, status).
+  - `transcript_job_chunks` = uploaded chunk index tracking for integrity checks.
+
 ## Access Patterns
 
 - Extension/web app clients call the backend through the shared TypeScript client (`/api`, bundled to `extension/dist/libs/initApi.js`) and attach the Supabase JWT from `window.LockInAuth`.
@@ -277,6 +282,115 @@ CREATE TABLE public.ai_requests (
 
 ---
 
+### `transcripts`
+
+Per-user cached AI transcripts keyed by fingerprint.
+
+```sql
+CREATE TABLE public.transcripts (
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  fingerprint text NOT NULL,
+  provider text,
+  media_url text,
+  media_url_normalized text,
+  etag text,
+  last_modified text,
+  duration_ms integer,
+  transcript_json jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT transcripts_pkey PRIMARY KEY (user_id, fingerprint)
+);
+```
+
+**Fields:**
+
+- `user_id` - Owner (FK to `auth.users`)
+- `fingerprint` - Deterministic hash of media URL + duration
+- `provider` - Transcription provider (e.g., `openai`)
+- `media_url` - Redacted media URL (no raw tokens/queries)
+- `media_url_normalized` - Redacted URL without query/hash (for cache keys)
+- `etag` - Optional upstream ETag if known
+- `last_modified` - Optional upstream Last-Modified if known
+- `duration_ms` - Duration of media in milliseconds
+- `transcript_json` - Canonical transcript payload (`TranscriptResult`)
+- `created_at` - Cache insert time
+
+**Usage:** Written by backend transcription pipeline. Read by jobs to return cached transcripts instantly.
+
+**Access:** RLS enforced (users can only access their own cached transcripts).
+
+---
+
+### `transcript_jobs`
+
+Per-user transcription jobs for tracking upload and processing state.
+
+```sql
+CREATE TABLE public.transcript_jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  fingerprint text NOT NULL,
+  provider text,
+  media_url text,
+  media_url_normalized text,
+  duration_ms integer,
+  status text NOT NULL DEFAULT 'created',
+  error text,
+  expected_total_chunks integer,
+  bytes_received bigint NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT transcript_jobs_pkey PRIMARY KEY (id)
+);
+```
+
+**Fields:**
+
+- `id` - Job id
+- `user_id` - Owner (FK to `auth.users`)
+- `fingerprint` - Cache key for the transcript
+- `provider` - Source provider (panopto, echo360, html5)
+- `media_url` - Redacted media URL used for upload
+- `media_url_normalized` - Redacted URL without query/hash
+- `duration_ms` - Duration of media in milliseconds
+- `status` - Job state: `created` | `uploading` | `uploaded` | `processing` | `done` | `error` | `canceled`
+- `error` - Failure reason when `status = error`
+- `expected_total_chunks` - Total chunks expected for completion
+- `bytes_received` - Total bytes received across unique chunks
+- `created_at` - Job creation time
+- `updated_at` - Last status update
+
+**Usage:** Tracks AI transcription progress. Jobs are scoped by `user_id`.
+
+---
+
+### `transcript_job_chunks`
+
+Unique chunk index tracking for transcript job uploads.
+
+```sql
+CREATE TABLE public.transcript_job_chunks (
+  job_id uuid NOT NULL REFERENCES public.transcript_jobs(id) ON DELETE CASCADE,
+  chunk_index integer NOT NULL,
+  byte_size integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT transcript_job_chunks_pkey PRIMARY KEY (job_id, chunk_index)
+);
+```
+
+**Fields:**
+
+- `job_id` - Parent transcription job
+- `chunk_index` - Zero-based chunk index
+- `byte_size` - Size of the chunk payload
+- `created_at` - Chunk receipt time
+
+**Usage:** Enforces idempotent uploads and validates completeness before processing.
+
+**Access:** RLS enforced via parent job ownership (`transcript_jobs.user_id`).
+
+---
+
 ## TypeScript Types
 
 See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
@@ -301,6 +415,9 @@ auth.users (Supabase)
      -> note_assets (1:N)
   -> folders (1:N)
   -> ai_requests (1:N)
+  -> transcripts (1:N)
+  -> transcript_jobs (1:N)
+      -> transcript_job_chunks (1:N)
 ```
 
 **Note:** Currently no explicit relationship between `notes` and `folders`. Organization is done via `course_code` and `tags`.
@@ -343,6 +460,16 @@ CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
 -- AI requests: Rate limiting + analytics
 CREATE INDEX idx_ai_requests_user_created ON public.ai_requests(user_id, created_at DESC);
 CREATE INDEX idx_ai_requests_created_at ON public.ai_requests(created_at DESC);
+
+-- Transcript jobs: user + fingerprint lookups
+CREATE INDEX idx_transcript_jobs_user_created ON public.transcript_jobs(user_id, created_at DESC);
+CREATE INDEX idx_transcript_jobs_fingerprint ON public.transcript_jobs(fingerprint);
+
+-- Transcript job chunks: lookup by job
+CREATE INDEX idx_transcript_job_chunks_job ON public.transcript_job_chunks(job_id);
+
+-- Transcript cache: normalized URL lookup
+CREATE INDEX idx_transcripts_media_url_norm ON public.transcripts(media_url_normalized);
 ```
 
 ---
@@ -353,7 +480,7 @@ All tables have RLS policies ensuring users can only access their own data. Migr
 
 **Critical**: RLS provides defense-in-depth security. Even if application code has bugs, users cannot access each other's data.
 
-**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `folders`, `ai_requests`
+**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `folders`, `ai_requests`, `transcripts`, `transcript_jobs`, `transcript_job_chunks`
 
 ```sql
 -- Enable RLS on all tables
@@ -399,6 +526,8 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 | `003_row_level_security.sql`      | Dec 2024 | RLS policies for data isolation                |
 | `004_vector_extension_schema.sql` | Dec 2024 | Fix pgvector after moving to extensions schema |
 | `005_starred_notes.sql`           | Dec 2024 | Add is_starred column for favoriting notes     |
+| `006_transcripts.sql`             | Dec 2025 | Transcript jobs + transcript cache tables      |
+| `007_transcripts_hardening.sql`   | Jan 2026 | Transcript job state + cache hardening         |
 
 ---
 

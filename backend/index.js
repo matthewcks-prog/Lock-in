@@ -11,6 +11,7 @@ require("dotenv").config();
 
 const { createApp } = require("./app");
 const { PORT } = require("./config");
+const { startTranscriptJobReaper } = require("./services/transcriptsService");
 
 const app = createApp();
 
@@ -22,4 +23,6 @@ app.listen(PORT, () => {
     console.warn("WARNING: OPENAI_API_KEY not found in environment variables!");
     console.warn("   Please create a .env file with your OpenAI API key.");
   }
+
+  startTranscriptJobReaper();
 });

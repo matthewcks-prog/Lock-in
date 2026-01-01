@@ -14,6 +14,7 @@ const {
 } = require("./config");
 const lockinRoutes = require("./routes/lockinRoutes");
 const noteRoutes = require("./routes/noteRoutes");
+const transcriptsRoutes = require("./routes/transcriptsRoutes");
 const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
 
 function createApp() {
@@ -72,6 +73,7 @@ function createApp() {
   // API routes
   app.use("/api", lockinRoutes);
   app.use("/api", noteRoutes);
+  app.use("/api", transcriptsRoutes);
 
   // 404 handler for unmatched routes
   app.use(notFoundHandler);

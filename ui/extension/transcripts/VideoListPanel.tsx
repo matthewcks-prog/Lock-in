@@ -27,6 +27,16 @@ interface VideoListPanelProps {
     provider: string;
     signInUrl: string;
   };
+  /** AI transcription fallback state */
+  aiFallback?: {
+    video: DetectedVideo | null;
+    isAvailable: boolean;
+    isTranscribing: boolean;
+    progressMessage?: string | null;
+    error?: string | null;
+    onTranscribe: (video: DetectedVideo) => void;
+    onCancel: () => void;
+  };
 }
 
 /**
@@ -174,6 +184,55 @@ function AuthRequiredPrompt({
   );
 }
 
+function AiFallbackBanner({
+  video,
+  isTranscribing,
+  progressMessage,
+  error,
+  onTranscribe,
+  onCancel,
+}: {
+  video: DetectedVideo | null;
+  isTranscribing: boolean;
+  progressMessage?: string | null;
+  error?: string | null;
+  onTranscribe: (video: DetectedVideo) => void;
+  onCancel: () => void;
+}) {
+  const title = video?.title ? ` for "${video.title}"` : "";
+  const message = error
+    ? `AI transcription failed: ${error}`
+    : progressMessage ||
+      (isTranscribing
+        ? "Transcribing with AI..."
+        : `No captions found${title}. You can transcribe with AI.`);
+
+  return (
+    <div className="lockin-transcript-ai-fallback">
+      {isTranscribing && <span className="lockin-inline-spinner" />}
+      <span className="lockin-transcript-ai-fallback-text">{message}</span>
+      {isTranscribing ? (
+        <button
+          className="lockin-transcript-ai-fallback-btn"
+          onClick={onCancel}
+          type="button"
+        >
+          Cancel
+        </button>
+      ) : (
+        <button
+          className="lockin-transcript-ai-fallback-btn"
+          onClick={() => video && onTranscribe(video)}
+          type="button"
+          disabled={!video}
+        >
+          Transcribe with AI
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function VideoListPanel({
   videos,
   isLoading,
@@ -183,9 +242,13 @@ export function VideoListPanel({
   onClose,
   error,
   authRequired,
+  aiFallback,
 }: VideoListPanelProps) {
   // Note: isExtracting is used for global loading state, extractingVideoId for per-video state
   void _isExtracting; // Mark as intentionally unused (parent uses extractingVideoId)
+  const showAiFallback =
+    aiFallback &&
+    (aiFallback.isAvailable || aiFallback.isTranscribing || aiFallback.error);
   return (
     <div className="lockin-video-list-panel">
       <div className="lockin-video-list-header">
@@ -214,6 +277,16 @@ export function VideoListPanel({
         ) : error ? (
           <div className="lockin-video-list-error">
             <p>{error}</p>
+            {showAiFallback && aiFallback ? (
+              <AiFallbackBanner
+                video={aiFallback.video}
+                isTranscribing={aiFallback.isTranscribing}
+                progressMessage={aiFallback.progressMessage}
+                error={aiFallback.error}
+                onTranscribe={aiFallback.onTranscribe}
+                onCancel={aiFallback.onCancel}
+              />
+            ) : null}
           </div>
         ) : videos.length === 0 ? (
           <div className="lockin-video-list-empty">

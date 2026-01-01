@@ -308,6 +308,8 @@ export function LockInSidebar({
     detectAndAutoExtract,
     closeVideoList,
     extractTranscript,
+    transcribeWithAI,
+    cancelAiTranscription,
     clearError,
   } = useTranscripts();
 
@@ -447,6 +449,25 @@ export function LockInSidebar({
     closeVideoList();
     clearError();
   }, [closeVideoList, clearError]);
+
+  const aiFallbackCandidate =
+    transcriptState.lastExtraction &&
+    !transcriptState.lastExtraction.result.success &&
+    transcriptState.lastExtraction.result.errorCode === "NO_CAPTIONS" &&
+    transcriptState.lastExtraction.result.aiTranscriptionAvailable;
+  const aiFallbackVideo = aiFallbackCandidate
+    ? transcriptState.lastExtraction?.video || null
+    : transcriptState.aiTranscription.video || null;
+  const aiIsTranscribing = [
+    "starting",
+    "uploading",
+    "processing",
+    "polling",
+  ].includes(transcriptState.aiTranscription.status);
+  const aiError =
+    transcriptState.aiTranscription.status === "failed"
+      ? transcriptState.aiTranscription.error
+      : null;
 
   useEffect(() => {
     if (!storage) return;
@@ -1253,6 +1274,20 @@ export function LockInSidebar({
                             onClose={handleTranscriptPanelClose}
                             error={transcriptState.error || undefined}
                             authRequired={transcriptState.authRequired}
+                            aiFallback={{
+                              video: aiFallbackVideo,
+                              isAvailable: Boolean(aiFallbackCandidate),
+                              isTranscribing: aiIsTranscribing,
+                              progressMessage:
+                                transcriptState.aiTranscription.progressMessage,
+                              error: aiError,
+                              onTranscribe: (video) => {
+                                void transcribeWithAI(video);
+                              },
+                              onCancel: () => {
+                                void cancelAiTranscription();
+                              },
+                            }}
                           />
                         )}
                         {renderChatMessages()}

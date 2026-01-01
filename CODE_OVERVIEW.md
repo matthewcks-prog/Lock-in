@@ -85,7 +85,8 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`core/transcripts/webvttParser.ts`** - WebVTT parsing with HTML entity decoding
 - **`extension/src/transcripts/providers/`** - Provider adapters for different video platforms:
   - `panoptoProvider.ts` - Panopto embed detection and VTT caption extraction
-- **`ui/extension/transcripts/`** - UI components (VideoListPanel, TranscriptMessage, useTranscripts hook)
+- **`ui/extension/transcripts/`** - UI components (VideoListPanel, TranscriptMessage, useTranscripts hook) plus HTML5 DOM textTracks extractor (`extractHtml5TranscriptFromDom.ts`)
+- **AI fallback**: `extension/background.js` handles `TRANSCRIBE_MEDIA_AI` by streaming media to backend transcript jobs; `ui/extension/transcripts/useTranscripts.ts` shows the fallback action + progress state.
 
 ### Styling
 
@@ -121,6 +122,10 @@ This is a living overview of the current codebase. Update it whenever files move
 
   - Authenticated routes for notes CRUD, search, note chat, and note asset upload/list/delete.
 
+- **`routes/transcriptsRoutes.js`**
+
+  - Authenticated routes for transcript job creation, chunk upload, finalize, cancel, and status polling.
+
 - **`controllers/lockinController.js`**
 
   - Handlers for AI processing, chat listing/deletion, chat messages, and chat title generation (OpenAI summarization + persistence).
@@ -138,6 +143,9 @@ This is a living overview of the current codebase. Update it whenever files move
   - Handles note asset upload/list/delete via Supabase Storage with validation.
   - Returns assets with snake_case fields (note_id, mime_type, storage_path, created_at) that are mapped to camelCase in the API client.
 
+- **`controllers/transcriptsController.js`**
+  - Transcript job lifecycle handlers (create, upload chunks, finalize, cancel, status) with quota enforcement and chunk integrity checks.
+
 ### Data Layer
 
 - **`chatRepository.js`**
@@ -152,13 +160,22 @@ This is a living overview of the current codebase. Update it whenever files move
 
   - Data access for the `note_assets` table (create/list/get/delete).
 
+- **`transcriptsRepository.js`**
+
+  - Data access for per-user transcript cache, transcript job records, and chunk tracking.
+
 - **`supabaseClient.js`**
   - Configured Supabase client instance used across the data layer.
+
+### Services
+
+- **`services/transcriptsService.js`**
+  - Handles ffmpeg audio extraction, segmentation, OpenAI STT, job cleanup/cancellation, and stale job reaping.
 
 ### External Services
 
 - **`openaiClient.js`**
-  - OpenAI SDK wrapper, prompt construction, and response formatting.
+  - OpenAI SDK wrapper, prompt construction, response formatting, and audio transcription.
 
 ### Middleware
 

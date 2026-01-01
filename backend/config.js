@@ -6,6 +6,8 @@
  * - This keeps configuration in one place and makes it easier to test.
  */
 
+const path = require("path");
+
 const PORT = process.env.PORT || 3000;
 
 // Request/body limits
@@ -56,6 +58,35 @@ const NOTE_ASSET_MIME_GROUPS = {
 
 const ALLOWED_ASSET_MIME_TYPES = Object.values(NOTE_ASSET_MIME_GROUPS).flat();
 
+// Transcript processing
+const TRANSCRIPTION_MODEL =
+  process.env.OPENAI_TRANSCRIPTION_MODEL || "whisper-1";
+const TRANSCRIPTION_SEGMENT_MAX_MB =
+  parseInt(process.env.TRANSCRIPTION_SEGMENT_MAX_MB, 10) || 24;
+const TRANSCRIPTION_TEMP_DIR =
+  process.env.TRANSCRIPTION_TEMP_DIR ||
+  path.join(__dirname, "tmp", "transcripts");
+const TRANSCRIPT_CHUNK_MAX_BYTES =
+  parseInt(process.env.TRANSCRIPT_CHUNK_MAX_BYTES, 10) ||
+  8 * 1024 * 1024;
+const TRANSCRIPT_DAILY_JOB_LIMIT =
+  parseInt(process.env.TRANSCRIPT_DAILY_JOB_LIMIT, 10) || 20;
+const TRANSCRIPT_MAX_CONCURRENT_JOBS =
+  parseInt(process.env.TRANSCRIPT_MAX_CONCURRENT_JOBS, 10) || 3;
+const TRANSCRIPT_MAX_TOTAL_BYTES =
+  parseInt(process.env.TRANSCRIPT_MAX_TOTAL_BYTES, 10) || 512 * 1024 * 1024;
+const TRANSCRIPT_MAX_DURATION_MINUTES =
+  parseInt(process.env.TRANSCRIPT_MAX_DURATION_MINUTES, 10) || 180;
+// Rate limit for chunk uploads: 512MB/minute allows reasonable upload speed
+// while still providing abuse protection (enforced per-user per-minute window)
+const TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE =
+  parseInt(process.env.TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE, 10) ||
+  512 * 1024 * 1024;
+const TRANSCRIPT_JOB_TTL_MINUTES =
+  parseInt(process.env.TRANSCRIPT_JOB_TTL_MINUTES, 10) || 60;
+const TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES =
+  parseInt(process.env.TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES, 10) || 10;
+
 // Preferred extensions for common MIME types (fallback to subtype if missing)
 const MIME_EXTENSION_MAP = {
   "application/pdf": "pdf",
@@ -93,6 +124,15 @@ module.exports = {
   NOTE_ASSET_MIME_GROUPS,
   ALLOWED_ASSET_MIME_TYPES,
   MIME_EXTENSION_MAP,
+  TRANSCRIPTION_MODEL,
+  TRANSCRIPTION_SEGMENT_MAX_MB,
+  TRANSCRIPTION_TEMP_DIR,
+  TRANSCRIPT_CHUNK_MAX_BYTES,
+  TRANSCRIPT_DAILY_JOB_LIMIT,
+  TRANSCRIPT_MAX_CONCURRENT_JOBS,
+  TRANSCRIPT_MAX_TOTAL_BYTES,
+  TRANSCRIPT_MAX_DURATION_MINUTES,
+  TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE,
+  TRANSCRIPT_JOB_TTL_MINUTES,
+  TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES,
 };
-
-
