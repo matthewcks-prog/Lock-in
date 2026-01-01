@@ -304,6 +304,37 @@ describe('Unified Detection', () => {
       // Echo360 should win when we're on an Echo360 page
       expect(result.provider).toBe('echo360');
     });
+
+    it('detects HTML5 videos in the document', () => {
+      const doc = document.implementation.createHTMLDocument('test');
+      doc.body.innerHTML = `
+        <video id="lecture-video" title="Week 2 Lecture">
+          <source src="https://cdn.example.com/lecture.mp4" type="video/mp4" />
+          <track kind="captions" srclang="en" label="English" src="https://cdn.example.com/lecture.vtt" />
+        </video>
+      `;
+
+      const result = detectVideosSync({
+        pageUrl: 'https://example.com/course',
+        iframes: [],
+        document: doc,
+      });
+
+      expect(result.provider).toBe('html5');
+      expect(result.videos).toHaveLength(1);
+      expect(result.videos[0].provider).toBe('html5');
+      expect(result.videos[0].title).toBe('Week 2 Lecture');
+      expect(result.videos[0].mediaUrl).toBe('https://cdn.example.com/lecture.mp4');
+      expect(result.videos[0].domId).toBe('lecture-video');
+      expect(result.videos[0].trackUrls).toEqual([
+        {
+          kind: 'captions',
+          label: 'English',
+          srclang: 'en',
+          src: 'https://cdn.example.com/lecture.vtt',
+        },
+      ]);
+    });
   });
 });
 

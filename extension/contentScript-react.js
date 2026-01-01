@@ -146,6 +146,10 @@ async function bootstrap() {
     });
 
     interactionController.bind();
+    
+    // Set up message handler for media fetch requests (for AI transcription)
+    setupMediaFetchHandler();
+    
     hasBootstrapped = true;
   })();
 
@@ -154,6 +158,59 @@ async function bootstrap() {
   } finally {
     bootstrapPromise = null;
   }
+}
+
+/**
+ * Set up handler for FETCH_MEDIA_FOR_TRANSCRIPTION requests from background script.
+ * This enables the content script to fetch authenticated media that may be blocked
+ * by CORS when fetched from the background script.
+ */
+function setupMediaFetchHandler() {
+  if (!Messaging || typeof Messaging.onMessage !== 'function') {
+    Logger.warn('[Lock-in] Messaging not available for media fetch handler');
+    return;
+  }
+  
+  const MediaFetcher = window.LockInMediaFetcher;
+  if (!MediaFetcher) {
+    Logger.warn('[Lock-in] MediaFetcher not available');
+    return;
+  }
+  
+  Messaging.onMessage(async (message, sender) => {
+    if (!message || typeof message !== 'object') return;
+    
+    if (message.type === 'FETCH_MEDIA_FOR_TRANSCRIPTION') {
+      Logger.debug('[Lock-in] Received FETCH_MEDIA_FOR_TRANSCRIPTION request');
+      const { mediaUrl, jobId, requestId } = message.payload || {};
+      
+      if (!mediaUrl || !jobId || !requestId) {
+        return { success: false, error: 'Missing required parameters' };
+      }
+      
+      try {
+        const result = await MediaFetcher.handleMediaFetchRequest(
+          { mediaUrl, jobId, requestId },
+          async (chunkMessage) => {
+            // Send each chunk to the background script
+            await Messaging.sendToBackground(chunkMessage);
+          }
+        );
+        return result;
+      } catch (error) {
+        Logger.error('[Lock-in] Media fetch error:', error);
+        return { 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        };
+      }
+    }
+    
+    // Return undefined for unhandled messages
+    return undefined;
+  });
+  
+  Logger.debug('[Lock-in] Media fetch handler registered');
 }
 
 function safeInit() {

@@ -12,7 +12,7 @@
 /**
  * Supported video provider types
  */
-export type VideoProvider = 'panopto' | 'echo360' | 'youtube' | 'unknown';
+export type VideoProvider = 'panopto' | 'echo360' | 'youtube' | 'html5' | 'unknown';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Video Detection
@@ -36,6 +36,25 @@ export interface DetectedVideo {
   durationMs?: number;
   /** Recording date/time (optional) */
   recordedAt?: string;
+
+  // HTML5-specific fields
+  /** Direct media URL for HTML5 video elements */
+  mediaUrl?: string;
+  /** DOM id for the video element (if present) */
+  domId?: string;
+  /** Stable-ish selector path for the video element */
+  domSelector?: string;
+  /** Captions/subtitles track URLs (if available) */
+  trackUrls?: Array<{
+    kind: string;
+    label?: string;
+    srclang?: string;
+    src: string;
+  }>;
+  /** DRM detection hint (mediaKeys/encrypted) */
+  drmDetected?: boolean;
+  /** DRM detection signal (e.g., "mediaKeys", "encrypted-event") */
+  drmReason?: string;
   
   // Echo360-specific fields
   /** Echo360 host origin (e.g., "https://echo360.net.au") */
@@ -104,7 +123,7 @@ export interface TranscriptExtractionResult {
   /** Error message (if failed) */
   error?: string;
   /** Error code for programmatic handling */
-  errorCode?: 'AUTH_REQUIRED' | 'NO_CAPTIONS' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'NOT_AVAILABLE';
+  errorCode?: 'AUTH_REQUIRED' | 'LOCKIN_AUTH_REQUIRED' | 'NO_CAPTIONS' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'NOT_AVAILABLE';
   /** Whether AI transcription is available as fallback */
   aiTranscriptionAvailable?: boolean;
 }

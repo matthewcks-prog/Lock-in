@@ -155,7 +155,10 @@ export async function extractPanoptoTranscript(
 export async function handleTranscriptMessage(
   message: TranscriptMessage
 ): Promise<TranscriptResponse> {
+  console.log('[Lock-in Transcript BG] handleTranscriptMessage called for provider:', message.payload?.video?.provider);
+  
   if (message.type !== 'EXTRACT_TRANSCRIPT') {
+    console.warn('[Lock-in Transcript BG] Unknown message type:', message.type);
     return {
       success: false,
       error: `Unknown message type: ${message.type}`,
@@ -163,17 +166,61 @@ export async function handleTranscriptMessage(
   }
   
   const { video } = message.payload;
+  console.log('[Lock-in Transcript BG] Extracting transcript for video:', video.id, video.title, video.provider);
   
   switch (video.provider) {
     case 'panopto': {
       const result = await extractPanoptoTranscript(video);
+      console.log('[Lock-in Transcript BG] Panopto extraction result:', result.success, result.errorCode);
       return {
         success: result.success,
         data: result,
       };
     }
     
+    case 'html5': {
+      // HTML5 videos should primarily be handled by DOM extraction in the content script.
+      // If we reach here, it means DOM extraction failed and there are no track URLs.
+      // We can try fetching track URLs if available.
+      console.log('[Lock-in Transcript BG] HTML5 video reached background - checking for track URLs');
+      
+      if (video.trackUrls && video.trackUrls.length > 0) {
+        console.log('[Lock-in Transcript BG] Found', video.trackUrls.length, 'track URLs, attempting to fetch');
+        for (const track of video.trackUrls) {
+          try {
+            console.log('[Lock-in Transcript BG] Fetching track from:', track.src);
+            const vttContent = await fetchVttContent(track.src);
+            const transcript = parseWebVtt(vttContent);
+            
+            if (transcript.segments.length > 0) {
+              console.log('[Lock-in Transcript BG] Successfully parsed VTT with', transcript.segments.length, 'segments');
+              return {
+                success: true,
+                data: { success: true, transcript },
+              };
+            }
+          } catch (e) {
+            console.warn('[Lock-in Transcript BG] Failed to fetch track:', track.src, e);
+            // Continue to try other tracks
+          }
+        }
+      }
+      
+      // No captions available for this HTML5 video
+      console.log('[Lock-in Transcript BG] No captions available for HTML5 video');
+      return {
+        success: false,
+        data: {
+          success: false,
+          error: 'No captions available for this video. This video does not have embedded subtitles or captions.',
+          errorCode: 'NO_CAPTIONS',
+          aiTranscriptionAvailable: true,
+        },
+      };
+    }
+    
     default:
+      console.warn('[Lock-in Transcript BG] Unsupported video provider:', video.provider);
       return {
         success: false,
         error: `Unsupported video provider: ${video.provider}`,

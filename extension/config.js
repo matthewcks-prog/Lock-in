@@ -1,9 +1,10 @@
 (function () {
-  if (window.LOCKIN_CONFIG) {
+  const root = typeof window !== "undefined" ? window : self;
+  if (root.LOCKIN_CONFIG) {
     return;
   }
 
-  window.LOCKIN_CONFIG = {
+  root.LOCKIN_CONFIG = {
     BACKEND_URL: "http://localhost:3000",
     SUPABASE_URL: "https://uszxfuzauetcchwcgufe.supabase.co",
     SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzenhmdXphdWV0Y2Nod2NndWZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzM4MzgsImV4cCI6MjA4MDAwOTgzOH0.iiCytIONfubK7ZkDJj95cAiOl_jjMimbfYWDrMhDw7E",
