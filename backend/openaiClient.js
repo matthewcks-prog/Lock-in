@@ -55,11 +55,7 @@ function buildSystemMessage({ mode, difficultyLevel }) {
   return { role: "system", content };
 }
 
-function buildInitialHistory({
-  selection,
-  mode,
-  difficultyLevel,
-}) {
+function buildInitialHistory({ selection, mode, difficultyLevel }) {
   const systemMessage = buildSystemMessage({
     mode,
     difficultyLevel,
@@ -204,7 +200,11 @@ async function generateStructuredStudyResponse(options) {
     newUserMessage,
   } = options;
 
-  if (!selection || typeof selection !== "string" || selection.trim().length === 0) {
+  if (
+    !selection ||
+    typeof selection !== "string" ||
+    selection.trim().length === 0
+  ) {
     throw new Error("Selection is required and must be a non-empty string");
   }
 
@@ -234,10 +234,11 @@ async function generateStructuredStudyResponse(options) {
   if (courseCode) {
     contextParts.push(`Course code: ${courseCode}`);
   }
-  const contextInfo = contextParts.length > 0 ? `\n\n${contextParts.join("\n")}` : "";
+  const contextInfo =
+    contextParts.length > 0 ? `\n\n${contextParts.join("\n")}` : "";
 
   // Build difficulty instruction
-  const difficultyInstruction = difficultyLevel 
+  const difficultyInstruction = difficultyLevel
     ? `Match the student's ${difficultyLevel} level in your explanation.`
     : "";
 
@@ -287,7 +288,8 @@ ${selection}${contextInfo}`;
 
 Using the selected text, the previous conversation, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
   } else {
-    userContent = "Analyze the selected text and return the structured JSON response described in the system message.";
+    userContent =
+      "Analyze the selected text and return the structured JSON response described in the system message.";
   }
 
   messages.push({ role: "user", content: userContent });
@@ -315,7 +317,9 @@ Using the selected text, the previous conversation, and the mode instructions, a
       parsed = JSON.parse(content);
     } catch (parseError) {
       throw new Error(
-        `Failed to parse JSON response: ${parseError.message}. Response: ${content.substring(0, 200)}`
+        `Failed to parse JSON response: ${
+          parseError.message
+        }. Response: ${content.substring(0, 200)}`
       );
     }
 
@@ -338,7 +342,12 @@ Using the selected text, the previous conversation, and the mode instructions, a
 
     // Validate notes structure
     parsed.notes = parsed.notes
-      .filter((note) => note && typeof note.title === "string" && typeof note.content === "string")
+      .filter(
+        (note) =>
+          note &&
+          typeof note.title === "string" &&
+          typeof note.content === "string"
+      )
       .map((note) => ({
         title: note.title,
         content: note.content,
@@ -348,7 +357,10 @@ Using the selected text, the previous conversation, and the mode instructions, a
     // Validate todos structure
     parsed.todos = parsed.todos
       .filter(
-        (todo) => todo && typeof todo.title === "string" && typeof todo.description === "string"
+        (todo) =>
+          todo &&
+          typeof todo.title === "string" &&
+          typeof todo.description === "string"
       )
       .map((todo) => ({
         title: todo.title,
@@ -356,7 +368,9 @@ Using the selected text, the previous conversation, and the mode instructions, a
       }));
 
     // Validate tags
-    parsed.tags = parsed.tags.filter((tag) => typeof tag === "string" && tag.trim().length > 0);
+    parsed.tags = parsed.tags.filter(
+      (tag) => typeof tag === "string" && tag.trim().length > 0
+    );
 
     // Add mode to response
     return {
@@ -371,7 +385,9 @@ Using the selected text, the previous conversation, and the mode instructions, a
     if (error.message && error.message.includes("JSON")) {
       throw error;
     }
-    throw new Error(`Failed to generate structured study response: ${error.message}`);
+    throw new Error(
+      `Failed to generate structured study response: ${error.message}`
+    );
   }
 }
 
@@ -382,7 +398,10 @@ Using the selected text, the previous conversation, and the mode instructions, a
  * @param {string} [options.fallbackTitle] - Title to use if generation fails
  * @returns {Promise<string>}
  */
-async function generateChatTitleFromHistory({ history = [], fallbackTitle = "" }) {
+async function generateChatTitleFromHistory({
+  history = [],
+  fallbackTitle = "",
+}) {
   const sanitizedHistory = sanitizeHistory(history)
     .map((message) => ({
       ...message,
@@ -440,12 +459,12 @@ async function generateChatTitleFromHistory({ history = [], fallbackTitle = "" }
  * @returns {Promise<number[]>} Array of embedding floats
  */
 async function embedText(text) {
-  if (!text || typeof text !== 'string' || text.trim().length === 0) {
-    throw new Error('Text is required and must be a non-empty string');
+  if (!text || typeof text !== "string" || text.trim().length === 0) {
+    throw new Error("Text is required and must be a non-empty string");
   }
 
   const res = await openai.embeddings.create({
-    model: 'text-embedding-3-small',
+    model: "text-embedding-3-small",
     input: text.trim(),
   });
 
@@ -466,13 +485,13 @@ async function chatWithModel({ messages }) {
   });
 
   const choice = completion.choices[0]?.message;
-  return (choice?.content || '').trim();
+  return (choice?.content || "").trim();
 }
 
 /**
  * Transcribe an audio file using OpenAI Speech-to-Text.
  * Includes retry logic and timeout handling for large files.
- * 
+ *
  * Best practices implemented:
  * - Exponential backoff with jitter for retries
  * - Detailed error logging for debugging
@@ -487,39 +506,50 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
   // Check file size before attempting upload
   const stats = fs.statSync(filePath);
   const fileSizeMB = stats.size / (1024 * 1024);
-  
+
   // OpenAI Whisper has a 25MB limit
   if (stats.size > 25 * 1024 * 1024) {
-    throw new Error(`Audio file too large: ${fileSizeMB.toFixed(1)}MB (max 25MB). File should be split into smaller segments.`);
+    throw new Error(
+      `Audio file too large: ${fileSizeMB.toFixed(
+        1
+      )}MB (max 25MB). File should be split into smaller segments.`
+    );
   }
 
-  console.log(`[OpenAI] Transcribing ${fileSizeMB.toFixed(1)}MB audio file: ${require("path").basename(filePath)}`);
+  console.log(
+    `[OpenAI] Transcribing ${fileSizeMB.toFixed(
+      1
+    )}MB audio file: ${require("path").basename(filePath)}`
+  );
 
   let lastError = null;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const startTime = Date.now();
-      const response = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(filePath),
-        model: TRANSCRIPTION_MODEL,
-        response_format: "verbose_json",
-        language: language || undefined,
-        temperature: 0,
-        timestamp_granularities: ["segment"],
-      }, {
-        // Timeout scales with file size: 30s base + 20s per MB
-        timeout: Math.max(30000, 30000 + Math.ceil(fileSizeMB) * 20000),
-      });
+      const response = await openai.audio.transcriptions.create(
+        {
+          file: fs.createReadStream(filePath),
+          model: TRANSCRIPTION_MODEL,
+          response_format: "verbose_json",
+          language: language || undefined,
+          temperature: 0,
+          timestamp_granularities: ["segment"],
+        },
+        {
+          // Timeout scales with file size: 30s base + 20s per MB
+          timeout: Math.max(30000, 30000 + Math.ceil(fileSizeMB) * 20000),
+        }
+      );
 
       const duration = ((Date.now() - startTime) / 1000).toFixed(1);
       console.log(`[OpenAI] Transcription completed in ${duration}s`);
       return response;
     } catch (error) {
       lastError = error;
-      
+
       // Determine if error is retryable
-      const isRetryable = 
+      const isRetryable =
         error?.code === "ECONNRESET" ||
         error?.code === "ETIMEDOUT" ||
         error?.code === "ENOTFOUND" ||
@@ -532,11 +562,14 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
         error?.status === 500 || // Internal server error
         error?.status === 502 || // Bad gateway
         error?.status === 503 || // Service unavailable
-        error?.status === 504;   // Gateway timeout
-      
+        error?.status === 504; // Gateway timeout
+
       const errorType = error?.code || error?.status || "unknown";
-      console.warn(`[OpenAI] Transcription attempt ${attempt}/${maxRetries} failed (${errorType}):`, error?.message || error);
-      
+      console.warn(
+        `[OpenAI] Transcription attempt ${attempt}/${maxRetries} failed (${errorType}):`,
+        error?.message || error
+      );
+
       if (!isRetryable || attempt === maxRetries) {
         // Format error message for user
         let message = "Transcription failed";
@@ -545,27 +578,31 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
         } else if (error?.error?.message) {
           message = error.error.message;
         }
-        
+
         // Add helpful context for common errors
         if (error?.message?.includes("Connection error")) {
-          message += ". This may be a temporary network issue - please try again.";
+          message +=
+            ". This may be a temporary network issue - please try again.";
         }
-        
-        console.error(`[OpenAI] Transcription failed after ${attempt} attempts:`, message);
+
+        console.error(
+          `[OpenAI] Transcription failed after ${attempt} attempts:`,
+          message
+        );
         const wrappedError = new Error(message);
         wrappedError.originalError = error;
         throw wrappedError;
       }
-      
+
       // Exponential backoff with jitter: 2-3s, 4-6s, 8-12s
       const baseBackoff = 2000 * Math.pow(2, attempt - 1);
       const jitter = Math.random() * baseBackoff * 0.5;
       const backoffMs = Math.min(baseBackoff + jitter, 12000);
-      console.log(`[OpenAI] Retrying in ${(backoffMs/1000).toFixed(1)}s...`);
-      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      console.log(`[OpenAI] Retrying in ${(backoffMs / 1000).toFixed(1)}s...`);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
     }
   }
-  
+
   throw lastError || new Error("Transcription failed after retries");
 }
 

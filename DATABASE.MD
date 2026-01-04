@@ -528,6 +528,28 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 | `005_starred_notes.sql`           | Dec 2024 | Add is_starred column for favoriting notes     |
 | `006_transcripts.sql`             | Dec 2025 | Transcript jobs + transcript cache tables      |
 | `007_transcripts_hardening.sql`   | Jan 2026 | Transcript job state + cache hardening         |
+| `008_transcript_privacy_hardening.sql` | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking |
+
+---
+
+## Privacy & Ethics
+
+### AI Transcription Privacy Measures
+
+**Data Minimization:**
+- Media URLs are redacted after transcript creation (removes session tokens, auth params)
+- Transcripts expire after 90 days (automatic deletion)
+- Failed jobs deleted after 7 days
+- Only normalized URLs kept for cache lookups (fingerprint-based)
+
+**User Consent:**
+- Explicit confirmation required before AI transcription
+- Clear disclosure: "Process using OpenAI Whisper API (external, no training on your data)"
+- Respects Panopto/LMS access controls (only uses downloadable videos)
+
+**Scheduled Cleanup:**
+- `clean_expired_transcripts()` - Run daily to delete expired content
+- `redact_completed_job_urls()` - Run every 6 hours to redact URLs from completed jobs
 
 ---
 

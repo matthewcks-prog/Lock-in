@@ -12,7 +12,7 @@
 /**
  * Supported video provider types
  */
-export type VideoProvider = 'panopto' | 'echo360' | 'youtube' | 'html5' | 'unknown';
+export type VideoProvider = 'panopto' | 'youtube' | 'html5' | 'unknown';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Video Detection
@@ -55,16 +55,9 @@ export interface DetectedVideo {
   drmDetected?: boolean;
   /** DRM detection signal (e.g., "mediaKeys", "encrypted-event") */
   drmReason?: string;
-  
-  // Echo360-specific fields
-  /** Echo360 host origin (e.g., "https://echo360.net.au") */
-  echoOrigin?: string;
-  /** Echo360 section ID */
-  sectionId?: string;
-  /** Echo360 lesson ID (needed for transcript API) */
-  lessonId?: string;
-  /** Echo360 media ID (needed for transcript API) */
-  mediaId?: string;
+  // Panopto-specific fields
+  /** Panopto tenant domain (e.g., "monash.au.panopto.com") */
+  panoptoTenant?: string;
 }
 
 /**
@@ -150,73 +143,3 @@ export interface TranscriptProvider {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Echo360-specific Types
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Echo360 syllabus response structure
- */
-export interface Echo360SyllabusResponse {
-  data: Echo360Lesson[];
-}
-
-/**
- * Echo360 lesson structure from syllabus
- */
-export interface Echo360Lesson {
-  lesson: {
-    id: string;
-    name: string;
-    timing?: {
-      start?: string;
-    };
-  };
-  medias: Echo360Media[];
-}
-
-/**
- * Echo360 media item
- */
-export interface Echo360Media {
-  id: string;
-  name?: string;
-  durationMs?: number;
-  thumbnailUrl?: string;
-  isAvailable?: boolean;
-}
-
-/**
- * Echo360 transcript API response
- */
-export interface Echo360TranscriptResponse {
-  data?: {
-    contentJSON?: {
-      cues?: Echo360TranscriptCue[];
-    };
-  };
-}
-
-/**
- * Echo360 transcript cue
- */
-export interface Echo360TranscriptCue {
-  startMs: number;
-  endMs: number;
-  content: string;
-  speaker?: string;
-}
-
-/**
- * Echo360 context extracted from page URL
- */
-export interface Echo360Context {
-  /** Echo360 origin (e.g., "https://echo360.net.au") */
-  echoOrigin: string;
-  /** Section ID from URL */
-  sectionId?: string;
-  /** Lesson ID from URL */
-  lessonId?: string;
-  /** Media ID from URL */
-  mediaId?: string;
-}
-

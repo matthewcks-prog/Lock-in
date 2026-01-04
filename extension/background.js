@@ -84,15 +84,844 @@ function extractCaptionVttUrl(html) {
   return null;
 }
 
+/**
+ * Helper to decode escaped URLs from Panopto JSON
+ */
+function decodeEscapedUrl(url) {
+  return url
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    )
+    .replace(/\\\//g, "/")
+    .replace(/\\\\/g, "\\")
+    .replace(/\\"/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x2F;/gi, "/")
+    .replace(/&#x3D;/gi, "=")
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+// Panopto Media Resolver (V2)
+const PANOPTO_RESOLVER_TIMEOUT_MS = 15000;
+const PANOPTO_RESOLVER_RANGE_HEADER = "bytes=0-0";
+const PANOPTO_MEDIA_EXTENSIONS = [".mp4", ".m4a", ".mp3"];
+const PANOPTO_MEDIA_HINTS = ["/podcast/", "podcast", "download"];
+
+function parseBooleanConfig(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return ["1", "true", "yes", "on", "debug", "trace"].includes(normalized);
+  }
+  return false;
+}
+
+function isPanoptoResolverDebugEnabled() {
+  const direct = getConfigValue("DEBUG_PANOPTO_RESOLVER", null);
+  if (direct !== null) return parseBooleanConfig(direct);
+  const legacy = getConfigValue("DEBUG_PANOPTO", null);
+  if (legacy !== null) return parseBooleanConfig(legacy);
+  const debug = getConfigValue("DEBUG", null);
+  if (debug !== null) return parseBooleanConfig(debug);
+  const level = getConfigValue("LOG_LEVEL", "");
+  return typeof level === "string" && ["debug", "trace"].includes(level.toLowerCase());
+}
+
+function truncateUrl(value) {
+  if (!value || typeof value !== "string") return "";
+  return value.length > 140 ? `${value.slice(0, 137)}...` : value;
+}
+
+function createPanoptoResolverLogger(jobId, debugEnabled) {
+  const prefix = "[Lock-in PanoptoResolver]";
+  const startMs = Date.now();
+
+  const log = (level, step, data, always) => {
+    if (!always && !debugEnabled) return;
+    const elapsedMs =
+      data && typeof data.elapsedMs === "number"
+        ? data.elapsedMs
+        : Date.now() - startMs;
+    const status = data?.status ? ` status=${data.status}` : "";
+    const url = data?.url ? ` url=${truncateUrl(data.url)}` : "";
+    const finalUrl = data?.finalUrl ? ` finalUrl=${truncateUrl(data.finalUrl)}` : "";
+    const line = `${prefix} jobId=${jobId} step=${step}${status}${url}${finalUrl} ms=${elapsedMs}`;
+    const meta = data?.meta;
+    if (meta) {
+      console[level](line, meta);
+    } else {
+      console[level](line);
+    }
+  };
+
+  return {
+    debug: (step, data) => log("debug", step, data, false),
+    info: (step, data) => log("info", step, data, true),
+    warn: (step, data) => log("warn", step, data, true),
+    error: (step, data) => log("error", step, data, true),
+    isDebugEnabled: () => debugEnabled,
+  };
+}
+
+function extractPanoptoInfoFromUrl(url) {
+  if (!url) return null;
+  const match = url.match(
+    /https?:\/\/([^/]+)\/Panopto\/Pages\/(?:Embed|Viewer)\.aspx\?[^#]*\bid=([a-f0-9-]+)/i
+  );
+  if (match) {
+    return { tenant: match[1], deliveryId: match[2] };
+  }
+
+  try {
+    const urlObj = new URL(url);
+    const host = urlObj.hostname;
+    if (!host.includes("panopto")) return null;
+    const id = urlObj.searchParams.get("id");
+    if (id) {
+      return { tenant: host, deliveryId: id };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function buildPanoptoViewerUrl(tenant, deliveryId) {
+  return `https://${tenant}/Panopto/Pages/Viewer.aspx?id=${encodeURIComponent(
+    deliveryId
+  )}`;
+}
+
+function buildPanoptoEmbedUrl(tenant, deliveryId) {
+  return `https://${tenant}/Panopto/Pages/Embed.aspx?id=${encodeURIComponent(
+    deliveryId
+  )}`;
+}
+
+function buildPanoptoPodcastDownloadUrl(tenant, deliveryId) {
+  if (!tenant || !deliveryId) return null;
+  const url = new URL(
+    `https://${tenant}/Panopto/Podcast/Download/${encodeURIComponent(deliveryId)}.mp4`
+  );
+  url.searchParams.set("mediaTargetType", "videoPodcast");
+  return url.toString();
+}
+
+function looksLikePanoptoMediaUrl(url) {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  if (lower.startsWith("blob:") || lower.startsWith("data:")) {
+    return false;
+  }
+  if (lower.includes(".m3u8")) {
+    return false;
+  }
+  if (PANOPTO_MEDIA_EXTENSIONS.some((ext) => lower.includes(ext))) {
+    return true;
+  }
+  return PANOPTO_MEDIA_HINTS.some((hint) => lower.includes(hint));
+}
+
+function normalizePanoptoCandidateUrl(rawUrl, baseUrl) {
+  if (!rawUrl) return null;
+  const decoded = decodeEscapedUrl(rawUrl);
+  if (!decoded || decoded.startsWith("javascript:")) return null;
+  try {
+    return new URL(decoded, baseUrl).toString();
+  } catch {
+    return decoded;
+  }
+}
+
+function extractPanoptoMediaCandidatesFromHtml(html, baseUrl) {
+  const candidates = [];
+  const seen = new Set();
+  let podcastDisabled = false;
+  let downloadEnabled = false;
+  let disabledReason = null;
+
+  const addCandidate = (rawUrl, source) => {
+    const normalized = normalizePanoptoCandidateUrl(rawUrl, baseUrl);
+    if (!normalized || !looksLikePanoptoMediaUrl(normalized)) return;
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push({ url: normalized, source });
+  };
+
+  const urlPatterns = [
+    { regex: /"PodcastUrl"\s*:\s*"([^"]+)"/gi, source: "html:PodcastUrl" },
+    { regex: /"PodcastDownloadUrl"\s*:\s*"([^"]+)"/gi, source: "html:PodcastDownloadUrl" },
+    { regex: /"DownloadUrl"\s*:\s*"([^"]+)"/gi, source: "html:DownloadUrl" },
+    { regex: /"StreamUrl"\s*:\s*"([^"]+)"/gi, source: "html:StreamUrl" },
+    { regex: /"IosStreamUrl"\s*:\s*"([^"]+)"/gi, source: "html:IosStreamUrl" },
+    { regex: /"Mp4Url"\s*:\s*"([^"]+)"/gi, source: "html:Mp4Url" },
+    { regex: /"VideoUrl"\s*:\s*"([^"]+)"/gi, source: "html:VideoUrl" },
+  ];
+
+  for (const pattern of urlPatterns) {
+    for (const match of html.matchAll(pattern.regex)) {
+      if (match?.[1]) {
+        addCandidate(match[1], pattern.source);
+      }
+    }
+  }
+
+  for (const match of html.matchAll(
+    /<meta[^>]+(?:property|name)=["']og:video(?::secure_url)?["'][^>]+content=["']([^"']+)["'][^>]*>/gi
+  )) {
+    if (match?.[1]) {
+      addCandidate(match[1], "html:og:video");
+    }
+  }
+
+  for (const match of html.matchAll(
+    /data-(?:podcast|download|stream|video)-url=["']([^"']+)["']/gi
+  )) {
+    if (match?.[1]) {
+      addCandidate(match[1], "html:data-url");
+    }
+  }
+
+  for (const match of html.matchAll(
+    /href=["']([^"']*\/Podcast\/[^"']+)["']/gi
+  )) {
+    if (match?.[1]) {
+      addCandidate(match[1], "html:podcast-link");
+    }
+  }
+
+  const disabledPatterns = [
+    { regex: /"PodcastDownloadEnabled"\s*:\s*false/i, reason: "podcast-download-disabled" },
+    { regex: /"DownloadEnabled"\s*:\s*false/i, reason: "download-disabled" },
+    { regex: /"DownloadsEnabled"\s*:\s*false/i, reason: "downloads-disabled" },
+    { regex: /"AllowDownload"\s*:\s*false/i, reason: "allow-download-false" },
+    { regex: /data-download-enabled=["']false["']/i, reason: "data-download-enabled-false" },
+  ];
+  const enabledPatterns = [
+    /"PodcastDownloadEnabled"\s*:\s*true/i,
+    /"DownloadEnabled"\s*:\s*true/i,
+    /"DownloadsEnabled"\s*:\s*true/i,
+    /"AllowDownload"\s*:\s*true/i,
+    /data-download-enabled=["']true["']/i,
+  ];
+
+  for (const entry of disabledPatterns) {
+    if (entry.regex.test(html)) {
+      podcastDisabled = true;
+      disabledReason = entry.reason;
+      break;
+    }
+  }
+
+  if (enabledPatterns.some((pattern) => pattern.test(html))) {
+    downloadEnabled = true;
+  }
+
+  return { candidates, podcastDisabled, disabledReason, downloadEnabled };
+}
+
+function panoptoRuntimeProbe() {
+  const candidates = [];
+  const seen = new Set();
+  let podcastDisabled = false;
+  let downloadEnabled = false;
+  let disabledReason = null;
+
+  const decodeEscaped = (value) =>
+    value
+      .replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) =>
+        String.fromCharCode(parseInt(hex, 16))
+      )
+      .replace(/\\\//g, "/")
+      .replace(/\\\\/g, "\\")
+      .replace(/\\"/g, '"')
+      .trim();
+
+  const normalizeUrl = (rawUrl) => {
+    if (!rawUrl) return null;
+    const decoded = decodeEscaped(rawUrl);
+    if (!decoded || decoded.startsWith("javascript:")) return null;
+    try {
+      return new URL(decoded, window.location.href).toString();
+    } catch {
+      return decoded;
+    }
+  };
+
+  const looksLikeMediaUrl = (url) => {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    if (lower.startsWith("blob:") || lower.startsWith("data:")) return false;
+    if (lower.includes(".m3u8")) return false;
+    if ([".mp4", ".m4a", ".mp3"].some((ext) => lower.includes(ext))) {
+      return true;
+    }
+    return ["/podcast/", "podcast", "download"].some((hint) =>
+      lower.includes(hint)
+    );
+  };
+
+  const addCandidate = (rawUrl, source) => {
+    const normalized = normalizeUrl(rawUrl);
+    if (!normalized || !looksLikeMediaUrl(normalized)) return;
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push({ url: normalized, source });
+  };
+
+  const metaTags = document.querySelectorAll(
+    'meta[property="og:video"], meta[property="og:video:secure_url"], meta[name="og:video"], meta[name="og:video:secure_url"]'
+  );
+  metaTags.forEach((meta) => {
+    const content = meta.getAttribute("content");
+    if (content) {
+      addCandidate(content, "runtime:og:video");
+    }
+  });
+
+  const dataUrlNodes = document.querySelectorAll(
+    "[data-podcast-url], [data-download-url], [data-stream-url], [data-video-url]"
+  );
+  dataUrlNodes.forEach((node) => {
+    const attrs = ["data-podcast-url", "data-download-url", "data-stream-url", "data-video-url"];
+    attrs.forEach((attr) => {
+      const value = node.getAttribute(attr);
+      if (value) {
+        addCandidate(value, "runtime:data-url");
+      }
+    });
+  });
+
+  const anchors = document.querySelectorAll("a[href]");
+  anchors.forEach((anchor) => {
+    const href = anchor.getAttribute("href");
+    if (href && /podcast|download/i.test(href)) {
+      addCandidate(href, "runtime:link");
+    }
+  });
+
+  const downloadControls = document.querySelectorAll(
+    '[aria-label*="Download" i], [title*="Download" i], [data-tooltip*="Download" i]'
+  );
+  downloadControls.forEach((control) => {
+    const ariaDisabled = control.getAttribute("aria-disabled");
+    const isDisabled =
+      control.hasAttribute("disabled") || ariaDisabled === "true";
+    if (isDisabled && !podcastDisabled) {
+      podcastDisabled = true;
+      disabledReason = "download-control-disabled";
+    }
+  });
+
+  const rootObjects = [
+    { name: "Panopto", value: window.Panopto },
+    { name: "panopto", value: window.panopto },
+    { name: "PanoptoViewer", value: window.PanoptoViewer },
+    { name: "__PANOPTO_STATE__", value: window.__PANOPTO_STATE__ },
+    { name: "__INITIAL_STATE__", value: window.__INITIAL_STATE__ },
+  ];
+
+  const visited = new WeakSet();
+  const maxDepth = 4;
+  let inspected = 0;
+  const maxNodes = 1500;
+
+  const scan = (value, path, depth) => {
+    if (!value || typeof value !== "object") return;
+    if (visited.has(value)) return;
+    if (inspected > maxNodes) return;
+    visited.add(value);
+    inspected += 1;
+    if (depth > maxDepth) return;
+
+    Object.keys(value).forEach((key) => {
+      try {
+        const next = value[key];
+        const nextPath = `${path}.${key}`;
+        if (typeof next === "string") {
+          if (looksLikeMediaUrl(next)) {
+            addCandidate(next, `runtime:${nextPath}`);
+          }
+        } else if (typeof next === "boolean") {
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.includes("download") || lowerKey.includes("podcast")) {
+            if (next === false && !podcastDisabled) {
+              podcastDisabled = true;
+              disabledReason = `state:${nextPath}`;
+            }
+            if (next === true) {
+              downloadEnabled = true;
+            }
+          }
+        } else if (typeof next === "object" && next) {
+          scan(next, nextPath, depth + 1);
+        }
+      } catch {
+        // Ignore access errors
+      }
+    });
+  };
+
+  rootObjects.forEach((root) => {
+    if (root.value && typeof root.value === "object") {
+      scan(root.value, root.name, 0);
+    }
+  });
+
+  if (typeof performance !== "undefined" && performance.getEntriesByType) {
+    const entries = performance.getEntriesByType("resource");
+    for (let i = 0; i < entries.length && candidates.length < 20; i += 1) {
+      const entry = entries[i];
+      if (entry && typeof entry.name === "string" && looksLikeMediaUrl(entry.name)) {
+        addCandidate(entry.name, "runtime:perf");
+      }
+    }
+  }
+
+  return {
+    pageUrl: window.location.href,
+    candidates,
+    podcastDisabled,
+    downloadEnabled,
+    disabledReason,
+  };
+}
+
+function executeScriptInTab(tabId, func) {
+  return new Promise((resolve, reject) => {
+    if (!chrome?.scripting?.executeScript) {
+      reject(new Error("chrome.scripting.executeScript unavailable"));
+      return;
+    }
+    chrome.scripting.executeScript(
+      {
+        target: { tabId, allFrames: true },
+        world: "MAIN",
+        func,
+      },
+      (results) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(results || []);
+      }
+    );
+  });
+}
+
+async function runPanoptoRuntimeProbe(tabId, logger) {
+  if (!tabId) {
+    logger.debug("runtime-probe", { status: "skipped", meta: { reason: "no-tab-id" } });
+    return { candidates: [], podcastDisabled: false, downloadEnabled: false };
+  }
+
+  const started = Date.now();
+  try {
+    const results = await executeScriptInTab(tabId, panoptoRuntimeProbe);
+    const candidates = [];
+    let podcastDisabled = false;
+    let downloadEnabled = false;
+    let disabledReason = null;
+    let frameCount = 0;
+
+    results.forEach((entry) => {
+      const data = entry?.result;
+      if (!data || !data.candidates) return;
+      const pageUrl = typeof data.pageUrl === "string" ? data.pageUrl : "";
+      if (!pageUrl.includes("panopto")) return;
+      frameCount += 1;
+      data.candidates.forEach((candidate) => {
+        if (candidate?.url) {
+          candidates.push({
+            url: candidate.url,
+            source: candidate.source || "runtime",
+            frameUrl: pageUrl,
+          });
+        }
+      });
+      if (data.podcastDisabled) {
+        podcastDisabled = true;
+        disabledReason = data.disabledReason || disabledReason;
+      }
+      if (data.downloadEnabled) {
+        downloadEnabled = true;
+      }
+    });
+
+    logger.debug("runtime-probe", {
+      status: "ok",
+      elapsedMs: Date.now() - started,
+      meta: {
+        frameCount,
+        candidateCount: candidates.length,
+        podcastDisabled,
+        downloadEnabled,
+      },
+    });
+
+    return { candidates, podcastDisabled, downloadEnabled, disabledReason };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn("runtime-probe", {
+      status: "error",
+      elapsedMs: Date.now() - started,
+      meta: { error: message },
+    });
+    return { candidates: [], podcastDisabled: false, downloadEnabled: false, error: message };
+  }
+}
+
+function scorePanoptoCandidate(candidate) {
+  const url = candidate?.url || "";
+  const source = candidate?.source || "";
+  const lower = url.toLowerCase();
+  let score = 0;
+  if (lower.includes("/podcast/")) score += 5;
+  if (lower.includes("podcast")) score += 3;
+  if (lower.includes("download")) score += 2;
+  if (lower.includes(".mp4")) score += 3;
+  if (lower.includes(".m4a")) score += 2;
+  if (lower.includes(".mp3")) score += 1;
+  if (lower.includes(".m3u8")) score -= 10;
+  if (source.includes("og:video")) score -= 1;
+  return score;
+}
+
+function dedupeAndSortPanoptoCandidates(candidates) {
+  const seen = new Set();
+  const unique = [];
+  for (const candidate of candidates) {
+    if (!candidate?.url) continue;
+    if (seen.has(candidate.url)) continue;
+    seen.add(candidate.url);
+    unique.push(candidate);
+  }
+  return unique.sort((a, b) => scorePanoptoCandidate(b) - scorePanoptoCandidate(a));
+}
+
+async function probePanoptoMediaUrl(url, logger) {
+  const started = Date.now();
+  try {
+    const response = await fetchWithRetry(
+      url,
+      {
+        method: "GET",
+        credentials: "include",
+        redirect: "follow",
+        headers: {
+          Range: PANOPTO_RESOLVER_RANGE_HEADER,
+          Accept: "video/*,audio/*,*/*",
+        },
+      },
+      1,
+      PANOPTO_RESOLVER_TIMEOUT_MS
+    );
+
+    const status = response.status;
+    const contentType = response.headers.get("content-type") || "";
+    const contentRange = response.headers.get("content-range") || "";
+    const finalUrl = response.url || url;
+
+    if (response.body && typeof response.body.cancel === "function") {
+      try {
+        response.body.cancel();
+      } catch {
+        // Ignore stream cancel errors
+      }
+    }
+
+    logger.debug("range-probe", {
+      status: response.ok ? "ok" : "error",
+      url,
+      finalUrl,
+      elapsedMs: Date.now() - started,
+      meta: {
+        status,
+        contentType,
+        contentRange,
+      },
+    });
+
+    if (isAuthStatus(status)) {
+      return { ok: false, status, errorCode: "AUTH_REQUIRED", finalUrl, contentType };
+    }
+
+    if (!response.ok) {
+      return { ok: false, status, finalUrl, contentType };
+    }
+
+    if (contentType.toLowerCase().includes("text/html")) {
+      return { ok: false, status, errorCode: "AUTH_REQUIRED", finalUrl, contentType };
+    }
+
+    return { ok: true, status, finalUrl, contentType };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.debug("range-probe", {
+      status: "error",
+      url,
+      elapsedMs: Date.now() - started,
+      meta: { error: message },
+    });
+    return { ok: false, error: message };
+  }
+}
+
+const PanoptoMediaResolver = {
+  async resolve({ tenant, deliveryId, viewerUrl, embedUrl, tabId, jobId }) {
+    const resolvedJobId =
+      jobId || `panopto-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const debugEnabled = isPanoptoResolverDebugEnabled();
+    const logger = createPanoptoResolverLogger(resolvedJobId, debugEnabled);
+    const debugPayload = {
+      jobId: resolvedJobId,
+      candidates: [],
+      signals: {},
+    };
+
+    let resolvedTenant = tenant;
+    let resolvedDeliveryId = deliveryId;
+    let resolvedViewerUrl = viewerUrl;
+    let resolvedEmbedUrl = embedUrl;
+
+    if (!resolvedViewerUrl || !resolvedTenant || !resolvedDeliveryId) {
+      const info = extractPanoptoInfoFromUrl(embedUrl || viewerUrl);
+      if (info) {
+        resolvedTenant = resolvedTenant || info.tenant;
+        resolvedDeliveryId = resolvedDeliveryId || info.deliveryId;
+      }
+    }
+
+    if (!resolvedViewerUrl && resolvedTenant && resolvedDeliveryId) {
+      resolvedViewerUrl = buildPanoptoViewerUrl(
+        resolvedTenant,
+        resolvedDeliveryId
+      );
+    }
+
+    if (!resolvedEmbedUrl && resolvedTenant && resolvedDeliveryId) {
+      resolvedEmbedUrl = buildPanoptoEmbedUrl(
+        resolvedTenant,
+        resolvedDeliveryId
+      );
+    }
+
+    const primaryUrl = resolvedViewerUrl || resolvedEmbedUrl;
+    if (!primaryUrl) {
+      return {
+        ok: false,
+        errorCode: "INVALID_VIDEO",
+        message: "Panopto viewer URL not available.",
+        debug: debugEnabled ? debugPayload : undefined,
+      };
+    }
+
+    logger.info("start", { status: "begin", url: primaryUrl });
+
+    let podcastDisabled = false;
+    let downloadEnabled = false;
+    let disabledReason = null;
+    let authRequired = false;
+
+    const candidates = [];
+    const collectFromHtml = async (url, step) => {
+      const started = Date.now();
+      try {
+        const html = await fetchWithCredentials(url);
+        const result = extractPanoptoMediaCandidatesFromHtml(html, url);
+        candidates.push(...result.candidates);
+        if (result.podcastDisabled) {
+          podcastDisabled = true;
+          disabledReason = result.disabledReason || disabledReason;
+        }
+        if (result.downloadEnabled) {
+          downloadEnabled = true;
+        }
+        logger.debug(step, {
+          status: "ok",
+          url,
+          elapsedMs: Date.now() - started,
+          meta: {
+            candidateCount: result.candidates.length,
+            podcastDisabled: result.podcastDisabled,
+            downloadEnabled: result.downloadEnabled,
+          },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message === "AUTH_REQUIRED") {
+          authRequired = true;
+        }
+        logger.debug(step, {
+          status: "error",
+          url,
+          elapsedMs: Date.now() - started,
+          meta: { error: message },
+        });
+      }
+    };
+
+    if (resolvedViewerUrl) {
+      await collectFromHtml(resolvedViewerUrl, "viewer-html");
+    }
+    if (resolvedEmbedUrl && resolvedEmbedUrl !== resolvedViewerUrl) {
+      await collectFromHtml(resolvedEmbedUrl, "embed-html");
+    }
+
+    if (candidates.length === 0) {
+      const runtime = await runPanoptoRuntimeProbe(tabId, logger);
+      candidates.push(...runtime.candidates);
+      if (runtime.podcastDisabled) {
+        podcastDisabled = true;
+        disabledReason = runtime.disabledReason || disabledReason;
+      }
+      if (runtime.downloadEnabled) {
+        downloadEnabled = true;
+      }
+    }
+
+    if (resolvedTenant && resolvedDeliveryId) {
+      const podcastDownloadUrl = buildPanoptoPodcastDownloadUrl(
+        resolvedTenant,
+        resolvedDeliveryId
+      );
+      if (podcastDownloadUrl) {
+        candidates.push({
+          url: podcastDownloadUrl,
+          source: "derived:podcast-download",
+        });
+      }
+    }
+
+    const orderedCandidates = dedupeAndSortPanoptoCandidates(candidates);
+    debugPayload.candidates = orderedCandidates.map((candidate) => ({
+      url: truncateUrl(candidate.url),
+      source: candidate.source,
+    }));
+    debugPayload.signals = {
+      podcastDisabled,
+      downloadEnabled,
+      disabledReason,
+      authRequired,
+      viewerUrl: truncateUrl(resolvedViewerUrl),
+      embedUrl: truncateUrl(resolvedEmbedUrl),
+    };
+
+    if (orderedCandidates.length === 0) {
+      if (podcastDisabled) {
+        logger.warn("resolve", {
+          status: "podcast-disabled",
+          url: primaryUrl,
+          meta: { disabledReason },
+        });
+        return {
+          ok: false,
+          errorCode: "PODCAST_DISABLED",
+          message:
+            "Panopto downloads are disabled for this video. Ask your instructor to enable podcast downloads.",
+          debug: debugEnabled ? debugPayload : undefined,
+        };
+      }
+      if (authRequired) {
+        return {
+          ok: false,
+          errorCode: "AUTH_REQUIRED",
+          message:
+            "Authentication required. Please log in to Panopto and try again.",
+          debug: debugEnabled ? debugPayload : undefined,
+        };
+      }
+      return {
+        ok: false,
+        errorCode: "NOT_AVAILABLE",
+        message:
+          "No downloadable media URL found. This video may not allow downloads.",
+        debug: debugEnabled ? debugPayload : undefined,
+      };
+    }
+
+    for (const candidate of orderedCandidates) {
+      const probe = await probePanoptoMediaUrl(candidate.url, logger);
+      if (probe.ok) {
+        logger.info("resolve", {
+          status: "ok",
+          url: candidate.url,
+          finalUrl: probe.finalUrl,
+        });
+        return {
+          ok: true,
+          mediaUrl: probe.finalUrl || candidate.url,
+          mime: probe.contentType || null,
+          method: candidate.source || "unknown",
+          debug: debugEnabled ? debugPayload : undefined,
+        };
+      }
+
+      if (probe.errorCode === "AUTH_REQUIRED") {
+        logger.warn("resolve", {
+          status: "auth-required",
+          url: candidate.url,
+        });
+        return {
+          ok: false,
+          errorCode: "AUTH_REQUIRED",
+          message:
+            "Authentication required to access this Panopto download. Please log in and try again.",
+          debug: debugEnabled ? debugPayload : undefined,
+        };
+      }
+
+      if (probe.status === 403 && podcastDisabled) {
+        logger.warn("resolve", {
+          status: "podcast-disabled",
+          url: candidate.url,
+          meta: { disabledReason },
+        });
+        return {
+          ok: false,
+          errorCode: "PODCAST_DISABLED",
+          message:
+            "Panopto downloads are disabled for this video. Ask your instructor to enable podcast downloads.",
+          debug: debugEnabled ? debugPayload : undefined,
+        };
+      }
+    }
+
+    if (podcastDisabled) {
+      return {
+        ok: false,
+        errorCode: "PODCAST_DISABLED",
+        message:
+          "Panopto downloads are disabled for this video. Ask your instructor to enable podcast downloads.",
+        debug: debugEnabled ? debugPayload : undefined,
+      };
+    }
+
+    return {
+      ok: false,
+      errorCode: "NOT_ALLOWED",
+      message:
+        "Panopto denied access to the download URL. Downloads may be disabled for your account.",
+      debug: debugEnabled ? debugPayload : undefined,
+    };
+  },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Network Utilities
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Default retry configuration */
 const RETRY_CONFIG = {
-  maxRetries: 2,
+  maxRetries: 3,
   baseDelayMs: 500,
   maxDelayMs: 5000,
+  timeoutMs: 30000, // 30 second timeout
 };
 
 /**
@@ -138,17 +967,37 @@ function isRetryableError(error, response) {
  * Fetch with retry and exponential backoff
  * @param {string} url - URL to fetch
  * @param {RequestInit} options - Fetch options
- * @param {number} maxRetries - Maximum retry attempts (default 2)
+ * @param {number} maxRetries - Maximum retry attempts (default from config)
+ * @param {number} timeoutMs - Request timeout in milliseconds (default from config)
  * @returns {Promise<Response>}
  */
-async function fetchWithRetry(url, options, maxRetries = RETRY_CONFIG.maxRetries) {
+async function fetchWithRetry(
+  url,
+  options = {},
+  maxRetries = RETRY_CONFIG.maxRetries,
+  timeoutMs = RETRY_CONFIG.timeoutMs
+) {
   let lastError;
   let lastResponse;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetch(url, options);
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      // Merge abort signal with existing options
+      const fetchOptions = {
+        ...options,
+        signal: controller.signal,
+      };
+
+      console.log(`[Lock-in] Fetching (attempt ${attempt + 1}/${maxRetries + 1}): ${url.substring(0, 100)}...`);
+      const response = await fetch(url, fetchOptions);
+      clearTimeout(timeoutId);
       lastResponse = response;
+
+      console.log(`[Lock-in] Response status: ${response.status} ${response.statusText}`);
 
       // If successful or non-retryable error, return
       if (response.ok || !isRetryableError(null, response)) {
@@ -159,9 +1008,19 @@ async function fetchWithRetry(url, options, maxRetries = RETRY_CONFIG.maxRetries
       lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
     } catch (error) {
       lastError = error;
+      console.error(`[Lock-in] Fetch error (attempt ${attempt + 1}):`, error.message || error);
+      
+      // Specific error handling for better debugging
+      if (error.name === 'AbortError') {
+        console.warn(`[Lock-in] Request timeout after ${timeoutMs}ms`);
+        lastError = new Error(`Request timeout after ${timeoutMs}ms`);
+      } else if (error.message === 'Failed to fetch') {
+        console.warn('[Lock-in] Network error: Failed to fetch. Possible causes: CORS, DNS, or network connectivity');
+      }
+      
       // Network errors are retryable
       if (attempt < maxRetries) {
-        console.log(`[Lock-in] Retry ${attempt + 1}/${maxRetries} for ${url}`);
+        console.log(`[Lock-in] Retrying in ${RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt)}ms...`);
         await backoffDelay(attempt);
         continue;
       }
@@ -169,7 +1028,7 @@ async function fetchWithRetry(url, options, maxRetries = RETRY_CONFIG.maxRetries
 
     // If this wasn't the last attempt, wait and retry
     if (attempt < maxRetries && isRetryableError(lastError, lastResponse)) {
-      console.log(`[Lock-in] Retry ${attempt + 1}/${maxRetries} for ${url}`);
+      console.log(`[Lock-in] Retrying in ${RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt)}ms...`);
       await backoffDelay(attempt);
     }
   }
@@ -183,54 +1042,115 @@ async function fetchWithRetry(url, options, maxRetries = RETRY_CONFIG.maxRetries
 
 /**
  * Fetch HTML with credentials (with retry)
+ * @param {string} url - URL to fetch
+ * @returns {Promise<string>} HTML content
  */
 async function fetchWithCredentials(url) {
+  console.log('[Lock-in] fetchWithCredentials:', url.substring(0, 100));
+  
+  // Validate URL
+  try {
+    new URL(url);
+  } catch (e) {
+    console.error('[Lock-in] Invalid URL:', url, e);
+    throw new Error('Invalid URL provided');
+  }
+
   const response = await fetchWithRetry(url, {
     method: "GET",
     credentials: "include",
+    mode: "cors", // Explicitly set CORS mode
     headers: {
       Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "User-Agent": "Mozilla/5.0 (Chrome Extension)",
     },
   });
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403)
+    console.error(`[Lock-in] Response not OK: ${response.status} ${response.statusText}`);
+    if (response.status === 401 || response.status === 403) {
       throw new Error("AUTH_REQUIRED");
+    }
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
-  return response.text();
+  
+  const text = await response.text();
+  console.log(`[Lock-in] Fetched ${text.length} bytes successfully`);
+  return text;
 }
 
 /**
  * Fetch VTT content (with retry)
+ * @param {string} url - Caption VTT URL
+ * @returns {Promise<string>} VTT content
  */
 async function fetchVttContent(url) {
+  console.log('[Lock-in] fetchVttContent:', url.substring(0, 100));
+  
+  // Validate URL
+  try {
+    new URL(url);
+  } catch (e) {
+    console.error('[Lock-in] Invalid caption URL:', url, e);
+    throw new Error('Invalid caption URL');
+  }
+
   const response = await fetchWithRetry(url, {
     method: "GET",
     credentials: "include",
-    headers: { Accept: "text/vtt,text/plain,*/*" },
+    mode: "cors", // Explicitly set CORS mode
+    headers: { 
+      Accept: "text/vtt,text/plain,*/*",
+      "User-Agent": "Mozilla/5.0 (Chrome Extension)",
+    },
   });
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403)
+    console.error(`[Lock-in] VTT fetch failed: ${response.status} ${response.statusText}`);
+    if (response.status === 401 || response.status === 403) {
       throw new Error("AUTH_REQUIRED");
+    }
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
-  return response.text();
+  
+  const text = await response.text();
+  console.log(`[Lock-in] Fetched VTT: ${text.length} bytes`);
+  return text;
 }
 
 /**
  * Extract transcript from a Panopto video
  */
 async function extractPanoptoTranscript(video) {
+  console.log('[Lock-in] extractPanoptoTranscript starting for:', {
+    id: video.id,
+    title: video.title,
+    embedUrl: video.embedUrl,
+  });
+
   try {
+    // Validate video embedUrl
+    if (!video.embedUrl) {
+      console.error('[Lock-in] No embedUrl provided for Panopto video');
+      return {
+        success: false,
+        error: "No video URL provided",
+        errorCode: "INVALID_VIDEO",
+        aiTranscriptionAvailable: true,
+      };
+    }
+
     // Step 1: Fetch the embed page HTML
+    console.log('[Lock-in] Step 1: Fetching embed page...');
     const embedHtml = await fetchWithCredentials(video.embedUrl);
+    console.log('[Lock-in] Embed page fetched successfully, length:', embedHtml.length);
 
     // Step 2: Extract caption URL from the HTML
+    console.log('[Lock-in] Step 2: Extracting caption URL...');
     const captionUrl = extractCaptionVttUrl(embedHtml);
 
     if (!captionUrl) {
+      console.warn('[Lock-in] No caption URL found in embed page');
       return {
         success: false,
         error: "No captions available for this video",
@@ -238,14 +1158,19 @@ async function extractPanoptoTranscript(video) {
         aiTranscriptionAvailable: true,
       };
     }
+    console.log('[Lock-in] Caption URL found:', captionUrl.substring(0, 100));
 
     // Step 3: Fetch the VTT content
+    console.log('[Lock-in] Step 3: Fetching VTT content...');
     const vttContent = await fetchVttContent(captionUrl);
+    console.log('[Lock-in] VTT content fetched successfully, length:', vttContent.length);
 
     // Step 4: Parse the VTT
+    console.log('[Lock-in] Step 4: Parsing VTT content...');
     const transcript = parseWebVtt(vttContent);
 
     if (transcript.segments.length === 0) {
+      console.warn('[Lock-in] Parsed transcript has no segments');
       return {
         success: false,
         error: "Caption file is empty or could not be parsed",
@@ -254,10 +1179,18 @@ async function extractPanoptoTranscript(video) {
       };
     }
 
+    console.log('[Lock-in] Transcript extracted successfully:', {
+      segments: transcript.segments.length,
+      plainTextLength: transcript.plainText?.length || 0,
+      durationMs: transcript.durationMs,
+    });
+
     return { success: true, transcript };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    console.error('[Lock-in] extractPanoptoTranscript error:', message, error);
 
+    // Auth error
     if (message === "AUTH_REQUIRED") {
       return {
         success: false,
@@ -267,18 +1200,37 @@ async function extractPanoptoTranscript(video) {
       };
     }
 
-    if (
-      message.includes("Failed to fetch") ||
-      message.includes("NetworkError")
-    ) {
+    // Timeout error
+    if (message.includes("timeout") || message.includes("AbortError")) {
       return {
         success: false,
-        error: "Network error. Please check your connection.",
+        error: "Request timeout. The server took too long to respond.",
+        errorCode: "TIMEOUT",
+        aiTranscriptionAvailable: true,
+      };
+    }
+
+    // Network/CORS errors
+    if (
+      message.includes("Failed to fetch") ||
+      message.includes("NetworkError") ||
+      message.includes("CORS") ||
+      message.includes("Network request failed")
+    ) {
+      console.error('[Lock-in] Network error details:', {
+        message,
+        embedUrl: video.embedUrl,
+        error: error.toString(),
+      });
+      return {
+        success: false,
+        error: "Network error. Please check your internet connection and ensure you're logged into Panopto.",
         errorCode: "NETWORK_ERROR",
         aiTranscriptionAvailable: true,
       };
     }
 
+    // Generic error
     return {
       success: false,
       error: `Failed to extract transcript: ${message}`,
@@ -292,12 +1244,20 @@ async function extractPanoptoTranscript(video) {
  * Extract transcript from an HTML5 video using track URLs
  */
 async function extractHtml5Transcript(video) {
-  console.log('[Lock-in BG] extractHtml5Transcript called for video:', video.id, video.title);
+  console.log(
+    "[Lock-in BG] extractHtml5Transcript called for video:",
+    video.id,
+    video.title
+  );
   const tracks = Array.isArray(video.trackUrls) ? video.trackUrls : [];
-  console.log('[Lock-in BG] Track URLs found:', tracks.length, tracks.map(t => t?.src));
-  
+  console.log(
+    "[Lock-in BG] Track URLs found:",
+    tracks.length,
+    tracks.map((t) => t?.src)
+  );
+
   if (tracks.length === 0) {
-    console.log('[Lock-in BG] No caption tracks available for HTML5 video');
+    console.log("[Lock-in BG] No caption tracks available for HTML5 video");
     return {
       success: false,
       error: "No captions found",
@@ -334,7 +1294,10 @@ async function extractHtml5Transcript(video) {
         };
       }
 
-      if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
+      if (
+        message.includes("Failed to fetch") ||
+        message.includes("NetworkError")
+      ) {
         lastError = {
           error:
             "Captions could not be fetched due to browser restrictions or network errors.",
@@ -365,659 +1328,100 @@ async function extractHtml5Transcript(video) {
     aiTranscriptionAvailable: true,
   };
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Echo360 Transcript Extraction
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Cache for Echo360 syllabus responses */
-const syllabusCache = new Map();
-/** Cache TTL in milliseconds (5 minutes) */
-const SYLLABUS_CACHE_TTL_MS = 5 * 60 * 1000;
-
 /**
- * Get cache key for syllabus
- * @param {string} echoOrigin - Echo360 origin
- * @param {string} sectionId - Section ID
- * @returns {string} Cache key
- */
-function getSyllabusCacheKey(echoOrigin, sectionId) {
-  return `${echoOrigin}:${sectionId}`;
-}
-
-/**
- * Check if cached syllabus is still valid
- * @param {Object} cached - Cached entry with data and timestamp
- * @returns {boolean} Whether cache is valid
- */
-function isCacheValid(cached) {
-  if (!cached || !cached.timestamp) return false;
-  return Date.now() - cached.timestamp < SYLLABUS_CACHE_TTL_MS;
-}
-
-/**
- * Fetch Echo360 syllabus to get list of recordings
- * Results are cached for 5 minutes to reduce API calls.
- * @param {Object} context - Echo360 context with echoOrigin and sectionId
- * @returns {Promise<Object>} Result with videos array or error
- */
-async function fetchEcho360Syllabus(context) {
-  const { echoOrigin, sectionId } = context;
-
-  if (!echoOrigin || !sectionId) {
-    console.warn("[Lock-in] Missing Echo360 context:", {
-      echoOrigin,
-      sectionId,
-    });
-    return {
-      success: false,
-      error: "Missing Echo360 context (origin or sectionId)",
-      errorCode: "INVALID_CONTEXT",
-    };
-  }
-
-  // Check cache first
-  const cacheKey = getSyllabusCacheKey(echoOrigin, sectionId);
-  const cached = syllabusCache.get(cacheKey);
-  if (isCacheValid(cached)) {
-    console.log("[Lock-in] Using cached Echo360 syllabus for:", cacheKey);
-    return cached.data;
-  }
-
-  const syllabusUrl = `${echoOrigin}/section/${sectionId}/syllabus`;
-  console.log("[Lock-in] Fetching Echo360 syllabus from:", syllabusUrl);
-
-  try {
-    const response = await fetchWithRetry(syllabusUrl, {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      console.warn(
-        "[Lock-in] Echo360 syllabus request failed:",
-        response.status
-      );
-      if (response.status === 401 || response.status === 403) {
-        return {
-          success: false,
-          error: "Please sign in to Echo360 to view recordings.",
-          errorCode: "AUTH_REQUIRED",
-        };
-      }
-      return {
-        success: false,
-        error: `Failed to fetch syllabus: HTTP ${response.status}`,
-        errorCode: "NETWORK_ERROR",
-      };
-    }
-
-    const data = await response.json();
-    const videos = parseEcho360Syllabus(data, echoOrigin, sectionId);
-    console.log(
-      "[Lock-in] Parsed",
-      videos.length,
-      "videos from Echo360 syllabus"
-    );
-
-    const result = {
-      success: true,
-      videos,
-    };
-
-    // Cache successful response
-    syllabusCache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now(),
-    });
-
-    return result;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[Lock-in] Echo360 syllabus fetch error:", message);
-
-    return {
-      success: false,
-      error: `Failed to fetch Echo360 recordings: ${message}`,
-      errorCode: "NETWORK_ERROR",
-    };
-  }
-}
-
-/**
- * Parse Echo360 syllabus response into DetectedVideo array
- * @param {Object} data - Syllabus API response
- * @param {string} echoOrigin - Echo360 origin URL
- * @param {string} sectionId - Section ID
- * @returns {Array} Array of DetectedVideo objects
- */
-function parseEcho360Syllabus(data, echoOrigin, sectionId) {
-  const videos = [];
-
-  // Handle both direct array and { data: [...] } formats
-  const items = Array.isArray(data) ? data : data.data || [];
-  console.log(
-    "[Lock-in] parseEcho360Syllabus: data type =",
-    typeof data,
-    ", items count =",
-    items.length
-  );
-  console.log("[Lock-in] Raw data keys:", Object.keys(data || {}));
-
-  if (items.length === 0) {
-    console.log(
-      "[Lock-in] No items found. Full data structure:",
-      JSON.stringify(data).substring(0, 2000)
-    );
-  }
-
-  for (const item of items) {
-    console.log("[Lock-in] Processing syllabus item type:", item.type);
-
-    // Skip non-lesson items
-    if (item.type && item.type !== "SyllabusLessonType") {
-      console.log("[Lock-in] Skipping non-lesson item type:", item.type);
-      continue;
-    }
-
-    // The structure is: item.lesson.lesson for lesson data, item.lesson.medias for medias
-    const lessonWrapper = item.lesson || item;
-    const lesson = lessonWrapper.lesson || lessonWrapper;
-    const medias = lessonWrapper.medias || [];
-
-    console.log(
-      "[Lock-in] Lesson id:",
-      lesson?.id,
-      "medias count:",
-      medias.length
-    );
-
-    if (!lesson || !lesson.id) {
-      console.log("[Lock-in] Skipping item without lesson id");
-      continue;
-    }
-
-    // Create a video entry for each media in the lesson
-    for (const media of medias) {
-      if (!media.id) continue;
-
-      // Skip unavailable media
-      if (media.isAvailable === false) {
-        console.log("[Lock-in] Skipping unavailable media:", media.id);
-        continue;
-      }
-
-      const title =
-        lesson.name ||
-        lesson.displayName ||
-        media.title ||
-        `Recording ${videos.length + 1}`;
-      const recordedAt =
-        lesson.timing?.start || lessonWrapper.captureStartedAt || null;
-
-      videos.push({
-        id: `${lesson.id}_${media.id}`,
-        provider: "echo360",
-        title,
-        embedUrl: `${echoOrigin}/lesson/${lesson.id}/classroom`,
-        echoOrigin,
-        sectionId,
-        lessonId: lesson.id,
-        mediaId: media.id,
-        durationMs: media.durationMs || undefined,
-        thumbnailUrl: media.thumbnailUri || media.thumbnailUrl || undefined,
-        recordedAt,
-      });
-
-      console.log("[Lock-in] Added video:", title);
-    }
-
-    // If no medias array but lesson has video content, create placeholder entry
-    if (medias.length === 0 && lesson.id && lessonWrapper.hasVideo) {
-      videos.push({
-        id: lesson.id,
-        provider: "echo360",
-        title:
-          lesson.name || lesson.displayName || `Recording ${videos.length + 1}`,
-        embedUrl: `${echoOrigin}/lesson/${lesson.id}/classroom`,
-        echoOrigin,
-        sectionId,
-        lessonId: lesson.id,
-        recordedAt: lesson.timing?.start || null,
-      });
-      console.log(
-        "[Lock-in] Added lesson without explicit media:",
-        lesson.name
-      );
-    }
-  }
-
-  console.log("[Lock-in] Total videos parsed:", videos.length);
-  return videos;
-}
-
-/**
- * Extract potential sectionId from a compound Echo360 lessonId
- * Echo360 compound lesson IDs often contain embedded section IDs in the format:
- * G_{uuid1}_{sectionId}_{timestamp1}_{timestamp2}
- * @param {string} lessonId - The compound lesson ID
- * @returns {string|null} Section ID if found, null otherwise
- */
-function extractSectionIdFromLessonId(lessonId) {
-  if (!lessonId) return null;
-  
-  // UUID pattern
-  const UUID_PATTERN = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi;
-  
-  // Find all UUIDs in the lessonId
-  const uuids = lessonId.match(UUID_PATTERN);
-  
-  if (!uuids || uuids.length < 2) {
-    console.log('[Lock-in] Could not find multiple UUIDs in lessonId:', lessonId);
-    return null;
-  }
-  
-  // The second UUID is typically the sectionId
-  // First UUID is usually the lesson/recording UUID
-  // Second UUID is the section UUID
-  console.log('[Lock-in] Found UUIDs in lessonId:', uuids);
-  return uuids[1]; // Return the second UUID as the sectionId
-}
-
-/**
- * Try to fetch mediaId from Echo360 using multiple strategies
- * @param {string} echoOrigin - Echo360 origin URL
- * @param {string} lessonId - Lesson ID
- * @returns {Promise<string|null>} Media ID or null if not found
- */
-async function fetchEcho360MediaId(echoOrigin, lessonId) {
-  // Strategy 0: Try to extract sectionId from compound lessonId and use syllabus API
-  const embeddedSectionId = extractSectionIdFromLessonId(lessonId);
-  if (embeddedSectionId) {
-    try {
-      console.log('[Lock-in] Strategy 0: Trying syllabus API with embedded sectionId:', embeddedSectionId);
-      const syllabusResult = await fetchEcho360Syllabus({ echoOrigin, sectionId: embeddedSectionId });
-      
-      if (syllabusResult.success && syllabusResult.videos && syllabusResult.videos.length > 0) {
-        // Find the video that matches our lessonId
-        for (const video of syllabusResult.videos) {
-          // Check if this video's lessonId matches (could be exact or partial match)
-          if (video.lessonId && lessonId.includes(video.lessonId)) {
-            if (video.mediaId) {
-              console.log('[Lock-in] Strategy 0 SUCCESS - Found mediaId from syllabus:', video.mediaId);
-              return video.mediaId;
-            }
-          }
-        }
-        
-        // If no exact match, try the first video with a mediaId (single-video sections)
-        if (syllabusResult.videos.length === 1 && syllabusResult.videos[0].mediaId) {
-          console.log('[Lock-in] Strategy 0 SUCCESS - Using single video mediaId:', syllabusResult.videos[0].mediaId);
-          return syllabusResult.videos[0].mediaId;
-        }
-        
-        console.log('[Lock-in] Strategy 0: Found syllabus but no matching mediaId for lessonId');
-      }
-    } catch (e) {
-      console.warn('[Lock-in] Strategy 0 failed:', e.message);
-    }
-  }
-
-  // Strategy 1: Try fetching lesson details
-  try {
-    const lessonUrl = `${echoOrigin}/api/ui/echoplayer/lessons/${lessonId}`;
-    console.log("[Lock-in] Strategy 1: Fetching lesson from:", lessonUrl);
-
-    const lessonResponse = await fetch(lessonUrl, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    });
-
-    if (lessonResponse.ok) {
-      const lessonData = await lessonResponse.json();
-      console.log("[Lock-in] Lesson data keys:", Object.keys(lessonData || {}));
-      console.log("[Lock-in] Lesson data (truncated):", JSON.stringify(lessonData).substring(0, 2000));
-
-      // Try various response structures
-      const medias = 
-        lessonData.data?.medias ||
-        lessonData.medias ||
-        lessonData.data?.lesson?.medias ||
-        lessonData.lesson?.medias ||
-        [];
-      
-      if (medias.length > 0 && medias[0].id) {
-        console.log("[Lock-in] Strategy 1 SUCCESS - Found media ID:", medias[0].id);
-        return medias[0].id;
-      }
-      
-      // Check for media in video property
-      const video = lessonData.data?.video || lessonData.video;
-      if (video?.id) {
-        console.log("[Lock-in] Strategy 1 SUCCESS - Found video ID:", video.id);
-        return video.id;
-      }
-    }
-  } catch (e) {
-    console.warn("[Lock-in] Strategy 1 failed:", e.message);
-  }
-
-  // Strategy 2: Try fetching lesson medias directly
-  try {
-    const mediasUrl = `${echoOrigin}/api/ui/echoplayer/lessons/${lessonId}/medias`;
-    console.log("[Lock-in] Strategy 2: Fetching medias from:", mediasUrl);
-
-    const mediasResponse = await fetch(mediasUrl, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    });
-
-    if (mediasResponse.ok) {
-      const mediasData = await mediasResponse.json();
-      console.log("[Lock-in] Medias data:", JSON.stringify(mediasData).substring(0, 1000));
-
-      const medias = Array.isArray(mediasData) ? mediasData : 
-                     mediasData.data || mediasData.medias || [];
-      
-      if (medias.length > 0 && medias[0].id) {
-        console.log("[Lock-in] Strategy 2 SUCCESS - Found media ID:", medias[0].id);
-        return medias[0].id;
-      }
-    }
-  } catch (e) {
-    console.warn("[Lock-in] Strategy 2 failed:", e.message);
-  }
-
-  // Strategy 3: Try fetching the classroom page and parsing for mediaId
-  try {
-    const classroomUrl = `${echoOrigin}/lesson/${lessonId}/classroom`;
-    console.log("[Lock-in] Strategy 3: Fetching classroom HTML from:", classroomUrl);
-
-    const classroomResponse = await fetch(classroomUrl, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "text/html" },
-    });
-
-    if (classroomResponse.ok) {
-      const html = await classroomResponse.text();
-      
-      // Look for mediaId in various patterns
-      const patterns = [
-        /"mediaId"\s*:\s*"([a-f0-9-]{36})"/i,
-        /"media[_-]?id"\s*[=:]\s*"([a-f0-9-]{36})"/i,
-        /medias\/([a-f0-9-]{36})\/transcript/i,
-        /medias\/([a-f0-9-]{36})(?:\/|\?|")/i,
-        /"id"\s*:\s*"([a-f0-9-]{36})"/g, // Multiple UUIDs - we'll pick the first that looks like a media ID
-      ];
-
-      for (const pattern of patterns) {
-        const match = html.match(pattern);
-        if (match && match[1]) {
-          console.log("[Lock-in] Strategy 3 SUCCESS - Found media ID from pattern:", pattern.source, "->", match[1]);
-          return match[1];
-        }
-      }
-      
-      console.log("[Lock-in] Strategy 3: No mediaId found in HTML");
-    }
-  } catch (e) {
-    console.warn("[Lock-in] Strategy 3 failed:", e.message);
-  }
-
-  // Strategy 4: Try the public API info endpoint
-  try {
-    const infoUrl = `${echoOrigin}/api/ui/echoplayer/public-api/lessons/${lessonId}/info`;
-    console.log("[Lock-in] Strategy 4: Fetching public info from:", infoUrl);
-
-    const infoResponse = await fetch(infoUrl, {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    });
-
-    if (infoResponse.ok) {
-      const infoData = await infoResponse.json();
-      console.log("[Lock-in] Info data:", JSON.stringify(infoData).substring(0, 1000));
-
-      const medias = infoData.data?.medias || infoData.medias || [];
-      if (medias.length > 0 && medias[0].id) {
-        console.log("[Lock-in] Strategy 4 SUCCESS - Found media ID:", medias[0].id);
-        return medias[0].id;
-      }
-    }
-  } catch (e) {
-    console.warn("[Lock-in] Strategy 4 failed:", e.message);
-  }
-
-  return null;
-}
-
-/**
- * Fetch transcript for an Echo360 video
- * @param {Object} video - DetectedVideo with Echo360 metadata
- * @returns {Promise<Object>} Result with transcript or error
- */
-async function extractEcho360Transcript(video) {
-  const { echoOrigin, lessonId, mediaId } = video;
-
-  console.log("[Lock-in] extractEcho360Transcript called with:", {
-    echoOrigin,
-    lessonId,
-    mediaId,
-  });
-
-  if (!echoOrigin || !lessonId) {
-    console.error("[Lock-in] Missing required Echo360 metadata");
-    return {
-      success: false,
-      error: "Missing Echo360 video metadata (origin or lessonId)",
-      errorCode: "INVALID_CONTEXT",
-      aiTranscriptionAvailable: true,
-    };
-  }
-
-  // If mediaId is missing, try multiple strategies to get it
-  let targetMediaId = mediaId;
-  if (!targetMediaId) {
-    console.log("[Lock-in] No mediaId provided, trying multiple strategies to find it...");
-    targetMediaId = await fetchEcho360MediaId(echoOrigin, lessonId);
-  } else {
-    console.log("[Lock-in] Using provided mediaId:", targetMediaId);
-  }
-
-  if (!targetMediaId) {
-    console.error("[Lock-in] Could not determine media ID after all strategies");
-    return {
-      success: false,
-      error: "Could not determine media ID for transcript",
-      errorCode: "NO_MEDIA_ID",
-      aiTranscriptionAvailable: true,
-    };
-  }
-
-  const transcriptUrl = `${echoOrigin}/api/ui/echoplayer/lessons/${lessonId}/medias/${targetMediaId}/transcript`;
-  console.log("[Lock-in] Fetching transcript from:", transcriptUrl);
-
-  try {
-    const response = await fetchWithRetry(transcriptUrl, {
-      method: "GET",
-      credentials: "include",
-      headers: {
-        Accept: "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        return {
-          success: false,
-          error: "Please sign in to Echo360 to access transcripts.",
-          errorCode: "AUTH_REQUIRED",
-          aiTranscriptionAvailable: true,
-        };
-      }
-      if (response.status === 404) {
-        return {
-          success: false,
-          error:
-            "Transcript not available for this recording. AI transcription may be available as a fallback.",
-          errorCode: "NOT_AVAILABLE",
-          aiTranscriptionAvailable: true,
-        };
-      }
-      return {
-        success: false,
-        error: `Failed to fetch transcript: HTTP ${response.status}`,
-        errorCode: "NETWORK_ERROR",
-        aiTranscriptionAvailable: true,
-      };
-    }
-
-    const data = await response.json();
-    const transcript = parseEcho360Transcript(data);
-
-    if (!transcript || transcript.segments.length === 0) {
-      return {
-        success: false,
-        error:
-          "Transcript not available for this recording. AI transcription may be available as a fallback.",
-        errorCode: "NOT_AVAILABLE",
-        aiTranscriptionAvailable: true,
-      };
-    }
-
-    return {
-      success: true,
-      transcript,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[Lock-in] Echo360 transcript fetch error:", message);
-
-    return {
-      success: false,
-      error: `Failed to fetch transcript: ${message}`,
-      errorCode: "NETWORK_ERROR",
-      aiTranscriptionAvailable: true,
-    };
-  }
-}
-
-/**
- * Parse Echo360 transcript API response into TranscriptResult
- * @param {Object} data - Transcript API response
- * @returns {Object|null} TranscriptResult or null if no content
- */
-function parseEcho360Transcript(data) {
-  console.log(
-    "[Lock-in] parseEcho360Transcript: raw data keys:",
-    Object.keys(data || {})
-  );
-
-  // Handle various response structures
-  const cues =
-    data?.data?.contentJSON?.cues ||
-    data?.contentJSON?.cues ||
-    data?.cues ||
-    [];
-
-  console.log("[Lock-in] parseEcho360Transcript: found", cues.length, "cues");
-
-  if (!cues || cues.length === 0) {
-    console.log(
-      "[Lock-in] parseEcho360Transcript: no cues found, data structure:",
-      JSON.stringify(data).substring(0, 1000)
-    );
-    return null;
-  }
-
-  const segments = [];
-  const textParts = [];
-
-  for (const cue of cues) {
-    const text = (cue.content || cue.text || "").trim();
-    if (!text) continue;
-
-    segments.push({
-      startMs: cue.startMs || cue.start || 0,
-      endMs: cue.endMs || cue.end || 0,
-      text,
-      speaker: cue.speaker || undefined,
-    });
-
-    textParts.push(text);
-  }
-
-  const plainText = textParts.join(" ");
-  const durationMs =
-    segments.length > 0 ? segments[segments.length - 1].endMs : 0;
-
-  console.log(
-    "[Lock-in] parseEcho360Transcript: parsed",
-    segments.length,
-    "segments, plainText length:",
-    plainText.length
-  );
-
-  return {
-    plainText,
-    segments,
-    durationMs,
-  };
-}
-
-/**
- * Handle transcript extraction message
+ * Handle transcript extraction for supported providers.
  */
 async function handleTranscriptExtraction(video) {
-  console.log('[Lock-in BG] handleTranscriptExtraction called');
-  console.log('[Lock-in BG] Video:', {
-    id: video.id,
-    provider: video.provider,
-    title: video.title,
-    mediaUrl: video.mediaUrl,
-    trackUrls: video.trackUrls?.length || 0,
-  });
-  
+  console.log("[Lock-in BG] handleTranscriptExtraction called");
+  if (!video || !video.provider) {
+    return {
+      success: false,
+      error: "No video provider specified",
+      errorCode: "INVALID_VIDEO",
+      aiTranscriptionAvailable: true,
+    };
+  }
+
   switch (video.provider) {
     case "panopto": {
-      console.log('[Lock-in BG] Handling Panopto video');
+      console.log("[Lock-in BG] Handling Panopto video");
       const result = await extractPanoptoTranscript(video);
-      console.log('[Lock-in BG] Panopto result:', result.success, result.errorCode);
-      return { success: result.success, data: result };
-    }
-    case "echo360": {
-      console.log('[Lock-in BG] Handling Echo360 video');
-      const result = await extractEcho360Transcript(video);
-      console.log('[Lock-in BG] Echo360 result:', result.success, result.errorCode);
-      return { success: result.success, data: result };
+      console.log("[Lock-in BG] Panopto result:", result.success);
+      return result;
     }
     case "html5": {
-      console.log('[Lock-in BG] Handling HTML5 video');
+      console.log("[Lock-in BG] Handling HTML5 video");
       const result = await extractHtml5Transcript(video);
-      console.log('[Lock-in BG] HTML5 result:', result.success, result.errorCode);
-      return { success: result.success, data: result };
+      console.log("[Lock-in BG] HTML5 result:", result.success);
+      return result;
     }
     default:
-      console.warn('[Lock-in BG] Unsupported video provider:', video.provider);
       return {
         success: false,
         error: `Unsupported video provider: ${video.provider}`,
+        errorCode: "NOT_AVAILABLE",
+        aiTranscriptionAvailable: true,
       };
   }
 }
 
-// ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
+// ─────────────────────────────────────────────────────────────────────────────
 // AI Transcription Helpers
 // ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?ƒ"?
 
 const AI_TRANSCRIPTION_JOBS = new Map();
+
+/**
+ * Fetch media URL from Panopto video for AI transcription
+ * @param {Object} video - DetectedVideo object
+ * @returns {Promise<Object>} - { success, mediaUrl?, error? }
+ */
+async function handlePanoptoMediaUrlFetch(video, options = {}) {
+  console.log("[Lock-in BG] Fetching Panopto media URL for AI transcription");
+  console.log("[Lock-in BG] Video:", {
+    id: video.id,
+    provider: video.provider,
+    embedUrl: video.embedUrl,
+    panoptoTenant: video.panoptoTenant,
+  });
+
+  if (video.provider !== "panopto") {
+    return {
+      success: false,
+      error: "Not a Panopto video",
+    };
+  }
+
+  try {
+    const tabId = options?.tabId || null;
+    const resolverResult = await PanoptoMediaResolver.resolve({
+      tenant: video.panoptoTenant,
+      deliveryId: video.id,
+      embedUrl: video.embedUrl,
+      tabId,
+    });
+    console.log(
+      "[Lock-in BG] Panopto media URL fetch (v2) result:",
+      resolverResult.ok
+    );
+    return {
+      success: resolverResult.ok,
+      mediaUrl: resolverResult.mediaUrl,
+      mime: resolverResult.mime,
+      method: resolverResult.method,
+      error: resolverResult.message,
+      errorCode: resolverResult.errorCode,
+      debug: resolverResult.debug,
+    };
+  } catch (error) {
+    console.error("[Lock-in BG] Error fetching Panopto media URL:", error);
+    return {
+      success: false,
+      error: error.message || "Failed to fetch media URL",
+    };
+  }
+}
+
 const AI_UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
 const AI_POLL_INTERVAL_MS = 3000;
 const AI_POLL_MAX_ATTEMPTS = 160;
@@ -1027,7 +1431,9 @@ function getConfigValue(key, fallback) {
     return fallback;
   }
   const value = self.LOCKIN_CONFIG[key];
-  return value === undefined || value === null || value === "" ? fallback : value;
+  return value === undefined || value === null || value === ""
+    ? fallback
+    : value;
 }
 
 function getBackendUrl() {
@@ -1192,8 +1598,11 @@ function createProgressEmitter(tabId, requestId) {
     if (!tabId) return;
 
     const percent =
-      typeof info.percent === "number" ? Math.max(0, Math.min(100, info.percent)) : undefined;
-    const percentBucket = typeof percent === "number" ? Math.floor(percent) : null;
+      typeof info.percent === "number"
+        ? Math.max(0, Math.min(100, info.percent))
+        : undefined;
+    const percentBucket =
+      typeof percent === "number" ? Math.floor(percent) : null;
     const shouldSkip =
       stage === lastStage &&
       percentBucket !== null &&
@@ -1245,9 +1654,9 @@ async function fetchJsonWithAuth(url, token, options = {}) {
     let message = "Request failed";
     if (data?.error?.message) {
       message = data.error.message;
-    } else if (typeof data?.error === 'string') {
+    } else if (typeof data?.error === "string") {
       message = data.error;
-    } else if (typeof data?.message === 'string') {
+    } else if (typeof data?.message === "string") {
       message = data.message;
     } else if (response.statusText) {
       message = response.statusText;
@@ -1301,7 +1710,7 @@ function base64ToArrayBuffer(base64) {
 /**
  * Request content script to fetch media and stream it back
  * This is used as a fallback when CORS blocks direct fetching from background
- * 
+ *
  * @param {number} tabId - The tab ID to send the request to
  * @param {string} mediaUrl - The URL of the media to fetch
  * @param {string} jobId - The transcription job ID
@@ -1309,9 +1718,18 @@ function base64ToArrayBuffer(base64) {
  * @param {function} onChunk - Callback for each chunk received
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-async function fetchMediaViaContentScript({ tabId, mediaUrl, jobId, requestId, onChunk }) {
-  console.log('[Lock-in BG] Requesting content script to fetch media:', mediaUrl);
-  
+async function fetchMediaViaContentScript({
+  tabId,
+  mediaUrl,
+  jobId,
+  requestId,
+  onChunk,
+}) {
+  console.log(
+    "[Lock-in BG] Requesting content script to fetch media:",
+    mediaUrl
+  );
+
   // Set up chunk receiver
   let resolveComplete;
   let rejectComplete;
@@ -1319,40 +1737,40 @@ async function fetchMediaViaContentScript({ tabId, mediaUrl, jobId, requestId, o
     resolveComplete = resolve;
     rejectComplete = reject;
   });
-  
+
   // Store the chunk handler for this request
   pendingMediaChunks.set(requestId, {
     onChunk,
     resolve: resolveComplete,
     reject: rejectComplete,
   });
-  
+
   try {
     // Send request to content script - this kicks off the fetch
     // The content script will send chunks via separate MEDIA_CHUNK messages
     const result = await chrome.tabs.sendMessage(tabId, {
-      type: 'FETCH_MEDIA_FOR_TRANSCRIPTION',
-      payload: { mediaUrl, jobId, requestId }
+      type: "FETCH_MEDIA_FOR_TRANSCRIPTION",
+      payload: { mediaUrl, jobId, requestId },
     });
-    
-    console.log('[Lock-in BG] Content script fetch result:', result);
-    
+
+    console.log("[Lock-in BG] Content script fetch result:", result);
+
     if (!result || !result.success) {
       throw createErrorWithCode(
-        result?.error || 'Content script failed to fetch media',
-        result?.errorCode || 'CONTENT_FETCH_ERROR'
+        result?.error || "Content script failed to fetch media",
+        result?.errorCode || "CONTENT_FETCH_ERROR"
       );
     }
-    
+
     // Wait for all chunks to be processed
     // The handleMediaChunkMessage will resolve this when isLast=true
-    console.log('[Lock-in BG] Waiting for all chunks to be uploaded...');
+    console.log("[Lock-in BG] Waiting for all chunks to be uploaded...");
     await completePromise;
-    console.log('[Lock-in BG] All chunks uploaded successfully');
-    
+    console.log("[Lock-in BG] All chunks uploaded successfully");
+
     return result;
   } catch (error) {
-    console.error('[Lock-in BG] Content script media fetch error:', error);
+    console.error("[Lock-in BG] Content script media fetch error:", error);
     throw error;
   } finally {
     pendingMediaChunks.delete(requestId);
@@ -1363,21 +1781,30 @@ async function fetchMediaViaContentScript({ tabId, mediaUrl, jobId, requestId, o
  * Handle MEDIA_CHUNK messages from content script
  */
 function handleMediaChunkMessage(message) {
-  const { requestId, chunkIndex, chunkData, chunkSize, isLast } = message.payload || {};
-  
+  const { requestId, chunkIndex, chunkData, chunkSize, isLast } =
+    message.payload || {};
+
   const handler = pendingMediaChunks.get(requestId);
   if (!handler) {
-    console.warn('[Lock-in BG] Received chunk for unknown request:', requestId);
+    console.warn("[Lock-in BG] Received chunk for unknown request:", requestId);
     return;
   }
-  
-  console.log('[Lock-in BG] Received chunk:', chunkIndex, 'size:', chunkSize, 'isLast:', isLast);
-  
+
+  console.log(
+    "[Lock-in BG] Received chunk:",
+    chunkIndex,
+    "size:",
+    chunkSize,
+    "isLast:",
+    isLast
+  );
+
   // Convert base64 to Uint8Array
   const chunkBytes = base64ToArrayBuffer(chunkData);
-  
+
   // Call the chunk handler
-  handler.onChunk(chunkBytes, chunkIndex, isLast)
+  handler
+    .onChunk(chunkBytes, chunkIndex, isLast)
     .then(() => {
       if (isLast) {
         handler.resolve({ success: true });
@@ -1388,11 +1815,19 @@ function handleMediaChunkMessage(message) {
     });
 }
 
-async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress, tabId, requestId }) {
+async function uploadMediaInChunks({
+  jobId,
+  mediaUrl,
+  token,
+  signal,
+  onProgress,
+  tabId,
+  requestId,
+}) {
   const backendUrl = getBackendUrl();
   let uploadedBytes = 0;
   let chunkIndex = 0;
-  
+
   // Helper to send a chunk to the backend with retry logic for rate limits
   const sendChunkToBackend = async (chunk, index, maxRetries = 5) => {
     const headers = {
@@ -1407,12 +1842,15 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
         throw new Error("CANCELED");
       }
 
-      const response = await fetch(`${backendUrl}/api/transcripts/jobs/${jobId}/chunks`, {
-        method: "PUT",
-        headers,
-        body: chunk,
-        signal,
-      });
+      const response = await fetch(
+        `${backendUrl}/api/transcripts/jobs/${jobId}/chunks`,
+        {
+          method: "PUT",
+          headers,
+          body: chunk,
+          signal,
+        }
+      );
 
       if (response.ok) {
         return response.json();
@@ -1422,57 +1860,83 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
       if (response.status === 429) {
         const retryAfterHeader = response.headers.get("Retry-After");
         let retryAfterMs;
-        
+
         if (retryAfterHeader) {
           retryAfterMs = parseInt(retryAfterHeader, 10) * 1000;
         } else {
           // Exponential backoff: 2s, 4s, 8s, 16s, 32s
           retryAfterMs = Math.min(2000 * Math.pow(2, attempt), 32000);
         }
-        
-        console.log(`[Lock-in BG] Rate limited on chunk ${index}, retrying in ${retryAfterMs}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+
+        console.log(
+          `[Lock-in BG] Rate limited on chunk ${index}, retrying in ${retryAfterMs}ms (attempt ${
+            attempt + 1
+          }/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
         continue;
       }
 
       const text = await response.text();
       let data = null;
-      try { data = JSON.parse(text); } catch { /* ignore */ }
-      lastError = new Error(data?.error?.message || data?.error || `Chunk upload failed: ${response.status}`);
+      try {
+        data = JSON.parse(text);
+      } catch {
+        /* ignore */
+      }
+      lastError = new Error(
+        data?.error?.message ||
+          data?.error ||
+          `Chunk upload failed: ${response.status}`
+      );
       break;
     }
-    
-    throw lastError || new Error(`Chunk ${index} upload failed after ${maxRetries} retries`);
+
+    throw (
+      lastError ||
+      new Error(`Chunk ${index} upload failed after ${maxRetries} retries`)
+    );
   };
-  
+
   // Known SSO domains that indicate session expiration
-  const SSO_DOMAINS = ['okta.com', 'auth0.com', 'login.microsoftonline.com', 'accounts.google.com'];
-  
+  const SSO_DOMAINS = [
+    "okta.com",
+    "auth0.com",
+    "login.microsoftonline.com",
+    "accounts.google.com",
+  ];
+
   const isSsoRedirect = (url) => {
     try {
       const hostname = new URL(url).hostname.toLowerCase();
-      return SSO_DOMAINS.some(domain => hostname.includes(domain));
-    } catch { return false; }
+      return SSO_DOMAINS.some((domain) => hostname.includes(domain));
+    } catch {
+      return false;
+    }
   };
-  
+
   const isCdnUrl = (url) => {
     try {
       const hostname = new URL(url).hostname.toLowerCase();
-      return hostname.includes('cloudfront.net') || 
-             hostname.includes('cdn.') ||
-             hostname.includes('akamai') ||
-             hostname.includes('fastly') ||
-             hostname.includes('cloudflare');
-    } catch { return false; }
+      return (
+        hostname.includes("cloudfront.net") ||
+        hostname.includes("cdn.") ||
+        hostname.includes("akamai") ||
+        hostname.includes("fastly") ||
+        hostname.includes("cloudflare")
+      );
+    } catch {
+      return false;
+    }
   };
-  
+
   // First try direct fetch from background script
   let response;
   let usedContentScript = false;
-  
+
   try {
-    console.log('[Lock-in BG] Attempting direct media fetch:', mediaUrl);
-    
+    console.log("[Lock-in BG] Attempting direct media fetch:", mediaUrl);
+
     // Use manual redirect to handle Moodle → CDN redirects properly
     // Moodle needs credentials, CDN doesn't (and CDN returns Access-Control-Allow-Origin: *)
     response = await fetch(mediaUrl, {
@@ -1481,15 +1945,22 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
       redirect: "manual",
       signal,
     });
-    
-    console.log('[Lock-in BG] Initial response:', response.status, response.type);
-    
+
+    console.log(
+      "[Lock-in BG] Initial response:",
+      response.status,
+      response.type
+    );
+
     // Handle redirects manually
-    if (response.type === "opaqueredirect" || response.status === 0 ||
-        (response.status >= 300 && response.status < 400)) {
+    if (
+      response.type === "opaqueredirect" ||
+      response.status === 0 ||
+      (response.status >= 300 && response.status < 400)
+    ) {
       const location = response.headers.get("location");
-      console.log('[Lock-in BG] Redirect detected, location:', location);
-      
+      console.log("[Lock-in BG] Redirect detected, location:", location);
+
       if (location) {
         // Check for SSO redirect (session expired)
         if (isSsoRedirect(location)) {
@@ -1498,11 +1969,14 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
             "SESSION_EXPIRED"
           );
         }
-        
+
         // Follow redirect with appropriate credentials
         const useCredentials = !isCdnUrl(location);
-        console.log('[Lock-in BG] Following redirect, credentials:', useCredentials);
-        
+        console.log(
+          "[Lock-in BG] Following redirect, credentials:",
+          useCredentials
+        );
+
         response = await fetch(location, {
           method: "GET",
           credentials: useCredentials ? "include" : "omit",
@@ -1510,41 +1984,49 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
         });
       } else {
         // Can't get location - fall back to content script
-        console.log('[Lock-in BG] No location header, falling back to content script');
+        console.log(
+          "[Lock-in BG] No location header, falling back to content script"
+        );
         throw createErrorWithCode("CORS_BLOCKED", "CORS_BLOCKED");
       }
     }
-    
+
     // Check for CORS/opaque issues
     if (response.type === "opaque") {
-      console.log('[Lock-in BG] Got opaque response, will try content script fallback');
+      console.log(
+        "[Lock-in BG] Got opaque response, will try content script fallback"
+      );
       throw createErrorWithCode("CORS_BLOCKED", "CORS_BLOCKED");
     }
-    
+
     if (!response.ok) {
       if (isAuthStatus(response.status)) {
-        throw createErrorWithCode("Authentication required. Please refresh the page and log in.", "AUTH_REQUIRED");
+        throw createErrorWithCode(
+          "Authentication required. Please refresh the page and log in.",
+          "AUTH_REQUIRED"
+        );
       }
       throw createErrorWithCode(`HTTP ${response.status}`, "FETCH_ERROR");
     }
-    
-    console.log('[Lock-in BG] Direct fetch successful');
+
+    console.log("[Lock-in BG] Direct fetch successful");
   } catch (error) {
     // Check if we should try content script fallback
-    const shouldFallback = 
+    const shouldFallback =
       error?.code === "CORS_BLOCKED" ||
       error?.code === "NOT_AVAILABLE" ||
-      (error?.message && (
-        error.message.includes("CORS") ||
-        error.message.includes("opaque") ||
-        error.message.includes("Failed to fetch") ||
-        error.message.includes("NetworkError")
-      ));
-    
+      (error?.message &&
+        (error.message.includes("CORS") ||
+          error.message.includes("opaque") ||
+          error.message.includes("Failed to fetch") ||
+          error.message.includes("NetworkError")));
+
     if (shouldFallback && tabId) {
-      console.log('[Lock-in BG] Trying content script fallback for media fetch');
+      console.log(
+        "[Lock-in BG] Trying content script fallback for media fetch"
+      );
       usedContentScript = true;
-      
+
       try {
         // Use content script to fetch and upload chunks
         await fetchMediaViaContentScript({
@@ -1559,36 +2041,40 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
               onProgress({ bytesUploaded: uploadedBytes, chunkIndex: index });
             }
             chunkIndex = index + 1;
-          }
+          },
         });
-        
+
         // Return consistent property names with direct fetch path
         // chunkIndex is now the total count (0-indexed + 1 after each chunk)
-        return { 
+        return {
           chunkCount: chunkIndex,
           totalChunks: chunkIndex, // We know exact count after streaming completes
           totalBytes: uploadedBytes,
-          usedContentScript: true
+          usedContentScript: true,
         };
       } catch (contentError) {
-        console.error('[Lock-in BG] Content script fallback failed:', contentError);
+        console.error(
+          "[Lock-in BG] Content script fallback failed:",
+          contentError
+        );
         throw createErrorWithCode(
-          contentError?.message || "Media could not be fetched via content script.",
+          contentError?.message ||
+            "Media could not be fetched via content script.",
           contentError?.code || "CONTENT_FETCH_ERROR"
         );
       }
     }
-    
+
     // Re-throw original error if we can't fallback
     if (error?.name === "AbortError") throw error;
     if (error?.code) throw error;
-    
+
     throw createErrorWithCode(
       "Media could not be fetched due to browser restrictions (CORS/opaque response) or network errors.",
       "NOT_AVAILABLE"
     );
   }
-  
+
   // Process the direct fetch response
   if (!response.body || typeof response.body.getReader !== "function") {
     throw createErrorWithCode(
@@ -1643,27 +2129,42 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
       if (uploadResponse.status === 429) {
         const retryAfterHeader = uploadResponse.headers.get("Retry-After");
         let retryAfterMs;
-        
+
         if (retryAfterHeader) {
           retryAfterMs = parseInt(retryAfterHeader, 10) * 1000;
         } else {
           // Exponential backoff: 2s, 4s, 8s, 16s, 32s
           retryAfterMs = Math.min(2000 * Math.pow(2, attempt), 32000);
         }
-        
-        console.log(`[Lock-in BG] Rate limited on chunk ${chunkIndex}, retrying in ${retryAfterMs}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, retryAfterMs));
+
+        console.log(
+          `[Lock-in BG] Rate limited on chunk ${chunkIndex}, retrying in ${retryAfterMs}ms (attempt ${
+            attempt + 1
+          }/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
         continue;
       }
 
       const text = await uploadResponse.text();
       let data = null;
-      try { data = JSON.parse(text); } catch { /* ignore */ }
-      lastError = new Error(data?.error?.message || data?.error || `Failed to upload chunk ${chunkIndex}: ${uploadResponse.status}`);
+      try {
+        data = JSON.parse(text);
+      } catch {
+        /* ignore */
+      }
+      lastError = new Error(
+        data?.error?.message ||
+          data?.error ||
+          `Failed to upload chunk ${chunkIndex}: ${uploadResponse.status}`
+      );
       break;
     }
-    
-    throw lastError || new Error(`Chunk ${chunkIndex} upload failed after ${maxRetries} retries`);
+
+    throw (
+      lastError ||
+      new Error(`Chunk ${chunkIndex} upload failed after ${maxRetries} retries`)
+    );
   };
 
   while (true) {
@@ -1708,7 +2209,13 @@ async function uploadMediaInChunks({ jobId, mediaUrl, token, signal, onProgress,
   };
 }
 
-async function finalizeTranscriptionJob({ jobId, token, options, expectedTotalChunks, signal }) {
+async function finalizeTranscriptionJob({
+  jobId,
+  token,
+  options,
+  expectedTotalChunks,
+  signal,
+}) {
   const backendUrl = getBackendUrl();
   const payload = Object.assign({}, options || {});
   if (expectedTotalChunks) {
@@ -1740,14 +2247,18 @@ async function pollTranscriptJob({ jobId, token, signal, onProgress }) {
     );
 
     const job = data?.job || data;
-    if ((job?.status === "done" || job?.status === "completed") && job.transcript) {
+    if (
+      (job?.status === "done" || job?.status === "completed") &&
+      job.transcript
+    ) {
       return job.transcript;
     }
     if (job?.status === "error" || job?.status === "failed") {
       // Extract error message - handle both string and object error formats
-      const errorMsg = typeof job.error === 'string' 
-        ? job.error 
-        : (job.error?.message || "AI transcription failed");
+      const errorMsg =
+        typeof job.error === "string"
+          ? job.error
+          : job.error?.message || "AI transcription failed";
       throw new Error(errorMsg);
     }
     if (job?.status === "canceled") {
@@ -1767,11 +2278,15 @@ async function cancelTranscriptJob({ jobId, token }) {
   if (!jobId || !token) return;
   const backendUrl = getBackendUrl();
   try {
-    await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}/cancel`, token, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    });
+    await fetchJsonWithAuth(
+      `${backendUrl}/api/transcripts/jobs/${jobId}/cancel`,
+      token,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }
+    );
   } catch (error) {
     console.warn("[Lock-in] Failed to cancel transcript job:", error);
   }
@@ -1788,18 +2303,23 @@ async function listActiveTranscriptJobs({ token }) {
 async function cancelAllActiveTranscriptJobs({ token }) {
   if (!token) throw new Error("No auth token provided");
   const backendUrl = getBackendUrl();
-  return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/cancel-all`, token, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({}),
-  });
+  return fetchJsonWithAuth(
+    `${backendUrl}/api/transcripts/jobs/cancel-all`,
+    token,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }
+  );
 }
 
 async function handleAiTranscriptionStart(payload, sender) {
   const video = payload?.video;
   const options = payload?.options || {};
   const requestId =
-    payload?.requestId || `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    payload?.requestId ||
+    `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   if (!video || !video.mediaUrl) {
     return {
@@ -1921,7 +2441,10 @@ async function handleAiTranscriptionStart(payload, sender) {
 
     progress("processing", { jobId, message: "Processing audio..." });
     const expectedTotalChunksForFinalize =
-      uploadStats?.totalChunks || expectedTotalChunks || uploadStats?.chunkCount || null;
+      uploadStats?.totalChunks ||
+      expectedTotalChunks ||
+      uploadStats?.chunkCount ||
+      null;
     await finalizeTranscriptionJob({
       jobId,
       token,
@@ -1962,10 +2485,14 @@ async function handleAiTranscriptionStart(payload, sender) {
       };
     }
     if (errorCode === "LOCKIN_AUTH_REQUIRED") {
-      progress("failed", { jobId: jobState.jobId, message: "Lock-in sign-in required." });
+      progress("failed", {
+        jobId: jobState.jobId,
+        message: "Lock-in sign-in required.",
+      });
       return {
         success: false,
-        error: "Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.",
+        error:
+          "Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.",
         errorCode: "LOCKIN_AUTH_REQUIRED",
         jobId: jobState.jobId,
         status: "failed",
@@ -1977,10 +2504,14 @@ async function handleAiTranscriptionStart(payload, sender) {
       message === "AUTH_REQUIRED" ||
       isAuthStatus(status)
     ) {
-      progress("failed", { jobId: jobState.jobId, message: "Media authentication required." });
+      progress("failed", {
+        jobId: jobState.jobId,
+        message: "Media authentication required.",
+      });
       return {
         success: false,
-        error: "Media authentication required. Please refresh the page and ensure you are logged in to the learning platform.",
+        error:
+          "Media authentication required. Please refresh the page and ensure you are logged in to the learning platform.",
         errorCode: "AUTH_REQUIRED",
         jobId: jobState.jobId,
         status: "failed",
@@ -2163,22 +2694,56 @@ async function handleMessage(message, sender) {
 
       case "extractTranscript":
       case "EXTRACT_TRANSCRIPT": {
-        console.log('[Lock-in BG] EXTRACT_TRANSCRIPT message received');
+        console.log("[Lock-in BG] EXTRACT_TRANSCRIPT message received");
         const video = message.video || message.payload?.video;
         if (!video) {
-          console.warn('[Lock-in BG] No video provided in EXTRACT_TRANSCRIPT message');
+          console.warn(
+            "[Lock-in BG] No video provided in EXTRACT_TRANSCRIPT message"
+          );
           return Messaging
             ? Messaging.createErrorResponse("No video provided")
             : { error: "No video provided" };
         }
-        console.log('[Lock-in BG] Processing EXTRACT_TRANSCRIPT for:', video.provider, video.id);
+        console.log(
+          "[Lock-in BG] Processing EXTRACT_TRANSCRIPT for:",
+          video.provider,
+          video.id
+        );
         const result = await handleTranscriptExtraction(video);
-        console.log('[Lock-in BG] EXTRACT_TRANSCRIPT result:', result.success);
+        console.log("[Lock-in BG] EXTRACT_TRANSCRIPT result:", result.success);
         return Messaging
           ? result.success
             ? Messaging.createSuccessResponse(result)
             : Messaging.createErrorResponse(
                 result.error || "Failed to extract transcript",
+                result
+              )
+          : result;
+      }
+
+      case "FETCH_PANOPTO_MEDIA_URL": {
+        console.log("[Lock-in BG] FETCH_PANOPTO_MEDIA_URL message received");
+        const video = message.video || message.payload?.video;
+        if (!video) {
+          console.warn(
+            "[Lock-in BG] No video provided in FETCH_PANOPTO_MEDIA_URL message"
+          );
+          return Messaging
+            ? Messaging.createErrorResponse("No video provided")
+            : { success: false, error: "No video provided" };
+        }
+        console.log(
+          "[Lock-in BG] Fetching media URL for:",
+          video.provider,
+          video.id
+        );
+        const result = await handlePanoptoMediaUrlFetch(video, { tabId });
+        console.log("[Lock-in BG] FETCH_PANOPTO_MEDIA_URL result:", result.success);
+        return Messaging
+          ? result.success
+            ? Messaging.createSuccessResponse(result)
+            : Messaging.createErrorResponse(
+                result.error || "Failed to fetch media URL",
                 result
               )
           : result;
@@ -2235,31 +2800,6 @@ async function handleMessage(message, sender) {
             ? Messaging.createErrorResponse(error.message)
             : { success: false, error: error.message };
         }
-      }
-
-      case "fetchEcho360Syllabus":
-      case "FETCH_ECHO360_SYLLABUS": {
-        const context = message.context || message.payload?.context;
-        if (!context) {
-          return Messaging
-            ? Messaging.createErrorResponse("No Echo360 context provided")
-            : { success: false, error: "No Echo360 context provided" };
-        }
-        const result = await fetchEcho360Syllabus(context);
-        if (result.success) {
-          return Messaging
-            ? Messaging.createSuccessResponse({
-                success: true,
-                videos: result.videos,
-              })
-            : { success: true, videos: result.videos };
-        }
-        return Messaging
-          ? Messaging.createErrorResponse(
-              result.error || "Failed to fetch syllabus",
-              { data: result }
-            )
-          : { success: false, error: result.error, data: result };
       }
 
       default: {

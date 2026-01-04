@@ -38,6 +38,22 @@
       if (node.nodeType === Node.ELEMENT_NODE) {
         const tag = node.tagName || "";
         if (WRAPPER_SKIP_TAGS.has(tag)) return false;
+        // Don't move fixed/absolute positioned elements - they're likely modals/popups
+        // that need to stay as direct body children for correct stacking behavior
+        try {
+          const style = window.getComputedStyle(node);
+          const position = style.getPropertyValue("position");
+          if (position === "fixed" || position === "absolute") {
+            return false;
+          }
+          // Don't move elements with very high z-index (likely overlays)
+          const zIndex = parseInt(style.getPropertyValue("z-index"), 10);
+          if (!isNaN(zIndex) && zIndex > 1000) {
+            return false;
+          }
+        } catch (e) {
+          // getComputedStyle might fail on some elements, just skip the check
+        }
       }
       return true;
     }

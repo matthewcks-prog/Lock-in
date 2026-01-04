@@ -120,32 +120,16 @@ async function waitForTrackCues(
 export async function extractHtml5TranscriptFromDom(
   video: DetectedVideo
 ): Promise<TranscriptExtractionResult | null> {
-  console.log('[Lock-in Transcript] extractHtml5TranscriptFromDom called for video:', video.id, video.title);
-  
   const videoEl = findHtml5VideoElement(video);
   if (!videoEl) {
-    console.warn('[Lock-in Transcript] Could not find video element in DOM for:', video.id);
-    console.log('[Lock-in Transcript] Tried: domId =', video.domId, ', domSelector =', video.domSelector, ', mediaUrl =', video.mediaUrl);
     return null;
   }
-  console.log('[Lock-in Transcript] Found video element:', videoEl.id || '(no id)', videoEl.className || '(no class)');
 
   const captionTracks = Array.from(videoEl.textTracks || []).filter(
     (track) => track.kind === 'captions' || track.kind === 'subtitles'
   );
-  console.log('[Lock-in Transcript] Caption/subtitle tracks found:', captionTracks.length);
-  captionTracks.forEach((track, i) => {
-    console.log(`[Lock-in Transcript] Track ${i + 1}:`, {
-      kind: track.kind,
-      label: track.label,
-      language: track.language,
-      mode: track.mode,
-      cueCount: track.cues?.length || 0,
-    });
-  });
 
   if (captionTracks.length === 0) {
-    console.log('[Lock-in Transcript] No caption/subtitle tracks available');
     return null;
   }
 

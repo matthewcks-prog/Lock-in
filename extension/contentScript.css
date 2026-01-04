@@ -35,14 +35,9 @@ html {
   --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
 }
 
-/* Default: page uses 100% viewport width */
-body {
-  width: 100vw !important;
-  max-width: 100vw !important;
-  margin: 0 !important;
-  padding: 0 !important;
+/* Only apply restrictive styles when sidebar is open - avoid breaking site layouts */
+body.lockin-sidebar-open {
   overflow-x: hidden;
-  box-sizing: border-box;
 }
 
 /* Page content wrapper (injected) */
@@ -82,12 +77,10 @@ body.lockin-sidebar-open #page-wrapper {
   padding-right: 0 !important;
 }
 
-/* Also flatten common container wrappers that add gutters */
-body.lockin-sidebar-open .container,
-body.lockin-sidebar-open .container-fluid,
-body.lockin-sidebar-open main,
-body.lockin-sidebar-open #main-content,
-body.lockin-sidebar-open .content {
+/* Only target Moodle-specific container wrappers - avoid breaking other sites */
+body.lockin-sidebar-open #lockin-page-wrapper > #page-wrapper > .container-fluid,
+body.lockin-sidebar-open #lockin-page-wrapper > #page > #page-content,
+body.lockin-sidebar-open #lockin-page-wrapper > #region-main-box {
   max-width: 100% !important;
   width: 100% !important;
   margin-right: 0 !important;
@@ -2449,6 +2442,12 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 /* Video Item */
 .lockin-video-item {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lockin-video-item-main {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px;
@@ -2461,18 +2460,18 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   text-align: left;
 }
 
-.lockin-video-item:hover {
+.lockin-video-item-main:hover {
   border-color: #c7d2fe;
   background: #f8faff;
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
 }
 
-.lockin-video-item:disabled {
+.lockin-video-item-main:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 
-.lockin-video-item.is-extracting {
+.lockin-video-item.is-extracting .lockin-video-item-main {
   border-color: #6366f1;
   background: #eef2ff;
 }
@@ -2548,6 +2547,140 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   border-radius: 4px;
 }
 
+.lockin-video-item-badge {
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.lockin-video-item-ai {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+
+.lockin-video-item-ai-active {
+  flex-direction: column;
+  align-items: stretch;
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  gap: 6px;
+}
+
+.lockin-video-item-ai-error {
+  background: #fee2e2;
+  border-color: #fecaca;
+}
+
+.lockin-video-item-ai-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lockin-video-item-ai-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lockin-video-item-ai-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.lockin-video-item-ai-subtitle {
+  font-size: 11px;
+  color: #92400e;
+}
+
+.lockin-video-item-ai-active .lockin-video-item-ai-title,
+.lockin-video-item-ai-active .lockin-video-item-ai-subtitle {
+  color: #1e3a8a;
+}
+
+.lockin-video-item-ai-error .lockin-video-item-ai-title,
+.lockin-video-item-ai-error .lockin-video-item-ai-subtitle {
+  color: #991b1b;
+}
+
+.lockin-video-item-ai-progress {
+  width: 100%;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.lockin-video-item-ai-progress-bar {
+  height: 100%;
+  background: #6366f1;
+  width: 0%;
+  transition: width 0.2s ease;
+}
+
+.lockin-video-item-ai-btn {
+  padding: 4px 10px;
+  background: #f59e0b;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+
+.lockin-video-item-ai-btn:hover {
+  background: #d97706;
+}
+
+.lockin-video-item-ai-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lockin-video-item-ai-active .lockin-video-item-ai-btn {
+  background: #6b7280;
+  align-self: flex-start;
+}
+
+.lockin-video-item-ai-active .lockin-video-item-ai-btn:hover {
+  background: #4b5563;
+}
+
+.lockin-video-item-ai-error .lockin-video-item-ai-btn {
+  background: #dc2626;
+}
+
+.lockin-video-item-ai-error .lockin-video-item-ai-btn:hover {
+  background: #b91c1c;
+}
+
+.lockin-video-item-error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
 /* Auth Required Prompt */
 .lockin-video-auth-required {
   padding: 20px;
@@ -2593,7 +2726,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   transition: transform 0.15s ease;
 }
 
-.lockin-video-item:hover .lockin-video-extract-icon {
+.lockin-video-item-main:hover .lockin-video-extract-icon {
   transform: translateX(2px);
   color: #6366f1;
 }
@@ -2686,45 +2819,6 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 .lockin-transcript-action-btn.lockin-transcript-action-primary:hover {
   background: #1d4ed8;
   border-color: #1d4ed8;
-}
-
-/* AI Fallback Notice */
-.lockin-transcript-ai-fallback {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
-  border-radius: 8px;
-  margin-top: 8px;
-}
-
-.lockin-transcript-ai-fallback-text {
-  font-size: 12px;
-  color: #92400e;
-}
-
-.lockin-transcript-ai-fallback-btn {
-  padding: 4px 10px;
-  background: #f59e0b;
-  border: none;
-  border-radius: 4px;
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.lockin-transcript-ai-fallback-btn:hover {
-  background: #d97706;
-}
-
-/* TODO: Whisper fallback placeholder */
-.lockin-transcript-ai-fallback-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* === RESPONSIVE BEHAVIOR === */
