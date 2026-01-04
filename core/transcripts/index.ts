@@ -10,16 +10,20 @@ export * from './webvttParser';
 export * from './videoDetection';
 export * from './providerRegistry';
 export {
-  Echo360Provider,
-  createEcho360Provider,
-  parseEcho360Syllabus,
-  parseEcho360Transcript,
-} from './providers/echo360Provider';
-export {
   PanoptoProvider,
   createPanoptoProvider,
   extractCaptionVttUrl,
+  extractPanoptoMediaUrl,
   extractDeliveryId,
   extractTenantDomain,
+  extractPanoptoInfo,
+  buildPanoptoEmbedUrl,
+  buildPanoptoViewerUrl,
+  normalizePanoptoEmbedUrl,
+  detectPanoptoFromLinks,
+  detectPanoptoFromRedirect,
+  isPanoptoUrl,
+  isPanoptoDomain,
+  isLmsRedirectPage,
+  type PanoptoInfo,
 } from './providers/panoptoProvider';
-

@@ -2,7 +2,7 @@
  * useTranscripts Hook
  *
  * Manages transcript extraction state and communication with background script.
- * Detects videos from multiple providers (Panopto, Echo360).
+ * Detects videos from multiple providers (Panopto, HTML5).
  *
  * Uses core detection logic from core/transcripts/videoDetection.ts
  */
@@ -12,14 +12,12 @@ import type { DetectedVideo, TranscriptResult } from '@core/transcripts/types';
 import {
   detectVideosSync,
   collectIframeInfo,
-  extractEcho360Context,
-  getEcho360PageType,
 } from '@core/transcripts/videoDetection';
 import { extractHtml5TranscriptFromDom } from './extractHtml5TranscriptFromDom';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Types
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 type AiTranscriptionStatus =
   | 'idle'
@@ -37,6 +35,7 @@ interface AiTranscriptionState {
   jobId: string | null;
   video: DetectedVideo | null;
   progressMessage: string | null;
+  progressPercent: number | null;
   error: string | null;
 }
 
@@ -51,13 +50,10 @@ interface TranscriptState {
   isExtracting: boolean;
   /** ID of video currently being extracted */
   extractingVideoId: string | null;
-  /** Error message if any */
+  /** Error message for detection failures */
   error: string | null;
-  /** Last transcript extraction result */
-  lastExtraction: {
-    video: DetectedVideo;
-    result: TranscriptResponseData;
-  } | null;
+  /** Per-video transcript extraction results */
+  extractionsByVideoId: Record<string, TranscriptResponseData>;
   /** Last extracted transcript */
   lastTranscript: {
     video: DetectedVideo;
@@ -74,9 +70,7 @@ interface TranscriptState {
 
 interface UseTranscriptsResult {
   state: TranscriptState;
-  openVideoList: () => void;
   closeVideoList: () => void;
-  detectVideos: () => void;
   /** Detect videos and auto-extract if only one is found */
   detectAndAutoExtract: () => void;
   extractTranscript: (video: DetectedVideo) => Promise<TranscriptResult | null>;
@@ -106,6 +100,13 @@ interface AiTranscriptionResponse {
   requestId?: string;
 }
 
+interface PanoptoMediaUrlResponse {
+  success: boolean;
+  mediaUrl?: string;
+  error?: string;
+  errorCode?: string;
+}
+
 interface AiTranscriptionProgressPayload {
   requestId?: string;
   jobId?: string | null;
@@ -114,124 +115,25 @@ interface AiTranscriptionProgressPayload {
   percent?: number | null;
 }
 
+interface AiTranscriptionProgressMessage {
+  type?: string;
+  payload?: AiTranscriptionProgressPayload;
+}
+
 interface BackgroundResponse {
   success?: boolean;
   ok?: boolean;
-  data?: TranscriptResponseData | Echo360SyllabusData;
+  data?: TranscriptResponseData;
   error?: string;
+  errorCode?: string;
   transcript?: TranscriptResult;
   aiTranscriptionAvailable?: boolean;
   videos?: DetectedVideo[];
 }
 
-interface Echo360SyllabusData {
-  success: boolean;
-  videos?: DetectedVideo[];
-  error?: string;
-  errorCode?: string;
-}
-
-interface AuthRequiredError {
-  type: 'AUTH_REQUIRED';
-  provider: string;
-  signInUrl: string;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DOM Helpers (content script context only)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Extract video title from Echo360 page using multiple strategies
- */
-function extractEcho360PageTitle(): string {
-  // Strategy 1: Look for specific Echo360 title elements
-  const titleSelectors = [
-    '[data-testid="lesson-title"]',
-    '[class*="lesson-title"]',
-    '[class*="video-title"]',
-    '.classroom-title',
-    'h1[class*="title"]',
-    '.header-title',
-  ];
-
-  for (const selector of titleSelectors) {
-    try {
-      const el = document.querySelector(selector);
-      const text = el?.textContent?.trim();
-      if (text && text.length > 2 && text.length < 500) {
-        return text;
-      }
-    } catch {
-      // Selector failed, try next
-    }
-  }
-
-  // Strategy 2: Check meta tags
-  const metaTitle =
-    document.querySelector('meta[property="og:title"]')?.getAttribute('content') ||
-    document.querySelector('meta[name="title"]')?.getAttribute('content');
-  if (metaTitle?.trim()) {
-    return metaTitle.trim();
-  }
-
-  // Strategy 3: Clean up document.title
-  let pageTitle = document.title || '';
-  pageTitle = pageTitle
-    .replace(/\s*[-|–—]\s*(Echo360|Classroom|Player).*$/i, '')
-    .trim();
-  pageTitle = pageTitle.replace(/^(Video|Recording|Lecture):\s*/i, '').trim();
-
-  if (pageTitle && pageTitle.length > 2) {
-    return pageTitle;
-  }
-
-  return 'Echo360 Recording';
-}
-
-/**
- * Try to extract media ID from Echo360 page DOM
- * Note: This is a simplified version. Complex extraction moved to background script.
- */
-function extractMediaIdFromDom(): string | undefined {
-  const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
-
-  // Strategy 1: Look for media ID in data attributes
-  try {
-    const mediaElements = document.querySelectorAll(
-      '[data-media-id], [data-mediaid], [data-video-id]'
-    );
-    for (const el of mediaElements) {
-      const mediaId =
-        el.getAttribute('data-media-id') ||
-        el.getAttribute('data-mediaid') ||
-        el.getAttribute('data-video-id');
-      if (mediaId && UUID_PATTERN.test(mediaId)) {
-        return mediaId;
-      }
-    }
-  } catch {
-    // Ignore errors
-  }
-
-  // Strategy 2: Look in video elements
-  try {
-    const videos = document.querySelectorAll('video[data-id], video[id], video[data-media-id]');
-    for (const video of videos) {
-      const id =
-        video.getAttribute('data-id') ||
-        video.getAttribute('data-media-id') ||
-        video.id;
-      if (id && UUID_PATTERN.test(id)) {
-        return id;
-      }
-    }
-  } catch {
-    // Ignore errors
-  }
-
-  return undefined;
-}
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
 function formatDurationForConfirm(durationMs?: number): string | null {
   if (!durationMs || durationMs <= 0) return null;
@@ -249,9 +151,9 @@ function formatDurationForConfirm(durationMs?: number): string | null {
   return `${seconds}s`;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Background Script Communication
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * Send a message to the background script and await response
@@ -277,14 +179,23 @@ async function sendToBackground<T>(message: unknown): Promise<T> {
  * Normalize the background script response
  */
 function normalizeTranscriptResponse(response: BackgroundResponse): TranscriptResponseData {
-  return (
-    (response.data as TranscriptResponseData) ?? {
-      success: response.success ?? false,
-      transcript: response.transcript,
-      error: response.error,
-      aiTranscriptionAvailable: response.aiTranscriptionAvailable,
-    }
-  );
+  const data = response.data as TranscriptResponseData | undefined;
+  if (data) {
+    return {
+      ...data,
+      errorCode: data.errorCode ?? response.errorCode,
+      aiTranscriptionAvailable:
+        data.aiTranscriptionAvailable ?? response.aiTranscriptionAvailable,
+    };
+  }
+
+  return {
+    success: response.success ?? false,
+    transcript: response.transcript,
+    error: response.error,
+    errorCode: response.errorCode,
+    aiTranscriptionAvailable: response.aiTranscriptionAvailable,
+  };
 }
 
 function mapStageToStatus(
@@ -309,6 +220,15 @@ function mapStageToStatus(
     default:
       return fallback;
   }
+}
+
+function isAiTranscriptionBusy(status: AiTranscriptionStatus): boolean {
+  return (
+    status === 'starting' ||
+    status === 'uploading' ||
+    status === 'processing' ||
+    status === 'polling'
+  );
 }
 
 function formatAiProgressMessage(
@@ -351,9 +271,9 @@ function formatAiProgressMessage(
   return stageLabel;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Hook Implementation
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 const INITIAL_STATE: TranscriptState = {
   isVideoListOpen: false,
@@ -362,7 +282,7 @@ const INITIAL_STATE: TranscriptState = {
   isExtracting: false,
   extractingVideoId: null,
   error: null,
-  lastExtraction: null,
+  extractionsByVideoId: {},
   lastTranscript: null,
   aiTranscription: {
     status: 'idle',
@@ -370,6 +290,7 @@ const INITIAL_STATE: TranscriptState = {
     jobId: null,
     video: null,
     progressMessage: null,
+    progressPercent: null,
     error: null,
   },
 };
@@ -381,10 +302,17 @@ export function useTranscripts(): UseTranscriptsResult {
   const activeAiRequestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (typeof chrome === 'undefined' || !chrome.runtime?.onMessage) return;
+    if (typeof chrome === 'undefined') {
+      return;
+    }
+
+    const runtime = chrome.runtime;
+    if (!runtime?.onMessage?.addListener || !runtime.onMessage.removeListener) {
+      return;
+    }
 
     const listener = (
-      message: { type?: string; payload?: AiTranscriptionProgressPayload },
+      message: AiTranscriptionProgressMessage,
       _sender: chrome.runtime.MessageSender
     ) => {
       if (!message || message.type !== 'TRANSCRIBE_MEDIA_AI_PROGRESS') return;
@@ -408,20 +336,19 @@ export function useTranscripts(): UseTranscriptsResult {
             ...prev.aiTranscription,
             status: nextStatus,
             progressMessage,
-            jobId: payload.jobId ?? prev.aiTranscription.jobId,
+            progressPercent:
+              typeof payload.percent === 'number'
+                ? payload.percent
+                : prev.aiTranscription.progressPercent,
           },
         };
       });
     };
 
-    chrome.runtime.onMessage.addListener(listener);
+    runtime.onMessage.addListener(listener);
     return () => {
-      chrome.runtime.onMessage.removeListener(listener);
+      runtime.onMessage.removeListener(listener);
     };
-  }, []);
-
-  const openVideoList = useCallback(() => {
-    setState((prev) => ({ ...prev, isVideoListOpen: true, error: null }));
   }, []);
 
   const closeVideoList = useCallback(() => {
@@ -429,38 +356,25 @@ export function useTranscripts(): UseTranscriptsResult {
   }, []);
 
   /**
-   * Core detection logic - shared between detectVideos and detectAndAutoExtract
-   * Includes retry logic for video players that take time to initialize (video.js, etc.)
+   * Core detection logic with retry for delayed video players (video.js, MediaElement.js).
    */
   const performDetection = useCallback(async (): Promise<DetectedVideo[]> => {
     const currentUrl = window.location.href;
-    console.log('[Lock-in Transcript] performDetection called for URL:', currentUrl);
 
     // Helper to run a single detection attempt
     const runDetection = (): ReturnType<typeof detectVideosSync> => {
       const iframes = collectIframeInfo(document);
-      console.log('[Lock-in Transcript] Collected iframes:', iframes.length);
-      iframes.forEach((iframe, i) => {
-        console.log(`[Lock-in Transcript] Iframe ${i + 1}:`, iframe.src, iframe.title || '(no title)');
-      });
-      
       const context = {
         pageUrl: currentUrl,
         iframes,
         document,
       };
-      console.log('[Lock-in Transcript] Detection context built, document present:', !!context.document);
 
       return detectVideosSync(context);
     };
 
     // First attempt
     let result = runDetection();
-    console.log('[Lock-in Transcript] Initial detection result:', {
-      provider: result.provider,
-      videoCount: result.videos.length,
-      requiresApiCall: result.requiresApiCall,
-    });
 
     // Retry logic for delayed video players (video.js, MediaElement.js, etc.)
     // Some players take time to initialize the video element with proper src
@@ -476,65 +390,15 @@ export function useTranscripts(): UseTranscriptsResult {
       });
       
       if (hasUnreadyVideos || videoElements.length > 0) {
-        console.log('[Lock-in Transcript] Found', videoElements.length, 'video elements, some may be loading. Retrying...');
         
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
           result = runDetection();
-          console.log(`[Lock-in Transcript] Retry ${attempt}/${MAX_RETRIES} result:`, {
-            provider: result.provider,
-            videoCount: result.videos.length,
-          });
           
           if (result.videos.length > 0) {
-            console.log('[Lock-in Transcript] Found videos after retry');
             break;
           }
         }
-      }
-    }
-
-    console.log('[Lock-in Transcript] Final detection result:', {
-      provider: result.provider,
-      videoCount: result.videos.length,
-      requiresApiCall: result.requiresApiCall,
-    });
-
-    if (result.provider === 'echo360') {
-      const echo360Context = extractEcho360Context(currentUrl);
-      const pageType = getEcho360PageType(echo360Context);
-
-      if (pageType === 'lesson' && result.videos.length === 1) {
-        // Lesson page - enrich single video with page title and mediaId
-        const video = result.videos[0];
-        video.title = extractEcho360PageTitle();
-        video.mediaId = video.mediaId || extractMediaIdFromDom();
-        return [video];
-      }
-
-      if (pageType === 'section' && result.requiresApiCall && echo360Context) {
-        // Section page - need API call for video list
-        const response = await sendToBackground<BackgroundResponse>({
-          type: 'FETCH_ECHO360_SYLLABUS',
-          payload: { context: echo360Context },
-        });
-
-        if (response.success && response.videos) {
-          return response.videos;
-        }
-
-        // Handle auth required
-        const errorCode = (response.data as Echo360SyllabusData)?.errorCode;
-        if (errorCode === 'AUTH_REQUIRED') {
-          const authError: AuthRequiredError = {
-            type: 'AUTH_REQUIRED',
-            provider: 'echo360',
-            signInUrl: echo360Context.echoOrigin,
-          };
-          throw authError;
-        }
-
-        throw new Error(response.error || 'Failed to fetch Echo360 recordings');
       }
     }
 
@@ -547,58 +411,14 @@ export function useTranscripts(): UseTranscriptsResult {
    */
   const handleDetectionError = useCallback(
     (error: unknown, showPanel: boolean): void => {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'type' in error &&
-        (error as AuthRequiredError).type === 'AUTH_REQUIRED'
-      ) {
-        const authError = error as AuthRequiredError;
-        setState((prev) => ({
-          ...prev,
-          isDetecting: false,
-          isVideoListOpen: showPanel,
-          error: 'Please sign in to Echo360 to view recordings.',
-          authRequired: {
-            provider: authError.provider,
-            signInUrl: authError.signInUrl,
-          },
-        }));
-      } else {
-        setState((prev) => ({
-          ...prev,
-          isDetecting: false,
-          isVideoListOpen: showPanel,
-          error: error instanceof Error ? error.message : 'Failed to detect videos',
-        }));
-      }
+      setState((prev) => ({
+        ...prev,
+        isDetecting: false,
+        isVideoListOpen: showPanel,
+      }));
     },
     []
   );
-
-  /**
-   * Detect videos on the current page
-   */
-  const detectVideos = useCallback(async () => {
-    setState((prev) => ({
-      ...prev,
-      isDetecting: true,
-      error: null,
-      authRequired: undefined,
-      lastExtraction: null,
-    }));
-
-    try {
-      const videos = await performDetection();
-      setState((prev) => ({
-        ...prev,
-        videos,
-        isDetecting: false,
-      }));
-    } catch (error) {
-      handleDetectionError(error, true);
-    }
-  }, [performDetection, handleDetectionError]);
 
   /**
    * Extract transcript from background script
@@ -621,12 +441,10 @@ export function useTranscripts(): UseTranscriptsResult {
     ): Promise<{ transcript: TranscriptResult | null; result: TranscriptResponseData }> => {
       if (video.provider === 'html5') {
         const domResult = await extractHtml5TranscriptFromDom(video);
-        if (domResult?.success && domResult.transcript) {
-          return {
-            transcript: domResult.transcript,
-            result: { success: true, transcript: domResult.transcript },
-          };
-        }
+        return {
+          transcript: domResult.transcript,
+          result: { success: true, transcript: domResult.transcript },
+        };
       }
 
       const result = await fetchBackgroundTranscript(video);
@@ -640,14 +458,22 @@ export function useTranscripts(): UseTranscriptsResult {
    */
   const extractTranscript = useCallback(
     async (video: DetectedVideo): Promise<TranscriptResult | null> => {
-      setState((prev) => ({
-        ...prev,
-        isExtracting: true,
-        extractingVideoId: video.id,
-        error: null,
-        authRequired: undefined,
-        lastExtraction: null,
-      }));
+      if (state.isExtracting || isAiTranscriptionBusy(state.aiTranscription.status)) {
+        return null;
+      }
+
+      setState((prev) => {
+        const nextExtractions = { ...prev.extractionsByVideoId };
+        delete nextExtractions[video.id];
+        return {
+          ...prev,
+          isExtracting: true,
+          extractingVideoId: video.id,
+          error: null,
+          authRequired: undefined,
+          extractionsByVideoId: nextExtractions,
+        };
+      });
 
       try {
         const { transcript, result } = await extractTranscriptWithDomFallback(video);
@@ -659,51 +485,48 @@ export function useTranscripts(): UseTranscriptsResult {
             extractingVideoId: null,
             isVideoListOpen: false,
             lastTranscript: { video, transcript },
-            lastExtraction: { video, result },
+            extractionsByVideoId: {
+              ...prev.extractionsByVideoId,
+              [video.id]: result,
+            },
           }));
 
           return transcript;
         }
 
-        let errorMessage = result.error || 'Failed to extract transcript';
-        if (result.aiTranscriptionAvailable) {
-          errorMessage += ' (AI transcription available as fallback)';
-        }
-
-        if (result.errorCode === 'AUTH_REQUIRED' && video.provider === 'echo360') {
-          setState((prev) => ({
-            ...prev,
-            isExtracting: false,
-            extractingVideoId: null,
-            error: 'Please sign in to Echo360 to access transcripts.',
-            lastExtraction: { video, result },
-            authRequired: {
-              provider: 'echo360',
-              signInUrl: video.echoOrigin || 'https://echo360.net.au',
-            },
-          }));
-        } else {
-          setState((prev) => ({
-            ...prev,
-            isExtracting: false,
-            extractingVideoId: null,
-            error: errorMessage,
-            lastExtraction: { video, result },
-          }));
-        }
-
-        return null;
-      } catch (error) {
         setState((prev) => ({
           ...prev,
           isExtracting: false,
           extractingVideoId: null,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          extractionsByVideoId: {
+            ...prev.extractionsByVideoId,
+            [video.id]: {
+              ...result,
+              error: result.error || 'Failed to extract transcript',
+            },
+          },
+        }));
+
+        return null;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+        setState((prev) => ({
+          ...prev,
+          isExtracting: false,
+          extractingVideoId: null,
+          extractionsByVideoId: {
+            ...prev.extractionsByVideoId,
+            [video.id]: {
+              success: false,
+              error: errorMessage,
+            },
+          },
         }));
         return null;
       }
     },
-    [extractTranscriptWithDomFallback]
+    [extractTranscriptWithDomFallback, state.aiTranscription.status, state.isExtracting]
   );
 
   /**
@@ -716,7 +539,7 @@ export function useTranscripts(): UseTranscriptsResult {
       isDetecting: true,
       error: null,
       authRequired: undefined,
-      lastExtraction: null,
+      extractionsByVideoId: {},
     }));
 
     try {
@@ -724,14 +547,19 @@ export function useTranscripts(): UseTranscriptsResult {
 
       if (videos.length === 1) {
         // Single video - auto-extract without showing selection UI
-        setState((prev) => ({
-          ...prev,
-          videos,
-          isDetecting: false,
-          isVideoListOpen: false,
-          isExtracting: true,
-          extractingVideoId: videos[0].id,
-        }));
+        setState((prev) => {
+          const nextExtractions = { ...prev.extractionsByVideoId };
+          delete nextExtractions[videos[0].id];
+          return {
+            ...prev,
+            videos,
+            isDetecting: false,
+            isVideoListOpen: false,
+            isExtracting: true,
+            extractingVideoId: videos[0].id,
+            extractionsByVideoId: nextExtractions,
+          };
+        });
 
         try {
           const { transcript, result } = await extractTranscriptWithDomFallback(videos[0]);
@@ -742,48 +570,43 @@ export function useTranscripts(): UseTranscriptsResult {
               isExtracting: false,
               extractingVideoId: null,
               lastTranscript: { video: videos[0], transcript },
-              lastExtraction: { video: videos[0], result },
+              extractionsByVideoId: {
+                ...prev.extractionsByVideoId,
+                [videos[0].id]: result,
+              },
             }));
           } else {
-            let errorMessage = result.error || 'Failed to extract transcript';
-            if (result.aiTranscriptionAvailable) {
-              errorMessage += ' (AI transcription available as fallback)';
-            }
-
-            if (result.errorCode === 'AUTH_REQUIRED' && videos[0].provider === 'echo360') {
-              setState((prev) => ({
-                ...prev,
-                isExtracting: false,
-                extractingVideoId: null,
-                isVideoListOpen: true,
-                error: 'Please sign in to access transcripts.',
-                lastExtraction: { video: videos[0], result },
-                authRequired: {
-                  provider: 'echo360',
-                  signInUrl: videos[0].echoOrigin || 'https://echo360.net.au',
+            setState((prev) => ({
+              ...prev,
+              isExtracting: false,
+              extractingVideoId: null,
+              isVideoListOpen: true,
+              extractionsByVideoId: {
+                ...prev.extractionsByVideoId,
+                [videos[0].id]: {
+                  ...result,
+                  error: result.error || 'Failed to extract transcript',
                 },
-              }));
-            } else {
-              setState((prev) => ({
-                ...prev,
-                isExtracting: false,
-                extractingVideoId: null,
-                isVideoListOpen: true,
-                error: errorMessage,
-                lastExtraction: { video: videos[0], result },
-              }));
-            }
+              },
+            }));
           }
         } catch (extractError) {
+          const errorMessage =
+            extractError instanceof Error
+              ? extractError.message
+              : 'Failed to extract transcript';
           setState((prev) => ({
             ...prev,
             isExtracting: false,
             extractingVideoId: null,
             isVideoListOpen: true,
-            error:
-              extractError instanceof Error
-                ? extractError.message
-                : 'Failed to extract transcript',
+            extractionsByVideoId: {
+              ...prev.extractionsByVideoId,
+              [videos[0].id]: {
+                success: false,
+                error: errorMessage,
+              },
+            },
           }));
         }
       } else {
@@ -804,29 +627,123 @@ export function useTranscripts(): UseTranscriptsResult {
       video: DetectedVideo,
       options?: { languageHint?: string; maxMinutes?: number }
     ): Promise<TranscriptResult | null> => {
-      if (!video.mediaUrl) {
+      if (isAiTranscriptionBusy(state.aiTranscription.status)) return null;
+      // For Panopto videos, fetch the media URL first if not available
+      let videoWithMediaUrl = video;
+      if (video.provider === 'panopto' && !video.mediaUrl) {
         setState((prev) => ({
           ...prev,
-          error: 'AI transcription is not available for this video.',
+          error: null,
+          aiTranscription: {
+            status: 'starting',
+            requestId: null,
+            jobId: null,
+            video,
+            progressMessage: 'Finding downloadable video URL... (checking if podcast download is enabled)',
+            progressPercent: null,
+            error: null,
+          },
+        }));
+
+        try {
+          const mediaUrlResponse = await sendToBackground<PanoptoMediaUrlResponse>({
+            type: 'FETCH_PANOPTO_MEDIA_URL',
+            payload: { video },
+          });
+
+          if (!mediaUrlResponse.success || !mediaUrlResponse.mediaUrl) {
+            const errorMsg =
+              mediaUrlResponse.error ||
+              (mediaUrlResponse.errorCode === 'PODCAST_DISABLED'
+                ? 'Panopto downloads are disabled for this video. Ask your instructor to enable podcast downloads.'
+                : mediaUrlResponse.errorCode === 'AUTH_REQUIRED'
+                ? 'Authentication required. Please log in to Panopto and try again.'
+                : mediaUrlResponse.errorCode === 'NOT_ALLOWED'
+                ? 'Panopto denied access to the download URL. Downloads may be disabled for your account.'
+                : 'No downloadable media URL found for this video.');
+            setState((prev) => ({
+              ...prev,
+              aiTranscription: {
+                status: 'failed',
+                requestId: null,
+                jobId: null,
+                video,
+                progressMessage: null,
+                progressPercent: null,
+                error: errorMsg,
+              },
+            }));
+            return null;
+          }
+
+          videoWithMediaUrl = {
+            ...video,
+            mediaUrl: mediaUrlResponse.mediaUrl,
+          };
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error
+              ? error.message
+              : 'Failed to prepare video for AI transcription';
+          setState((prev) => ({
+            ...prev,
+            aiTranscription: {
+              status: 'failed',
+              requestId: null,
+              jobId: null,
+              video,
+              progressMessage: null,
+              progressPercent: null,
+              error: errorMsg,
+            },
+          }));
+          return null;
+        }
+      }
+
+      if (!videoWithMediaUrl.mediaUrl) {
+        const message = 'AI transcription is not available for this video.';
+        setState((prev) => ({
+          ...prev,
+          aiTranscription: {
+            status: 'failed',
+            requestId: null,
+            jobId: null,
+            video: videoWithMediaUrl,
+            progressMessage: null,
+            progressPercent: null,
+            error: message,
+          },
         }));
         return null;
       }
 
-      const isBusy =
-        state.aiTranscription.status === 'starting' ||
-        state.aiTranscription.status === 'uploading' ||
-        state.aiTranscription.status === 'processing' ||
-        state.aiTranscription.status === 'polling';
-      if (isBusy) return null;
-
-      const durationLabel = formatDurationForConfirm(video.durationMs);
+      const durationLabel = formatDurationForConfirm(videoWithMediaUrl.durationMs);
       const isLong =
-        typeof video.durationMs === 'number' && video.durationMs >= LONG_DURATION_CONFIRM_MS;
+        typeof videoWithMediaUrl.durationMs === 'number' &&
+        videoWithMediaUrl.durationMs >= LONG_DURATION_CONFIRM_MS;
+      const longLabel = durationLabel
+        ? `This video is ${durationLabel} long.`
+        : 'This is a long video.';
+
+      // Ethical consent: Explain external processing clearly
       const confirmMessage = isLong
-        ? `Transcribe${durationLabel ? ` (${durationLabel})` : ''} with AI? This may take a while.`
-        : `Transcribe${durationLabel ? ` (${durationLabel})` : ''} with AI?`;
+        ? `${longLabel} Lock-in will upload it to our transcription service, which may take several minutes. Continue?`
+        : 'Lock-in will upload this video to our transcription service to generate a transcript. Continue?';
 
       if (!window.confirm(confirmMessage)) {
+        setState((prev) => ({
+          ...prev,
+          aiTranscription: {
+            status: 'idle',
+            requestId: null,
+            jobId: null,
+            video: null,
+            progressMessage: null,
+            progressPercent: null,
+            error: null,
+          },
+        }));
         return null;
       }
 
@@ -839,8 +756,9 @@ export function useTranscripts(): UseTranscriptsResult {
           status: 'starting',
           requestId,
           jobId: null,
-          video,
-          progressMessage: 'Preparing AI transcription',
+          video: videoWithMediaUrl,
+          progressMessage: 'Downloading video for transcription... This may take a minute.',
+          progressPercent: null,
           error: null,
         },
       }));
@@ -848,7 +766,7 @@ export function useTranscripts(): UseTranscriptsResult {
       try {
         const response = await sendToBackground<AiTranscriptionResponse>({
           type: 'TRANSCRIBE_MEDIA_AI',
-          payload: { video, options, requestId },
+          payload: { video: videoWithMediaUrl, options, requestId },
         });
 
         if (activeAiRequestIdRef.current !== requestId) {
@@ -863,53 +781,65 @@ export function useTranscripts(): UseTranscriptsResult {
             extractingVideoId: null,
             isVideoListOpen: false,
             error: null,
-            lastTranscript: { video, transcript },
-            lastExtraction: { video, result: { success: true, transcript } },
+            lastTranscript: { video: videoWithMediaUrl, transcript },
+            extractionsByVideoId: {
+              ...prev.extractionsByVideoId,
+              [videoWithMediaUrl.id]: { success: true, transcript },
+            },
             aiTranscription: {
               status: 'completed',
               requestId,
               jobId: response.jobId || prev.aiTranscription.jobId,
-              video,
+              video: videoWithMediaUrl,
               progressMessage: 'Transcript ready',
+              progressPercent: 100,
               error: null,
             },
           }));
+          activeAiRequestIdRef.current = null;
           return transcript;
         }
 
+        const nextStatus = mapStageToStatus(
+          response.status,
+          response.errorCode === 'CANCELED' ? 'canceled' : 'failed'
+        );
         const errorMessage = response.error || 'AI transcription failed';
-        const status = response.errorCode === 'CANCELED' ? 'canceled' : 'failed';
         setState((prev) => ({
           ...prev,
-          error: errorMessage,
           aiTranscription: {
-            status,
+            status: nextStatus,
             requestId,
             jobId: response.jobId || prev.aiTranscription.jobId,
-            video,
-            progressMessage: status === 'canceled' ? 'Transcription canceled' : null,
+            video: videoWithMediaUrl,
+            progressMessage: null,
+            progressPercent: null,
             error: errorMessage,
           },
         }));
+        activeAiRequestIdRef.current = null;
         return null;
       } catch (error) {
         if (activeAiRequestIdRef.current !== requestId) {
           return null;
         }
         const message =
-          error instanceof Error ? error.message : 'AI transcription failed';
+          error instanceof Error
+            ? error.message
+            : 'Failed to transcribe media.';
         setState((prev) => ({
           ...prev,
-          error: message,
           aiTranscription: {
             status: 'failed',
             requestId,
             jobId: prev.aiTranscription.jobId,
-            video,
+            video: videoWithMediaUrl,
             progressMessage: null,
+            progressPercent: null,
             error: message,
           },
         }));
+        activeAiRequestIdRef.current = null;
         return null;
       }
     },
@@ -930,6 +860,7 @@ export function useTranscripts(): UseTranscriptsResult {
         ...prev.aiTranscription,
         status: 'canceled',
         progressMessage: 'Transcription canceled',
+        progressPercent: null,
         error: null,
       },
     }));
@@ -946,9 +877,8 @@ export function useTranscripts(): UseTranscriptsResult {
           ...prev.aiTranscription,
           status: 'failed',
           error:
-            error instanceof Error
-              ? error.message
-              : 'Failed to cancel transcription',
+            error instanceof Error ? error.message : 'Failed to cancel transcription',
+          progressPercent: null,
         },
       }));
     }
@@ -960,9 +890,7 @@ export function useTranscripts(): UseTranscriptsResult {
 
   return {
     state,
-    openVideoList,
     closeVideoList,
-    detectVideos,
     detectAndAutoExtract,
     extractTranscript,
     transcribeWithAI,

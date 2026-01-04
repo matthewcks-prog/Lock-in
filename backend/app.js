@@ -27,7 +27,38 @@ function createApp() {
   app.use(
     cors({
       origin(origin, callback) {
-        if (isOriginAllowed(origin)) {
+        // #region agent log
+        const fs = require('fs');
+        const logPath = 'c:\\Users\\matth\\Lock-in\\.cursor\\debug.log';
+        try {
+          const logEntry = JSON.stringify({
+            location: 'app.js:29',
+            message: 'CORS origin check',
+            data: { origin, method: 'CORS middleware', requestType: 'preflight or actual' },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'run1',
+            hypothesisId: 'B2'
+          }) + '\n';
+          fs.appendFileSync(logPath, logEntry, 'utf8');
+        } catch (e) {}
+        // #endregion
+        const allowed = isOriginAllowed(origin);
+        // #region agent log
+        try {
+          const logEntry = JSON.stringify({
+            location: 'app.js:31',
+            message: 'CORS callback decision',
+            data: { origin, allowed, willAllow: allowed },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'run1',
+            hypothesisId: 'B2'
+          }) + '\n';
+          fs.appendFileSync(logPath, logEntry, 'utf8');
+        } catch (e) {}
+        // #endregion
+        if (allowed) {
           callback(null, true);
         } else {
           // In production you may want to reject here instead of allowing.

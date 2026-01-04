@@ -192,7 +192,8 @@ function errorHandler(err, req, res, next) {
 
   // Set appropriate headers for rate limit errors
   // Support both RATE_LIMIT and TRANSCRIPT_RATE_LIMIT error codes
-  const isRateLimitError = err.code === "RATE_LIMIT" || err.code === "TRANSCRIPT_RATE_LIMIT";
+  const isRateLimitError =
+    err.code === "RATE_LIMIT" || err.code === "TRANSCRIPT_RATE_LIMIT";
   const retryAfter = err.retryAfterSeconds || err.details?.retryAfterSeconds;
   if (isRateLimitError && retryAfter) {
     res.set("Retry-After", String(retryAfter));

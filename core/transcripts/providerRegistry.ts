@@ -178,7 +178,5 @@ export function detectVideosFromRegistry(context: VideoDetectionContext): {
 // They should be imported and registered during application bootstrap.
 // Example:
 //   import { PanoptoProvider } from './providers/panoptoProvider';
-//   import { Echo360Provider } from './providers/echo360Provider';
 //   registerProvider(new PanoptoProvider());
-//   registerProvider(new Echo360Provider());
 

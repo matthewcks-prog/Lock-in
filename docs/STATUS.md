@@ -1,5 +1,46 @@
 # Status
 
+## Recent Changes (2026-01-04)
+
+### Transcript Extraction Error Handling Improvements
+
+**Issue:** Users experiencing "Network error. Please check your connection." with transcript extraction
+
+**Changes Made:**
+
+1. **Enhanced Network Request Handling** (`extension/background.js`):
+   - ✅ Added 30-second timeout using AbortController
+   - ✅ Increased retry attempts from 2 to 3
+   - ✅ Comprehensive logging at each step (fetch attempts, response status, errors)
+   - ✅ Timeout-specific error handling
+   - ✅ URL validation before fetch
+   - ✅ Explicit CORS mode in requests
+   - ✅ User-Agent headers
+
+2. **Improved Error Classification**:
+   - `TIMEOUT`: Request timeout errors
+   - `NETWORK_ERROR`: Network/CORS/connectivity issues
+   - `AUTH_REQUIRED`: Authentication needed
+   - `NO_CAPTIONS`: Video has no captions
+   - `PARSE_ERROR`: Caption parsing issues
+   - `INVALID_VIDEO`: Invalid video data
+
+3. **TypeScript Provider Updates** (`core/transcripts/providers/panoptoProvider.ts`):
+   - ✅ Matching error handling improvements
+   - ✅ Better timeout detection
+   - ✅ Enhanced logging for caption URL extraction
+
+4. **Documentation**:
+   - ✅ Created `docs/TRANSCRIPT_TROUBLESHOOTING.md` - comprehensive troubleshooting guide
+
+**Best Practices:**
+- Industry-standard timeout handling (30s)
+- Exponential backoff retry strategy
+- Specific, actionable error messages
+- Comprehensive logging for debugging
+
+---
+
 ## Current Refactor Phase
 - Phase B6 (test hardening) in progress.
 - Codex steps:

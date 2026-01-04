@@ -19,8 +19,7 @@ const DAILY_REQUEST_LIMIT =
   parseInt(process.env.DAILY_REQUEST_LIMIT, 10) || 100;
 
 // Number of chats returned in the sidebar by default``
-const DEFAULT_CHAT_LIST_LIMIT =
-  parseInt(process.env.CHAT_LIST_LIMIT, 10) || 5;
+const DEFAULT_CHAT_LIST_LIMIT = parseInt(process.env.CHAT_LIST_LIMIT, 10) || 5;
 
 // CORS configuration – in production prefer an explicit allow‑list
 const ALLOWED_ORIGINS = [
@@ -30,8 +29,8 @@ const ALLOWED_ORIGINS = [
   /localhost/,
   // Monash learning environment (e.g. https://learning.monash.edu)
   /^https:\/\/learning\.monash\.edu$/,
-  // Panopto (all regional domains)
-  /^https:\/\/([a-z0-9-]+\.)?panopto\.(com|eu)$/,
+  // Panopto (all regional domains, including multi-subdomain like monash.au.panopto.com)
+  /^https:\/\/([a-z0-9.-]+\.)?panopto\.(com|eu)$/,
   // Echo360 (regional + QA domains)
   /^https:\/\/([a-z0-9-]+\.)?echo360qa\.(org|dev)$/,
   /^https:\/\/([a-z0-9-]+\.)?echo360\.(org|org\.au|net\.au|ca|org\.uk)$/,
@@ -67,8 +66,7 @@ const TRANSCRIPTION_TEMP_DIR =
   process.env.TRANSCRIPTION_TEMP_DIR ||
   path.join(__dirname, "tmp", "transcripts");
 const TRANSCRIPT_CHUNK_MAX_BYTES =
-  parseInt(process.env.TRANSCRIPT_CHUNK_MAX_BYTES, 10) ||
-  8 * 1024 * 1024;
+  parseInt(process.env.TRANSCRIPT_CHUNK_MAX_BYTES, 10) || 8 * 1024 * 1024;
 const TRANSCRIPT_DAILY_JOB_LIMIT =
   parseInt(process.env.TRANSCRIPT_DAILY_JOB_LIMIT, 10) || 20;
 const TRANSCRIPT_MAX_CONCURRENT_JOBS =
@@ -102,14 +100,59 @@ const MIME_EXTENSION_MAP = {
 };
 
 function isOriginAllowed(origin) {
+  // #region agent log
+  const fs = require('fs');
+  const logPath = 'c:\\Users\\matth\\Lock-in\\.cursor\\debug.log';
+  try {
+    const logEntry = JSON.stringify({
+      location: 'config.js:108',
+      message: 'isOriginAllowed called',
+      data: { origin, originType: typeof origin, isNull: origin === null, isUndefined: origin === undefined },
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'run1',
+      hypothesisId: 'B1'
+    }) + '\n';
+    fs.appendFileSync(logPath, logEntry, 'utf8');
+  } catch (e) {}
+  // #endregion
   if (!origin) {
+    // #region agent log
+    try {
+      const logEntry = JSON.stringify({
+        location: 'config.js:111',
+        message: 'isOriginAllowed: origin is null/undefined, allowing',
+        data: { origin },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'B1'
+      }) + '\n';
+      fs.appendFileSync(logPath, logEntry, 'utf8');
+    } catch (e) {}
+    // #endregion
     // Allow non-browser clients (health checks, local tools, etc.)
     return true;
   }
 
-  return ALLOWED_ORIGINS.some((pattern) =>
+  const result = ALLOWED_ORIGINS.some((pattern) =>
     typeof pattern === "string" ? origin === pattern : pattern.test(origin)
   );
+  // #region agent log
+  try {
+    const logEntry = JSON.stringify({
+      location: 'config.js:116',
+      message: 'isOriginAllowed result',
+      data: { origin, result, patternsChecked: ALLOWED_ORIGINS.length, matchedPattern: ALLOWED_ORIGINS.find(p => typeof p === 'string' ? origin === p : p.test(origin)) ? 'found' : 'none' },
+      timestamp: Date.now(),
+      sessionId: 'debug-session',
+      runId: 'run1',
+      hypothesisId: 'B1'
+    }) + '\n';
+    fs.appendFileSync(logPath, logEntry, 'utf8');
+  } catch (e) {}
+  // #endregion
+  return result;
 }
 
 module.exports = {

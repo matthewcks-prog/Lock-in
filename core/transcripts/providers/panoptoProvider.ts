@@ -1,9 +1,13 @@
 /**
  * Panopto Transcript Provider
  *
- * Handles detection and transcript extraction for Panopto video embeds.
- * Panopto embeds appear as iframes with src containing:
- *   https://<tenant>.panopto.com/Panopto/Pages/Embed.aspx?id=<deliveryId>
+ * Handles detection and transcript extraction for Panopto videos.
+ * 
+ * Detection strategies (in order of priority):
+ * 1. Direct Panopto URLs - User is on panopto.com directly
+ * 2. Embedded iframes - Panopto embedded in LMS page
+ * 3. Anchor links - Links to Panopto (e.g., Moodle mod/url redirect pages)
+ * 4. Meta refresh/redirects - Intermediate redirect pages
  *
  * This provider uses DOM-based detection (synchronous).
  */
@@ -33,61 +37,49 @@ const PANOPTO_EMBED_REGEX =
 const PANOPTO_VIEWER_REGEX =
   /https?:\/\/([^/]+\.panopto\.com)\/Panopto\/Pages\/Viewer\.aspx\?.*\bid=([a-f0-9-]+)/i;
 
+/**
+ * Pattern to detect Moodle/LMS redirect pages that might link to Panopto
+ */
+const LMS_REDIRECT_PATTERNS = [
+  /mod\/url\/view\.php/i,
+  /mod\/resource\/view\.php/i,
+  /mod\/lti\/view\.php/i,
+  /mod\/page\/view\.php/i,
+] as const;
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Utility Functions
+// Backwards Compatibility Wrappers
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Extract delivery ID from a Panopto URL
+ * @deprecated Use extractPanoptoInfo instead
  */
 export function extractDeliveryId(url: string): string | null {
-  const embedMatch = url.match(PANOPTO_EMBED_REGEX);
-  if (embedMatch) {
-    return embedMatch[2];
-  }
-
-  const viewerMatch = url.match(PANOPTO_VIEWER_REGEX);
-  if (viewerMatch) {
-    return viewerMatch[2];
-  }
-
-  // Fallback: look for id= parameter
-  try {
-    const urlObj = new URL(url);
-    const id = urlObj.searchParams.get('id');
-    if (id && /^[a-f0-9-]+$/i.test(id)) {
-      return id;
-    }
-  } catch {
-    // Invalid URL
-  }
-
-  return null;
+  const info = extractPanoptoInfo(url);
+  return info?.deliveryId ?? null;
 }
 
 /**
  * Extract tenant domain from a Panopto URL
+ * Works with any panopto.com URL, even without a video ID
+ * @deprecated Use extractPanoptoInfo instead for complete video info
  */
 export function extractTenantDomain(url: string): string | null {
-  const embedMatch = url.match(PANOPTO_EMBED_REGEX);
-  if (embedMatch) {
-    return embedMatch[1];
-  }
-
-  const viewerMatch = url.match(PANOPTO_VIEWER_REGEX);
-  if (viewerMatch) {
-    return viewerMatch[1];
-  }
-
+  // First try extractPanoptoInfo for complete URLs
+  const info = extractPanoptoInfo(url);
+  if (info?.tenant) return info.tenant;
+  
+  // Fallback: extract hostname from any panopto.com URL
   try {
     const urlObj = new URL(url);
-    if (urlObj.hostname.includes('panopto.com')) {
+    if (isPanoptoDomain(urlObj.hostname)) {
       return urlObj.hostname;
     }
   } catch {
     // Invalid URL
   }
-
+  
   return null;
 }
 
@@ -99,6 +91,258 @@ export function isPanoptoUrl(url: string): boolean {
 }
 
 /**
+ * Check if URL is a potential LMS redirect page
+ */
+export function isLmsRedirectPage(url: string): boolean {
+  return LMS_REDIRECT_PATTERNS.some(pattern => pattern.test(url));
+}
+
+/**
+ * Check if a hostname is a Panopto domain
+ */
+export function isPanoptoDomain(hostname: string): boolean {
+  return hostname.includes('panopto.com') || hostname.includes('panopto.');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Link Detection Functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Panopto video info extracted from URL
+ */
+export interface PanoptoInfo {
+  deliveryId: string;
+  tenant: string;
+}
+
+/**
+ * Extract Panopto info from any URL format
+ * More permissive than the regex patterns - handles encoded URLs and various formats
+ */
+export function extractPanoptoInfo(url: string): PanoptoInfo | null {
+  // Try standard patterns first
+  const embedMatch = url.match(PANOPTO_EMBED_REGEX);
+  if (embedMatch) {
+    return { deliveryId: embedMatch[2], tenant: embedMatch[1] };
+  }
+
+  const viewerMatch = url.match(PANOPTO_VIEWER_REGEX);
+  if (viewerMatch) {
+    return { deliveryId: viewerMatch[2], tenant: viewerMatch[1] };
+  }
+
+  // Try parsing as URL and extracting 'id' param
+  try {
+    const urlObj = new URL(url);
+    if (isPanoptoDomain(urlObj.hostname)) {
+      const id = urlObj.searchParams.get('id');
+      // ID should be a UUID-like format (at least 8 characters with hex and dashes)
+      if (id && id.length >= 8 && /^[a-f0-9-]+$/i.test(id)) {
+        return { deliveryId: id, tenant: urlObj.hostname };
+      }
+    }
+  } catch {
+    // Not a valid URL, try decoding
+  }
+
+  // Try with URL decoding (handles double-encoded URLs)
+  try {
+    const decoded = decodeURIComponent(url);
+    if (decoded !== url) {
+      return extractPanoptoInfo(decoded);
+    }
+  } catch {
+    // Ignore decode errors
+  }
+
+  return null;
+}
+
+/**
+ * Build a canonical Panopto embed URL for a video.
+ */
+export function buildPanoptoEmbedUrl(
+  tenant: string,
+  deliveryId: string
+): string {
+  return `https://${tenant}/Panopto/Pages/Embed.aspx?id=${encodeURIComponent(
+    deliveryId
+  )}`;
+}
+
+/**
+ * Build a canonical Panopto viewer URL for a video.
+ */
+export function buildPanoptoViewerUrl(
+  tenant: string,
+  deliveryId: string
+): string {
+  return `https://${tenant}/Panopto/Pages/Viewer.aspx?id=${encodeURIComponent(
+    deliveryId
+  )}`;
+}
+
+/**
+ * Normalize a Panopto URL to its embed URL.
+ */
+export function normalizePanoptoEmbedUrl(url: string): string | null {
+  const info = extractPanoptoInfo(url);
+  return info ? buildPanoptoEmbedUrl(info.tenant, info.deliveryId) : null;
+}
+
+/**
+ * Detect Panopto videos from anchor links on a page.
+ * Catches cases where Panopto is linked but not embedded (e.g., Moodle mod/url).
+ */
+export function detectPanoptoFromLinks(doc: Document): DetectedVideo[] {
+  const videos: DetectedVideo[] = [];
+  const seenIds = new Set<string>();
+
+  const addVideo = (info: PanoptoInfo, title: string): void => {
+    if (seenIds.has(info.deliveryId)) return;
+    seenIds.add(info.deliveryId);
+    
+    const embedUrl = buildPanoptoEmbedUrl(info.tenant, info.deliveryId);
+    videos.push({
+      id: info.deliveryId,
+      provider: 'panopto',
+      title: title || `Panopto video ${videos.length + 1}`,
+      embedUrl,
+      panoptoTenant: info.tenant,
+    });
+  };
+
+  // Strategy 1: Check all anchor elements
+  const anchors = Array.from(doc.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+  for (const anchor of anchors) {
+    const href = anchor.href || anchor.getAttribute('href') || '';
+    if (!href) continue;
+
+    let info = extractPanoptoInfo(href);
+    
+    // Also check data attributes (some LMS systems use these)
+    if (!info) {
+      const dataHref = anchor.getAttribute('data-href') || 
+                       anchor.getAttribute('data-url') ||
+                       anchor.getAttribute('data-src');
+      if (dataHref) {
+        info = extractPanoptoInfo(dataHref);
+      }
+    }
+
+    if (info) {
+      const title = 
+        anchor.textContent?.trim() ||
+        anchor.getAttribute('title') ||
+        anchor.getAttribute('aria-label') ||
+        '';
+      addVideo(info, title);
+    }
+  }
+
+  // Strategy 2: Check onclick handlers (some themes use JavaScript)
+  const elementsWithOnclick = Array.from(
+    doc.querySelectorAll('[onclick*="panopto" i]')
+  ) as HTMLElement[];
+  
+  for (const el of elementsWithOnclick) {
+    const onclick = el.getAttribute('onclick') || '';
+    const info = extractPanoptoInfo(onclick);
+    if (info && !seenIds.has(info.deliveryId)) {
+      const title = el.textContent?.trim() || '';
+      addVideo(info, title);
+    }
+  }
+
+  return videos;
+}
+
+/**
+ * Detect Panopto from meta refresh or JavaScript redirects
+ */
+export function detectPanoptoFromRedirect(doc: Document): DetectedVideo[] {
+  const videos: DetectedVideo[] = [];
+  const seenIds = new Set<string>();
+
+  const addVideo = (info: PanoptoInfo, title: string): void => {
+    if (seenIds.has(info.deliveryId)) return;
+    seenIds.add(info.deliveryId);
+    
+    const embedUrl = buildPanoptoEmbedUrl(info.tenant, info.deliveryId);
+    videos.push({
+      id: info.deliveryId,
+      provider: 'panopto',
+      title: title || doc.title || 'Panopto video',
+      embedUrl,
+      panoptoTenant: info.tenant,
+    });
+  };
+
+  // Check meta refresh tags
+  const metaRefresh = doc.querySelector('meta[http-equiv="refresh"]');
+  if (metaRefresh) {
+    const content = metaRefresh.getAttribute('content') || '';
+    const urlMatch = content.match(/url=(.+)/i);
+    if (urlMatch) {
+      const info = extractPanoptoInfo(urlMatch[1]);
+      if (info) {
+        addVideo(info, '');
+      }
+    }
+  }
+
+  // Check for window.location assignments in scripts
+  const scripts = Array.from(doc.querySelectorAll('script:not([src])'));
+  for (const script of scripts) {
+    const content = script.textContent || '';
+    // Look for panopto URLs in location assignments
+    const locationMatch = content.match(
+      /(?:window\.)?location(?:\.href)?\s*=\s*['"]([^'"]*panopto[^'"]*)['"]/i
+    );
+    if (locationMatch) {
+      const info = extractPanoptoInfo(locationMatch[1]);
+      if (info && !seenIds.has(info.deliveryId)) {
+        addVideo(info, '');
+      }
+    }
+  }
+
+  // Check for Panopto URLs in visible page content (last resort)
+  // This catches "You will be redirected to..." type pages
+  const bodyText = doc.body?.textContent || '';
+  // Match full Panopto URLs - the hostname must end with panopto.com
+  const panoptoUrls = bodyText.match(
+    /https?:\/\/[a-z0-9.-]+\.panopto\.com\/[^\s<>"']*/gi
+  ) || [];
+  
+  for (const url of panoptoUrls) {
+    const info = extractPanoptoInfo(url);
+    if (info && !seenIds.has(info.deliveryId)) {
+      addVideo(info, '');
+    }
+  }
+
+  return videos;
+}
+
+function decodeEscapedUrl(value: string): string {
+  return value
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex) =>
+      String.fromCharCode(parseInt(hex, 16))
+    )
+    .replace(/\\\//g, '/')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\\"/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x2F;/gi, '/')
+    .replace(/&#x3D;/gi, '=')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+/**
  * Extract CaptionUrl from Panopto embed HTML
  *
  * Panopto embeds contain a JSON bootstrap object with caption URLs.
@@ -107,44 +351,154 @@ export function isPanoptoUrl(url: string): boolean {
  * @param html - The embed page HTML
  * @returns The first caption VTT URL or null
  */
+/**
+ * Extract caption VTT URL from Panopto embed page HTML.
+ * Searches for multiple patterns in priority order.
+ *
+ * @param html - The embed page HTML
+ * @returns The first caption VTT URL or null
+ */
 export function extractCaptionVttUrl(html: string): string | null {
-  // Pattern 1: Look for CaptionUrl in JSON structure
-  // "CaptionUrl":["https://...GetCaptionVTT.ashx?id=..."]
-  const captionUrlMatch = html.match(/"CaptionUrl"\s*:\s*\[\s*"([^"]+)"/);
-  if (captionUrlMatch) {
-    // Unescape JSON string escapes
-    return captionUrlMatch[1].replace(/\\/g, '');
+  const patterns: RegExp[] = [
+    /"CaptionUrl"\s*:\s*\[\s*"([^"]+)"/i,
+    /"CaptionUrl"\s*:\s*"([^"]+)"/i,
+    /"Captions"\s*:\s*\[\s*\{[^}]*"Url"\s*:\s*"([^"]+)"/i,
+    /"Captions"\s*:\s*\[\s*\{[^}]*"VttUrl"\s*:\s*"([^"]+)"/i,
+    /"Captions"\s*:\s*\[\s*\{[^}]*"CaptionUrl"\s*:\s*"([^"]+)"/i,
+    /"TranscriptUrl"\s*:\s*"([^"]+)"/i,
+    /((?:https?:)?\/\/[^"'\s]+GetCaptionVTT\.ashx\?[^"'\s]+)/i,
+    /((?:\/)?Panopto\/Pages\/Transcription\/GetCaptionVTT\.ashx\?[^"'\s]+)/i,
+  ];
+
+  for (let i = 0; i < patterns.length; i++) {
+    const pattern = patterns[i];
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      const url = decodeEscapedUrl(match[1]);
+      console.log(`[Panopto] Caption URL found with pattern ${i + 1}:`, url.substring(0, 100));
+      return url;
+    }
   }
 
-  // Pattern 2: Look for Captions array with Url property
-  // "Captions":[{"Url":"...","Language":"..."}]
-  const captionsMatch = html.match(
-    /"Captions"\s*:\s*\[\s*\{\s*"Url"\s*:\s*"([^"]+)"/
-  );
-  if (captionsMatch) {
-    return captionsMatch[1].replace(/\\/g, '');
+  console.warn('[Panopto] No caption URL found in embed HTML. HTML length:', html.length);
+  // Log a sample of the HTML for debugging (first 500 chars)
+  console.log('[Panopto] HTML sample:', html.substring(0, 500).replace(/\s+/g, ' '));
+  
+  return null;
+}
+
+/**
+ * Extract media URL from Panopto embed page HTML for AI transcription.
+ * Panopto provides multiple delivery URLs:
+ * - StreamUrl: Primary MP4 video stream
+ * - PodcastUrl: Alternative download URL (often better for AI transcription)
+ * - DeliveryInfo.Streams: Array of stream URLs with different qualities
+ *
+ * @param html - The embed page HTML
+ * @returns The first available media URL or null
+ */
+export function extractPanoptoMediaUrl(html: string): string | null {
+  // Check if URL looks like a valid video URL
+  const isValidVideoUrl = (url: string): boolean => {
+    if (!url || url.length < 10) return false;
+    const lower = url.toLowerCase();
+    return (
+      lower.includes('.mp4') ||
+      lower.includes('.m3u8') ||
+      lower.includes('stream') ||
+      lower.includes('podcast') ||
+      lower.includes('delivery') ||
+      lower.includes('/video/') ||
+      (lower.startsWith('http') && lower.includes('panopto'))
+    );
+  };
+
+  // Priority order: Most specific to most general
+  const patterns: RegExp[] = [
+    // 1. PodcastUrl (direct download, best for AI)
+    /"PodcastUrl"\s*:\s*"([^"]+)"/i,
+    
+    // 2. StreamUrl (primary stream)
+    /"StreamUrl"\s*:\s*"([^"]+)"/i,
+    
+    // 3. IosStreamUrl (iOS-compatible, usually MP4)
+    /"IosStreamUrl"\s*:\s*"([^"]+)"/i,
+    
+    // 4. Streams array with Url
+    /"Streams"\s*:\s*\[\s*\{[^}]*"Url"\s*:\s*"([^"]+)"/i,
+    
+    // 5. DeliveryInfo with StreamUrl
+    /"DeliveryInfo"[^}]*"StreamUrl"\s*:\s*"([^"]+)"/i,
+    
+    // 6. Any URL field containing video-like paths
+    /"(?:Url|url|URL)"\s*:\s*"(https?:\/\/[^"]*(?:mp4|stream|podcast|delivery|video)[^"]*)"/i,
+    
+    // 7. Generic panopto video URLs
+    /"(?:Url|url|URL)"\s*:\s*"(https?:\/\/[^"]*panopto[^"]*\/(?:Podcast|Stream|Delivery)[^"]*)"/i,
+  ];
+
+  console.log('[Panopto] Searching for media URL in HTML (length:', html.length, ')');
+  
+  // Try each pattern
+  for (let i = 0; i < patterns.length; i++) {
+    const pattern = patterns[i];
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      const url = decodeEscapedUrl(match[1]);
+      if (isValidVideoUrl(url)) {
+        console.log(`[Panopto] Media URL found with pattern ${i + 1}:`, url.substring(0, 100));
+        return url;
+      } else {
+        console.log(`[Panopto] Pattern ${i + 1} matched but URL invalid:`, url.substring(0, 50));
+      }
+    }
   }
 
-  // Pattern 3: Direct GetCaptionVTT.ashx URL reference
-  const directVttMatch = html.match(
-    /https?:\/\/[^"]+GetCaptionVTT\.ashx\?[^"]+/
-  );
-  if (directVttMatch) {
-    return directVttMatch[0].replace(/\\/g, '');
+  // Debug: Log what keys are actually in the HTML
+  const urlKeys = html.match(/"\\w*[Uu]rl\\w*"\s*:/g);
+  if (urlKeys) {
+    console.log('[Panopto] Found URL-like keys in HTML:', urlKeys.slice(0, 10).join(', '));
+  }
+  
+  // Debug: Check if there are any video URLs at all
+  const anyVideoUrl = html.match(/https?:\/\/[^"\s]*(?:mp4|m3u8|stream|podcast)/i);
+  if (anyVideoUrl) {
+    console.log('[Panopto] Found potential video URL in HTML:', anyVideoUrl[0].substring(0, 100));
   }
 
-  // Pattern 4: Look for TranscriptUrl
-  const transcriptMatch = html.match(/"TranscriptUrl"\s*:\s*"([^"]+)"/);
-  if (transcriptMatch) {
-    return transcriptMatch[1].replace(/\\/g, '');
-  }
-
+  console.warn('[Panopto] No media URL found for AI transcription');
   return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Implementation
 // ─────────────────────────────────────────────────────────────────────────────
+
+function resolvePanoptoEmbedUrl(video: DetectedVideo): string {
+  if (video.panoptoTenant) {
+    return buildPanoptoEmbedUrl(video.panoptoTenant, video.id);
+  }
+
+  return normalizePanoptoEmbedUrl(video.embedUrl) ?? video.embedUrl;
+}
+
+function resolvePanoptoViewerUrl(video: DetectedVideo): string | null {
+  if (video.panoptoTenant) {
+    return buildPanoptoViewerUrl(video.panoptoTenant, video.id);
+  }
+
+  const info = extractPanoptoInfo(video.embedUrl);
+  return info ? buildPanoptoViewerUrl(info.tenant, info.deliveryId) : null;
+}
+
+function resolveCaptionUrl(captionUrl: string, baseUrl: string): string {
+  const decoded = decodeEscapedUrl(captionUrl);
+  try {
+    return new URL(decoded, baseUrl).toString();
+  } catch {
+    return decoded;
+  }
+}
 
 /**
  * Panopto transcript provider implementation
@@ -153,17 +507,7 @@ export class PanoptoProvider implements TranscriptProviderV2 {
   readonly provider = 'panopto' as const;
 
   canHandle(url: string): boolean {
-    return isPanoptoUrl(url) || this.hasPanoptoIframe();
-  }
-
-  /**
-   * Check if URL might contain Panopto content (embedded)
-   * This is a heuristic - we check for common LMS domains
-   */
-  private hasPanoptoIframe(): boolean {
-    // Panopto is usually embedded in LMS pages
-    // We'll return false here and let DOM detection find iframes
-    return false;
+    return isPanoptoUrl(url);
   }
 
   requiresAsyncDetection(_context: VideoDetectionContext): boolean {
@@ -171,41 +515,68 @@ export class PanoptoProvider implements TranscriptProviderV2 {
     return false;
   }
 
+  /**
+   * Detect Panopto videos using multiple strategies:
+   * 1. Current page URL (if user is on Panopto directly)
+   * 2. Embedded iframes
+   * 3. Anchor links on page
+   * 4. Redirect mechanisms (meta refresh, JS redirects)
+   */
   detectVideosSync(context: VideoDetectionContext): DetectedVideo[] {
-    const videos: DetectedVideo[] = [];
     const seenIds = new Set<string>();
-    let videoIndex = 0;
+    const allVideos: DetectedVideo[] = [];
 
-    const addVideo = (deliveryId: string, title: string, embedUrl: string): void => {
-      if (seenIds.has(deliveryId)) return;
-      seenIds.add(deliveryId);
-      videoIndex++;
-      videos.push({
-        id: deliveryId,
-        provider: 'panopto',
-        title: title || `Panopto video ${videoIndex}`,
-        embedUrl,
-      });
+    const addVideos = (videos: DetectedVideo[]): void => {
+      for (const video of videos) {
+        if (!seenIds.has(video.id)) {
+          seenIds.add(video.id);
+          allVideos.push(video);
+        }
+      }
     };
 
-    // Check current page URL
-    const pageDeliveryId = extractDeliveryId(context.pageUrl);
-    const pageTenant = extractTenantDomain(context.pageUrl);
-    if (pageDeliveryId && pageTenant) {
-      addVideo(pageDeliveryId, '', context.pageUrl);
+    // Strategy 1: Check current page URL
+    const pageInfo = extractPanoptoInfo(context.pageUrl);
+    if (pageInfo) {
+      addVideos([{
+        id: pageInfo.deliveryId,
+        provider: 'panopto',
+        title: '', // Will be filled by caller
+        embedUrl: buildPanoptoEmbedUrl(pageInfo.tenant, pageInfo.deliveryId),
+        panoptoTenant: pageInfo.tenant,
+      }]);
     }
 
-    // Check all iframes
+    // Strategy 2: Check iframes
     for (const iframe of context.iframes) {
       if (!iframe.src) continue;
-      const deliveryId = extractDeliveryId(iframe.src);
-      const tenant = extractTenantDomain(iframe.src);
-      if (deliveryId && tenant) {
-        addVideo(deliveryId, iframe.title || '', iframe.src);
+      const info = extractPanoptoInfo(iframe.src);
+      if (info && !seenIds.has(info.deliveryId)) {
+        seenIds.add(info.deliveryId);
+        allVideos.push({
+          id: info.deliveryId,
+          provider: 'panopto',
+          title: iframe.title || `Panopto video ${allVideos.length + 1}`,
+          embedUrl: buildPanoptoEmbedUrl(info.tenant, info.deliveryId),
+          panoptoTenant: info.tenant,
+        });
       }
     }
 
-    return videos;
+    // Strategy 3 & 4: Check links and redirects (requires document)
+    if (context.document) {
+      // Check anchor links
+      const linkVideos = detectPanoptoFromLinks(context.document);
+      addVideos(linkVideos);
+
+      // Check redirect mechanisms (especially for LMS redirect pages)
+      if (isLmsRedirectPage(context.pageUrl)) {
+        const redirectVideos = detectPanoptoFromRedirect(context.document);
+        addVideos(redirectVideos);
+      }
+    }
+
+    return allVideos;
   }
 
   async extractTranscript(
@@ -213,39 +584,80 @@ export class PanoptoProvider implements TranscriptProviderV2 {
     fetcher: AsyncFetcher
   ): Promise<TranscriptExtractionResult> {
     try {
-      // Step 1: Fetch the embed page HTML
-      const embedHtml = await fetcher.fetchWithCredentials(video.embedUrl);
+      const primaryEmbedUrl = resolvePanoptoEmbedUrl(video);
+      const viewerUrl = resolvePanoptoViewerUrl(video);
+      const candidateUrls = [
+        primaryEmbedUrl,
+        viewerUrl,
+        video.embedUrl,
+      ].filter(Boolean) as string[];
+      const uniqueCandidateUrls = Array.from(new Set(candidateUrls));
 
-      // Step 2: Extract caption URL from the HTML
-      const captionUrl = extractCaptionVttUrl(embedHtml);
+      const extractFromUrl = async (
+        url: string
+      ): Promise<TranscriptExtractionResult | null> => {
+        const embedHtml = await fetcher.fetchWithCredentials(url);
+        const captionUrl = extractCaptionVttUrl(embedHtml);
+        if (!captionUrl) return null;
 
-      if (!captionUrl) {
+        const resolvedCaptionUrl = resolveCaptionUrl(captionUrl, url);
+        const vttContent = await fetcher.fetchWithCredentials(resolvedCaptionUrl);
+        const transcript = parseWebVtt(vttContent);
+
+        if (transcript.segments.length === 0) {
+          return {
+            success: false,
+            error: 'Caption file is empty or could not be parsed',
+            errorCode: 'PARSE_ERROR',
+            aiTranscriptionAvailable: true,
+          };
+        }
+
         return {
-          success: false,
-          error: 'No captions available for this video',
-          errorCode: 'NO_CAPTIONS',
-          aiTranscriptionAvailable: true,
+          success: true,
+          transcript,
         };
+      };
+
+      let primaryFetched = false;
+      let primaryError: unknown = null;
+
+      try {
+        const result = await extractFromUrl(primaryEmbedUrl);
+        primaryFetched = true;
+        if (result) return result;
+      } catch (error) {
+        primaryError = error;
+        const message = error instanceof Error ? error.message : String(error);
+        if (message === 'AUTH_REQUIRED') {
+          throw error;
+        }
       }
 
-      // Step 3: Fetch the VTT content
-      const vttContent = await fetcher.fetchWithCredentials(captionUrl);
+      for (const url of uniqueCandidateUrls.slice(1)) {
+        try {
+          const result = await extractFromUrl(url);
+          if (result) return result;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          if (message === 'AUTH_REQUIRED') {
+            throw error;
+          }
+          if (!primaryError) {
+            primaryError = error;
+          }
+        }
+      }
 
-      // Step 4: Parse the VTT
-      const transcript = parseWebVtt(vttContent);
-
-      if (transcript.segments.length === 0) {
-        return {
-          success: false,
-          error: 'Caption file is empty or could not be parsed',
-          errorCode: 'PARSE_ERROR',
-          aiTranscriptionAvailable: true,
-        };
+      if (primaryError && !primaryFetched) {
+        throw primaryError;
       }
 
       return {
-        success: true,
-        transcript,
+        success: false,
+        error: 'No captions available for this video',
+        errorCode: 'NO_CAPTIONS',
+        aiTranscriptionAvailable: true,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -259,13 +671,26 @@ export class PanoptoProvider implements TranscriptProviderV2 {
         };
       }
 
+      // Timeout errors
+      if (message.includes('timeout') || message.includes('AbortError')) {
+        return {
+          success: false,
+          error: 'Request timeout. The server took too long to respond.',
+          errorCode: 'TIMEOUT',
+          aiTranscriptionAvailable: true,
+        };
+      }
+
+      // Network/CORS errors
       if (
         message.includes('Failed to fetch') ||
-        message.includes('NetworkError')
+        message.includes('NetworkError') ||
+        message.includes('CORS') ||
+        message.includes('Network request failed')
       ) {
         return {
           success: false,
-          error: 'Network error. Please check your connection.',
+          error: 'Network error. Please check your internet connection and ensure you\'re logged into Panopto.',
           errorCode: 'NETWORK_ERROR',
           aiTranscriptionAvailable: true,
         };

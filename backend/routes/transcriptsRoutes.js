@@ -19,7 +19,10 @@ router.post(
 );
 router.put(
   "/transcripts/jobs/:id/chunks",
-  express.raw({ type: "application/octet-stream", limit: TRANSCRIPT_CHUNK_MAX_BYTES }),
+  express.raw({
+    type: "application/octet-stream",
+    limit: TRANSCRIPT_CHUNK_MAX_BYTES,
+  }),
   asyncHandler(transcriptsController.uploadChunk)
 );
 router.post(
@@ -30,9 +33,6 @@ router.post(
   "/transcripts/jobs/:id/cancel",
   asyncHandler(transcriptsController.cancelJob)
 );
-router.get(
-  "/transcripts/jobs/:id",
-  asyncHandler(transcriptsController.getJob)
-);
+router.get("/transcripts/jobs/:id", asyncHandler(transcriptsController.getJob));
 
 module.exports = router;

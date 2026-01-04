@@ -5,5 +5,4 @@
  */
 
 export * from './panoptoProvider';
-export * from './echo360Provider';
 

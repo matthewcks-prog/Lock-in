@@ -78,7 +78,9 @@ function coerceNumber(value) {
 
 function getStartOfTodayUTC() {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+  );
 }
 
 function enforceUploadRateLimit(userId, bytes) {
@@ -148,7 +150,9 @@ async function createJob(req, res) {
     throw new ValidationError("mediaUrl is required", "mediaUrl");
   }
 
-  const normalized = normalizeMediaUrlForStorage(mediaUrlNormalized || mediaUrl);
+  const normalized = normalizeMediaUrlForStorage(
+    mediaUrlNormalized || mediaUrl
+  );
   const redactedUrl = sanitizeMediaUrlForStorage(mediaUrl);
   const cached = await getTranscriptByFingerprint({ fingerprint, userId });
   if (cached?.transcript_json) {
@@ -234,7 +238,10 @@ async function uploadChunk(req, res) {
     throw new ValidationError("Chunk payload is required", "chunk");
   }
   if (chunkIndex === null) {
-    throw new ValidationError("Chunk index header is required", "x-chunk-index");
+    throw new ValidationError(
+      "Chunk index header is required",
+      "x-chunk-index"
+    );
   }
   ensureValidChunkIndex(chunkIndex);
 
@@ -305,7 +312,8 @@ async function uploadChunk(req, res) {
 
   await appendTranscriptChunk(jobId, req.body, chunkIndex);
   const updates = {
-    status: job.status === JOB_STATUS.CREATED ? JOB_STATUS.UPLOADING : job.status,
+    status:
+      job.status === JOB_STATUS.CREATED ? JOB_STATUS.UPLOADING : job.status,
     error: null,
     bytes_received: bytesReceived + req.body.length,
   };
@@ -344,7 +352,10 @@ async function finalizeJob(req, res) {
   }
 
   if (job.status === JOB_STATUS.DONE) {
-    const cached = await getTranscriptByFingerprint({ fingerprint: job.fingerprint, userId });
+    const cached = await getTranscriptByFingerprint({
+      fingerprint: job.fingerprint,
+      userId,
+    });
     return res.json({
       success: true,
       job: {
@@ -371,7 +382,9 @@ async function finalizeJob(req, res) {
 
   const expectedChunks =
     job.expected_total_chunks ??
-    (expectedTotalChunks ? parseExpectedTotalChunks(expectedTotalChunks) : null);
+    (expectedTotalChunks
+      ? parseExpectedTotalChunks(expectedTotalChunks)
+      : null);
 
   if (!expectedChunks) {
     throw new AppError(
@@ -462,7 +475,10 @@ async function getJob(req, res) {
 
   let transcript = null;
   if (job.status === JOB_STATUS.DONE) {
-    const cached = await getTranscriptByFingerprint({ fingerprint: job.fingerprint, userId });
+    const cached = await getTranscriptByFingerprint({
+      fingerprint: job.fingerprint,
+      userId,
+    });
     transcript = cached?.transcript_json || null;
   }
 
@@ -514,7 +530,10 @@ async function cancelAllActiveJobs(req, res) {
       await updateTranscriptJob({
         jobId: job.id,
         userId,
-        updates: { status: JOB_STATUS.CANCELED, error: "Canceled by user (bulk)" },
+        updates: {
+          status: JOB_STATUS.CANCELED,
+          error: "Canceled by user (bulk)",
+        },
       });
       canceled.push(job.id);
     } catch (error) {

@@ -24,6 +24,7 @@ describe("manifest content_scripts order", () => {
       "content/sidebarHost.js",
       "content/sessionManager.js",
       "content/interactions.js",
+      "content/mediaFetcher.js",
       "dist/ui/index.js",
       "contentScript-react.js",
     ]);

@@ -199,13 +199,18 @@ async function convertToAudio(inputPath, outputPath, state) {
   await runFfmpeg(
     [
       "-y",
-      "-i", inputPath,
-      "-vn",           // No video
-      "-ac", "1",      // Mono
-      "-ar", "16000",  // 16kHz
-      "-b:a", "64k",   // 64kbps
-      "-f", "mp3",
-      outputPath
+      "-i",
+      inputPath,
+      "-vn", // No video
+      "-ac",
+      "1", // Mono
+      "-ar",
+      "16000", // 16kHz
+      "-b:a",
+      "64k", // 64kbps
+      "-f",
+      "mp3",
+      outputPath,
     ],
     state
   );
@@ -219,15 +224,23 @@ async function convertToAudio(inputPath, outputPath, state) {
 async function splitAudioIfNeeded(audioPath, jobDir, state) {
   ensureNotCanceled(state);
   const stats = await fs.promises.stat(audioPath);
-  
+
   // For small files (< 20MB), no need to split
   const SMALL_FILE_THRESHOLD = 20 * 1024 * 1024;
   if (stats.size <= SMALL_FILE_THRESHOLD) {
-    console.log(`[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(1)}MB - no splitting needed`);
+    console.log(
+      `[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(
+        1
+      )}MB - no splitting needed`
+    );
     return [{ path: audioPath, startMs: 0 }];
   }
 
-  console.log(`[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(1)}MB - splitting into ${SEGMENT_DURATION_SECONDS/60} minute segments`);
+  console.log(
+    `[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(
+      1
+    )}MB - splitting into ${SEGMENT_DURATION_SECONDS / 60} minute segments`
+  );
   const segmentsDir = path.join(jobDir, "segments");
   await fs.promises.mkdir(segmentsDir, { recursive: true });
   const outputPattern = path.join(segmentsDir, "segment-%03d.mp3");
@@ -235,14 +248,21 @@ async function splitAudioIfNeeded(audioPath, jobDir, state) {
   await runFfmpeg(
     [
       "-y",
-      "-i", audioPath,
+      "-i",
+      audioPath,
       "-vn",
-      "-f", "segment",
-      "-segment_time", String(SEGMENT_DURATION_SECONDS),
-      "-reset_timestamps", "1",
-      "-ac", "1",
-      "-ar", "16000",
-      "-b:a", "64k",   // MP3 at 64kbps
+      "-f",
+      "segment",
+      "-segment_time",
+      String(SEGMENT_DURATION_SECONDS),
+      "-reset_timestamps",
+      "1",
+      "-ac",
+      "1",
+      "-ar",
+      "16000",
+      "-b:a",
+      "64k", // MP3 at 64kbps
       outputPattern,
     ],
     state
@@ -257,7 +277,9 @@ async function splitAudioIfNeeded(audioPath, jobDir, state) {
       startMs: index * SEGMENT_DURATION_SECONDS * 1000,
     }));
 
-  console.log(`[Transcripts] Created ${segments.length} segments for transcription`);
+  console.log(
+    `[Transcripts] Created ${segments.length} segments for transcription`
+  );
   return segments;
 }
 
@@ -341,11 +363,15 @@ async function processTranscriptJob(job, options, state) {
   const transcript = await transcribeSegments(segments, options, state);
   ensureNotCanceled(state);
 
+  // Redact media URL for privacy (remove session tokens, auth params)
+  // Keep normalized version for cache lookups
+  const mediaUrlRedacted = '[REDACTED_FOR_PRIVACY]';
+
   await upsertTranscriptCache({
     userId: job.user_id,
     fingerprint: job.fingerprint,
     provider: job.provider || "openai",
-    mediaUrlRedacted: job.media_url,
+    mediaUrlRedacted,
     mediaUrlNormalized: job.media_url_normalized,
     etag: null,
     lastModified: null,
