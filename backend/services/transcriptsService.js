@@ -14,10 +14,22 @@ const {
   TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES,
 } = require("../config");
 
+// Industry best practice: Use ffmpeg-static for bundled FFmpeg binary
+// This eliminates PATH issues across all platforms
+let ffmpegPath;
+try {
+  ffmpegPath = require("ffmpeg-static");
+  console.log("[Transcripts] Using bundled FFmpeg from ffmpeg-static");
+} catch {
+  // Fallback to system FFmpeg if ffmpeg-static not installed
+  ffmpegPath = "ffmpeg";
+  console.log("[Transcripts] ffmpeg-static not found, using system FFmpeg");
+}
+
 // Check if ffmpeg is available on startup
 function checkFfmpegAvailable() {
   try {
-    execSync("ffmpeg -version", { stdio: "ignore" });
+    execSync(`"${ffmpegPath}" -version`, { stdio: "ignore", shell: true });
     return true;
   } catch {
     return false;
@@ -27,12 +39,12 @@ function checkFfmpegAvailable() {
 const FFMPEG_AVAILABLE = checkFfmpegAvailable();
 if (!FFMPEG_AVAILABLE) {
   console.warn(
-    "[Transcripts] WARNING: FFmpeg not found in PATH. AI transcription will not work.\n" +
-      "  Install FFmpeg:\n" +
-      "    - Windows: winget install Gyan.FFmpeg (then restart terminal/backend)\n" +
-      "    - macOS: brew install ffmpeg\n" +
-      "    - Linux: sudo apt install ffmpeg"
+    "[Transcripts] WARNING: FFmpeg not available. AI transcription will not work.\n" +
+      "  The bundled ffmpeg-static should work automatically.\n" +
+      "  If issues persist, try: npm install ffmpeg-static (in backend folder)"
   );
+} else {
+  console.log("[Transcripts] FFmpeg is available and ready");
 }
 
 const ACTIVE_JOBS = new Map();
@@ -88,7 +100,7 @@ function ensureNotCanceled(state) {
 
 function runFfmpeg(args, state) {
   return new Promise((resolve, reject) => {
-    const proc = spawn("ffmpeg", args, {
+    const proc = spawn(ffmpegPath, args, {
       stdio: ["ignore", "ignore", "pipe"],
     });
     state.currentProcess = proc;
@@ -103,11 +115,7 @@ function runFfmpeg(args, state) {
       // Provide helpful error message when ffmpeg is not found
       if (err.code === "ENOENT") {
         const helpfulError = new Error(
-          "FFmpeg not found. Please install FFmpeg and ensure it's in your system PATH.\n" +
-            "Installation options:\n" +
-            "  - Windows: winget install Gyan.FFmpeg (then restart terminal/backend)\n" +
-            "  - macOS: brew install ffmpeg\n" +
-            "  - Linux: sudo apt install ffmpeg"
+          "FFmpeg not found. Try reinstalling: npm install ffmpeg-static (in backend folder)"
         );
         helpfulError.code = "FFMPEG_NOT_FOUND";
         reject(helpfulError);
@@ -365,7 +373,7 @@ async function processTranscriptJob(job, options, state) {
 
   // Redact media URL for privacy (remove session tokens, auth params)
   // Keep normalized version for cache lookups
-  const mediaUrlRedacted = '[REDACTED_FOR_PRIVACY]';
+  const mediaUrlRedacted = "[REDACTED_FOR_PRIVACY]";
 
   await upsertTranscriptCache({
     userId: job.user_id,

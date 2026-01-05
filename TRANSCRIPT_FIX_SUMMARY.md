@@ -20,6 +20,7 @@ The error occurred during transcript extraction from Panopto videos. The root ca
 **File: `extension/background.js`**
 
 #### Before:
+
 ```javascript
 // Only 2 retries, no timeout
 async function fetchWithRetry(url, options, maxRetries = 2) {
@@ -30,6 +31,7 @@ async function fetchWithRetry(url, options, maxRetries = 2) {
 ```
 
 #### After:
+
 ```javascript
 // 3 retries with 30s timeout
 const RETRY_CONFIG = {
@@ -43,25 +45,30 @@ async function fetchWithRetry(url, options, maxRetries = 3, timeoutMs = 30000) {
   // NEW: AbortController for timeout
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  
+
   const fetchOptions = {
     ...options,
     signal: controller.signal,
   };
-  
+
   // NEW: Comprehensive logging
-  console.log(`[Lock-in] Fetching (attempt ${attempt + 1}/${maxRetries + 1}): ${url}`);
+  console.log(
+    `[Lock-in] Fetching (attempt ${attempt + 1}/${maxRetries + 1}): ${url}`
+  );
   const response = await fetch(url, fetchOptions);
-  console.log(`[Lock-in] Response status: ${response.status} ${response.statusText}`);
-  
+  console.log(
+    `[Lock-in] Response status: ${response.status} ${response.statusText}`
+  );
+
   // NEW: Timeout-specific error handling
-  if (error.name === 'AbortError') {
+  if (error.name === "AbortError") {
     lastError = new Error(`Request timeout after ${timeoutMs}ms`);
   }
 }
 ```
 
 **Benefits:**
+
 - ✅ Requests won't hang indefinitely (30s timeout)
 - ✅ More retry attempts for transient failures (3 vs 2)
 - ✅ Clear logging for debugging
@@ -72,6 +79,7 @@ async function fetchWithRetry(url, options, maxRetries = 3, timeoutMs = 30000) {
 **File: `extension/background.js` - `extractPanoptoTranscript()`**
 
 #### Before:
+
 ```javascript
 catch (error) {
   if (message.includes("Failed to fetch") || message.includes("NetworkError")) {
@@ -84,11 +92,12 @@ catch (error) {
 ```
 
 #### After:
+
 ```javascript
 catch (error) {
   // NEW: Comprehensive logging
   console.error('[Lock-in] extractPanoptoTranscript error:', message, error);
-  
+
   // NEW: Timeout-specific error
   if (message.includes("timeout") || message.includes("AbortError")) {
     return {
@@ -96,9 +105,9 @@ catch (error) {
       errorCode: "TIMEOUT",
     };
   }
-  
+
   // IMPROVED: More specific network error message
-  if (message.includes("Failed to fetch") || 
+  if (message.includes("Failed to fetch") ||
       message.includes("NetworkError") ||
       message.includes("CORS")) {
     console.error('[Lock-in] Network error details:', {
@@ -115,6 +124,7 @@ catch (error) {
 ```
 
 **Benefits:**
+
 - ✅ Timeout errors have specific message
 - ✅ Network errors mention Panopto login requirement
 - ✅ Detailed error logging for debugging
@@ -125,6 +135,7 @@ catch (error) {
 **File: `extension/background.js` - `fetchWithCredentials()` and `fetchVttContent()`**
 
 #### Before:
+
 ```javascript
 async function fetchWithCredentials(url) {
   const response = await fetchWithRetry(url, {
@@ -137,16 +148,17 @@ async function fetchWithCredentials(url) {
 ```
 
 #### After:
+
 ```javascript
 async function fetchWithCredentials(url) {
-  console.log('[Lock-in] fetchWithCredentials:', url.substring(0, 100));
-  
+  console.log("[Lock-in] fetchWithCredentials:", url.substring(0, 100));
+
   // NEW: URL validation
   try {
     new URL(url);
   } catch (e) {
-    console.error('[Lock-in] Invalid URL:', url, e);
-    throw new Error('Invalid URL provided');
+    console.error("[Lock-in] Invalid URL:", url, e);
+    throw new Error("Invalid URL provided");
   }
 
   const response = await fetchWithRetry(url, {
@@ -157,7 +169,7 @@ async function fetchWithCredentials(url) {
       "User-Agent": "Mozilla/5.0 (Chrome Extension)", // NEW: User-Agent header
     },
   });
-  
+
   // NEW: Response logging
   const text = await response.text();
   console.log(`[Lock-in] Fetched ${text.length} bytes successfully`);
@@ -165,6 +177,7 @@ async function fetchWithCredentials(url) {
 ```
 
 **Benefits:**
+
 - ✅ Invalid URLs caught before fetch attempt
 - ✅ Explicit CORS mode for clarity
 - ✅ User-Agent header for better server compatibility
@@ -175,6 +188,7 @@ async function fetchWithCredentials(url) {
 **File: `core/transcripts/providers/panoptoProvider.ts` - `extractCaptionVttUrl()`**
 
 #### After:
+
 ```typescript
 export function extractCaptionVttUrl(html: string): string | null {
   // Try multiple patterns...
@@ -183,20 +197,30 @@ export function extractCaptionVttUrl(html: string): string | null {
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);
       // NEW: Log which pattern matched
-      console.log(`[Panopto] Caption URL found with pattern ${i + 1}:`, url.substring(0, 100));
+      console.log(
+        `[Panopto] Caption URL found with pattern ${i + 1}:`,
+        url.substring(0, 100)
+      );
       return url;
     }
   }
 
   // NEW: Log when no caption found
-  console.warn('[Panopto] No caption URL found in embed HTML. HTML length:', html.length);
-  console.log('[Panopto] HTML sample:', html.substring(0, 500).replace(/\s+/g, ' '));
-  
+  console.warn(
+    "[Panopto] No caption URL found in embed HTML. HTML length:",
+    html.length
+  );
+  console.log(
+    "[Panopto] HTML sample:",
+    html.substring(0, 500).replace(/\s+/g, " ")
+  );
+
   return null;
 }
 ```
 
 **Benefits:**
+
 - ✅ Know which caption pattern worked
 - ✅ See HTML sample when captions not found
 - ✅ Easier to diagnose caption extraction failures
@@ -208,6 +232,7 @@ export function extractCaptionVttUrl(html: string): string | null {
 Open Chrome DevTools (F12) and watch the Console tab. You should now see detailed logs:
 
 **Successful extraction:**
+
 ```
 [Lock-in] extractPanoptoTranscript starting for: {...}
 [Lock-in] Step 1: Fetching embed page...
@@ -223,12 +248,14 @@ Open Chrome DevTools (F12) and watch the Console tab. You should now see detaile
 ```
 
 **If timeout occurs:**
+
 ```
 [Lock-in] Request timeout after 30000ms
 Error: Request timeout. The server took too long to respond.
 ```
 
 **If network error:**
+
 ```
 [Lock-in] Fetch error (attempt 1): Failed to fetch
 [Lock-in] Network error: Failed to fetch. Possible causes: CORS, DNS, or network connectivity
@@ -254,8 +281,9 @@ For more detailed logging:
 ## Documentation
 
 Created comprehensive troubleshooting guide:
+
 - **Location**: `docs/TRANSCRIPT_TROUBLESHOOTING.md`
-- **Includes**: 
+- **Includes**:
   - Console log patterns
   - Error code reference
   - Step-by-step debugging guide

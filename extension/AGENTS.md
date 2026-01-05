@@ -42,6 +42,7 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - Session management (per-tab)
 - Message routing
 - **DO NOT** contain business logic - delegate to core/services
+- **Transcript extraction**: Uses `ExtensionFetcher` class (Chrome-specific CORS/credentials) and delegates to core providers via fetcher interface. No extraction algorithm logic here - that's in `/core/transcripts/providers/`.
 
 ### `contentScript-react.js`
 - **Active** content script (legacy `contentScript.js` removed)

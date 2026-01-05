@@ -57,7 +57,8 @@ function formatAsVtt(segments: TranscriptSegment[]): string {
     };
     
     lines.push(String(index + 1));
-    lines.push(`${formatVttTime(segment.startMs)} --> ${formatVttTime(segment.endMs)}`);
+    const endMs = typeof segment.endMs === "number" ? segment.endMs : segment.startMs;
+    lines.push(`${formatVttTime(segment.startMs)} --> ${formatVttTime(endMs)}`);
     lines.push(segment.text);
     lines.push("");
   });
@@ -110,7 +111,7 @@ export function TranscriptMessage({
           <span className="lockin-transcript-title">Transcript: {videoTitle}</span>
         </div>
         <div className="lockin-transcript-meta">
-          {transcript.segments.length} segments • {formatTime(transcript.durationMs || 0)}
+          Transcript found | {transcript.segments.length} segments | {formatTime(transcript.durationMs || 0)}
         </div>
       </div>
       

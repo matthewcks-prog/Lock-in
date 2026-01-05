@@ -38,14 +38,14 @@ interface VideoListPanelProps {
 }
 
 type AiTranscriptionStatus =
-  | 'idle'
-  | 'starting'
-  | 'uploading'
-  | 'processing'
-  | 'polling'
-  | 'completed'
-  | 'failed'
-  | 'canceled';
+  | "idle"
+  | "starting"
+  | "uploading"
+  | "processing"
+  | "polling"
+  | "completed"
+  | "failed"
+  | "canceled";
 
 interface AiTranscriptionUiState {
   status: AiTranscriptionStatus;
@@ -68,6 +68,7 @@ interface VideoExtractionResult {
 function ProviderBadge({ provider }: { provider: string }) {
   const badgeColors: Record<string, { bg: string; text: string }> = {
     panopto: { bg: "#1e3a5f", text: "#ffffff" },
+    echo360: { bg: "#b45309", text: "#ffffff" },
     html5: { bg: "#2f6f44", text: "#ffffff" },
     youtube: { bg: "#cc0000", text: "#ffffff" },
     unknown: { bg: "#6b7280", text: "#ffffff" },
@@ -195,7 +196,9 @@ function VideoListItem({
     extractionResult &&
     !extractionResult.success &&
     extractionResult.errorCode === "NO_CAPTIONS";
-  const aiAvailable = Boolean(noCaptions && extractionResult?.aiTranscriptionAvailable);
+  const aiAvailable = Boolean(
+    noCaptions && extractionResult?.aiTranscriptionAvailable
+  );
   const extractionError =
     extractionResult && !extractionResult.success && !aiAvailable
       ? extractionResult.error || "Failed to extract transcript"
@@ -216,7 +219,10 @@ function VideoListItem({
       : "Generates captions when none are available.";
 
   return (
-    <div className={`lockin-video-item ${isThisExtracting ? "is-extracting" : ""}`}>
+    <div
+      className={`lockin-video-item ${isThisExtracting ? "is-extracting" : ""}`}
+      role="listitem"
+    >
       <button
         className="lockin-video-item-main"
         onClick={onSelect}
@@ -228,7 +234,7 @@ function VideoListItem({
             <ProviderBadge provider={video.provider} />
             <span className="lockin-video-item-title">{video.title}</span>
             {noCaptions && (
-              <span className="lockin-video-item-badge">No captions</span>
+              <span className="lockin-video-item-badge">No transcript</span>
             )}
           </div>
           {(recordingDate || duration) && (
@@ -260,7 +266,9 @@ function VideoListItem({
             <span className="lockin-inline-spinner" />
             <div className="lockin-video-item-ai-text">
               <div className="lockin-video-item-ai-title">{progressLabel}</div>
-              <div className="lockin-video-item-ai-subtitle">{progressMessage}</div>
+              <div className="lockin-video-item-ai-subtitle">
+                {progressMessage}
+              </div>
             </div>
           </div>
           {typeof progressPercent === "number" && (
@@ -287,7 +295,9 @@ function VideoListItem({
         <div className="lockin-video-item-ai lockin-video-item-ai-error">
           <div className="lockin-video-item-ai-text">
             <div className="lockin-video-item-ai-title">
-              {aiIsCanceled ? "Transcription canceled" : "AI transcription failed"}
+              {aiIsCanceled
+                ? "Transcription canceled"
+                : "AI transcription failed"}
             </div>
             <div className="lockin-video-item-ai-subtitle">
               {aiErrorMessage || "Try again when you're ready."}
@@ -415,11 +425,11 @@ export function VideoListPanel({
           <div className="lockin-video-list-empty">
             <p>No videos detected on this page.</p>
             <p className="lockin-video-list-hint">
-              Supported: Panopto embeds, HTML5 videos
+              Supported: Panopto, Echo360, HTML5 videos
             </p>
           </div>
         ) : (
-          <div className="lockin-video-list">
+          <div className="lockin-video-list" role="list">
             {videos.map((video) => (
               <VideoListItem
                 key={`${video.provider}-${video.id}`}

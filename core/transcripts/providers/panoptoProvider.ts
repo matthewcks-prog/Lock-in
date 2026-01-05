@@ -6,8 +6,6 @@
  * Detection strategies (in order of priority):
  * 1. Direct Panopto URLs - User is on panopto.com directly
  * 2. Embedded iframes - Panopto embedded in LMS page
- * 3. Anchor links - Links to Panopto (e.g., Moodle mod/url redirect pages)
- * 4. Meta refresh/redirects - Intermediate redirect pages
  *
  * This provider uses DOM-based detection (synchronous).
  */
@@ -17,7 +15,9 @@ import type {
   VideoDetectionContext,
   TranscriptExtractionResult,
 } from '../types';
-import type { TranscriptProviderV2, AsyncFetcher } from '../providerRegistry';
+import type { TranscriptProviderV2 } from '../providerRegistry';
+import type { EnhancedAsyncFetcher } from '../fetchers/types';
+import { hasRedirectSupport, hasHtmlParsingSupport } from '../fetchers/types';
 import { parseWebVtt } from '../webvttParser';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,7 +42,6 @@ const PANOPTO_VIEWER_REGEX =
  */
 const LMS_REDIRECT_PATTERNS = [
   /mod\/url\/view\.php/i,
-  /mod\/resource\/view\.php/i,
   /mod\/lti\/view\.php/i,
   /mod\/page\/view\.php/i,
 ] as const;
@@ -102,6 +101,29 @@ export function isLmsRedirectPage(url: string): boolean {
  */
 export function isPanoptoDomain(hostname: string): boolean {
   return hostname.includes('panopto.com') || hostname.includes('panopto.');
+}
+
+function resolveUrl(candidate: string, baseUrl: string): string | null {
+  const trimmed = candidate.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('#')) return null;
+  if (trimmed.startsWith('javascript:')) return null;
+  if (trimmed.startsWith('mailto:')) return null;
+  try {
+    return new URL(trimmed, baseUrl).toString();
+  } catch {
+    return null;
+  }
+}
+
+function getAnchorTitle(anchor: HTMLAnchorElement): string {
+  return (
+    anchor.textContent?.trim() ||
+    anchor.getAttribute('title') ||
+    anchor.getAttribute('aria-label') ||
+    anchor.getAttribute('data-title') ||
+    ''
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -191,13 +213,16 @@ export function normalizePanoptoEmbedUrl(url: string): string | null {
   return info ? buildPanoptoEmbedUrl(info.tenant, info.deliveryId) : null;
 }
 
+
 /**
  * Detect Panopto videos from anchor links on a page.
- * Catches cases where Panopto is linked but not embedded (e.g., Moodle mod/url).
+ * Catches cases where Panopto is linked but not embedded.
  */
 export function detectPanoptoFromLinks(doc: Document): DetectedVideo[] {
   const videos: DetectedVideo[] = [];
   const seenIds = new Set<string>();
+  const baseUrl =
+    doc.baseURI || (doc.location ? doc.location.href : '');
 
   const addVideo = (info: PanoptoInfo, title: string): void => {
     if (seenIds.has(info.deliveryId)) return;
@@ -216,8 +241,10 @@ export function detectPanoptoFromLinks(doc: Document): DetectedVideo[] {
   // Strategy 1: Check all anchor elements
   const anchors = Array.from(doc.querySelectorAll('a[href]')) as HTMLAnchorElement[];
   for (const anchor of anchors) {
-    const href = anchor.href || anchor.getAttribute('href') || '';
-    if (!href) continue;
+    const rawHref = anchor.getAttribute('href') || anchor.href || '';
+    if (!rawHref) continue;
+    const resolvedHref = resolveUrl(rawHref, baseUrl);
+    const href = resolvedHref || rawHref;
 
     let info = extractPanoptoInfo(href);
     
@@ -227,16 +254,13 @@ export function detectPanoptoFromLinks(doc: Document): DetectedVideo[] {
                        anchor.getAttribute('data-url') ||
                        anchor.getAttribute('data-src');
       if (dataHref) {
-        info = extractPanoptoInfo(dataHref);
+        const resolvedDataHref = resolveUrl(dataHref, baseUrl);
+        info = extractPanoptoInfo(resolvedDataHref || dataHref);
       }
     }
 
     if (info) {
-      const title = 
-        anchor.textContent?.trim() ||
-        anchor.getAttribute('title') ||
-        anchor.getAttribute('aria-label') ||
-        '';
+      const title = getAnchorTitle(anchor);
       addVideo(info, title);
     }
   }
@@ -519,8 +543,6 @@ export class PanoptoProvider implements TranscriptProviderV2 {
    * Detect Panopto videos using multiple strategies:
    * 1. Current page URL (if user is on Panopto directly)
    * 2. Embedded iframes
-   * 3. Anchor links on page
-   * 4. Redirect mechanisms (meta refresh, JS redirects)
    */
   detectVideosSync(context: VideoDetectionContext): DetectedVideo[] {
     const seenIds = new Set<string>();
@@ -563,44 +585,105 @@ export class PanoptoProvider implements TranscriptProviderV2 {
       }
     }
 
-    // Strategy 3 & 4: Check links and redirects (requires document)
-    if (context.document) {
-      // Check anchor links
-      const linkVideos = detectPanoptoFromLinks(context.document);
-      addVideos(linkVideos);
-
-      // Check redirect mechanisms (especially for LMS redirect pages)
-      if (isLmsRedirectPage(context.pageUrl)) {
-        const redirectVideos = detectPanoptoFromRedirect(context.document);
-        addVideos(redirectVideos);
-      }
-    }
-
     return allVideos;
   }
 
   async extractTranscript(
     video: DetectedVideo,
-    fetcher: AsyncFetcher
+    fetcher: EnhancedAsyncFetcher
   ): Promise<TranscriptExtractionResult> {
     try {
+      // Validate video embedUrl
+      if (!video.embedUrl) {
+        return {
+          success: false,
+          error: 'No video URL provided',
+          errorCode: 'INVALID_VIDEO',
+          aiTranscriptionAvailable: true,
+        };
+      }
+
+      // Build initial candidate URLs (same as background.js)
+      const candidateUrls: string[] = [];
+      if (video.panoptoTenant && video.id) {
+        candidateUrls.push(
+          buildPanoptoEmbedUrl(video.panoptoTenant, video.id),
+          buildPanoptoViewerUrl(video.panoptoTenant, video.id)
+        );
+      }
+
+      // Use resolve functions to handle edge cases
       const primaryEmbedUrl = resolvePanoptoEmbedUrl(video);
       const viewerUrl = resolvePanoptoViewerUrl(video);
-      const candidateUrls = [
-        primaryEmbedUrl,
-        viewerUrl,
-        video.embedUrl,
-      ].filter(Boolean) as string[];
-      const uniqueCandidateUrls = Array.from(new Set(candidateUrls));
+      
+      if (primaryEmbedUrl) {
+        candidateUrls.push(primaryEmbedUrl);
+      }
+      if (viewerUrl) {
+        candidateUrls.push(viewerUrl);
+      }
 
+      candidateUrls.push(video.embedUrl);
+      const pendingUrls = Array.from(
+        new Set(candidateUrls.filter(Boolean))
+      );
+      const visitedUrls = new Set<string>();
+      let anyFetched = false;
+      let primaryError: unknown = null;
+
+      // Dynamic discovery helper (same as background.js)
+      const enqueueCandidate = (candidate: string | null): void => {
+        if (!candidate) return;
+        if (visitedUrls.has(candidate)) return;
+        if (pendingUrls.includes(candidate)) return;
+        pendingUrls.push(candidate);
+      };
+
+      // Extract from URL with dynamic discovery support
       const extractFromUrl = async (
         url: string
       ): Promise<TranscriptExtractionResult | null> => {
-        const embedHtml = await fetcher.fetchWithCredentials(url);
-        const captionUrl = extractCaptionVttUrl(embedHtml);
-        if (!captionUrl) return null;
+        // Use redirect-aware fetch if available (preserves redirect tracking)
+        let html: string;
+        let finalUrl: string;
+        
+        if (hasRedirectSupport(fetcher) && fetcher.fetchHtmlWithRedirectInfo) {
+          const result = await fetcher.fetchHtmlWithRedirectInfo(url);
+          html = result.html;
+          finalUrl = result.finalUrl;
+        } else {
+          // Fallback to basic fetch
+          html = await fetcher.fetchWithCredentials(url);
+          finalUrl = url;
+        }
+        
+        anyFetched = true;
 
-        const resolvedCaptionUrl = resolveCaptionUrl(captionUrl, url);
+        const captionUrl = extractCaptionVttUrl(html);
+        
+        // Dynamic discovery: find more URLs from HTML if captions not found
+        if (!captionUrl) {
+          if (hasHtmlParsingSupport(fetcher) && fetcher.extractPanoptoInfoFromHtml) {
+            const resolvedInfo = extractPanoptoInfo(finalUrl);
+            const fromHtml = fetcher.extractPanoptoInfoFromHtml(html, finalUrl || url);
+            const info = resolvedInfo || fromHtml?.info;
+
+            if (fromHtml?.url) {
+              enqueueCandidate(fromHtml.url);
+            }
+            if (info) {
+              enqueueCandidate(
+                buildPanoptoEmbedUrl(info.tenant, info.deliveryId)
+              );
+              enqueueCandidate(
+                buildPanoptoViewerUrl(info.tenant, info.deliveryId)
+              );
+            }
+          }
+          return null; // Try next URL
+        }
+
+        const resolvedCaptionUrl = resolveCaptionUrl(captionUrl, finalUrl);
         const vttContent = await fetcher.fetchWithCredentials(resolvedCaptionUrl);
         const transcript = parseWebVtt(vttContent);
 
@@ -619,25 +702,17 @@ export class PanoptoProvider implements TranscriptProviderV2 {
         };
       };
 
-      let primaryFetched = false;
-      let primaryError: unknown = null;
+      // Try URLs with dynamic discovery (same while loop as background.js)
+      while (pendingUrls.length > 0) {
+        const url = pendingUrls.shift();
+        if (!url || visitedUrls.has(url)) continue;
+        visitedUrls.add(url);
 
-      try {
-        const result = await extractFromUrl(primaryEmbedUrl);
-        primaryFetched = true;
-        if (result) return result;
-      } catch (error) {
-        primaryError = error;
-        const message = error instanceof Error ? error.message : String(error);
-        if (message === 'AUTH_REQUIRED') {
-          throw error;
-        }
-      }
-
-      for (const url of uniqueCandidateUrls.slice(1)) {
         try {
           const result = await extractFromUrl(url);
-          if (result) return result;
+          if (result) {
+            return result;
+          }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           if (message === 'AUTH_REQUIRED') {
@@ -649,7 +724,7 @@ export class PanoptoProvider implements TranscriptProviderV2 {
         }
       }
 
-      if (primaryError && !primaryFetched) {
+      if (!anyFetched && primaryError) {
         throw primaryError;
       }
 

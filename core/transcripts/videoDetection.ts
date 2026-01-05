@@ -14,12 +14,12 @@ import type {
 import {
   extractPanoptoInfo as _extractPanoptoInfo,
   isPanoptoUrl as _isPanoptoUrl,
-  isLmsRedirectPage,
-  detectPanoptoFromLinks,
-  detectPanoptoFromRedirect,
   buildPanoptoEmbedUrl,
   type PanoptoInfo,
 } from './providers/panoptoProvider';
+import {
+  detectEcho360Videos as _detectEcho360Videos,
+} from './providers/echo360Provider';
 
 // Re-export Panopto functions for backwards compatibility
 export const extractPanoptoInfo = _extractPanoptoInfo;
@@ -39,8 +39,8 @@ export const MAX_IFRAME_DEPTH = 3;
 
 /**
  * Detect Panopto videos from iframe list
- * Note: This is a legacy function. For comprehensive detection, 
- * use PanoptoProvider.detectVideosSync() which also checks links and redirects.
+ * Note: This is a legacy function. For comprehensive detection,
+ * use detectVideosSync() or PanoptoProvider.detectVideosSync().
  */
 export function detectPanoptoVideosFromIframes(
   iframes: VideoDetectionContext['iframes'],
@@ -94,6 +94,45 @@ function resolveUrl(
   } catch {
     return null;
   }
+}
+
+function isElementVisible(element: Element | null): boolean {
+  if (!element) return false;
+  if (element.hasAttribute('hidden')) return false;
+  if (element.closest('[hidden]')) return false;
+  if (element.getAttribute('aria-hidden') === 'true') return false;
+  if (element.closest('[aria-hidden="true"]')) return false;
+
+  const details = element.closest('details');
+  if (details && !details.hasAttribute('open')) {
+    const summary = element.closest('summary');
+    if (!summary || summary.parentElement !== details) {
+      return false;
+    }
+  }
+
+  // Check inline style attribute directly (works in jsdom)
+  const inlineStyle = (element as HTMLElement).style;
+  if (inlineStyle) {
+    if (inlineStyle.display === 'none') return false;
+    if (inlineStyle.visibility === 'hidden' || inlineStyle.visibility === 'collapse') return false;
+    const opacity = Number.parseFloat(inlineStyle.opacity || '1');
+    if (Number.isFinite(opacity) && opacity <= 0) return false;
+  }
+
+  // Also check computed style (for CSS classes, etc.)
+  const view = element.ownerDocument?.defaultView;
+  if (view && typeof view.getComputedStyle === 'function') {
+    const style = view.getComputedStyle(element);
+    if (style) {
+      if (style.display === 'none') return false;
+      if (style.visibility === 'hidden' || style.visibility === 'collapse') return false;
+      const opacity = Number.parseFloat(style.opacity || '1');
+      if (Number.isFinite(opacity) && opacity <= 0) return false;
+    }
+  }
+
+  return true;
 }
 
 function getElementLabel(el: Element | null): string | null {
@@ -311,7 +350,7 @@ export function detectHtml5Videos(
   const baseUrl = doc.baseURI || context.pageUrl;
   const videoElements = Array.from(
     doc.querySelectorAll('video')
-  ) as HTMLVideoElement[];
+  ).filter((video) => isElementVisible(video)) as HTMLVideoElement[];
   const videos: DetectedVideo[] = [];
 
   for (let index = 0; index < videoElements.length; index += 1) {
@@ -370,45 +409,29 @@ export interface VideoDetectionResult {
 export function detectVideosSync(
   context: VideoDetectionContext
 ): VideoDetectionResult {
-  // Check for Panopto videos using multiple detection strategies
-  // Strategy 1: Check iframes (embedded videos)
+  // Check for Panopto videos via embedded iframes and current URL
   const panoptoFromIframes = detectPanoptoVideosFromIframes(
     context.iframes,
     context.pageUrl
   );
-  
-  // Strategy 2 & 3: Check links and redirects (requires document)
-  let panoptoFromLinks: DetectedVideo[] = [];
-  let panoptoFromRedirect: DetectedVideo[] = [];
-  
-  if (context.document) {
-    // Check anchor links on page (for mod/url redirect pages)
-    panoptoFromLinks = detectPanoptoFromLinks(context.document);
 
-    // Check redirect mechanisms (especially for LMS redirect pages)
-    if (isLmsRedirectPage(context.pageUrl)) {
-      panoptoFromRedirect = detectPanoptoFromRedirect(context.document);
-    }
-  }
-  
-  // Merge all Panopto videos, deduplicating by ID
-  const seenPanoptoIds = new Set<string>();
-  const allPanoptoVideos: DetectedVideo[] = [];
-  
-  for (const video of [...panoptoFromIframes, ...panoptoFromLinks, ...panoptoFromRedirect]) {
-    if (!seenPanoptoIds.has(video.id)) {
-      seenPanoptoIds.add(video.id);
-      allPanoptoVideos.push(video);
-    }
-  }
-  
-  if (allPanoptoVideos.length > 0) {
-    const result = {
-      videos: allPanoptoVideos,
-      provider: 'panopto',
+  if (panoptoFromIframes.length > 0) {
+    const result: VideoDetectionResult = {
+      videos: panoptoFromIframes,
+      provider: 'panopto' as VideoProvider,
       requiresApiCall: false,
     };
     return result;
+  }
+
+  // Check for Echo360 videos
+  const echoVideos = _detectEcho360Videos(context);
+  if (echoVideos.length > 0) {
+    return {
+      videos: echoVideos,
+      provider: 'echo360' as VideoProvider,
+      requiresApiCall: false,
+    };
   }
 
   // Check for HTML5 video elements
@@ -416,7 +439,7 @@ export function detectVideosSync(
   if (html5Videos.length > 0) {
     return {
       videos: html5Videos,
-      provider: 'html5',
+      provider: 'html5' as VideoProvider,
       requiresApiCall: false,
     };
   }
@@ -452,6 +475,7 @@ export function collectIframeInfo(
   const result: VideoDetectionContext['iframes'] = [];
 
   for (const iframe of iframes) {
+    if (!isElementVisible(iframe)) continue;
     const src =
       iframe.src || iframe.getAttribute('data-src') || iframe.dataset.src || '';
     if (src) {
