@@ -175,7 +175,12 @@ export function parseWebVtt(vttContent: string): TranscriptResult {
   const plainText = segments.map(s => s.text).join(' ');
   
   // Calculate duration from last segment
-  const durationMs = segments.length > 0 ? segments[segments.length - 1].endMs : 0;
+  const lastSegment = segments[segments.length - 1];
+  const durationMs = lastSegment
+    ? typeof lastSegment.endMs === 'number'
+      ? lastSegment.endMs
+      : lastSegment.startMs
+    : 0;
   
   return {
     plainText,
@@ -192,7 +197,9 @@ export function formatAsVtt(segments: TranscriptSegment[]): string {
   
   segments.forEach((segment, index) => {
     lines.push(String(index + 1));
-    lines.push(`${formatVttTimestamp(segment.startMs)} --> ${formatVttTimestamp(segment.endMs)}`);
+    const endMs =
+      typeof segment.endMs === 'number' ? segment.endMs : segment.startMs;
+    lines.push(`${formatVttTimestamp(segment.startMs)} --> ${formatVttTimestamp(endMs)}`);
     lines.push(segment.text);
     lines.push('');
   });
@@ -212,4 +219,3 @@ function formatVttTimestamp(ms: number): string {
   
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
 }
-

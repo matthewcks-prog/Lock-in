@@ -7,7 +7,7 @@ Purpose: Quick orientation for humans/AI. For current implementation details, se
 backend/
   index.js, app.js, routes/, controllers/, middleware/, migrations/
 core/
-  domain/, services/, storage/, errors/, utils/
+  domain/, services/, storage/, errors/, utils/, transcripts/
 api/
   client.ts, auth.ts
 integrations/
@@ -17,7 +17,7 @@ extension/
   content/ (pageContext, stateStore, sidebarHost, sessionManager, interactions)
   src/ (initApi.ts, contentLibs.ts, chromeStorage.ts, logger.ts, messaging.ts)
   dist/
-    libs/ (build outputs: initApi.js, contentLibs.js, webvttParser.js, maps)
+    libs/ (build outputs: initApi.js, contentLibs.js, webvttParser.js, transcriptProviders.js, maps)
     ui/   (build output: index.js + map)
 ui/
   extension/ (index.tsx, LockInSidebar.tsx, notes/, hooks/)
@@ -34,9 +34,19 @@ docs/
 - **Content helpers bundle**: `extension/src/contentLibs.ts` → `extension/dist/libs/contentLibs.js` (`window.LockInContent.*`).
 - **Backend**: `backend/index.js` (Express server bootstraps from `app.js`).
 
+## Transcript System
+- **Detection**: `core/transcripts/videoDetection.ts` (Panopto/Echo360/HTML5 DOM detection)
+- **Providers**: `core/transcripts/providers/` (Panopto, Echo360) - business logic, no Chrome APIs
+- **Fetcher interfaces**: `core/transcripts/fetchers/types.ts` (AsyncFetcher, EnhancedAsyncFetcher)
+- **Extraction**: Provider `extractTranscript(video, fetcher)` methods
+- **Extension fetcher**: `extension/background.js` (ExtensionFetcher class - Chrome-specific CORS/credentials)
+- **Background routing**: `extension/background.js` (handleTranscriptExtraction - delegates to provider)
+- **UI hooks**: `ui/extension/transcripts/hooks/` (useTranscripts - React state management)
+
 ## Build Commands (npm scripts)
 - `npm run build:initApi` → `extension/dist/libs/initApi.js`
 - `npm run build:contentLibs` → `extension/dist/libs/contentLibs.js`
+- `npm run build:transcriptProviders` -> `extension/dist/libs/transcriptProviders.js`
 - `npm run build` (or `build:extension`) → builds libs then `extension/dist/ui/index.js`
 - `npm run verify-build` → `type-check` + `build`
 - `npm run type-check` → `tsc --noEmit`

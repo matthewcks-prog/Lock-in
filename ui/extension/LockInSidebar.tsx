@@ -1173,7 +1173,7 @@ export function LockInSidebar({
                         <span className="lockin-inline-spinner" />
                         <span>
                           {transcriptState.isExtracting
-                            ? "Extracting..."
+                            ? "Fetching transcript..."
                             : "Detecting..."}
                         </span>
                       </>

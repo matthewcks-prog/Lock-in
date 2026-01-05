@@ -1,0 +1,22 @@
+{
+  "contentJson": {
+    "cues": [
+      {
+        "startMs": 1000,
+        "endMs": 2000,
+        "speaker": "Speaker 0",
+        "content": " Hello   world ",
+        "confidence": 92
+      },
+      {
+        "startMs": 2100,
+        "endMs": 3200,
+        "speaker": "Dr. Smith",
+        "content": "Second cue",
+        "confidence": {
+          "average": 0.75
+        }
+      }
+    ]
+  }
+}

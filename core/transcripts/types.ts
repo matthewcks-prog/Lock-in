@@ -12,7 +12,7 @@
 /**
  * Supported video provider types
  */
-export type VideoProvider = 'panopto' | 'youtube' | 'html5' | 'unknown';
+export type VideoProvider = 'panopto' | 'echo360' | 'youtube' | 'html5' | 'unknown';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Video Detection
@@ -58,6 +58,13 @@ export interface DetectedVideo {
   // Panopto-specific fields
   /** Panopto tenant domain (e.g., "monash.au.panopto.com") */
   panoptoTenant?: string;
+  // Echo360-specific fields
+  /** Echo360 lesson identifier (UUID-like) */
+  echoLessonId?: string;
+  /** Echo360 media identifier (UUID-like) */
+  echoMediaId?: string;
+  /** Echo360 base URL (origin) for API calls */
+  echoBaseUrl?: string;
 }
 
 /**
@@ -86,11 +93,13 @@ export interface TranscriptSegment {
   /** Start time in milliseconds */
   startMs: number;
   /** End time in milliseconds */
-  endMs: number;
+  endMs: number | null;
   /** Transcript text for this segment */
   text: string;
   /** Speaker name (optional) */
   speaker?: string;
+  /** Confidence score (optional, 0..1) */
+  confidence?: number;
 }
 
 /**
@@ -116,7 +125,7 @@ export interface TranscriptExtractionResult {
   /** Error message (if failed) */
   error?: string;
   /** Error code for programmatic handling */
-  errorCode?: 'AUTH_REQUIRED' | 'LOCKIN_AUTH_REQUIRED' | 'NO_CAPTIONS' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'NOT_AVAILABLE';
+  errorCode?: 'AUTH_REQUIRED' | 'LOCKIN_AUTH_REQUIRED' | 'NO_CAPTIONS' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'NOT_AVAILABLE' | 'INVALID_VIDEO' | 'TIMEOUT';
   /** Whether AI transcription is available as fallback */
   aiTranscriptionAvailable?: boolean;
 }

@@ -11,6 +11,10 @@ import type {
   VideoDetectionContext,
   TranscriptExtractionResult,
 } from './types';
+import type {
+  AsyncFetcher,
+  EnhancedAsyncFetcher,
+} from './fetchers/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Interface (Extended)
@@ -51,22 +55,20 @@ export interface TranscriptProviderV2 {
   /**
    * Extract transcript for a video.
    * Typically handled by the background script.
+   * Providers can use EnhancedAsyncFetcher for advanced features like redirect tracking.
    */
   extractTranscript?(
     video: DetectedVideo,
-    fetcher: AsyncFetcher
+    fetcher: AsyncFetcher | EnhancedAsyncFetcher
   ): Promise<TranscriptExtractionResult>;
 }
 
 /**
  * Async fetcher interface for background script operations
+ * @deprecated Use AsyncFetcher from './fetchers/types' instead
+ * Kept here for backward compatibility
  */
-export interface AsyncFetcher {
-  /** Fetch with credentials included */
-  fetchWithCredentials(url: string): Promise<string>;
-  /** Fetch JSON with credentials */
-  fetchJson<T>(url: string): Promise<T>;
-}
+export type { AsyncFetcher, EnhancedAsyncFetcher } from './fetchers/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Registry

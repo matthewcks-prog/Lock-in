@@ -181,6 +181,53 @@ describe('Unified Detection', () => {
         },
       ]);
     });
+
+    it('detects Echo360 iframes', () => {
+      const result = detectVideosSync({
+        pageUrl: 'https://learning.monash.edu/course/123',
+        iframes: [
+          {
+            src: 'https://echo360.net.au/lesson/11111111-2222-3333-4444-555555555555/media/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            title: 'Echo360 Lecture',
+          },
+        ],
+      });
+
+      expect(result.provider).toBe('echo360');
+      expect(result.videos).toHaveLength(1);
+      expect(result.videos[0].provider).toBe('echo360');
+      expect(result.videos[0].echoLessonId).toBe(
+        '11111111-2222-3333-4444-555555555555'
+      );
+      expect(result.videos[0].echoMediaId).toBe(
+        'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+      );
+    });
+
+    it('ignores hidden HTML5 videos', () => {
+      const doc = document.implementation.createHTMLDocument('test');
+      doc.body.innerHTML = `
+        <video id="visible-video">
+          <source src="https://cdn.example.com/visible.mp4" type="video/mp4" />
+        </video>
+        <video id="hidden-video" style="display: none;">
+          <source src="https://cdn.example.com/hidden.mp4" type="video/mp4" />
+        </video>
+        <video id="aria-hidden-video" aria-hidden="true">
+          <source src="https://cdn.example.com/hidden2.mp4" type="video/mp4" />
+        </video>
+      `;
+
+      const result = detectVideosSync({
+        pageUrl: 'https://example.com/course',
+        iframes: [],
+        document: doc,
+      });
+
+      expect(result.provider).toBe('html5');
+      expect(result.videos).toHaveLength(1);
+      expect(result.videos[0].domId).toBe('visible-video');
+    });
   });
 });
 

@@ -252,6 +252,42 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 3. Use in service: `/core/services/` or directly in hooks
 4. Handle errors: Consistent error handling
 
+### Transcript System Architecture
+
+The transcript system uses a **provider pattern with dependency injection**:
+
+1. **Provider Pattern** (`/core/transcripts/providers/`)
+   - All video providers implement `TranscriptProviderV2` interface
+   - Providers are auto-registered via `core/transcripts/index.ts`
+   - Detection uses provider registry, not direct function calls
+   - Each provider handles detection and extraction for its platform
+
+2. **Fetcher Interface** (`/core/transcripts/fetchers/`)
+   - `AsyncFetcher` - Base interface for network operations
+   - `EnhancedAsyncFetcher` - Optional capabilities (redirect tracking, HTML parsing)
+   - Extension implements `ExtensionFetcher` in `background.js` (Chrome-specific)
+   - Future: Web app will implement `WebAppFetcher` (standard fetch API)
+
+3. **Extraction Flow**
+   - Detection: `detectVideosSync()` uses provider registry
+   - Extraction: Provider's `extractTranscript(video, fetcher)` method
+   - Fetcher handles CORS/credentials (background script for extension)
+   - Caching: Transcripts cached in `chrome.storage.local` (future enhancement)
+
+4. **File Organization**
+   - `/core/transcripts/providers/` - Provider implementations (Panopto, HTML5)
+   - `/core/transcripts/fetchers/` - Fetcher interfaces and type guards
+   - `/ui/extension/transcripts/hooks/` - React hooks (useTranscripts)
+   - `/extension/background.js` - ExtensionFetcher + message routing (no extraction logic)
+
+5. **Why Fetcher Interface?**
+   - **CORS**: Background scripts bypass CORS, content scripts cannot
+   - **Credentials**: Background scripts can send cookies with `credentials: "include"`
+   - **Testability**: Core providers can be tested with mock fetchers
+   - **Reusability**: Same provider works in extension and future web app
+
+**Rule**: Business logic (extraction algorithm) lives in `/core`. Chrome-specific fetching lives in `/extension`. Providers depend on fetcher interface, not concrete implementations.
+
 ---
 
 ## Naming Conventions

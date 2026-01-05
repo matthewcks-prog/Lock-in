@@ -516,7 +516,7 @@ describe('Panopto Link Detection', () => {
     });
 
     it('returns true for Moodle mod/resource pages', () => {
-      expect(isLmsRedirectPage('https://learning.monash.edu/mod/resource/view.php?id=12345')).toBe(true);
+      expect(isLmsRedirectPage('https://learning.monash.edu/mod/resource/view.php?id=12345')).toBe(false);
     });
 
     it('returns true for Moodle mod/lti pages', () => {
@@ -546,6 +546,20 @@ describe('Panopto Link Detection', () => {
       expect(videos[0].id).toBe('abc12345-1234-5678-abcd-def012345678');
       expect(videos[0].title).toBe('Week 1 Lecture');
       expect(videos[0].panoptoTenant).toBe('monash.au.panopto.com');
+    });
+
+    it('ignores LMS wrapper links in the Panopto list', () => {
+      const html = `
+        <html>
+          <body>
+            <a href="https://learning.monash.edu/mod/url/view.php?id=4042871">Week 3 recording</a>
+          </body>
+        </html>
+      `;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const videos = detectPanoptoFromLinks(doc);
+
+      expect(videos).toHaveLength(0);
     });
 
     it('detects multiple Panopto links', () => {

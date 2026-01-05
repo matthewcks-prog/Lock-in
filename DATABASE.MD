@@ -56,6 +56,7 @@ See `backend/migrations/004_vector_extension_schema.sql` for full migration deta
   - Table stores metadata + storage path; URLs are derived with `getPublicUrl`.
 
 - **AI Requests**
+
   - `ai_requests` = per-call log of AI usage (tokens in/out, mode).
   - Useful for analytics, quotas, and debugging.
 
@@ -519,15 +520,15 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 
 ### Applied Migrations
 
-| Migration                         | Date     | Description                                    |
-| --------------------------------- | -------- | ---------------------------------------------- |
-| `001_note_assets.sql`             | Dec 2024 | Note assets table for file attachments         |
-| `002_performance_indexes.sql`     | Dec 2024 | Performance indexes for all tables             |
-| `003_row_level_security.sql`      | Dec 2024 | RLS policies for data isolation                |
-| `004_vector_extension_schema.sql` | Dec 2024 | Fix pgvector after moving to extensions schema |
-| `005_starred_notes.sql`           | Dec 2024 | Add is_starred column for favoriting notes     |
-| `006_transcripts.sql`             | Dec 2025 | Transcript jobs + transcript cache tables      |
-| `007_transcripts_hardening.sql`   | Jan 2026 | Transcript job state + cache hardening         |
+| Migration                              | Date     | Description                                          |
+| -------------------------------------- | -------- | ---------------------------------------------------- |
+| `001_note_assets.sql`                  | Dec 2024 | Note assets table for file attachments               |
+| `002_performance_indexes.sql`          | Dec 2024 | Performance indexes for all tables                   |
+| `003_row_level_security.sql`           | Dec 2024 | RLS policies for data isolation                      |
+| `004_vector_extension_schema.sql`      | Dec 2024 | Fix pgvector after moving to extensions schema       |
+| `005_starred_notes.sql`                | Dec 2024 | Add is_starred column for favoriting notes           |
+| `006_transcripts.sql`                  | Dec 2025 | Transcript jobs + transcript cache tables            |
+| `007_transcripts_hardening.sql`        | Jan 2026 | Transcript job state + cache hardening               |
 | `008_transcript_privacy_hardening.sql` | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking |
 
 ---
@@ -537,17 +538,20 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 ### AI Transcription Privacy Measures
 
 **Data Minimization:**
+
 - Media URLs are redacted after transcript creation (removes session tokens, auth params)
 - Transcripts expire after 90 days (automatic deletion)
 - Failed jobs deleted after 7 days
 - Only normalized URLs kept for cache lookups (fingerprint-based)
 
 **User Consent:**
+
 - Explicit confirmation required before AI transcription
 - Clear disclosure: "Process using OpenAI Whisper API (external, no training on your data)"
 - Respects Panopto/LMS access controls (only uses downloadable videos)
 
 **Scheduled Cleanup:**
+
 - `clean_expired_transcripts()` - Run daily to delete expired content
 - `redact_completed_job_urls()` - Run every 6 hours to redact URLs from completed jobs
 

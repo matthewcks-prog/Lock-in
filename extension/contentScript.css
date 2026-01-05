@@ -2023,26 +2023,30 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 /* === SCROLLBARS === */
 .lockin-chat-messages::-webkit-scrollbar,
 .lockin-history-list::-webkit-scrollbar,
-.lockin-notes-list::-webkit-scrollbar {
+.lockin-notes-list::-webkit-scrollbar,
+.lockin-video-list-body::-webkit-scrollbar {
   width: 8px;
 }
 
 .lockin-chat-messages::-webkit-scrollbar-track,
 .lockin-history-list::-webkit-scrollbar-track,
-.lockin-notes-list::-webkit-scrollbar-track {
+.lockin-notes-list::-webkit-scrollbar-track,
+.lockin-video-list-body::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .lockin-chat-messages::-webkit-scrollbar-thumb,
 .lockin-history-list::-webkit-scrollbar-thumb,
-.lockin-notes-list::-webkit-scrollbar-thumb {
+.lockin-notes-list::-webkit-scrollbar-thumb,
+.lockin-video-list-body::-webkit-scrollbar-thumb {
   background: #d1d5db;
   border-radius: 4px;
 }
 
 .lockin-chat-messages::-webkit-scrollbar-thumb:hover,
 .lockin-history-list::-webkit-scrollbar-thumb:hover,
-.lockin-notes-list::-webkit-scrollbar-thumb:hover {
+.lockin-notes-list::-webkit-scrollbar-thumb:hover,
+.lockin-video-list-body::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
 
@@ -2350,7 +2354,8 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
   margin: 0 12px 12px;
-  max-height: 350px;
+  max-height: min(60vh, 520px);
+  min-height: 220px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2391,7 +2396,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 .lockin-video-list-body {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 12px 14px 14px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .lockin-video-list-loading,
@@ -2424,7 +2431,8 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 .lockin-video-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  min-height: 0;
 }
 
 .lockin-video-list-footer {
@@ -2483,7 +2491,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 
 .lockin-video-item-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
 }
 
@@ -2503,7 +2511,11 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   color: #111827;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .lockin-video-thumbnail {

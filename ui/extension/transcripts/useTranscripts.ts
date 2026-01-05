@@ -9,10 +9,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { DetectedVideo, TranscriptResult } from '@core/transcripts/types';
-import {
-  detectVideosSync,
-  collectIframeInfo,
-} from '@core/transcripts/videoDetection';
+import { detectVideosSync, collectIframeInfo } from '@core/transcripts/videoDetection';
 import { extractHtml5TranscriptFromDom } from './extractHtml5TranscriptFromDom';
 
 // -----------------------------------------------------------------------------
@@ -100,24 +97,12 @@ interface AiTranscriptionResponse {
   requestId?: string;
 }
 
-interface PanoptoMediaUrlResponse {
-  success: boolean;
-  mediaUrl?: string;
-  error?: string;
-  errorCode?: string;
-}
-
 interface AiTranscriptionProgressPayload {
   requestId?: string;
   jobId?: string | null;
   stage?: string | null;
   message?: string | null;
   percent?: number | null;
-}
-
-interface AiTranscriptionProgressMessage {
-  type?: string;
-  payload?: AiTranscriptionProgressPayload;
 }
 
 interface BackgroundResponse {
@@ -149,6 +134,60 @@ function formatDurationForConfirm(durationMs?: number): string | null {
     return `${minutes}m ${seconds}s`;
   }
   return `${seconds}s`;
+}
+
+const ECHO360_SECTION_REGEX =
+  /\/section\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+function hasEcho360Hint(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.toLowerCase().includes("echo360");
+}
+
+/**
+ * Check if URL is an Echo360 section/course listing page
+ * Section pages should fetch from syllabus API to get all videos
+ */
+function isEcho360SectionPage(pageUrl: string): boolean {
+  if (!hasEcho360Hint(pageUrl)) return false;
+  
+  const isSectionPath = ECHO360_SECTION_REGEX.test(pageUrl);
+  if (!isSectionPath) return false;
+  
+  // It's a section page if we're not on a specific lesson page
+  const isLessonPage = /\/lessons?\/[^/]+/i.test(pageUrl);
+  return !isLessonPage;
+}
+
+function hasEcho360Context(context: {
+  pageUrl: string;
+  iframes: Array<{ src: string }>;
+}): boolean {
+  if (hasEcho360Hint(context.pageUrl)) return true;
+  return context.iframes.some((iframe) => hasEcho360Hint(iframe.src));
+}
+
+function shouldFetchEcho360Async(
+  context: { pageUrl: string; iframes: Array<{ src: string }> },
+  videos: DetectedVideo[]
+): boolean {
+  if (!hasEcho360Context(context)) return false;
+  
+  // Always fetch async on section pages to get all videos from syllabus
+  if (isEcho360SectionPage(context.pageUrl)) {
+    return true;
+  }
+  
+  if (videos.length === 0) return true;
+
+  const echoVideos = videos.filter((video) => video.provider === "echo360");
+  if (echoVideos.length === 0) return false;
+
+  return echoVideos.some(
+    (video) =>
+      !video.echoLessonId ||
+      !video.echoMediaId ||
+      ECHO360_SECTION_REGEX.test(video.embedUrl)
+  );
 }
 
 // -----------------------------------------------------------------------------
@@ -196,6 +235,17 @@ function normalizeTranscriptResponse(response: BackgroundResponse): TranscriptRe
     errorCode: response.errorCode,
     aiTranscriptionAvailable: response.aiTranscriptionAvailable,
   };
+}
+
+function normalizeVideoDetectionResponse(response: BackgroundResponse): DetectedVideo[] {
+  if (Array.isArray(response.videos)) {
+    return response.videos;
+  }
+  const data = response.data as { videos?: DetectedVideo[] } | undefined;
+  if (Array.isArray(data?.videos)) {
+    return data.videos;
+  }
+  return [];
 }
 
 function mapStageToStatus(
@@ -302,17 +352,11 @@ export function useTranscripts(): UseTranscriptsResult {
   const activeAiRequestIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (typeof chrome === 'undefined') {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.onMessage) {
       return;
     }
-
-    const runtime = chrome.runtime;
-    if (!runtime?.onMessage?.addListener || !runtime.onMessage.removeListener) {
-      return;
-    }
-
     const listener = (
-      message: AiTranscriptionProgressMessage,
+      message: { type?: string; payload?: AiTranscriptionProgressPayload },
       _sender: chrome.runtime.MessageSender
     ) => {
       if (!message || message.type !== 'TRANSCRIBE_MEDIA_AI_PROGRESS') return;
@@ -345,9 +389,9 @@ export function useTranscripts(): UseTranscriptsResult {
       });
     };
 
-    runtime.onMessage.addListener(listener);
+    chrome.runtime.onMessage.addListener(listener);
     return () => {
-      runtime.onMessage.removeListener(listener);
+      chrome.runtime.onMessage.removeListener(listener);
     };
   }, []);
 
@@ -360,21 +404,44 @@ export function useTranscripts(): UseTranscriptsResult {
    */
   const performDetection = useCallback(async (): Promise<DetectedVideo[]> => {
     const currentUrl = window.location.href;
+    console.log("[Lock-in UI] Starting video detection", { currentUrl });
 
     // Helper to run a single detection attempt
-    const runDetection = (): ReturnType<typeof detectVideosSync> => {
+    const runDetection = (): {
+      result: ReturnType<typeof detectVideosSync>;
+      context: { pageUrl: string; iframes: Array<{ src: string; title?: string }>; document: Document };
+    } => {
       const iframes = collectIframeInfo(document);
       const context = {
         pageUrl: currentUrl,
         iframes,
         document,
       };
+      console.log("[Lock-in UI] Detection context built", {
+        pageUrl: context.pageUrl,
+        iframeCount: context.iframes.length,
+        iframeSrcs: context.iframes.map((iframe) => iframe.src).filter(Boolean),
+      });
 
-      return detectVideosSync(context);
+      const result = detectVideosSync(context);
+      console.log("[Lock-in UI] Sync detection result", {
+        videoCount: result.videos.length,
+        provider: result.provider,
+        requiresApiCall: result.requiresApiCall,
+        videos: result.videos.map((v) => ({
+          id: v.id,
+          provider: v.provider,
+          title: v.title,
+          lessonId: v.echoLessonId,
+          mediaId: v.echoMediaId,
+        })),
+      });
+
+      return { result, context };
     };
 
     // First attempt
-    let result = runDetection();
+    let { result, context } = runDetection();
 
     // Retry logic for delayed video players (video.js, MediaElement.js, etc.)
     // Some players take time to initialize the video element with proper src
@@ -390,19 +457,77 @@ export function useTranscripts(): UseTranscriptsResult {
       });
       
       if (hasUnreadyVideos || videoElements.length > 0) {
-        
+        console.log("[Lock-in UI] Retrying detection for delayed video players", {
+          videoElementCount: videoElements.length,
+          hasUnreadyVideos,
+        });
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-          result = runDetection();
+          ({ result, context } = runDetection());
           
           if (result.videos.length > 0) {
+            console.log("[Lock-in UI] Videos detected on retry", { attempt, videoCount: result.videos.length });
             break;
           }
         }
       }
     }
 
-    // Panopto or no videos detected
+    const contextForBackground = {
+      pageUrl: context.pageUrl,
+      iframes: context.iframes,
+    };
+
+    const shouldFetchAsync = shouldFetchEcho360Async(contextForBackground, result.videos);
+    console.log("[Lock-in UI] Checking if Echo360 async detection needed", {
+      shouldFetchAsync,
+      currentVideoCount: result.videos.length,
+      provider: result.provider,
+    });
+
+    if (shouldFetchAsync) {
+      try {
+        console.log("[Lock-in UI] Sending Echo360 async detection request", {
+          context: contextForBackground,
+        });
+        const response = await sendToBackground<BackgroundResponse>({
+          type: "DETECT_ECHO360_VIDEOS",
+          payload: { context: contextForBackground },
+        });
+        console.log("[Lock-in UI] Echo360 async detection response received", {
+          success: response.success,
+          videoCount: response.videos?.length,
+        });
+        const asyncVideos = normalizeVideoDetectionResponse(response);
+        console.log("[Lock-in UI] Echo360 async videos normalized", {
+          videoCount: asyncVideos.length,
+          videos: asyncVideos.map((v) => ({
+            id: v.id,
+            provider: v.provider,
+            title: v.title,
+            lessonId: v.echoLessonId,
+            mediaId: v.echoMediaId,
+          })),
+        });
+        if (asyncVideos.length > 0) {
+          console.log("[Lock-in UI] Returning async Echo360 videos", {
+            count: asyncVideos.length,
+          });
+          return asyncVideos;
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Echo360 detection failed";
+        console.error("[Lock-in UI] Echo360 async detection failed:", {
+          message,
+          error: error instanceof Error ? error.stack : String(error),
+        });
+      }
+    }
+
+    console.log("[Lock-in UI] Returning sync detection videos", {
+      count: result.videos.length,
+    });
     return result.videos;
   }, []);
 
@@ -441,6 +566,18 @@ export function useTranscripts(): UseTranscriptsResult {
     ): Promise<{ transcript: TranscriptResult | null; result: TranscriptResponseData }> => {
       if (video.provider === 'html5') {
         const domResult = await extractHtml5TranscriptFromDom(video);
+        // Handle null result (no video element found or no captions available)
+        if (!domResult) {
+          return {
+            transcript: null,
+            result: {
+              success: false,
+              error: 'No captions available for this video',
+              errorCode: 'NO_CAPTIONS',
+              aiTranscriptionAvailable: Boolean(video.mediaUrl),
+            },
+          };
+        }
         return {
           transcript: domResult.transcript,
           result: { success: true, transcript: domResult.transcript },
@@ -646,7 +783,9 @@ export function useTranscripts(): UseTranscriptsResult {
         }));
 
         try {
-          const mediaUrlResponse = await sendToBackground<PanoptoMediaUrlResponse>({
+          const mediaUrlResponse = await sendToBackground<{
+            success: boolean;
+          }>({
             type: 'FETCH_PANOPTO_MEDIA_URL',
             payload: { video },
           });
@@ -654,13 +793,7 @@ export function useTranscripts(): UseTranscriptsResult {
           if (!mediaUrlResponse.success || !mediaUrlResponse.mediaUrl) {
             const errorMsg =
               mediaUrlResponse.error ||
-              (mediaUrlResponse.errorCode === 'PODCAST_DISABLED'
-                ? 'Panopto downloads are disabled for this video. Ask your instructor to enable podcast downloads.'
-                : mediaUrlResponse.errorCode === 'AUTH_REQUIRED'
-                ? 'Authentication required. Please log in to Panopto and try again.'
-                : mediaUrlResponse.errorCode === 'NOT_ALLOWED'
-                ? 'Panopto denied access to the download URL. Downloads may be disabled for your account.'
-                : 'No downloadable media URL found for this video.');
+              'Could not find video URL. The video may be restricted or require authentication.';
             setState((prev) => ({
               ...prev,
               aiTranscription: {
@@ -720,30 +853,14 @@ export function useTranscripts(): UseTranscriptsResult {
 
       const durationLabel = formatDurationForConfirm(videoWithMediaUrl.durationMs);
       const isLong =
-        typeof videoWithMediaUrl.durationMs === 'number' &&
-        videoWithMediaUrl.durationMs >= LONG_DURATION_CONFIRM_MS;
-      const longLabel = durationLabel
-        ? `This video is ${durationLabel} long.`
-        : 'This is a long video.';
-
+        typeof videoWithMediaUrl.durationMs === 'number' && videoWithMediaUrl.durationMs >= LONG_DURATION_CONFIRM_MS;
+      
       // Ethical consent: Explain external processing clearly
       const confirmMessage = isLong
-        ? `${longLabel} Lock-in will upload it to our transcription service, which may take several minutes. Continue?`
-        : 'Lock-in will upload this video to our transcription service to generate a transcript. Continue?';
+        ? `This ${durationLabel ? `${durationLabel} ` : ''}video will be uploaded to Lock-in for AI transcription. This may take several minutes. Continue?`
+        : 'This video will be uploaded to Lock-in for AI transcription. Continue?';
 
       if (!window.confirm(confirmMessage)) {
-        setState((prev) => ({
-          ...prev,
-          aiTranscription: {
-            status: 'idle',
-            requestId: null,
-            jobId: null,
-            video: null,
-            progressMessage: null,
-            progressPercent: null,
-            error: null,
-          },
-        }));
         return null;
       }
 
@@ -757,7 +874,7 @@ export function useTranscripts(): UseTranscriptsResult {
           requestId,
           jobId: null,
           video: videoWithMediaUrl,
-          progressMessage: 'Downloading video for transcription... This may take a minute.',
+          progressMessage: 'No transcript available - transcribing with AI... This may take a minute.',
           progressPercent: null,
           error: null,
         },
@@ -800,11 +917,9 @@ export function useTranscripts(): UseTranscriptsResult {
           return transcript;
         }
 
-        const nextStatus = mapStageToStatus(
-          response.status,
-          response.errorCode === 'CANCELED' ? 'canceled' : 'failed'
-        );
         const errorMessage = response.error || 'AI transcription failed';
+        const fallbackStatus = response.status === 'canceled' ? 'canceled' : 'failed';
+        const nextStatus = mapStageToStatus(response.status, fallbackStatus);
         setState((prev) => ({
           ...prev,
           aiTranscription: {
@@ -812,7 +927,6 @@ export function useTranscripts(): UseTranscriptsResult {
             requestId,
             jobId: response.jobId || prev.aiTranscription.jobId,
             video: videoWithMediaUrl,
-            progressMessage: null,
             progressPercent: null,
             error: errorMessage,
           },
@@ -824,9 +938,7 @@ export function useTranscripts(): UseTranscriptsResult {
           return null;
         }
         const message =
-          error instanceof Error
-            ? error.message
-            : 'Failed to transcribe media.';
+          error instanceof Error ? error.message : 'AI transcription failed';
         setState((prev) => ({
           ...prev,
           aiTranscription: {
@@ -877,7 +989,9 @@ export function useTranscripts(): UseTranscriptsResult {
           ...prev.aiTranscription,
           status: 'failed',
           error:
-            error instanceof Error ? error.message : 'Failed to cancel transcription',
+            error instanceof Error
+              ? error.message
+              : 'Failed to cancel transcription',
           progressPercent: null,
         },
       }));
