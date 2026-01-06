@@ -22,6 +22,8 @@ interface VideoListPanelProps {
   onClose: () => void;
   /** Error message if detection failed */
   error?: string;
+  /** Optional hint to show when no videos are detected */
+  detectionHint?: string;
   /** Auth required info for sign-in prompt */
   authRequired?: {
     provider: string;
@@ -87,42 +89,6 @@ function ProviderBadge({ provider }: { provider: string }) {
   );
 }
 
-/**
- * Format date for display
- */
-function formatRecordingDate(dateStr: string | undefined): string | null {
-  if (!dateStr) return null;
-  try {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Format duration for display
- */
-function formatDuration(durationMs: number | undefined): string | null {
-  if (!durationMs) return null;
-  const totalSeconds = Math.floor(durationMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(
-      seconds
-    ).padStart(2, "0")}`;
-  }
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
 
 function isAiTranscriptionBusy(status: AiTranscriptionStatus): boolean {
   return (
@@ -178,8 +144,6 @@ function VideoListItem({
   onTranscribeWithAI: (video: DetectedVideo) => void;
   onCancelAi: () => void;
 }) {
-  const recordingDate = formatRecordingDate(video.recordedAt);
-  const duration = formatDuration(video.durationMs);
   const isThisExtracting = isExtracting && extractingVideoId === video.id;
   const isAnotherExtracting = isExtracting && extractingVideoId !== video.id;
   const aiForVideo =
@@ -237,16 +201,6 @@ function VideoListItem({
               <span className="lockin-video-item-badge">No transcript</span>
             )}
           </div>
-          {(recordingDate || duration) && (
-            <div className="lockin-video-item-meta">
-              {recordingDate && (
-                <span className="lockin-video-item-date">{recordingDate}</span>
-              )}
-              {duration && (
-                <span className="lockin-video-item-duration">{duration}</span>
-              )}
-            </div>
-          )}
         </div>
         <div className="lockin-video-item-action">
           {isThisExtracting ? (
@@ -383,6 +337,7 @@ export function VideoListPanel({
   onSelectVideo,
   onClose,
   error,
+  detectionHint,
   authRequired,
   extractionResults,
   aiTranscription,
@@ -427,6 +382,9 @@ export function VideoListPanel({
             <p className="lockin-video-list-hint">
               Supported: Panopto, Echo360, HTML5 videos
             </p>
+            {detectionHint && (
+              <p className="lockin-video-list-hint">{detectionHint}</p>
+            )}
           </div>
         ) : (
           <div className="lockin-video-list" role="list">

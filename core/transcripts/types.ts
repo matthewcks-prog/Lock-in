@@ -125,7 +125,7 @@ export interface TranscriptExtractionResult {
   /** Error message (if failed) */
   error?: string;
   /** Error code for programmatic handling */
-  errorCode?: 'AUTH_REQUIRED' | 'LOCKIN_AUTH_REQUIRED' | 'NO_CAPTIONS' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'NOT_AVAILABLE' | 'INVALID_VIDEO' | 'TIMEOUT';
+  errorCode?: 'AUTH_REQUIRED' | 'LOCKIN_AUTH_REQUIRED' | 'NO_CAPTIONS' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'NOT_AVAILABLE' | 'INVALID_VIDEO' | 'MEDIA_PROCESSING' | 'MEDIA_FAILED' | 'MEDIA_PRELIMINARY' | 'MEDIA_HIDDEN' | 'INVALID_RESPONSE' | 'TIMEOUT';
   /** Whether AI transcription is available as fallback */
   aiTranscriptionAvailable?: boolean;
 }
