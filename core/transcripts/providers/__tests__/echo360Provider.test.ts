@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import echoTranscriptFixture from './fixtures/echo360Transcript.json';
 import {
   Echo360Provider,
+  detectEcho360Videos,
   extractEcho360Info,
   extractSectionId,
   isEcho360SectionPage,
@@ -57,6 +58,33 @@ describe('normalizeEcho360TranscriptJson', () => {
       confidence: 0.75,
     });
     expect(transcript?.plainText).toBe('Hello world Second cue');
+  });
+});
+
+describe('detectEcho360Videos', () => {
+  it('skips section listing pages without lesson/media IDs', () => {
+    const videos = detectEcho360Videos({
+      pageUrl: 'https://echo360.net.au/section/11111111-2222-3333-4444-555555555555/home',
+      iframes: [],
+    });
+
+    expect(videos).toHaveLength(0);
+  });
+
+  it('detects lesson URLs and iframe videos', () => {
+    const lessonUrl =
+      'https://echo360.net.au/lesson/11111111-2222-3333-4444-555555555555/classroom';
+    const iframeUrl =
+      'https://echo360.net.au/lesson/99999999-8888-7777-6666-555555555555/media/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+    const videos = detectEcho360Videos({
+      pageUrl: lessonUrl,
+      iframes: [{ src: iframeUrl, title: 'Week 1 Lecture' }],
+    });
+
+    expect(videos).toHaveLength(2);
+    expect(videos[0].echoLessonId).toBe('11111111-2222-3333-4444-555555555555');
+    expect(videos[1].echoMediaId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
   });
 });
 
@@ -176,22 +204,24 @@ describe('Echo360Provider', () => {
       data: [
         {
           lesson: {
-            id: 'G_6f71556b-833c-468e-9aba-89fbc66d6e6f_19bae95c-ee99-44c1-975d-c45f07ca3db7_2025-07-31T13:58:00.000_2025-07-31T15:53:00.000',
-            name: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
-            displayName: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
-            timing: {
-              start: '2025-07-31T13:58:00.000',
-              end: '2025-07-31T15:53:00.000',
+            lesson: {
+              id: 'G_6f71556b-833c-468e-9aba-89fbc66d6e6f_19bae95c-ee99-44c1-975d-c45f07ca3db7_2025-07-31T13:58:00.000_2025-07-31T15:53:00.000',
+              name: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
+              displayName: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
+              timing: {
+                start: '2025-07-31T13:58:00.000',
+                end: '2025-07-31T15:53:00.000',
+              },
             },
+            medias: [
+              {
+                id: 'cdb84b16-ea4c-4990-8967-1184eba549de',
+                mediaType: 'Video',
+                title: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
+                isAvailable: true,
+              },
+            ],
           },
-          medias: [
-            {
-              id: 'cdb84b16-ea4c-4990-8967-1184eba549de',
-              mediaType: 'Video',
-              title: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
-              isAvailable: true,
-            },
-          ],
         },
         {
           lesson: {
@@ -205,7 +235,7 @@ describe('Echo360Provider', () => {
           },
           medias: [
             {
-              id: 'aabbccdd-1111-2222-3333-444455556666',
+              mediaId: '{AABBCCDD-1111-2222-3333-444455556666}',
               mediaType: 'Video',
               title: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
               isAvailable: true,
@@ -214,22 +244,22 @@ describe('Echo360Provider', () => {
         },
         {
           lesson: {
-            id: 'G_6f71556b-833c-468e-9aba-89fbc66d6e6f_19bae95c-ee99-44c1-975d-c45f07ca3db7_2025-08-14T13:58:00.000_2025-08-14T15:53:00.000',
-            name: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
-            displayName: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
-            timing: {
-              start: '2025-08-14T13:58:00.000',
-              end: '2025-08-14T15:53:00.000',
+            lesson: {
+              id: 'G_6f71556b-833c-468e-9aba-89fbc66d6e6f_19bae95c-ee99-44c1-975d-c45f07ca3db7_2025-08-14T13:58:00.000_2025-08-14T15:53:00.000',
+              name: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
+              displayName: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
+              timing: {
+                start: '2025-08-14T13:58:00.000',
+                end: '2025-08-14T15:53:00.000',
+              },
             },
           },
-          medias: [
-            {
-              id: 'deadbeef-cafe-babe-face-123456789abc',
-              mediaType: 'Video',
-              title: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
-              isAvailable: true,
-            },
-          ],
+          media: {
+            id: 'deadbeef-cafe-babe-face-123456789abc',
+            mediaType: 'Video',
+            title: 'FIT2100_CL_S2/Class/01_OnCampus/Operating systems',
+            isAvailable: true,
+          },
         },
       ],
     };
@@ -257,8 +287,8 @@ describe('Echo360Provider', () => {
       echoMediaId: 'cdb84b16-ea4c-4990-8967-1184eba549de',
       echoBaseUrl: 'https://echo360.net.au',
     });
-    // Title should include the date (format depends on locale)
-    expect(videos[0].title).toContain('2025');
+    // Title should not include the date (date display was removed from UI)
+    expect(videos[0].title).toBe('FIT2100_CL_S2/Class/01_OnCampus/Operating systems');
     
     // Verify second video
     expect(videos[1]).toMatchObject({
@@ -311,6 +341,138 @@ describe('Echo360Provider', () => {
     // Should only include the available media
     expect(videos).toHaveLength(1);
     expect(videos[0].echoMediaId).toBe('available-media');
+  });
+
+  it('skips non-video media types in syllabus response', async () => {
+    const provider = new Echo360Provider();
+
+    const syllabusResponse = {
+      status: 'ok',
+      data: [
+        {
+          lesson: { id: 'lesson-1', displayName: 'Week 1' },
+          medias: [
+            { id: 'doc-media', mediaType: 'Document', isAvailable: true },
+            { id: 'video-media', mediaType: 'Video', isAvailable: true },
+          ],
+        },
+      ],
+    };
+
+    const fetcher = {
+      fetchJson: vi.fn().mockResolvedValue(syllabusResponse),
+      fetchWithCredentials: vi.fn(),
+    };
+
+    const context = {
+      pageUrl: 'https://echo360.net.au/section/22222222-3333-4444-5555-666666666666/home',
+      iframes: [],
+    };
+
+    const videos = await provider.detectVideosAsync!(context, fetcher);
+
+    expect(videos).toHaveLength(1);
+    expect(videos[0].echoMediaId).toBe('video-media');
+  });
+
+  it('includes audio-only media in syllabus response', async () => {
+    const provider = new Echo360Provider();
+
+    const syllabusResponse = {
+      status: 'ok',
+      data: [
+        {
+          lesson: { id: 'lesson-audio', displayName: 'Week 2' },
+          medias: [
+            {
+              id: 'audio-only-media',
+              mediaType: 'Presentation',
+              isAudioOnly: true,
+              isAvailable: true,
+            },
+          ],
+        },
+      ],
+    };
+
+    const fetcher = {
+      fetchJson: vi.fn().mockResolvedValue(syllabusResponse),
+      fetchWithCredentials: vi.fn(),
+    };
+
+    const context = {
+      pageUrl: 'https://echo360.net.au/section/33333333-4444-5555-6666-777777777777/home',
+      iframes: [],
+    };
+
+    const videos = await provider.detectVideosAsync!(context, fetcher);
+
+    expect(videos).toHaveLength(1);
+    expect(videos[0].echoMediaId).toBe('audio-only-media');
+  });
+
+  it('includes audio media types in syllabus response', async () => {
+    const provider = new Echo360Provider();
+
+    const syllabusResponse = {
+      status: 'ok',
+      data: [
+        {
+          lesson: { id: 'lesson-audio-type', displayName: 'Week 3' },
+          medias: [
+            { id: 'audio-media', mediaType: 'Audio', isAvailable: true },
+            { id: 'audio-mime', mediaType: 'audio/mpeg', isAvailable: true },
+          ],
+        },
+      ],
+    };
+
+    const fetcher = {
+      fetchJson: vi.fn().mockResolvedValue(syllabusResponse),
+      fetchWithCredentials: vi.fn(),
+    };
+
+    const context = {
+      pageUrl: 'https://echo360.net.au/section/44444444-5555-6666-7777-888888888888/home',
+      iframes: [],
+    };
+
+    const videos = await provider.detectVideosAsync!(context, fetcher);
+
+    expect(videos).toHaveLength(2);
+    expect(videos.map(video => video.echoMediaId)).toEqual([
+      'audio-media',
+      'audio-mime',
+    ]);
+  });
+
+  it('includes media when mediaType is missing', async () => {
+    const provider = new Echo360Provider();
+
+    const syllabusResponse = {
+      status: 'ok',
+      data: [
+        {
+          lesson: { id: 'lesson-missing-type', displayName: 'Week 4' },
+          medias: [{ id: 'unknown-type-media', isAvailable: true }],
+        },
+      ],
+    };
+
+    const fetcher = {
+      fetchJson: vi.fn().mockResolvedValue(syllabusResponse),
+      fetchWithCredentials: vi.fn(),
+    };
+
+    const context = {
+      pageUrl: 'https://echo360.net.au/section/55555555-6666-7777-8888-999999999999/home',
+      iframes: [],
+    };
+
+    const videos = await provider.detectVideosAsync!(context, fetcher);
+
+    expect(videos).toHaveLength(1);
+    expect(videos[0].echoMediaId).toBe('unknown-type-media');
   });
 });
 

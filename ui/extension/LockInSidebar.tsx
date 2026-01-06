@@ -1254,6 +1254,7 @@ export function LockInSidebar({
                             }}
                             onClose={handleTranscriptPanelClose}
                             error={transcriptState.error || undefined}
+                            detectionHint={transcriptState.detectionHint || undefined}
                             authRequired={transcriptState.authRequired}
                             extractionResults={transcriptState.extractionsByVideoId}
                             aiTranscription={transcriptState.aiTranscription}

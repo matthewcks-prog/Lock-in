@@ -2535,30 +2535,6 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   height: 32px;
 }
 
-.lockin-video-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 4px;
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.lockin-video-item-date {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.lockin-video-item-duration {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
-  background: #f3f4f6;
-  border-radius: 4px;
-}
-
 .lockin-video-item-badge {
   margin-left: 6px;
   padding: 2px 6px;

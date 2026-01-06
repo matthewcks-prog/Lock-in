@@ -49,6 +49,8 @@ interface TranscriptState {
   extractingVideoId: string | null;
   /** Error message for detection failures */
   error: string | null;
+  /** Optional hint for empty detection results */
+  detectionHint: string | null;
   /** Per-video transcript extraction results */
   extractionsByVideoId: Record<string, TranscriptResponseData>;
   /** Last extracted transcript */
@@ -168,9 +170,10 @@ function hasEcho360Context(context: {
 
 function shouldFetchEcho360Async(
   context: { pageUrl: string; iframes: Array<{ src: string }> },
-  videos: DetectedVideo[]
+  videos: DetectedVideo[],
+  echo360Context = hasEcho360Context(context)
 ): boolean {
-  if (!hasEcho360Context(context)) return false;
+  if (!echo360Context) return false;
   
   // Always fetch async on section pages to get all videos from syllabus
   if (isEcho360SectionPage(context.pageUrl)) {
@@ -332,6 +335,7 @@ const INITIAL_STATE: TranscriptState = {
   isExtracting: false,
   extractingVideoId: null,
   error: null,
+  detectionHint: null,
   extractionsByVideoId: {},
   lastTranscript: null,
   aiTranscription: {
@@ -346,6 +350,8 @@ const INITIAL_STATE: TranscriptState = {
 };
 
 const LONG_DURATION_CONFIRM_MS = 20 * 60 * 1000;
+const ECHO360_EMPTY_HINT =
+  "Echo360 tip: open a lesson page or the syllabus list to load videos.";
 
 export function useTranscripts(): UseTranscriptsResult {
   const [state, setState] = useState<TranscriptState>(INITIAL_STATE);
@@ -402,7 +408,10 @@ export function useTranscripts(): UseTranscriptsResult {
   /**
    * Core detection logic with retry for delayed video players (video.js, MediaElement.js).
    */
-  const performDetection = useCallback(async (): Promise<DetectedVideo[]> => {
+  const performDetection = useCallback(async (): Promise<{
+    videos: DetectedVideo[];
+    echo360Context: boolean;
+  }> => {
     const currentUrl = window.location.href;
     console.log("[Lock-in UI] Starting video detection", { currentUrl });
 
@@ -478,7 +487,12 @@ export function useTranscripts(): UseTranscriptsResult {
       iframes: context.iframes,
     };
 
-    const shouldFetchAsync = shouldFetchEcho360Async(contextForBackground, result.videos);
+    const echo360Context = hasEcho360Context(contextForBackground);
+    const shouldFetchAsync = shouldFetchEcho360Async(
+      contextForBackground,
+      result.videos,
+      echo360Context
+    );
     console.log("[Lock-in UI] Checking if Echo360 async detection needed", {
       shouldFetchAsync,
       currentVideoCount: result.videos.length,
@@ -513,7 +527,7 @@ export function useTranscripts(): UseTranscriptsResult {
           console.log("[Lock-in UI] Returning async Echo360 videos", {
             count: asyncVideos.length,
           });
-          return asyncVideos;
+          return { videos: asyncVideos, echo360Context };
         }
       } catch (error) {
         const message =
@@ -528,7 +542,7 @@ export function useTranscripts(): UseTranscriptsResult {
     console.log("[Lock-in UI] Returning sync detection videos", {
       count: result.videos.length,
     });
-    return result.videos;
+    return { videos: result.videos, echo360Context };
   }, []);
 
   /**
@@ -536,10 +550,16 @@ export function useTranscripts(): UseTranscriptsResult {
    */
   const handleDetectionError = useCallback(
     (error: unknown, showPanel: boolean): void => {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Video detection failed. Please refresh and try again.';
       setState((prev) => ({
         ...prev,
         isDetecting: false,
         isVideoListOpen: showPanel,
+        error: message,
+        detectionHint: null,
       }));
     },
     []
@@ -675,12 +695,15 @@ export function useTranscripts(): UseTranscriptsResult {
       isVideoListOpen: true,
       isDetecting: true,
       error: null,
+      detectionHint: null,
       authRequired: undefined,
       extractionsByVideoId: {},
     }));
 
     try {
-      const videos = await performDetection();
+      const { videos, echo360Context } = await performDetection();
+      const detectionHint =
+        videos.length === 0 && echo360Context ? ECHO360_EMPTY_HINT : null;
 
       if (videos.length === 1) {
         // Single video - auto-extract without showing selection UI
@@ -694,6 +717,7 @@ export function useTranscripts(): UseTranscriptsResult {
             isVideoListOpen: false,
             isExtracting: true,
             extractingVideoId: videos[0].id,
+            detectionHint,
             extractionsByVideoId: nextExtractions,
           };
         });
@@ -752,6 +776,7 @@ export function useTranscripts(): UseTranscriptsResult {
           ...prev,
           videos,
           isDetecting: false,
+          detectionHint,
         }));
       }
     } catch (error) {
