@@ -107,6 +107,12 @@ interface AiTranscriptionProgressPayload {
   percent?: number | null;
 }
 
+interface PanoptoMediaUrlResponse {
+  success: boolean;
+  mediaUrl?: string;
+  error?: string;
+}
+
 interface BackgroundResponse {
   success?: boolean;
   ok?: boolean;
@@ -599,7 +605,7 @@ export function useTranscripts(): UseTranscriptsResult {
           };
         }
         return {
-          transcript: domResult.transcript,
+          transcript: domResult.transcript ?? null,
           result: { success: true, transcript: domResult.transcript },
         };
       }
@@ -808,9 +814,7 @@ export function useTranscripts(): UseTranscriptsResult {
         }));
 
         try {
-          const mediaUrlResponse = await sendToBackground<{
-            success: boolean;
-          }>({
+          const mediaUrlResponse = await sendToBackground<PanoptoMediaUrlResponse>({
             type: 'FETCH_PANOPTO_MEDIA_URL',
             payload: { video },
           });
@@ -952,6 +956,7 @@ export function useTranscripts(): UseTranscriptsResult {
             requestId,
             jobId: response.jobId || prev.aiTranscription.jobId,
             video: videoWithMediaUrl,
+            progressMessage: null,
             progressPercent: null,
             error: errorMessage,
           },
