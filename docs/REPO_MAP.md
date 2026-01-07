@@ -24,7 +24,7 @@ ui/
 shared/
   ui/components/ (Button, Card, ConfirmDialog, Toast, TextInput, Tabs)
 docs/
-  AGENTS.md, ARCHITECTURE.md, REPO_MAP.md, STATUS.md, REFACTOR_PLAN.md, PROMPT_LOG.md, SMOKE_CHECKLIST.md
+  AGENTS.md, ARCHITECTURE.md, REPO_MAP.md, STATUS.md, REFACTOR_PLAN.md, PROMPT_LOG.md, SMOKE_CHECKLIST.md, TRANSCRIPT_TROUBLESHOOTING.md, QUALITY_AUDIT_2025-12-16.md
 ```
 
 ## Entrypoints & Outputs

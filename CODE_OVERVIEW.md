@@ -81,15 +81,21 @@ This is a living overview of the current codebase. Update it whenever files move
 **Architecture**: Provider pattern with dependency injection (fetcher interface).
 
 - **`core/transcripts/types.ts`** - Domain types for transcripts (TranscriptSegment, DetectedVideo, etc.)
+- **`core/transcripts/types/echo360Types.ts`** - Echo360-specific types for syllabus parsing and detection.
+- **`core/transcripts/parsers/echo360Parser.ts`** - Echo360 syllabus parsing and syllabus API fetch helpers (re-exported by provider).
+- **`core/transcripts/utils/echo360Logger.ts`** - Echo360 logging utility shared by provider and parser.
+- **`core/transcripts/utils/echo360Network.ts`** - Echo360 network helpers for retries/timeouts/redirect-aware HTML fetches.
 - **`core/transcripts/webvttParser.ts`** - WebVTT parsing with HTML entity decoding
 - **`core/transcripts/fetchers/types.ts`** - Fetcher interfaces (AsyncFetcher, EnhancedAsyncFetcher) and type guards. No Chrome dependencies.
 - **`core/transcripts/providers/panoptoProvider.ts`** - Panopto provider: detection + extraction with dynamic URL discovery. Uses fetcher interface for network operations.
-- **`core/transcripts/providers/echo360Provider.ts`** - Echo360 provider: detection + transcript extraction (JSON/VTT/TXT fallback).
+- **`core/transcripts/providers/echo360Provider.ts`** - Echo360 provider: detection + transcript extraction with JSON transcript endpoint (primary), VTT/TXT fallback, and syllabus API integration for section pages. Uses fetcher interface for network operations.
 - **`core/transcripts/videoDetection.ts`** - Panopto + Echo360 + HTML5 video detection from DOM context
 - **`core/transcripts/providerRegistry.ts`** - Provider registry and TranscriptProviderV2 interface
 - **`ui/extension/transcripts/`** - UI components (VideoListPanel, TranscriptMessage, useTranscripts hook) plus HTML5 DOM textTracks extractor (`extractHtml5TranscriptFromDom.ts`)
 - **`extension/dist/libs/transcriptProviders.js`** - Bundled transcript providers for background usage (loaded via `importScripts`).
-- **`extension/background.js`** - ExtensionFetcher class (Chrome-specific CORS/credentials) + message routing. Delegates extraction to providers via fetcher. PanoptoMediaResolver for AI transcription media URL resolution.
+- **`extension/src/networkUtils.js`** - Background fetch helpers (retry, credentials, VTT/HTML fetch, redirect tracking) used by transcript helpers.
+- **`extension/src/panoptoResolver.js`** - Panopto extraction helpers + PanoptoMediaResolver for AI media URL resolution.
+- **`extension/background.js`** - ExtensionFetcher class (Chrome-specific CORS/credentials) + message routing. Delegates extraction to providers via fetcher, and wires Panopto transcript + media URL resolution via the shared background helpers.
 - **AI fallback**: `useTranscripts.ts` triggers `FETCH_PANOPTO_MEDIA_URL` when captions are missing, then `TRANSCRIBE_MEDIA_AI` streams media to backend transcript jobs.
 
 **Key pattern**: Business logic (extraction algorithm) in `/core/transcripts/providers/`. Chrome-specific fetching in `/extension/background.js` (ExtensionFetcher). Providers depend on fetcher interface, enabling testing and future web app reuse.
@@ -207,7 +213,7 @@ This is a living overview of the current codebase. Update it whenever files move
 5. **API abstraction**: Shared `/api` TypeScript client is bundled into `dist/libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
 6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor`/`useNotesList`, and the Lexical editor resides in `ui/extension/notes/` with inline attachment/image nodes (resizable images, paperclip insertion).
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
-8. **Transcript extraction**: Captions-first flow for Panopto/Echo360/HTML5. Panopto caption URLs are extracted from embed HTML; Echo360 uses JSON transcript endpoint with VTT/TXT fallback. If captions are missing, `PanoptoMediaResolver` resolves podcast/download URLs (viewer/embed HTML + MAIN-world probe + range validation) and the background AI pipeline uploads media to the backend. UI shows the video list and exposes AI fallback when captions are unavailable.
+8. **Transcript extraction**: Captions-first flow for Panopto/Echo360/HTML5. Panopto caption URLs are extracted from embed HTML; Echo360 uses JSON transcript endpoint (primary) with VTT/TXT fallback, and integrates with syllabus API for section pages. If captions are missing, `PanoptoMediaResolver` resolves podcast/download URLs (viewer/embed HTML + MAIN-world probe + range validation) and the background AI pipeline uploads media to the backend. UI shows the video list and exposes AI fallback when captions are unavailable.
 9. **Cross-tab sync**: `useCrossTabSync` uses `chrome.storage.local` as a lightweight event bus to refresh notes/chat state across tabs without duplicating feature-specific wiring.
 
 ### Backend
