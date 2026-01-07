@@ -1,0 +1,55 @@
+{
+  "_comment": "Windows-specific MCP configuration. Copy to .cursor/mcp.json and update paths if needed.",
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
+      "env": {
+        "ALLOWED_DIRECTORIES": "C:\\Users\\matth\\.cursor\\worktrees\\Lock-in\\hmg"
+      }
+    },
+    "git": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-git"],
+      "env": {
+        "GIT_REPO_PATH": "C:\\Users\\matth\\.cursor\\worktrees\\Lock-in\\hmg"
+      }
+    },
+    "shell-windows": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-powershell"],
+      "env": {
+        "WORKING_DIRECTORY": "C:\\Users\\matth\\.cursor\\worktrees\\Lock-in\\hmg",
+        "ALLOWED_COMMANDS": "npm,node,npx,cd,git",
+        "BLOCKED_PATTERNS": "rm -rf,git push --force,git reset --hard,del /s /q"
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-playwright"],
+      "env": {
+        "ALLOWED_DOMAINS": "localhost,learning.monash.edu,edstem.org,panopto.com,echo360.org",
+        "EXTENSION_PATH": "C:\\Users\\matth\\.cursor\\worktrees\\Lock-in\\hmg\\extension",
+        "TIMEOUT_MS": "30000"
+      }
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"],
+      "env": {
+        "ALLOWED_ORIGINS": "http://localhost:3000,https://*.supabase.co",
+        "RATE_LIMIT_PER_MINUTE": "10"
+      }
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": {
+        "POSTGRES_CONNECTION_STRING": "${SUPABASE_READONLY_CONNECTION_STRING}",
+        "READ_ONLY_MODE": "true",
+        "ALLOWED_SCHEMAS": "public"
+      }
+    }
+  }
+}
+

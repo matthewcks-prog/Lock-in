@@ -3,6 +3,8 @@
 **Tool**: Cursor (Read-only)  
 **Purpose**: Bulletproof quality/risk audit without functional changes
 
+> **Note**: This is a historical snapshot. Some items have been addressed since this audit. See `docs/STATUS.md` for current status. Contract tests for window globals (C5A-C5D) and manifest/init order guardrails have been completed. Current test count: 143 tests (was 136 at time of audit).
+
 ---
 
 ## Executive Summary
@@ -12,9 +14,9 @@ All quality gates are **PASSING** (lint: 0 errors, test: 136 passing, type-check
 **Key Findings:**
 - ✅ All automated checks pass
 - ⚠️ 126 `any` type warnings (categorized into quick fixes, medium refactors, danger zones)
-- ⚠️ Missing contract tests for `window.LockInAPI`, `window.LockInAuth`, `window.LockInUI`
-- ⚠️ No test for manifest script loading order
-- ⚠️ No test for init order dependencies
+- ⚠️ Missing contract tests for `window.LockInAPI`, `window.LockInAuth`, `window.LockInUI` *(Note: Completed in C5A-C5D)*
+- ⚠️ No test for manifest script loading order *(Note: Completed in C5C)*
+- ⚠️ No test for init order dependencies *(Note: Completed in C5D)*
 
 ---
 
@@ -25,7 +27,7 @@ All quality gates are **PASSING** (lint: 0 errors, test: 136 passing, type-check
 | Check | Command | Status | Details |
 |-------|---------|--------|---------|
 | **Lint** | `npm run lint` | ✅ PASS | 0 errors, 126 warnings (all `any` types) |
-| **Tests** | `npm run test` | ✅ PASS | 136 tests passing (10 test files, 2.22s duration) |
+| **Tests** | `npm run test` | ✅ PASS | 136 tests passing (10 test files, 2.22s duration) *(Note: Current count is 143 tests - see STATUS.md)* |
 | **Type-check** | `npm run type-check` | ✅ PASS | 0 errors |
 | **Build** | `npm run build` | ✅ PASS | All bundles generated successfully |
 | **Verify-build** | `npm run verify-build` | ✅ PASS | Type-check + build both pass |
