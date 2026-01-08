@@ -1,30 +1,30 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import { resolve } from "path";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
 import {
   createAliases,
   createIifeBuildConfig,
   ensureAsciiSafeOutput,
   sharedDefines,
-} from "./build/viteShared";
+} from './build/viteShared';
 
 export default defineConfig({
   define: sharedDefines,
   css: {
-    postcss: "./postcss.config.js",
+    postcss: './postcss.config.js',
   },
   plugins: [
     react(),
     ensureAsciiSafeOutput(
-      resolve(process.cwd(), "extension/dist/ui/index.js"),
-      "Processed output file for ASCII compatibility"
+      resolve(process.cwd(), 'extension/dist/ui/index.js'),
+      'Processed output file for ASCII compatibility',
     ),
   ],
   build: createIifeBuildConfig({
-    outDir: "extension/dist/ui",
-    entry: "ui/extension/index.tsx",
-    name: "LockInUI",
-    fileName: "index.js",
+    outDir: 'extension/dist/ui',
+    entry: 'ui/extension/index.tsx',
+    name: 'LockInUI',
+    fileName: 'index.js',
   }),
   resolve: {
     alias: createAliases({ includeApi: true, includeSharedUi: true }),

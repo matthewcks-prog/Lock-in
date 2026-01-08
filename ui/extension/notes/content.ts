@@ -1,39 +1,39 @@
-import type { NoteContent } from "@core/domain/Note";
+import type { NoteContent } from '@core/domain/Note';
 
 export function createNoteContentFromPlainText(text: string): NoteContent {
-  const normalized = text || "";
+  const normalized = text || '';
   const textNode = normalized
     ? [
         {
           detail: 0,
           format: 0,
-          mode: "normal",
-          style: "",
+          mode: 'normal',
+          style: '',
           text: normalized,
-          type: "text",
+          type: 'text',
           version: 1,
         },
       ]
     : [];
 
   return {
-    version: "lexical_v1",
+    version: 'lexical_v1',
     editorState: {
       root: {
         children: [
           {
             children: textNode,
-            direction: "ltr",
-            format: "",
+            direction: 'ltr',
+            format: '',
             indent: 0,
-            type: "paragraph",
+            type: 'paragraph',
             version: 1,
           },
         ],
-        direction: "ltr",
-        format: "",
+        direction: 'ltr',
+        format: '',
         indent: 0,
-        type: "root",
+        type: 'root',
         version: 1,
       },
     },

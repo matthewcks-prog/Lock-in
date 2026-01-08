@@ -1,35 +1,35 @@
-const fs = require("fs");
-const path = require("path");
-const { spawn, execSync } = require("child_process");
-const { transcribeAudioFile } = require("../openaiClient");
+const fs = require('fs');
+const path = require('path');
+const { spawn, execSync } = require('child_process');
+const { transcribeAudioFile } = require('../openaiClient');
 const {
   updateTranscriptJob,
   upsertTranscriptCache,
   listTranscriptJobsByStatusBefore,
-} = require("../repositories/transcriptsRepository");
+} = require('../repositories/transcriptsRepository');
 const {
   TRANSCRIPTION_SEGMENT_MAX_MB,
   TRANSCRIPTION_TEMP_DIR,
   TRANSCRIPT_JOB_TTL_MINUTES,
   TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES,
-} = require("../config");
+} = require('../config');
 
 // Industry best practice: Use ffmpeg-static for bundled FFmpeg binary
 // This eliminates PATH issues across all platforms
 let ffmpegPath;
 try {
-  ffmpegPath = require("ffmpeg-static");
-  console.log("[Transcripts] Using bundled FFmpeg from ffmpeg-static");
+  ffmpegPath = require('ffmpeg-static');
+  console.log('[Transcripts] Using bundled FFmpeg from ffmpeg-static');
 } catch {
   // Fallback to system FFmpeg if ffmpeg-static not installed
-  ffmpegPath = "ffmpeg";
-  console.log("[Transcripts] ffmpeg-static not found, using system FFmpeg");
+  ffmpegPath = 'ffmpeg';
+  console.log('[Transcripts] ffmpeg-static not found, using system FFmpeg');
 }
 
 // Check if ffmpeg is available on startup
 function checkFfmpegAvailable() {
   try {
-    execSync(`"${ffmpegPath}" -version`, { stdio: "ignore", shell: true });
+    execSync(`"${ffmpegPath}" -version`, { stdio: 'ignore', shell: true });
     return true;
   } catch {
     return false;
@@ -39,12 +39,12 @@ function checkFfmpegAvailable() {
 const FFMPEG_AVAILABLE = checkFfmpegAvailable();
 if (!FFMPEG_AVAILABLE) {
   console.warn(
-    "[Transcripts] WARNING: FFmpeg not available. AI transcription will not work.\n" +
-      "  The bundled ffmpeg-static should work automatically.\n" +
-      "  If issues persist, try: npm install ffmpeg-static (in backend folder)"
+    '[Transcripts] WARNING: FFmpeg not available. AI transcription will not work.\n' +
+      '  The bundled ffmpeg-static should work automatically.\n' +
+      '  If issues persist, try: npm install ffmpeg-static (in backend folder)',
   );
 } else {
-  console.log("[Transcripts] FFmpeg is available and ready");
+  console.log('[Transcripts] FFmpeg is available and ready');
 }
 
 const ACTIVE_JOBS = new Map();
@@ -59,12 +59,12 @@ function getJobDir(jobId) {
 }
 
 function getChunksDir(jobId) {
-  return path.join(getJobDir(jobId), "chunks");
+  return path.join(getJobDir(jobId), 'chunks');
 }
 
 function getChunkFilename(chunkIndex) {
   const safeIndex = Number.isFinite(chunkIndex) ? chunkIndex : 0;
-  const padded = String(safeIndex).padStart(6, "0");
+  const padded = String(safeIndex).padStart(6, '0');
   return `chunk-${padded}.bin`;
 }
 
@@ -92,8 +92,8 @@ function getJobState(jobId) {
 
 function ensureNotCanceled(state) {
   if (state.cancelRequested) {
-    const error = new Error("CANCELED");
-    error.code = "CANCELED";
+    const error = new Error('CANCELED');
+    error.code = 'CANCELED';
     throw error;
   }
 }
@@ -101,33 +101,33 @@ function ensureNotCanceled(state) {
 function runFfmpeg(args, state) {
   return new Promise((resolve, reject) => {
     const proc = spawn(ffmpegPath, args, {
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: ['ignore', 'ignore', 'pipe'],
     });
     state.currentProcess = proc;
-    let stderr = "";
+    let stderr = '';
 
-    proc.stderr.on("data", (chunk) => {
+    proc.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
     });
 
-    proc.on("error", (err) => {
+    proc.on('error', (err) => {
       state.currentProcess = null;
       // Provide helpful error message when ffmpeg is not found
-      if (err.code === "ENOENT") {
+      if (err.code === 'ENOENT') {
         const helpfulError = new Error(
-          "FFmpeg not found. Try reinstalling: npm install ffmpeg-static (in backend folder)"
+          'FFmpeg not found. Try reinstalling: npm install ffmpeg-static (in backend folder)',
         );
-        helpfulError.code = "FFMPEG_NOT_FOUND";
+        helpfulError.code = 'FFMPEG_NOT_FOUND';
         reject(helpfulError);
         return;
       }
       reject(err);
     });
 
-    proc.on("close", (code) => {
+    proc.on('close', (code) => {
       state.currentProcess = null;
       if (state.cancelRequested) {
-        return reject(new Error("CANCELED"));
+        return reject(new Error('CANCELED'));
       }
       if (code === 0) {
         return resolve();
@@ -149,28 +149,28 @@ async function appendTranscriptChunk(jobId, chunk, chunkIndex) {
     await fs.promises.writeFile(chunkPath, chunk);
   }
 
-  state.uploadPath = path.join(jobDir, "media.bin");
+  state.uploadPath = path.join(jobDir, 'media.bin');
   return chunkPath;
 }
 
 async function assembleUploadFromChunks(job, jobDir, state) {
   ensureNotCanceled(state);
   const chunksDir = getChunksDir(job.id);
-  const uploadPath = path.join(jobDir, "media.bin");
+  const uploadPath = path.join(jobDir, 'media.bin');
 
   const files = await fs.promises.readdir(chunksDir);
   const chunkFiles = files
-    .filter((file) => file.startsWith("chunk-") && file.endsWith(".bin"))
+    .filter((file) => file.startsWith('chunk-') && file.endsWith('.bin'))
     .sort();
 
   if (chunkFiles.length === 0) {
-    throw new Error("Uploaded media not found for this job");
+    throw new Error('Uploaded media not found for this job');
   }
 
   if (job.expected_total_chunks) {
     const expectedCount = Number(job.expected_total_chunks);
     if (chunkFiles.length !== expectedCount) {
-      throw new Error("Uploaded chunks are incomplete");
+      throw new Error('Uploaded chunks are incomplete');
     }
   }
 
@@ -181,8 +181,8 @@ async function assembleUploadFromChunks(job, jobDir, state) {
       ensureNotCanceled(state);
       await new Promise((resolve, reject) => {
         const readStream = fs.createReadStream(path.join(chunksDir, file));
-        readStream.on("error", reject);
-        readStream.on("end", resolve);
+        readStream.on('error', reject);
+        readStream.on('end', resolve);
         readStream.pipe(writeStream, { end: false });
       });
     }
@@ -206,21 +206,21 @@ async function convertToAudio(inputPath, outputPath, state) {
   // -b:a 64k: 64kbps bitrate (good for speech)
   await runFfmpeg(
     [
-      "-y",
-      "-i",
+      '-y',
+      '-i',
       inputPath,
-      "-vn", // No video
-      "-ac",
-      "1", // Mono
-      "-ar",
-      "16000", // 16kHz
-      "-b:a",
-      "64k", // 64kbps
-      "-f",
-      "mp3",
+      '-vn', // No video
+      '-ac',
+      '1', // Mono
+      '-ar',
+      '16000', // 16kHz
+      '-b:a',
+      '64k', // 64kbps
+      '-f',
+      'mp3',
       outputPath,
     ],
-    state
+    state,
   );
 }
 
@@ -237,57 +237,53 @@ async function splitAudioIfNeeded(audioPath, jobDir, state) {
   const SMALL_FILE_THRESHOLD = 20 * 1024 * 1024;
   if (stats.size <= SMALL_FILE_THRESHOLD) {
     console.log(
-      `[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(
-        1
-      )}MB - no splitting needed`
+      `[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(1)}MB - no splitting needed`,
     );
     return [{ path: audioPath, startMs: 0 }];
   }
 
   console.log(
     `[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(
-      1
-    )}MB - splitting into ${SEGMENT_DURATION_SECONDS / 60} minute segments`
+      1,
+    )}MB - splitting into ${SEGMENT_DURATION_SECONDS / 60} minute segments`,
   );
-  const segmentsDir = path.join(jobDir, "segments");
+  const segmentsDir = path.join(jobDir, 'segments');
   await fs.promises.mkdir(segmentsDir, { recursive: true });
-  const outputPattern = path.join(segmentsDir, "segment-%03d.mp3");
+  const outputPattern = path.join(segmentsDir, 'segment-%03d.mp3');
 
   await runFfmpeg(
     [
-      "-y",
-      "-i",
+      '-y',
+      '-i',
       audioPath,
-      "-vn",
-      "-f",
-      "segment",
-      "-segment_time",
+      '-vn',
+      '-f',
+      'segment',
+      '-segment_time',
       String(SEGMENT_DURATION_SECONDS),
-      "-reset_timestamps",
-      "1",
-      "-ac",
-      "1",
-      "-ar",
-      "16000",
-      "-b:a",
-      "64k", // MP3 at 64kbps
+      '-reset_timestamps',
+      '1',
+      '-ac',
+      '1',
+      '-ar',
+      '16000',
+      '-b:a',
+      '64k', // MP3 at 64kbps
       outputPattern,
     ],
-    state
+    state,
   );
 
   const files = await fs.promises.readdir(segmentsDir);
   const segments = files
-    .filter((file) => file.startsWith("segment-") && file.endsWith(".mp3"))
+    .filter((file) => file.startsWith('segment-') && file.endsWith('.mp3'))
     .sort()
     .map((file, index) => ({
       path: path.join(segmentsDir, file),
       startMs: index * SEGMENT_DURATION_SECONDS * 1000,
     }));
 
-  console.log(
-    `[Transcripts] Created ${segments.length} segments for transcription`
-  );
+  console.log(`[Transcripts] Created ${segments.length} segments for transcription`);
   return segments;
 }
 
@@ -302,11 +298,9 @@ async function transcribeSegments(segments, options, state) {
       language: options?.languageHint,
     });
 
-    const responseSegments = Array.isArray(response?.segments)
-      ? response.segments
-      : [];
+    const responseSegments = Array.isArray(response?.segments) ? response.segments : [];
 
-    if (responseSegments.length === 0 && typeof response?.text === "string") {
+    if (responseSegments.length === 0 && typeof response?.text === 'string') {
       const fallbackText = response.text.trim();
       if (fallbackText) {
         mergedSegments.push({
@@ -320,7 +314,7 @@ async function transcribeSegments(segments, options, state) {
     }
 
     for (const cue of responseSegments) {
-      const text = typeof cue.text === "string" ? cue.text.trim() : "";
+      const text = typeof cue.text === 'string' ? cue.text.trim() : '';
       if (!text) continue;
 
       const startMs = segment.startMs + Math.round((cue.start || 0) * 1000);
@@ -330,11 +324,9 @@ async function transcribeSegments(segments, options, state) {
     }
   }
 
-  const plainText = textParts.join("\n");
+  const plainText = textParts.join('\n');
   const durationMs =
-    mergedSegments.length > 0
-      ? mergedSegments[mergedSegments.length - 1].endMs
-      : undefined;
+    mergedSegments.length > 0 ? mergedSegments[mergedSegments.length - 1].endMs : undefined;
 
   return {
     plainText,
@@ -348,7 +340,7 @@ async function cleanupJobFiles(jobId) {
   try {
     await fs.promises.rm(dir, { recursive: true, force: true });
   } catch (error) {
-    console.warn("[Transcripts] Failed to clean up job files:", error);
+    console.warn('[Transcripts] Failed to clean up job files:', error);
   }
 }
 
@@ -364,7 +356,7 @@ async function processTranscriptJob(job, options, state) {
     }
   }
 
-  const audioPath = path.join(jobDir, "audio.wav");
+  const audioPath = path.join(jobDir, 'audio.wav');
   await convertToAudio(uploadPath, audioPath, state);
 
   const segments = await splitAudioIfNeeded(audioPath, jobDir, state);
@@ -373,12 +365,12 @@ async function processTranscriptJob(job, options, state) {
 
   // Redact media URL for privacy (remove session tokens, auth params)
   // Keep normalized version for cache lookups
-  const mediaUrlRedacted = "[REDACTED_FOR_PRIVACY]";
+  const mediaUrlRedacted = '[REDACTED_FOR_PRIVACY]';
 
   await upsertTranscriptCache({
     userId: job.user_id,
     fingerprint: job.fingerprint,
-    provider: job.provider || "openai",
+    provider: job.provider || 'openai',
     mediaUrlRedacted,
     mediaUrlNormalized: job.media_url_normalized,
     etag: null,
@@ -390,7 +382,7 @@ async function processTranscriptJob(job, options, state) {
   await updateTranscriptJob({
     jobId: job.id,
     userId: job.user_id,
-    updates: { status: "done", error: null },
+    updates: { status: 'done', error: null },
   });
 
   await cleanupJobFiles(job.id);
@@ -405,14 +397,14 @@ async function startTranscriptProcessing(job, options) {
   processTranscriptJob(job, options, state)
     .catch(async (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      const canceled = message === "CANCELED" || state.cancelRequested;
+      const canceled = message === 'CANCELED' || state.cancelRequested;
 
       await updateTranscriptJob({
         jobId: job.id,
         userId: job.user_id,
         updates: {
-          status: canceled ? "canceled" : "error",
-          error: canceled ? "Canceled" : message,
+          status: canceled ? 'canceled' : 'error',
+          error: canceled ? 'Canceled' : message,
         },
       });
 
@@ -429,9 +421,9 @@ async function cancelTranscriptProcessing(jobId) {
   state.cancelRequested = true;
   if (state.currentProcess) {
     try {
-      state.currentProcess.kill("SIGKILL");
+      state.currentProcess.kill('SIGKILL');
     } catch (error) {
-      console.warn("[Transcripts] Failed to kill ffmpeg process:", error);
+      console.warn('[Transcripts] Failed to kill ffmpeg process:', error);
     }
   }
   await cleanupJobFiles(jobId);
@@ -442,7 +434,7 @@ async function reapStaleTranscriptJobs() {
   const ttlMs = Math.max(1, TRANSCRIPT_JOB_TTL_MINUTES) * 60 * 1000;
   const cutoff = new Date(Date.now() - ttlMs).toISOString();
   const staleJobs = await listTranscriptJobsByStatusBefore({
-    statuses: ["created", "uploading", "uploaded", "processing"],
+    statuses: ['created', 'uploading', 'uploaded', 'processing'],
     updatedBefore: cutoff,
   });
 
@@ -452,7 +444,7 @@ async function reapStaleTranscriptJobs() {
     try {
       await cancelTranscriptProcessing(job.id);
     } catch (error) {
-      console.warn("[Transcripts] Failed to cancel stale job process:", error);
+      console.warn('[Transcripts] Failed to cancel stale job process:', error);
     }
 
     try {
@@ -460,12 +452,12 @@ async function reapStaleTranscriptJobs() {
         jobId: job.id,
         userId: job.user_id,
         updates: {
-          status: "error",
-          error: "Job expired before completion",
+          status: 'error',
+          error: 'Job expired before completion',
         },
       });
     } catch (error) {
-      console.warn("[Transcripts] Failed to mark stale job:", error);
+      console.warn('[Transcripts] Failed to mark stale job:', error);
     }
   }
 
@@ -473,16 +465,15 @@ async function reapStaleTranscriptJobs() {
 }
 
 function startTranscriptJobReaper() {
-  const intervalMs =
-    Math.max(1, TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES) * 60 * 1000;
+  const intervalMs = Math.max(1, TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES) * 60 * 1000;
 
   reapStaleTranscriptJobs().catch((error) => {
-    console.warn("[Transcripts] Initial job reaper run failed:", error);
+    console.warn('[Transcripts] Initial job reaper run failed:', error);
   });
 
   const timer = setInterval(() => {
     reapStaleTranscriptJobs().catch((error) => {
-      console.warn("[Transcripts] Job reaper run failed:", error);
+      console.warn('[Transcripts] Job reaper run failed:', error);
     });
   }, intervalMs);
 

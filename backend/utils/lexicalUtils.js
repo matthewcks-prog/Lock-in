@@ -55,11 +55,3 @@ function extractPlainTextFromLexical(editorState) {
 module.exports = {
   extractPlainTextFromLexical,
 };
-
-
-
-
-
-
-
-

@@ -4,7 +4,7 @@ export function log(
   level: 'debug' | 'info' | 'warn' | 'error',
   requestId: string,
   message: string,
-  meta?: Record<string, unknown>
+  meta?: Record<string, unknown>,
 ): void {
   const logFn =
     level === 'error'

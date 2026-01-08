@@ -6,7 +6,7 @@
  * parsed/serialized inside the editor adapter layer.
  */
 
-export type NoteContentVersion = "lexical_v1" | "legacy_html";
+export type NoteContentVersion = 'lexical_v1' | 'legacy_html';
 
 export interface NoteContent {
   version: NoteContentVersion;
@@ -26,17 +26,11 @@ export interface NoteContent {
   plainText?: string | null;
 }
 
-export type NoteStatus = "idle" | "editing" | "saving" | "saved" | "error";
+export type NoteStatus = 'idle' | 'editing' | 'saving' | 'saved' | 'error';
 
-export type NoteType =
-  | "manual"
-  | "definition"
-  | "formula"
-  | "concept"
-  | "general"
-  | "ai-generated";
+export type NoteType = 'manual' | 'definition' | 'formula' | 'concept' | 'general' | 'ai-generated';
 
-export type NoteAssetType = "image" | "document" | "audio" | "video" | "other";
+export type NoteAssetType = 'image' | 'document' | 'audio' | 'video' | 'other';
 
 export interface NoteAsset {
   id: string;

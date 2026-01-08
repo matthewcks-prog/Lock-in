@@ -1,4 +1,4 @@
-import type { LockInContentRuntime } from "./contentRuntime";
+import type { LockInContentRuntime } from './contentRuntime';
 
 declare global {
   interface Window {

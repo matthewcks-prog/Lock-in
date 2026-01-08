@@ -1,11 +1,11 @@
 // backend/controllers/notesController.js
 
-const notesRepo = require("../repositories/notesRepository");
-const noteAssetsRepo = require("../repositories/noteAssetsRepository");
-const { supabase } = require("../supabaseClient");
-const { NOTE_ASSETS_BUCKET } = require("../config");
-const { embedText } = require("../openaiClient");
-const { extractPlainTextFromLexical } = require("../utils/lexicalUtils");
+const notesRepo = require('../repositories/notesRepository');
+const noteAssetsRepo = require('../repositories/noteAssetsRepository');
+const { supabase } = require('../supabaseClient');
+const { NOTE_ASSETS_BUCKET } = require('../config');
+const { embedText } = require('../openaiClient');
+const { extractPlainTextFromLexical } = require('../utils/lexicalUtils');
 
 /**
  * Notes controller with scalability features:
@@ -30,13 +30,13 @@ function normaliseTags(tags) {
   if (!tags) return [];
   if (Array.isArray(tags)) {
     return tags
-      .filter((tag) => typeof tag === "string" && tag.trim().length > 0)
+      .filter((tag) => typeof tag === 'string' && tag.trim().length > 0)
       .slice(0, MAX_TAGS) // Limit number of tags
       .map((tag) => tag.trim().slice(0, MAX_TAG_LENGTH)); // Limit tag length
   }
-  if (typeof tags === "string") {
+  if (typeof tags === 'string') {
     return tags
-      .split(",")
+      .split(',')
       .map((tag) => tag.trim())
       .filter((tag) => tag.length > 0)
       .slice(0, MAX_TAGS)
@@ -49,18 +49,17 @@ function normaliseTags(tags) {
  * Validate and sanitize title
  */
 function validateTitle(title) {
-  if (!title || typeof title !== "string") {
-    return "Untitled Note";
+  if (!title || typeof title !== 'string') {
+    return 'Untitled Note';
   }
-  return title.trim().slice(0, MAX_TITLE_LENGTH) || "Untitled Note";
+  return title.trim().slice(0, MAX_TITLE_LENGTH) || 'Untitled Note';
 }
 
 /**
  * Validate UUID format
  */
 function isValidUUID(str) {
-  const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
 }
 
@@ -83,54 +82,53 @@ async function createNote(req, res, next) {
     } = req.body;
 
     // Debug logging (remove in production or use proper log levels)
-    if (process.env.NODE_ENV !== "production") {
-      console.log("createNote request body keys:", Object.keys(req.body));
-      console.log("content_json type:", typeof content_json);
-      console.log("editor_version:", editor_version);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('createNote request body keys:', Object.keys(req.body));
+      console.log('content_json type:', typeof content_json);
+      console.log('editor_version:', editor_version);
     }
 
     // Determine which content format we're using
     const hasLexicalContent = content_json && editor_version;
-    const hasLegacyContent =
-      content && typeof content === "string" && content.trim().length > 0;
+    const hasLegacyContent = content && typeof content === 'string' && content.trim().length > 0;
 
     if (!hasLexicalContent && !hasLegacyContent) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_CONTENT",
+          code: 'INVALID_CONTENT',
           message:
-            "content_json and editor_version are required, or legacy content field must be provided",
+            'content_json and editor_version are required, or legacy content field must be provided',
         },
       });
     }
 
     // Ensure content_json is always an object (required by database)
     let finalContentJson = {};
-    let finalEditorVersion = "lexical_v1";
+    let finalEditorVersion = 'lexical_v1';
 
     if (hasLexicalContent) {
       // Validate content_json is an object
-      if (typeof content_json === "string") {
+      if (typeof content_json === 'string') {
         try {
           finalContentJson = JSON.parse(content_json);
         } catch {
           return res.status(400).json({
             success: false,
             error: {
-              code: "INVALID_JSON",
-              message: "content_json must be a valid JSON object",
+              code: 'INVALID_JSON',
+              message: 'content_json must be a valid JSON object',
             },
           });
         }
-      } else if (typeof content_json === "object" && content_json !== null) {
+      } else if (typeof content_json === 'object' && content_json !== null) {
         finalContentJson = content_json;
       } else {
         return res.status(400).json({
           success: false,
           error: {
-            code: "INVALID_JSON",
-            message: "content_json must be a valid JSON object",
+            code: 'INVALID_JSON',
+            message: 'content_json must be a valid JSON object',
           },
         });
       }
@@ -138,18 +136,17 @@ async function createNote(req, res, next) {
     }
 
     // Extract plain text for embedding
-    let plainText = "";
+    let plainText = '';
     if (hasLexicalContent) {
       // Use provided content_text or extract from Lexical JSON
-      plainText =
-        content_text || extractPlainTextFromLexical(finalContentJson) || "";
+      plainText = content_text || extractPlainTextFromLexical(finalContentJson) || '';
     } else {
       // Legacy: use content field (strip HTML if present)
       plainText = content.trim();
       // Basic HTML stripping for legacy content
       plainText = plainText
-        .replace(/<[^>]*>/g, " ")
-        .replace(/\s+/g, " ")
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
     }
 
@@ -157,8 +154,8 @@ async function createNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "EMPTY_CONTENT",
-          message: "Note content cannot be empty",
+          code: 'EMPTY_CONTENT',
+          message: 'Note content cannot be empty',
         },
       });
     }
@@ -168,7 +165,7 @@ async function createNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "CONTENT_TOO_LONG",
+          code: 'CONTENT_TOO_LONG',
           message: `content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`,
         },
       });
@@ -180,20 +177,19 @@ async function createNote(req, res, next) {
       embedding = await embedText(plainText);
     } catch (embedError) {
       // Log but don't fail - note can still be saved without embedding
-      console.error("Failed to generate embedding:", embedError);
+      console.error('Failed to generate embedding:', embedError);
       // Continue without embedding (note will not be searchable via semantic search)
       embedding = null;
     }
 
-    const normalizedClientNoteId =
-      typeof clientNoteId === "string" ? clientNoteId.trim() : null;
+    const normalizedClientNoteId = typeof clientNoteId === 'string' ? clientNoteId.trim() : null;
 
     if (normalizedClientNoteId && !isValidUUID(normalizedClientNoteId)) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_CLIENT_NOTE_ID",
-          message: "clientNoteId must be a valid UUID",
+          code: 'INVALID_CLIENT_NOTE_ID',
+          message: 'clientNoteId must be a valid UUID',
         },
       });
     }
@@ -209,7 +205,7 @@ async function createNote(req, res, next) {
       sourceSelection: sourceSelection?.trim() || null,
       sourceUrl: sourceUrl?.trim() || null,
       courseCode: courseCode?.trim() || null,
-      noteType: noteType || "manual",
+      noteType: noteType || 'manual',
       tags: normaliseTags(tags),
       embedding,
     });
@@ -251,10 +247,10 @@ async function searchNotes(req, res, next) {
     const { q, courseCode, k } = req.query;
 
     // Validate query parameter
-    if (!q || typeof q !== "string" || q.trim().length === 0) {
+    if (!q || typeof q !== 'string' || q.trim().length === 0) {
       return res.status(400).json({
         success: false,
-        error: { message: "query parameter (q) is required" },
+        error: { message: 'query parameter (q) is required' },
       });
     }
 
@@ -266,10 +262,10 @@ async function searchNotes(req, res, next) {
     try {
       queryEmbedding = await embedText(q.trim());
     } catch (embedError) {
-      console.error("Failed to generate query embedding:", embedError);
+      console.error('Failed to generate query embedding:', embedError);
       return res.status(500).json({
         success: false,
-        error: { message: "Failed to process search query" },
+        error: { message: 'Failed to process search query' },
       });
     }
 
@@ -301,8 +297,8 @@ async function getNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "MISSING_NOTE_ID",
-          message: "noteId is required",
+          code: 'MISSING_NOTE_ID',
+          message: 'noteId is required',
         },
       });
     }
@@ -312,8 +308,8 @@ async function getNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_NOTE_ID",
-          message: "noteId must be a valid UUID",
+          code: 'INVALID_NOTE_ID',
+          message: 'noteId must be a valid UUID',
         },
       });
     }
@@ -324,8 +320,8 @@ async function getNote(req, res, next) {
       return res.status(404).json({
         success: false,
         error: {
-          code: "NOT_FOUND",
-          message: "Note not found",
+          code: 'NOT_FOUND',
+          message: 'Note not found',
         },
       });
     }
@@ -342,7 +338,7 @@ async function updateNote(req, res, next) {
   try {
     const userId = req.user.id;
     const { noteId } = req.params;
-    const ifUnmodifiedSince = req.headers["if-unmodified-since"];
+    const ifUnmodifiedSince = req.headers['if-unmodified-since'];
     const {
       title,
       content, // Legacy field (fallback)
@@ -360,8 +356,8 @@ async function updateNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "MISSING_NOTE_ID",
-          message: "noteId is required",
+          code: 'MISSING_NOTE_ID',
+          message: 'noteId is required',
         },
       });
     }
@@ -371,54 +367,53 @@ async function updateNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_NOTE_ID",
-          message: "noteId must be a valid UUID",
+          code: 'INVALID_NOTE_ID',
+          message: 'noteId must be a valid UUID',
         },
       });
     }
 
     // Determine which content format we're using
     const hasLexicalContent = content_json && editor_version;
-    const hasLegacyContent =
-      content && typeof content === "string" && content.trim().length > 0;
+    const hasLegacyContent = content && typeof content === 'string' && content.trim().length > 0;
 
     if (!hasLexicalContent && !hasLegacyContent) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_CONTENT",
+          code: 'INVALID_CONTENT',
           message:
-            "content_json and editor_version are required, or legacy content field must be provided",
+            'content_json and editor_version are required, or legacy content field must be provided',
         },
       });
     }
 
     // Ensure content_json is always an object (required by database)
     let finalContentJson = {};
-    let finalEditorVersion = "lexical_v1";
+    let finalEditorVersion = 'lexical_v1';
 
     if (hasLexicalContent) {
       // Validate content_json is an object
-      if (typeof content_json === "string") {
+      if (typeof content_json === 'string') {
         try {
           finalContentJson = JSON.parse(content_json);
         } catch {
           return res.status(400).json({
             success: false,
             error: {
-              code: "INVALID_JSON",
-              message: "content_json must be a valid JSON object",
+              code: 'INVALID_JSON',
+              message: 'content_json must be a valid JSON object',
             },
           });
         }
-      } else if (typeof content_json === "object" && content_json !== null) {
+      } else if (typeof content_json === 'object' && content_json !== null) {
         finalContentJson = content_json;
       } else {
         return res.status(400).json({
           success: false,
           error: {
-            code: "INVALID_JSON",
-            message: "content_json must be a valid JSON object",
+            code: 'INVALID_JSON',
+            message: 'content_json must be a valid JSON object',
           },
         });
       }
@@ -426,18 +421,17 @@ async function updateNote(req, res, next) {
     }
 
     // Extract plain text for embedding
-    let plainText = "";
+    let plainText = '';
     if (hasLexicalContent) {
       // Use provided content_text or extract from Lexical JSON
-      plainText =
-        content_text || extractPlainTextFromLexical(finalContentJson) || "";
+      plainText = content_text || extractPlainTextFromLexical(finalContentJson) || '';
     } else {
       // Legacy: use content field (strip HTML if present)
       plainText = content.trim();
       // Basic HTML stripping for legacy content
       plainText = plainText
-        .replace(/<[^>]*>/g, " ")
-        .replace(/\s+/g, " ")
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/\s+/g, ' ')
         .trim();
     }
 
@@ -445,8 +439,8 @@ async function updateNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "EMPTY_CONTENT",
-          message: "Note content cannot be empty",
+          code: 'EMPTY_CONTENT',
+          message: 'Note content cannot be empty',
         },
       });
     }
@@ -456,7 +450,7 @@ async function updateNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "CONTENT_TOO_LONG",
+          code: 'CONTENT_TOO_LONG',
           message: `content exceeds maximum length of ${MAX_CONTENT_LENGTH} characters`,
         },
       });
@@ -466,7 +460,7 @@ async function updateNote(req, res, next) {
     try {
       embedding = await embedText(plainText);
     } catch (embedError) {
-      console.error("Failed to regenerate embedding:", embedError);
+      console.error('Failed to regenerate embedding:', embedError);
       embedding = null;
     }
 
@@ -481,7 +475,7 @@ async function updateNote(req, res, next) {
       sourceSelection: sourceSelection?.trim() || null,
       sourceUrl: sourceUrl?.trim() || null,
       courseCode: courseCode?.trim() || null,
-      noteType: noteType || "manual",
+      noteType: noteType || 'manual',
       tags: normaliseTags(tags),
       embedding,
       ifUnmodifiedSince: ifUnmodifiedSince || null,
@@ -490,12 +484,12 @@ async function updateNote(req, res, next) {
     res.json(note);
   } catch (err) {
     // Handle conflict error from optimistic locking
-    if (err.name === "ConflictError" || err.status === 409) {
+    if (err.name === 'ConflictError' || err.status === 409) {
       return res.status(409).json({
         success: false,
         error: {
-          code: "CONFLICT",
-          message: err.message || "Note was modified by another session",
+          code: 'CONFLICT',
+          message: err.message || 'Note was modified by another session',
           updatedAt: err.updatedAt,
         },
       });
@@ -506,8 +500,8 @@ async function updateNote(req, res, next) {
       return res.status(404).json({
         success: false,
         error: {
-          code: "NOT_FOUND",
-          message: "Note not found",
+          code: 'NOT_FOUND',
+          message: 'Note not found',
         },
       });
     }
@@ -525,7 +519,7 @@ async function deleteNote(req, res, next) {
     if (!noteId) {
       return res.status(400).json({
         success: false,
-        error: { message: "noteId is required" },
+        error: { message: 'noteId is required' },
       });
     }
 
@@ -534,8 +528,8 @@ async function deleteNote(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_NOTE_ID",
-          message: "noteId must be a valid UUID",
+          code: 'INVALID_NOTE_ID',
+          message: 'noteId must be a valid UUID',
         },
       });
     }
@@ -551,16 +545,13 @@ async function deleteNote(req, res, next) {
           .remove(storagePaths);
 
         if (storageError) {
-          console.error(
-            "Failed to delete asset files from storage:",
-            storageError
-          );
+          console.error('Failed to delete asset files from storage:', storageError);
           // Continue with note deletion even if storage cleanup fails
           // The orphaned files can be cleaned up later
         }
       }
     } catch (assetErr) {
-      console.error("Error cleaning up assets:", assetErr);
+      console.error('Error cleaning up assets:', assetErr);
       // Continue with note deletion even if asset cleanup fails
     }
 
@@ -582,8 +573,8 @@ async function toggleStarred(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "MISSING_NOTE_ID",
-          message: "noteId is required",
+          code: 'MISSING_NOTE_ID',
+          message: 'noteId is required',
         },
       });
     }
@@ -593,8 +584,8 @@ async function toggleStarred(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_NOTE_ID",
-          message: "noteId must be a valid UUID",
+          code: 'INVALID_NOTE_ID',
+          message: 'noteId must be a valid UUID',
         },
       });
     }
@@ -606,8 +597,8 @@ async function toggleStarred(req, res, next) {
       return res.status(404).json({
         success: false,
         error: {
-          code: "NOT_FOUND",
-          message: "Note not found",
+          code: 'NOT_FOUND',
+          message: 'Note not found',
         },
       });
     }
@@ -627,8 +618,8 @@ async function setStarred(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "MISSING_NOTE_ID",
-          message: "noteId is required",
+          code: 'MISSING_NOTE_ID',
+          message: 'noteId is required',
         },
       });
     }
@@ -638,18 +629,18 @@ async function setStarred(req, res, next) {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_NOTE_ID",
-          message: "noteId must be a valid UUID",
+          code: 'INVALID_NOTE_ID',
+          message: 'noteId must be a valid UUID',
         },
       });
     }
 
-    if (typeof isStarred !== "boolean") {
+    if (typeof isStarred !== 'boolean') {
       return res.status(400).json({
         success: false,
         error: {
-          code: "INVALID_VALUE",
-          message: "isStarred must be a boolean",
+          code: 'INVALID_VALUE',
+          message: 'isStarred must be a boolean',
         },
       });
     }
@@ -661,8 +652,8 @@ async function setStarred(req, res, next) {
       return res.status(404).json({
         success: false,
         error: {
-          code: "NOT_FOUND",
-          message: "Note not found",
+          code: 'NOT_FOUND',
+          message: 'Note not found',
         },
       });
     }

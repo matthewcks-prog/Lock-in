@@ -1,13 +1,13 @@
 /**
  * Supabase Auth Client
- * 
+ *
  * Chrome-agnostic authentication client for Supabase.
  * Uses storage interface abstraction - no Chrome dependencies.
  */
 
-import type { StorageInterface } from "../core/storage/storageInterface";
-import type { AuthSession, AuthUser } from "../core/domain/types";
-import { createLogger } from "../core/utils/logger";
+import type { StorageInterface } from '../core/storage/storageInterface';
+import type { AuthSession, AuthUser } from '../core/domain/types';
+import { createLogger } from '../core/utils/logger';
 
 export interface AuthConfig {
   supabaseUrl: string;
@@ -37,13 +37,17 @@ type SupabaseSessionPayload = {
   user?: AuthUser | null;
 };
 
-const logger = createLogger("Auth");
+const logger = createLogger('Auth');
 
 /**
  * Create auth error with code
  */
-function createAuthError(message: string, code: string = "AUTH_ERROR", details?: unknown): AuthClientError {
-  const error = new Error(message || "Authentication failed") as AuthClientError;
+function createAuthError(
+  message: string,
+  code: string = 'AUTH_ERROR',
+  details?: unknown,
+): AuthClientError {
+  const error = new Error(message || 'Authentication failed') as AuthClientError;
   error.code = code;
   if (details !== undefined) {
     error.details = details;
@@ -72,28 +76,30 @@ async function parseErrorResponse(
     }
   }
 
-  const payloadRecord = typeof payload === "object" && payload !== null ? payload as Record<string, unknown> : null;
+  const payloadRecord =
+    typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : null;
   const nestedError = payloadRecord?.error;
-  const nestedRecord = typeof nestedError === "object" && nestedError !== null
-    ? (nestedError as Record<string, unknown>)
-    : null;
+  const nestedRecord =
+    typeof nestedError === 'object' && nestedError !== null
+      ? (nestedError as Record<string, unknown>)
+      : null;
   const message =
-    (typeof payloadRecord?.error_description === "string" && payloadRecord.error_description) ||
-    (typeof nestedRecord?.message === "string" && nestedRecord.message) ||
-    (typeof nestedError === "string" && nestedError) ||
-    (typeof payloadRecord?.message === "string" && payloadRecord.message) ||
+    (typeof payloadRecord?.error_description === 'string' && payloadRecord.error_description) ||
+    (typeof nestedRecord?.message === 'string' && nestedRecord.message) ||
+    (typeof nestedError === 'string' && nestedError) ||
+    (typeof payloadRecord?.message === 'string' && payloadRecord.message) ||
     fallbackMessage;
-  const normalized = (message || "").toLowerCase();
+  const normalized = (message || '').toLowerCase();
 
-  let code = "AUTH_ERROR";
-  if (normalized.includes("already registered")) {
-    code = "USER_ALREADY_REGISTERED";
-  } else if (normalized.includes("invalid login")) {
-    code = "INVALID_LOGIN";
-  } else if (normalized.includes("email not confirmed")) {
-    code = "EMAIL_NOT_CONFIRMED";
-  } else if (normalized.includes("invalid email")) {
-    code = "INVALID_EMAIL";
+  let code = 'AUTH_ERROR';
+  if (normalized.includes('already registered')) {
+    code = 'USER_ALREADY_REGISTERED';
+  } else if (normalized.includes('invalid login')) {
+    code = 'INVALID_LOGIN';
+  } else if (normalized.includes('email not confirmed')) {
+    code = 'EMAIL_NOT_CONFIRMED';
+  } else if (normalized.includes('invalid email')) {
+    code = 'INVALID_EMAIL';
   }
 
   return { message, code, details: payloadRecord || undefined };
@@ -102,9 +108,12 @@ async function parseErrorResponse(
 /**
  * Normalize Supabase session data
  */
-function normalizeSession(data: SupabaseSessionPayload, fallbackUser: AuthUser | null = null): AuthSession {
+function normalizeSession(
+  data: SupabaseSessionPayload,
+  fallbackUser: AuthUser | null = null,
+): AuthSession {
   if (!data?.access_token || !data?.refresh_token) {
-    throw new Error("Supabase session payload missing tokens");
+    throw new Error('Supabase session payload missing tokens');
   }
 
   const expiresIn = Number(data.expires_in) || 3600;
@@ -114,7 +123,7 @@ function normalizeSession(data: SupabaseSessionPayload, fallbackUser: AuthUser |
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
     expiresAt,
-    tokenType: data.token_type || "bearer",
+    tokenType: data.token_type || 'bearer',
     user: data.user || fallbackUser || null,
   };
 }
@@ -126,7 +135,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
   const {
     supabaseUrl,
     supabaseAnonKey,
-    sessionStorageKey = "lockinSupabaseSession",
+    sessionStorageKey = 'lockinSupabaseSession',
     tokenExpiryBufferMs = 60000,
   } = config;
 
@@ -134,7 +143,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
 
   function assertConfig(): void {
     if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error("Supabase URL or anon key is not configured");
+      throw new Error('Supabase URL or anon key is not configured');
     }
   }
 
@@ -143,7 +152,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
       const data = await storage.get(sessionStorageKey);
       return data[sessionStorageKey] || null;
     } catch (error) {
-      logger.error("Auth storage read error", error);
+      logger.error('Auth storage read error', error);
       return null;
     }
   }
@@ -152,7 +161,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     try {
       await storage.set({ [sessionStorageKey]: session });
     } catch (error) {
-      logger.error("Auth storage write error", error);
+      logger.error('Auth storage write error', error);
     }
   }
 
@@ -160,7 +169,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     try {
       await storage.remove(sessionStorageKey);
     } catch (error) {
-      logger.error("Auth storage clear error", error);
+      logger.error('Auth storage clear error', error);
     }
   }
 
@@ -169,7 +178,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
       try {
         cb(session);
       } catch (error) {
-        logger.error("Auth listener error", error);
+        logger.error('Auth listener error', error);
       }
     });
   }
@@ -178,16 +187,16 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     assertConfig();
 
     const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-      method: "POST",
+      method: 'POST',
       headers: {
         apikey: supabaseAnonKey,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
     });
 
     if (!response.ok) {
-      const parsed = await parseErrorResponse(response, "Failed to sign in");
+      const parsed = await parseErrorResponse(response, 'Failed to sign in');
       throw createAuthError(parsed.message, parsed.code, parsed.details);
     }
 
@@ -202,16 +211,16 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     assertConfig();
 
     const response = await fetch(`${supabaseUrl}/auth/v1/signup`, {
-      method: "POST",
+      method: 'POST',
       headers: {
         apikey: supabaseAnonKey,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
     });
 
     if (!response.ok) {
-      const parsed = await parseErrorResponse(response, "Failed to create account");
+      const parsed = await parseErrorResponse(response, 'Failed to create account');
       throw createAuthError(parsed.message, parsed.code, parsed.details);
     }
 
@@ -219,9 +228,9 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
 
     if (!data?.access_token || !data?.refresh_token) {
       throw createAuthError(
-        "Check your email to confirm your account, then sign in.",
-        "EMAIL_CONFIRMATION_REQUIRED",
-        data
+        'Check your email to confirm your account, then sign in.',
+        'EMAIL_CONFIRMATION_REQUIRED',
+        data,
       );
     }
 
@@ -231,32 +240,35 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     return session;
   }
 
-  async function refreshSession(refreshToken: string, existingUser: AuthUser | null = null): Promise<AuthSession> {
+  async function refreshSession(
+    refreshToken: string,
+    existingUser: AuthUser | null = null,
+  ): Promise<AuthSession> {
     assertConfig();
 
     if (!refreshToken) {
-      throw new Error("Missing refresh token");
+      throw new Error('Missing refresh token');
     }
 
     const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
-      method: "POST",
+      method: 'POST',
       headers: {
         apikey: supabaseAnonKey,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
     if (!response.ok) {
       await clearStorage();
-      let errorMessage = "Failed to refresh session";
+      let errorMessage = 'Failed to refresh session';
       try {
         const errorBody: unknown = await response.json();
-        if (typeof errorBody === "object" && errorBody !== null) {
+        if (typeof errorBody === 'object' && errorBody !== null) {
           const record = errorBody as Record<string, unknown>;
-          if (typeof record.error_description === "string") {
+          if (typeof record.error_description === 'string') {
             errorMessage = record.error_description;
-          } else if (typeof record.message === "string") {
+          } else if (typeof record.message === 'string') {
             errorMessage = record.message;
           }
         }
@@ -269,7 +281,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     const data = (await response.json()) as SupabaseSessionPayload;
     const session = normalizeSession(
       { ...data, refresh_token: data.refresh_token || refreshToken },
-      existingUser
+      existingUser,
     );
     await writeStorage(session);
     notify(session);
@@ -296,7 +308,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
       const refreshed = await refreshSession(session.refreshToken, session.user);
       return refreshed.accessToken;
     } catch (error) {
-      logger.error("Token refresh failed", error);
+      logger.error('Token refresh failed', error);
       return null;
     }
   }
@@ -312,7 +324,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
   }
 
   function onSessionChanged(callback: (session: AuthSession | null) => void): () => void {
-    if (typeof callback !== "function") {
+    if (typeof callback !== 'function') {
       return () => {};
     }
     listeners.add(callback);
@@ -321,7 +333,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
 
   // Listen to storage changes
   storage.onChanged((changes, areaName) => {
-    if (areaName === "sync" && changes[sessionStorageKey]) {
+    if (areaName === 'sync' && changes[sessionStorageKey]) {
       notify(changes[sessionStorageKey].newValue || null);
     }
   });

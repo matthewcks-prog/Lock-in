@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { STORAGE_KEYS } from "../storage";
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { STORAGE_KEYS } from '../storage';
 
-describe("contentRuntime surface", () => {
+describe('contentRuntime surface', () => {
   let createContentRuntime: () => any;
 
   beforeEach(async () => {
@@ -44,26 +44,26 @@ describe("contentRuntime surface", () => {
       tabs: mockTabs,
     };
 
-    ({ createContentRuntime } = await import("../contentRuntime"));
+    ({ createContentRuntime } = await import('../contentRuntime'));
     // ensure clean slate for window runtime
     delete (window as any).LockInContent;
   });
 
-  it("exposes a versioned runtime with required keys on window", () => {
+  it('exposes a versioned runtime with required keys on window', () => {
     const runtime = createContentRuntime();
     window.LockInContent = runtime;
 
     expect(window.LockInContent).toBeDefined();
-    expect(runtime.__version).toBe("1.0");
-    expect(window.LockInContent.__version).toBe("1.0");
+    expect(runtime.__version).toBe('1.0');
+    expect(window.LockInContent.__version).toBe('1.0');
     expect(window.LockInContent.storage).toBeDefined();
     expect(window.LockInContent.messaging).toBeDefined();
     expect(window.LockInContent.session).toBeDefined();
     expect(window.LockInContent.logger).toBeDefined();
-    expect(typeof runtime.storage.getLocal).toBe("function");
-    expect(typeof runtime.messaging.types.GET_TAB_ID).toBe("string");
-    expect(typeof runtime.session.getSession).toBe("function");
-    expect(typeof runtime.logger.info).toBe("function");
+    expect(typeof runtime.storage.getLocal).toBe('function');
+    expect(typeof runtime.messaging.types.GET_TAB_ID).toBe('string');
+    expect(typeof runtime.session.getSession).toBe('function');
+    expect(typeof runtime.logger.info).toBe('function');
     // legacy compat surface must not exist
     // @ts-expect-error - legacy compat removed
     expect(window.LockInContent.Storage).toBeUndefined();
@@ -71,19 +71,17 @@ describe("contentRuntime surface", () => {
     expect(window.LockInContent.MessageTypes).toBeUndefined();
   });
 
-  it("provides storage helpers that can be called (regression for missing getLocal)", async () => {
-    const mockChatId = "chat-123";
-    (chrome.storage.local.get as any).mockImplementation((
-      _keys: string | string[],
-      cb: (value: Record<string, unknown>) => void
-    ) =>
-      cb({ [STORAGE_KEYS.CURRENT_CHAT_ID]: mockChatId })
+  it('provides storage helpers that can be called (regression for missing getLocal)', async () => {
+    const mockChatId = 'chat-123';
+    (chrome.storage.local.get as any).mockImplementation(
+      (_keys: string | string[], cb: (value: Record<string, unknown>) => void) =>
+        cb({ [STORAGE_KEYS.CURRENT_CHAT_ID]: mockChatId }),
     );
 
     const runtime = createContentRuntime();
     const chatId = await runtime.session.loadChatId();
 
     expect(chatId).toBe(mockChatId);
-    expect((chrome.storage.local.get as any)).toHaveBeenCalled();
+    expect(chrome.storage.local.get as any).toHaveBeenCalled();
   });
 });

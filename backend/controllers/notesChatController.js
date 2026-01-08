@@ -13,9 +13,9 @@ async function chatWithNotes(req, res, next) {
 
     // Validate query parameter
     if (!query || typeof query !== 'string' || query.trim().length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: { message: 'query is required and cannot be empty' } 
+        error: { message: 'query is required and cannot be empty' },
       });
     }
 
@@ -28,9 +28,9 @@ async function chatWithNotes(req, res, next) {
       queryEmbedding = await embedText(query.trim());
     } catch (embedError) {
       console.error('Failed to generate query embedding:', embedError);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        error: { message: 'Failed to process search query' } 
+        error: { message: 'Failed to process search query' },
       });
     }
 
@@ -49,7 +49,8 @@ async function chatWithNotes(req, res, next) {
     // If no notes found, return early
     if (matches.length === 0) {
       return res.json({
-        answer: "I couldn't find any relevant notes to answer your question. Try creating some notes first!",
+        answer:
+          "I couldn't find any relevant notes to answer your question. Try creating some notes first!",
         usedNotes: [],
       });
     }
@@ -58,7 +59,8 @@ async function chatWithNotes(req, res, next) {
     const contextBlocks = matches.map((n, i) => {
       const courseInfo = n.course_code ? ` (course: ${n.course_code})` : '';
       // Use content_plain if available, otherwise extract from content_json
-      const noteText = n.content_plain || 
+      const noteText =
+        n.content_plain ||
         (n.content_json ? extractPlainTextFromLexical(n.content_json) : '') ||
         '';
       return `Note ${i + 1}${courseInfo}:\n${noteText}`;
@@ -72,9 +74,9 @@ Be clear and concise, and reference which note you are using when relevant.`;
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      { 
-        role: 'user', 
-        content: `Here are my notes:\n\n${contextBlocks.join('\n\n')}\n\nMy question: ${query.trim()}` 
+      {
+        role: 'user',
+        content: `Here are my notes:\n\n${contextBlocks.join('\n\n')}\n\nMy question: ${query.trim()}`,
       },
     ];
 
@@ -84,18 +86,18 @@ Be clear and concise, and reference which note you are using when relevant.`;
       answer = await chatWithModel({ messages });
     } catch (chatError) {
       console.error('Failed to generate chat response:', chatError);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        error: { message: 'Failed to generate answer' } 
+        error: { message: 'Failed to generate answer' },
       });
     }
 
     res.json({
       answer,
-      usedNotes: matches.map((n) => ({ 
-        id: n.id, 
-        title: n.title || 'Untitled Note', 
-        courseCode: n.course_code || null 
+      usedNotes: matches.map((n) => ({
+        id: n.id,
+        title: n.title || 'Untitled Note',
+        courseCode: n.course_code || null,
       })),
     });
   } catch (err) {
@@ -106,4 +108,3 @@ Be clear and concise, and reference which note you are using when relevant.`;
 module.exports = {
   chatWithNotes,
 };
-

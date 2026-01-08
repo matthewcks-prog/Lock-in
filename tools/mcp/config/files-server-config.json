@@ -1,0 +1,56 @@
+﻿{
+    "security":  {
+                     "readonly":  true,
+                     "max_files_per_request":  10,
+                     "rate_limit":  {
+                                        "requests_per_minute":  60,
+                                        "files_read_per_minute":  100
+                                    },
+                     "max_file_size_bytes":  1048576
+                 },
+    "version":  "1.0.0",
+    "description":  "Repository file access with path restrictions",
+    "allowed_paths":  [
+                          "core/**/*.ts",
+                          "core/**/*.js",
+                          "api/**/*.ts",
+                          "api/**/*.js",
+                          "integrations/**/*.ts",
+                          "integrations/**/*.js",
+                          "extension/**/*.js",
+                          "extension/**/*.ts",
+                          "ui/**/*.tsx",
+                          "ui/**/*.ts",
+                          "docs/**/*.md",
+                          "*.md",
+                          "package.json",
+                          "tsconfig.json",
+                          "vite.config.*.ts",
+                          "eslint.config.js"
+                      ],
+    "excluded_paths":  [
+                           "**/*.min.js",
+                           "**/node_modules/**",
+                           "**/dist/**",
+                           "**/build/**",
+                           "**/.git/**",
+                           "**/coverage/**",
+                           "**/*.log",
+                           "**/.env*",
+                           "**/tmp/**",
+                           "**/*.lock"
+                       ],
+    "server":  "lockin-files",
+    "metadata":  {
+                     "total_files":  81,
+                     "source":  "Scanned from repository structure",
+                     "last_updated":  "2026-01-09 02:11:52",
+                     "auto_generated":  true
+                 },
+    "safety_features":  {
+                            "binary_file_rejection":  true,
+                            "symlink_resolution":  false,
+                            "encoding_validation":  true,
+                            "path_traversal_prevention":  true
+                        }
+}

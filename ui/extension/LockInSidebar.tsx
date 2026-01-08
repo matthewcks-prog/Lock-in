@@ -6,17 +6,17 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
-} from "react";
-import type { PageContext, StudyMode } from "../../core/domain/types";
-import type { ApiClient } from "../../api/client";
-import { createNotesService } from "../../core/services/notesService.ts";
-import type { NotesService } from "../../core/services/notesService.ts";
-import { useNotesList } from "../hooks/useNotesList";
-import { NotesPanel } from "./notes/NotesPanel";
-import { createNoteContentFromPlainText } from "./notes/content";
-import { TranscriptMessage } from "./transcripts/TranscriptMessage";
-import { VideoListPanel } from "./transcripts/VideoListPanel";
-import { useTranscripts } from "./transcripts/useTranscripts";
+} from 'react';
+import type { PageContext, StudyMode } from '../../core/domain/types';
+import type { ApiClient } from '../../api/client';
+import { createNotesService } from '../../core/services/notesService.ts';
+import type { NotesService } from '../../core/services/notesService.ts';
+import { useNotesList } from '../hooks/useNotesList';
+import { NotesPanel } from './notes/NotesPanel';
+import { createNoteContentFromPlainText } from './notes/content';
+import { TranscriptMessage } from './transcripts/TranscriptMessage';
+import { VideoListPanel } from './transcripts/VideoListPanel';
+import { useTranscripts } from './transcripts/useTranscripts';
 
 interface StorageAdapter {
   get: (key: string) => Promise<any>;
@@ -37,7 +37,7 @@ export interface LockInSidebarProps {
   activeTabExternal?: string;
 }
 
-type ChatMessageRole = "user" | "assistant";
+type ChatMessageRole = 'user' | 'assistant';
 
 interface ChatMessageItem {
   id: string;
@@ -45,7 +45,7 @@ interface ChatMessageItem {
   content: string;
   timestamp: string;
   mode?: StudyMode;
-  source?: "selection" | "followup";
+  source?: 'selection' | 'followup';
   isPending?: boolean;
 }
 
@@ -56,46 +56,44 @@ interface ChatHistoryItem {
   lastMessage?: string;
 }
 
-type HistoryTitleSource = "local" | "server";
+type HistoryTitleSource = 'local' | 'server';
 
 const MODE_OPTIONS: Array<{ value: StudyMode; label: string; hint: string }> = [
-  { value: "explain", label: "Explain", hint: "Clarify the selection" },
+  { value: 'explain', label: 'Explain', hint: 'Clarify the selection' },
   {
-    value: "general",
-    label: "General",
-    hint: "Ask anything about the content",
+    value: 'general',
+    label: 'General',
+    hint: 'Ask anything about the content',
   },
 ];
 
-const CHAT_TAB_ID = "chat";
-const NOTES_TAB_ID = "notes";
-const SIDEBAR_ACTIVE_TAB_KEY = "lockin_sidebar_activeTab";
-const MODE_STORAGE_KEY = "lockinActiveMode";
-const SELECTED_NOTE_ID_KEY = "lockin_sidebar_selectedNoteId";
-const ACTIVE_CHAT_ID_KEY = "lockin_sidebar_activeChatId";
-const SIDEBAR_WIDTH_KEY = "lockin_sidebar_width";
-const SIDEBAR_OPEN_KEY = "lockin_sidebar_isOpen";
+const CHAT_TAB_ID = 'chat';
+const NOTES_TAB_ID = 'notes';
+const SIDEBAR_ACTIVE_TAB_KEY = 'lockin_sidebar_activeTab';
+const MODE_STORAGE_KEY = 'lockinActiveMode';
+const SELECTED_NOTE_ID_KEY = 'lockin_sidebar_selectedNoteId';
+const ACTIVE_CHAT_ID_KEY = 'lockin_sidebar_activeChatId';
+const SIDEBAR_WIDTH_KEY = 'lockin_sidebar_width';
+const SIDEBAR_OPEN_KEY = 'lockin_sidebar_isOpen';
 const SIDEBAR_MIN_WIDTH = 360;
 const SIDEBAR_MAX_WIDTH = 1500;
 const SIDEBAR_MAX_VW = 0.75;
 const CHAT_TITLE_MAX_WORDS = 6;
 const CHAT_TITLE_MAX_LENGTH = 80;
-const FALLBACK_CHAT_TITLE = "New chat";
+const FALLBACK_CHAT_TITLE = 'New chat';
 
 function isValidUUID(value: string | null | undefined) {
   if (!value) return false;
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function relativeLabel(iso: string | null | undefined) {
-  if (!iso) return "just now";
+  if (!iso) return 'just now';
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "just now";
+  if (Number.isNaN(date.getTime())) return 'just now';
   const delta = Date.now() - date.getTime();
   const minutes = Math.round(delta / 60000);
-  if (minutes <= 1) return "just now";
+  if (minutes <= 1) return 'just now';
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -104,18 +102,14 @@ function relativeLabel(iso: string | null | undefined) {
 }
 
 function normalizeSpaces(text: string) {
-  return text.replace(/\s+/g, " ").trim();
+  return text.replace(/\s+/g, ' ').trim();
 }
 
-function clampChatTitle(text = "") {
+function clampChatTitle(text = '') {
   const normalized = normalizeSpaces(text);
-  if (!normalized) return "";
+  if (!normalized) return '';
 
-  const limitedWords = normalized
-    .split(" ")
-    .slice(0, CHAT_TITLE_MAX_WORDS)
-    .join(" ")
-    .trim();
+  const limitedWords = normalized.split(' ').slice(0, CHAT_TITLE_MAX_WORDS).join(' ').trim();
 
   if (limitedWords.length <= CHAT_TITLE_MAX_LENGTH) {
     return limitedWords;
@@ -125,10 +119,10 @@ function clampChatTitle(text = "") {
 }
 
 function coerceChatTitle(candidate?: string | null, fallback?: string) {
-  const normalizedCandidate = clampChatTitle(candidate || "");
+  const normalizedCandidate = clampChatTitle(candidate || '');
   if (normalizedCandidate) return normalizedCandidate;
 
-  const normalizedFallback = clampChatTitle(fallback || "");
+  const normalizedFallback = clampChatTitle(fallback || '');
   return normalizedFallback || FALLBACK_CHAT_TITLE;
 }
 
@@ -169,24 +163,17 @@ function ModeSelector({
 
   useEffect(() => {
     const handler = () => setIsOpen(false);
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, []);
 
   const current = MODE_OPTIONS.find((option) => option.value === value);
 
   return (
-    <div
-      className="lockin-mode-selector-container"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        className="lockin-mode-pill"
-        onClick={toggle}
-        aria-haspopup="listbox"
-      >
+    <div className="lockin-mode-selector-container" onClick={(e) => e.stopPropagation()}>
+      <button className="lockin-mode-pill" onClick={toggle} aria-haspopup="listbox">
         <span className="lockin-mode-icon">*</span>
-        <span>{current?.label || "Mode"}</span>
+        <span>{current?.label || 'Mode'}</span>
         <span className="lockin-mode-chevron">v</span>
       </button>
       {isOpen && (
@@ -203,9 +190,7 @@ function ModeSelector({
               <span className="lockin-mode-option-icon">-</span>
               <div>
                 <div>{option.label}</div>
-                <div style={{ fontSize: "11px", color: "#6b7280" }}>
-                  {option.hint}
-                </div>
+                <div style={{ fontSize: '11px', color: '#6b7280' }}>{option.hint}</div>
               </div>
             </button>
           ))}
@@ -225,16 +210,14 @@ export function LockInSidebar({
   storage,
   activeTabExternal,
 }: LockInSidebarProps) {
-  const [activeTab, setActiveTab] = useState<string>(
-    activeTabExternal || CHAT_TAB_ID
-  );
+  const [activeTab, setActiveTab] = useState<string>(activeTabExternal || CHAT_TAB_ID);
   const [mode, setMode] = useState<StudyMode>(currentMode);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [recentChats, setRecentChats] = useState<ChatHistoryItem[]>([]);
   const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState("");
+  const [inputValue, setInputValue] = useState('');
   const [chatError, setChatError] = useState<string | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
@@ -252,11 +235,8 @@ export function LockInSidebar({
   const resizeCleanupRef = useRef<(() => void) | null>(null);
 
   const getMaxSidebarWidth = useCallback(() => {
-    if (typeof window === "undefined") return SIDEBAR_MAX_WIDTH;
-    return Math.min(
-      SIDEBAR_MAX_WIDTH,
-      Math.floor(window.innerWidth * SIDEBAR_MAX_VW)
-    );
+    if (typeof window === 'undefined') return SIDEBAR_MAX_WIDTH;
+    return Math.min(SIDEBAR_MAX_WIDTH, Math.floor(window.innerWidth * SIDEBAR_MAX_VW));
   }, []);
 
   const clampSidebarWidth = useCallback(
@@ -265,31 +245,26 @@ export function LockInSidebar({
       const minWidth = Math.min(SIDEBAR_MIN_WIDTH, maxWidth);
       return Math.min(maxWidth, Math.max(minWidth, Math.round(width)));
     },
-    [getMaxSidebarWidth]
+    [getMaxSidebarWidth],
   );
 
   const applySidebarWidth = useCallback(
     (width: number) => {
-      if (typeof document === "undefined") return;
+      if (typeof document === 'undefined') return;
       const clamped = clampSidebarWidth(width);
       currentWidthRef.current = clamped;
-      document.documentElement.style.setProperty(
-        "--lockin-sidebar-width",
-        `${clamped}px`
-      );
+      document.documentElement.style.setProperty('--lockin-sidebar-width', `${clamped}px`);
     },
-    [clampSidebarWidth]
+    [clampSidebarWidth],
   );
 
   const notesService: NotesService | null = useMemo(
     () => (apiClient ? createNotesService(apiClient) : null),
-    [apiClient]
+    [apiClient],
   );
 
   const courseCode = pageContext?.courseContext.courseCode || null;
-  const pageUrl =
-    pageContext?.url ||
-    (typeof window !== "undefined" ? window.location.href : "");
+  const pageUrl = pageContext?.url || (typeof window !== 'undefined' ? window.location.href : '');
 
   const {
     notes,
@@ -318,23 +293,23 @@ export function LockInSidebar({
     const html = document.documentElement;
     if (!body || !html) return;
     if (open) {
-      body.classList.add("lockin-sidebar-open");
-      html.classList.add("lockin-sidebar-transitioning");
+      body.classList.add('lockin-sidebar-open');
+      html.classList.add('lockin-sidebar-transitioning');
     } else {
-      body.classList.remove("lockin-sidebar-open");
+      body.classList.remove('lockin-sidebar-open');
     }
     if (layoutTimeoutRef.current) {
       window.clearTimeout(layoutTimeoutRef.current);
     }
     layoutTimeoutRef.current = window.setTimeout(() => {
-      html.classList.remove("lockin-sidebar-transitioning");
+      html.classList.remove('lockin-sidebar-transitioning');
     }, 320);
   }, []);
 
   const handleResizeStart = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) return;
-      if (typeof window === "undefined") return;
+      if (typeof window === 'undefined') return;
       event.preventDefault();
       event.stopPropagation();
 
@@ -367,10 +342,10 @@ export function LockInSidebar({
           handle.releasePointerCapture?.(pointerId);
         }
 
-        document.documentElement.classList.remove("lockin-sidebar-resizing");
-        window.removeEventListener("pointermove", handlePointerMove);
-        window.removeEventListener("pointerup", stopResize);
-        window.removeEventListener("pointercancel", stopResize);
+        document.documentElement.classList.remove('lockin-sidebar-resizing');
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', stopResize);
+        window.removeEventListener('pointercancel', stopResize);
 
         if (resizeRafRef.current !== null) {
           window.cancelAnimationFrame(resizeRafRef.current);
@@ -383,11 +358,9 @@ export function LockInSidebar({
         }
 
         if (currentWidthRef.current !== null) {
-          storage
-            ?.setLocal?.(SIDEBAR_WIDTH_KEY, currentWidthRef.current)
-            .catch(() => {
-              /* ignore */
-            });
+          storage?.setLocal?.(SIDEBAR_WIDTH_KEY, currentWidthRef.current).catch(() => {
+            /* ignore */
+          });
         }
       };
 
@@ -395,36 +368,32 @@ export function LockInSidebar({
       resizeCleanupRef.current = stopResize;
 
       handle.setPointerCapture?.(pointerId);
-      document.documentElement.classList.add("lockin-sidebar-resizing");
-      window.addEventListener("pointermove", handlePointerMove);
-      window.addEventListener("pointerup", stopResize);
-      window.addEventListener("pointercancel", stopResize);
+      document.documentElement.classList.add('lockin-sidebar-resizing');
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', stopResize);
+      window.addEventListener('pointercancel', stopResize);
 
       updateWidth(event.clientX);
     },
-    [applySidebarWidth, storage]
+    [applySidebarWidth, storage],
   );
 
-  const syncTextareaHeight = useCallback(
-    (target?: HTMLTextAreaElement | null) => {
-      if (typeof window === "undefined") return;
-      const input = target ?? inputRef.current;
-      if (!input) return;
-      input.style.height = "auto";
-      const maxHeightValue = window.getComputedStyle(input).maxHeight;
-      const maxHeight =
-        maxHeightValue === "none" ? 0 : Number.parseFloat(maxHeightValue);
-      const nextHeight = input.scrollHeight;
-      if (!maxHeight || Number.isNaN(maxHeight)) {
-        input.style.height = `${nextHeight}px`;
-        input.style.overflowY = "hidden";
-        return;
-      }
-      input.style.height = `${Math.min(nextHeight, maxHeight)}px`;
-      input.style.overflowY = nextHeight > maxHeight ? "auto" : "hidden";
-    },
-    []
-  );
+  const syncTextareaHeight = useCallback((target?: HTMLTextAreaElement | null) => {
+    if (typeof window === 'undefined') return;
+    const input = target ?? inputRef.current;
+    if (!input) return;
+    input.style.height = 'auto';
+    const maxHeightValue = window.getComputedStyle(input).maxHeight;
+    const maxHeight = maxHeightValue === 'none' ? 0 : Number.parseFloat(maxHeightValue);
+    const nextHeight = input.scrollHeight;
+    if (!maxHeight || Number.isNaN(maxHeight)) {
+      input.style.height = `${nextHeight}px`;
+      input.style.overflowY = 'hidden';
+      return;
+    }
+    input.style.height = `${Math.min(nextHeight, maxHeight)}px`;
+    input.style.overflowY = nextHeight > maxHeight ? 'auto' : 'hidden';
+  }, []);
 
   // Handle tab change while preserving page scroll position
   const handleTabChange = useCallback((tabId: string) => {
@@ -508,21 +477,14 @@ export function LockInSidebar({
             try {
               const response = await apiClient.getChatMessages(storedChatId);
               if (Array.isArray(response)) {
-                const normalized: ChatMessageItem[] = response.map(
-                  (message: any) => ({
-                    id:
-                      message.id ||
-                      `msg-${Math.random().toString(16).slice(2)}`,
-                    role: message.role === "assistant" ? "assistant" : "user",
-                    content:
-                      message.content ||
-                      message.output_text ||
-                      message.input_text ||
-                      "Message",
-                    timestamp: message.created_at || new Date().toISOString(),
-                    mode: (message.mode as StudyMode) || mode,
-                  })
-                );
+                const normalized: ChatMessageItem[] = response.map((message: any) => ({
+                  id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
+                  role: message.role === 'assistant' ? 'assistant' : 'user',
+                  content:
+                    message.content || message.output_text || message.input_text || 'Message',
+                  timestamp: message.created_at || new Date().toISOString(),
+                  mode: (message.mode as StudyMode) || mode,
+                }));
                 setMessages(normalized);
               }
             } catch {
@@ -568,12 +530,12 @@ export function LockInSidebar({
       .then((storedWidth) => {
         if (cancelled) return;
         const numeric =
-          typeof storedWidth === "number"
+          typeof storedWidth === 'number'
             ? storedWidth
-            : typeof storedWidth === "string"
+            : typeof storedWidth === 'string'
               ? Number.parseFloat(storedWidth)
               : null;
-        if (typeof numeric === "number" && !Number.isNaN(numeric) && numeric > 0) {
+        if (typeof numeric === 'number' && !Number.isNaN(numeric) && numeric > 0) {
           applySidebarWidth(numeric);
         }
       })
@@ -593,13 +555,13 @@ export function LockInSidebar({
   }, [isOpen, storage]);
 
   useEffect(() => {
-    if (typeof window === "undefined") return undefined;
+    if (typeof window === 'undefined') return undefined;
     const handleResize = () => {
       if (currentWidthRef.current === null) return;
       applySidebarWidth(currentWidthRef.current);
     };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, [applySidebarWidth]);
 
   useEffect(() => {
@@ -624,9 +586,7 @@ export function LockInSidebar({
 
   useEffect(() => {
     if (!activeTabExternal) return;
-    setActiveTab((current) =>
-      current === activeTabExternal ? current : activeTabExternal
-    );
+    setActiveTab((current) => (current === activeTabExternal ? current : activeTabExternal));
   }, [activeTabExternal]);
 
   useEffect(() => {
@@ -641,14 +601,14 @@ export function LockInSidebar({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && isOpen) {
+      if (event.key === 'Escape' && isOpen) {
         onToggle();
       }
     };
 
     if (isOpen) {
-      document.addEventListener("keydown", handleKeyDown);
-      return () => document.removeEventListener("keydown", handleKeyDown);
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
     }
 
     return undefined;
@@ -673,40 +633,32 @@ export function LockInSidebar({
     (
       item: ChatHistoryItem,
       previousId?: string | null,
-      titleSource: HistoryTitleSource = "local"
+      titleSource: HistoryTitleSource = 'local',
     ) => {
       setRecentChats((prev) => {
         const existing = prev.find(
-          (history) =>
-            history.id === item.id || (previousId && history.id === previousId)
+          (history) => history.id === item.id || (previousId && history.id === previousId),
         );
-        const existingTitle = existing?.title || "";
-        const incomingTitle = coerceChatTitle(
-          item.title,
-          existingTitle || FALLBACK_CHAT_TITLE
-        );
+        const existingTitle = existing?.title || '';
+        const incomingTitle = coerceChatTitle(item.title, existingTitle || FALLBACK_CHAT_TITLE);
         const normalizedExisting = clampChatTitle(existingTitle);
         const hasMeaningfulTitle =
-          Boolean(normalizedExisting) &&
-          normalizedExisting !== FALLBACK_CHAT_TITLE;
-        const shouldOverrideTitle = titleSource === "server" || !hasMeaningfulTitle;
+          Boolean(normalizedExisting) && normalizedExisting !== FALLBACK_CHAT_TITLE;
+        const shouldOverrideTitle = titleSource === 'server' || !hasMeaningfulTitle;
 
         const merged = {
           ...existing,
           ...item,
-          title: shouldOverrideTitle
-            ? incomingTitle
-            : existingTitle || FALLBACK_CHAT_TITLE,
+          title: shouldOverrideTitle ? incomingTitle : existingTitle || FALLBACK_CHAT_TITLE,
         };
 
         const filtered = prev.filter(
-          (history) =>
-            history.id !== item.id && (!previousId || history.id !== previousId)
+          (history) => history.id !== item.id && (!previousId || history.id !== previousId),
         );
         return [merged, ...filtered].slice(0, 12);
       });
     },
-    []
+    [],
   );
 
   const triggerProcess = useCallback(
@@ -721,7 +673,7 @@ export function LockInSidebar({
       chatHistory?: ChatMessageItem[];
       provisionalChatId?: string;
     }) => {
-      const trimmedSelection = selection || selectedText || "";
+      const trimmedSelection = selection || selectedText || '';
       if (!trimmedSelection && !newUserMessage) return;
 
       setChatError(null);
@@ -729,8 +681,8 @@ export function LockInSidebar({
       const pendingId = `assistant-${Date.now()}`;
       const pendingMessage: ChatMessageItem = {
         id: pendingId,
-        role: "assistant",
-        content: "Thinking...",
+        role: 'assistant',
+        content: 'Thinking...',
         timestamp: new Date().toISOString(),
         mode,
         isPending: true,
@@ -756,26 +708,22 @@ export function LockInSidebar({
           : null;
 
         const explanation =
-          response?.data?.explanation ||
-          `(${mode}) ${newUserMessage || trimmedSelection}`;
-        const resolvedChatId =
-          response?.chatId || chatId || provisionalChatId || null;
+          response?.data?.explanation || `(${mode}) ${newUserMessage || trimmedSelection}`;
+        const resolvedChatId = response?.chatId || chatId || provisionalChatId || null;
         const now = new Date().toISOString();
-        const fallbackTitle = buildInitialChatTitle(
-          newUserMessage || trimmedSelection
-        );
+        const fallbackTitle = buildInitialChatTitle(newUserMessage || trimmedSelection);
         const serverTitle = response?.chatTitle;
         const resolvedTitle = serverTitle
           ? coerceChatTitle(serverTitle, fallbackTitle)
           : fallbackTitle;
-        const titleSource: HistoryTitleSource = serverTitle ? "server" : "local";
+        const titleSource: HistoryTitleSource = serverTitle ? 'server' : 'local';
 
         setMessages((prev) =>
           prev.map((message) =>
             message.id === pendingId
               ? { ...message, content: explanation, isPending: false }
-              : message
-          )
+              : message,
+          ),
         );
         if (resolvedChatId) {
           setChatId(resolvedChatId);
@@ -788,45 +736,35 @@ export function LockInSidebar({
               lastMessage: explanation,
             },
             provisionalChatId,
-            titleSource
+            titleSource,
           );
         }
       } catch (error: any) {
         const fallback =
-          error?.message ||
-          "We could not process this request. Try again in a moment.";
+          error?.message || 'We could not process this request. Try again in a moment.';
         setMessages((prev) =>
           prev.map((message) =>
             message.id === pendingId
               ? { ...message, content: fallback, isPending: false }
-              : message
-          )
+              : message,
+          ),
         );
       } finally {
         setIsSending(false);
       }
     },
-    [
-      apiClient,
-      chatId,
-      courseCode,
-      messages,
-      mode,
-      pageUrl,
-      selectedText,
-      upsertHistory,
-    ]
+    [apiClient, chatId, courseCode, messages, mode, pageUrl, selectedText, upsertHistory],
   );
 
   const startNewChat = useCallback(
-    (text: string, source: "selection" | "followup" = "selection") => {
+    (text: string, source: 'selection' | 'followup' = 'selection') => {
       const trimmed = text.trim();
       if (!trimmed) return;
       const now = new Date().toISOString();
       const provisionalChatId = `chat-${Date.now()}`;
       const userMessage: ChatMessageItem = {
         id: `${provisionalChatId}-user`,
-        role: "user",
+        role: 'user',
         content: trimmed,
         timestamp: now,
         mode,
@@ -847,7 +785,7 @@ export function LockInSidebar({
           lastMessage: trimmed,
         },
         undefined,
-        "local"
+        'local',
       );
 
       triggerProcess({
@@ -856,7 +794,7 @@ export function LockInSidebar({
         provisionalChatId,
       });
     },
-    [mode, triggerProcess, upsertHistory]
+    [mode, triggerProcess, upsertHistory],
   );
 
   const appendSelectionToCurrentChat = useCallback(
@@ -866,11 +804,11 @@ export function LockInSidebar({
       const now = new Date().toISOString();
       const userMessage: ChatMessageItem = {
         id: `user-${Date.now()}`,
-        role: "user",
+        role: 'user',
         content: trimmed,
         timestamp: now,
         mode,
-        source: "selection",
+        source: 'selection',
       };
       const provisionalChatId = isValidUUID(chatId)
         ? (chatId as string)
@@ -892,7 +830,7 @@ export function LockInSidebar({
           lastMessage: trimmed,
         },
         undefined,
-        "local"
+        'local',
       );
 
       triggerProcess({
@@ -902,7 +840,7 @@ export function LockInSidebar({
         provisionalChatId,
       });
     },
-    [activeHistoryId, chatId, messages, mode, triggerProcess, upsertHistory]
+    [activeHistoryId, chatId, messages, mode, triggerProcess, upsertHistory],
   );
 
   useEffect(() => {
@@ -910,16 +848,11 @@ export function LockInSidebar({
     if (previousSelectionRef.current === selectedText) return;
     previousSelectionRef.current = selectedText;
     if (messages.length === 0) {
-      startNewChat(selectedText, "selection");
+      startNewChat(selectedText, 'selection');
     } else {
       appendSelectionToCurrentChat(selectedText);
     }
-  }, [
-    appendSelectionToCurrentChat,
-    messages.length,
-    selectedText,
-    startNewChat,
-  ]);
+  }, [appendSelectionToCurrentChat, messages.length, selectedText, startNewChat]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -930,9 +863,8 @@ export function LockInSidebar({
           const mapped = result.map((item: any) => ({
             id: item.id || `chat-${Math.random().toString(16).slice(2)}`,
             title: coerceChatTitle(item.title, FALLBACK_CHAT_TITLE),
-            updatedAt:
-              item.updated_at || item.updatedAt || new Date().toISOString(),
-            lastMessage: item.lastMessage || "",
+            updatedAt: item.updated_at || item.updatedAt || new Date().toISOString(),
+            lastMessage: item.lastMessage || '',
           }));
           setRecentChats(mapped);
         }
@@ -960,37 +892,30 @@ export function LockInSidebar({
       try {
         const response = await apiClient.getChatMessages(item.id);
         if (Array.isArray(response)) {
-          const normalized: ChatMessageItem[] = response.map(
-            (message: any) => ({
-              id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
-              role: message.role === "assistant" ? "assistant" : "user",
-              content:
-                message.content ||
-                message.output_text ||
-                message.input_text ||
-                "Message",
-              timestamp: message.created_at || new Date().toISOString(),
-              mode: (message.mode as StudyMode) || mode,
-            })
-          );
+          const normalized: ChatMessageItem[] = response.map((message: any) => ({
+            id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
+            role: message.role === 'assistant' ? 'assistant' : 'user',
+            content: message.content || message.output_text || message.input_text || 'Message',
+            timestamp: message.created_at || new Date().toISOString(),
+            mode: (message.mode as StudyMode) || mode,
+          }));
           setMessages(normalized);
         }
       } catch (error: any) {
         setChatError(
-          error?.message ||
-            "Could not load this conversation. Try refreshing the page."
+          error?.message || 'Could not load this conversation. Try refreshing the page.',
         );
       } finally {
         setIsSending(false);
       }
     },
-    [apiClient, mode]
+    [apiClient, mode],
   );
 
   const handleSend = useCallback(() => {
     if (!inputValue.trim() || isSending) return;
     appendSelectionToCurrentChat(inputValue);
-    setInputValue("");
+    setInputValue('');
   }, [appendSelectionToCurrentChat, inputValue, isSending]);
 
   const startBlankChat = () => {
@@ -1000,7 +925,7 @@ export function LockInSidebar({
     setIsHistoryOpen(false);
     setChatError(null);
     setMessages([]);
-    setInputValue("");
+    setInputValue('');
     setChatId(null);
     setActiveHistoryId(provisionalChatId);
     upsertHistory(
@@ -1008,10 +933,10 @@ export function LockInSidebar({
         id: provisionalChatId,
         title: FALLBACK_CHAT_TITLE,
         updatedAt: now,
-        lastMessage: "",
+        lastMessage: '',
       },
       undefined,
-      "local"
+      'local',
     );
   };
 
@@ -1023,60 +948,49 @@ export function LockInSidebar({
       }
 
       try {
-        const title =
-          messageContent.split("\n")[0].trim().slice(0, 50) || "Untitled note";
+        const title = messageContent.split('\n')[0].trim().slice(0, 50) || 'Untitled note';
 
         const createdNote = await notesService.createNote({
           title,
           content: createNoteContentFromPlainText(messageContent.trim()),
           sourceUrl: pageUrl,
           courseCode: courseCode || null,
-          noteType: "manual",
+          noteType: 'manual',
         });
 
         upsertNote(createdNote);
         setSelectedNoteId(createdNote.id);
         setActiveTab(NOTES_TAB_ID);
       } catch (error: any) {
-        console.error("Failed to save note:", error);
+        console.error('Failed to save note:', error);
         setActiveTab(NOTES_TAB_ID);
       }
     },
-    [courseCode, notesService, pageUrl, upsertNote]
+    [courseCode, notesService, pageUrl, upsertNote],
   );
 
   const renderChatMessages = () => {
     if (!messages.length) {
       return (
-        <div className="lockin-chat-empty">
-          Ask anything about this page to start a new chat.
-        </div>
+        <div className="lockin-chat-empty">Ask anything about this page to start a new chat.</div>
       );
     }
 
     return messages.map((message) => {
       const roleClass =
-        message.role === "assistant"
-          ? "lockin-chat-msg lockin-chat-msg-assistant"
-          : "lockin-chat-msg lockin-chat-msg-user";
+        message.role === 'assistant'
+          ? 'lockin-chat-msg lockin-chat-msg-assistant'
+          : 'lockin-chat-msg lockin-chat-msg-user';
       const bubbleClass =
-        message.role === "assistant"
-          ? "lockin-chat-bubble"
-          : "lockin-chat-bubble";
+        message.role === 'assistant' ? 'lockin-chat-bubble' : 'lockin-chat-bubble';
 
       return (
         <div key={message.id} className={roleClass}>
-          <div
-            className={`${bubbleClass}${
-              message.isPending ? " lockin-chat-msg-pending" : ""
-            }`}
-          >
+          <div className={`${bubbleClass}${message.isPending ? ' lockin-chat-msg-pending' : ''}`}>
             {message.content}
           </div>
-          {message.role === "assistant" && !message.isPending ? (
-            <SaveNoteAction
-              onSaveAsNote={() => handleSaveAsNote(message.content)}
-            />
+          {message.role === 'assistant' && !message.isPending ? (
+            <SaveNoteAction onSaveAsNote={() => handleSaveAsNote(message.content)} />
           ) : null}
         </div>
       );
@@ -1086,11 +1000,7 @@ export function LockInSidebar({
   return (
     <>
       {!isOpen && (
-        <button
-          id="lockin-toggle-pill"
-          onClick={onToggle}
-          aria-label="Open Lock-in sidebar"
-        >
+        <button id="lockin-toggle-pill" onClick={onToggle} aria-label="Open Lock-in sidebar">
           Lock-in
         </button>
       )}
@@ -1099,7 +1009,7 @@ export function LockInSidebar({
         <div
           id="lockin-sidebar"
           className="lockin-sidebar"
-          data-state={isOpen ? "expanded" : "collapsed"}
+          data-state={isOpen ? 'expanded' : 'collapsed'}
         >
           <div
             className="lockin-sidebar-resize-handle"
@@ -1110,14 +1020,12 @@ export function LockInSidebar({
             <div className="lockin-top-bar-left">
               <div className="lockin-tabs-wrapper" role="tablist">
                 {[CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
-                  const label = tabId === CHAT_TAB_ID ? "Chat" : "Notes";
+                  const label = tabId === CHAT_TAB_ID ? 'Chat' : 'Notes';
                   const isActive = activeTab === tabId;
                   return (
                     <button
                       key={tabId}
-                      className={`lockin-tab ${
-                        isActive ? "lockin-tab-active" : ""
-                      }`}
+                      className={`lockin-tab ${isActive ? 'lockin-tab-active' : ''}`}
                       onClick={() => handleTabChange(tabId)}
                       role="tab"
                       aria-selected={isActive}
@@ -1128,11 +1036,7 @@ export function LockInSidebar({
                 })}
               </div>
             </div>
-            <button
-              className="lockin-close-btn"
-              onClick={onToggle}
-              aria-label="Close sidebar"
-            >
+            <button className="lockin-close-btn" onClick={onToggle} aria-label="Close sidebar">
               x
             </button>
           </div>
@@ -1147,10 +1051,7 @@ export function LockInSidebar({
                     aria-label="Toggle chat history"
                     aria-pressed={isHistoryOpen}
                   >
-                    <span
-                      className="lockin-history-toggle-icon"
-                      aria-hidden="true"
-                    >
+                    <span className="lockin-history-toggle-icon" aria-hidden="true">
                       <span className="lockin-history-toggle-line" />
                       <span className="lockin-history-toggle-line" />
                       <span className="lockin-history-toggle-line" />
@@ -1163,32 +1064,21 @@ export function LockInSidebar({
                     className="lockin-extract-transcript-btn"
                     onClick={handleTranscriptClick}
                     type="button"
-                    disabled={
-                      transcriptState.isDetecting || transcriptState.isExtracting
-                    }
+                    disabled={transcriptState.isDetecting || transcriptState.isExtracting}
                   >
-                    {transcriptState.isDetecting ||
-                    transcriptState.isExtracting ? (
+                    {transcriptState.isDetecting || transcriptState.isExtracting ? (
                       <>
                         <span className="lockin-inline-spinner" />
                         <span>
-                          {transcriptState.isExtracting
-                            ? "Fetching transcript..."
-                            : "Detecting..."}
+                          {transcriptState.isExtracting ? 'Fetching transcript...' : 'Detecting...'}
                         </span>
                       </>
                     ) : (
                       <span>Transcript</span>
                     )}
                   </button>
-                  <ModeSelector
-                    value={mode}
-                    onSelect={(newMode) => setMode(newMode)}
-                  />
-                  <button
-                    className="lockin-new-chat-btn"
-                    onClick={startBlankChat}
-                  >
+                  <ModeSelector value={mode} onSelect={(newMode) => setMode(newMode)} />
+                  <button className="lockin-new-chat-btn" onClick={startBlankChat}>
                     + New chat
                   </button>
                 </div>
@@ -1196,11 +1086,11 @@ export function LockInSidebar({
 
               <div
                 className="lockin-chat-container"
-                data-history-state={isHistoryOpen ? "open" : "closed"}
+                data-history-state={isHistoryOpen ? 'open' : 'closed'}
               >
                 <aside
                   className="lockin-chat-history-panel"
-                  data-state={isHistoryOpen ? "open" : "closed"}
+                  data-state={isHistoryOpen ? 'open' : 'closed'}
                 >
                   <div className="lockin-history-list">
                     {recentChats.length === 0 ? (
@@ -1212,14 +1102,12 @@ export function LockInSidebar({
                         <button
                           key={item.id}
                           className={`lockin-history-item ${
-                            activeHistoryId === item.id ? "active" : ""
+                            activeHistoryId === item.id ? 'active' : ''
                           }`}
                           onClick={() => handleHistorySelect(item)}
                         >
                           <div className="lockin-history-item-content">
-                            <div className="lockin-history-title">
-                              {item.title}
-                            </div>
+                            <div className="lockin-history-title">{item.title}</div>
                             <div className="lockin-history-meta">
                               {relativeLabel(item.updatedAt)}
                             </div>
@@ -1237,9 +1125,7 @@ export function LockInSidebar({
                         {transcriptState.lastTranscript && (
                           <TranscriptMessage
                             transcript={transcriptState.lastTranscript.transcript}
-                            videoTitle={
-                              transcriptState.lastTranscript.video.title || "Video"
-                            }
+                            videoTitle={transcriptState.lastTranscript.video.title || 'Video'}
                             onSaveAsNote={handleSaveAsNote}
                           />
                         )}
@@ -1267,9 +1153,7 @@ export function LockInSidebar({
                           />
                         )}
                         {renderChatMessages()}
-                        {chatError && (
-                          <div className="lockin-chat-error">{chatError}</div>
-                        )}
+                        {chatError && <div className="lockin-chat-error">{chatError}</div>}
                       </div>
                     </div>
 
@@ -1285,7 +1169,7 @@ export function LockInSidebar({
                             syncTextareaHeight(e.currentTarget);
                           }}
                           onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
+                            if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
                               if (inputValue.trim() && !isSending) {
                                 handleSend();

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Note } from "../../core/domain/Note.ts";
-import type { NotesService } from "../../core/services/notesService.ts";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Note } from '../../core/domain/Note.ts';
+import type { NotesService } from '../../core/services/notesService.ts';
 
 interface UseNotesListOptions {
   notesService: NotesService | null | undefined;
@@ -9,10 +9,10 @@ interface UseNotesListOptions {
 
 /**
  * Hook for managing the notes list.
- * 
+ *
  * Includes request deduplication to prevent multiple concurrent requests
  * and skips requests if parameters haven't meaningfully changed.
- * 
+ *
  * Provides optimistic updates for delete and star operations.
  */
 export function useNotesList(options: UseNotesListOptions) {
@@ -20,27 +20,27 @@ export function useNotesList(options: UseNotesListOptions) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Track request state to prevent duplicates
   const isRefreshingRef = useRef(false);
-  const lastParamsRef = useRef<string>("");
+  const lastParamsRef = useRef<string>('');
 
   const refresh = useCallback(async () => {
     if (!notesService) return;
-    
+
     // Create a fingerprint of current params (only limit matters now)
     const paramsFingerprint = JSON.stringify({ limit });
-    
+
     // Skip if already refreshing with same params
     if (isRefreshingRef.current && lastParamsRef.current === paramsFingerprint) {
       return;
     }
-    
+
     isRefreshingRef.current = true;
     lastParamsRef.current = paramsFingerprint;
     setIsLoading(true);
     setError(null);
-    
+
     try {
       // Fetch ALL notes for the user (no courseCode/sourceUrl filters)
       // Client-side filtering will handle course/starred filters
@@ -49,7 +49,7 @@ export function useNotesList(options: UseNotesListOptions) {
       });
       setNotes(list);
     } catch (err: any) {
-      setError(err?.message || "Failed to load notes");
+      setError(err?.message || 'Failed to load notes');
     } finally {
       setIsLoading(false);
       isRefreshingRef.current = false;
@@ -68,102 +68,108 @@ export function useNotesList(options: UseNotesListOptions) {
    * Removes the note from the list immediately, then calls the backend.
    * If the backend call fails, the note is restored.
    */
-  const deleteNote = useCallback(async (noteId: string): Promise<void> => {
-    if (!notesService || !noteId) return;
-    
-    // Store the note for potential rollback
-    let deletedNote: Note | undefined;
-    let deletedIndex: number = -1;
-    
-    // Optimistic update: remove from list immediately
-    setNotes((prev) => {
-      deletedIndex = prev.findIndex((n) => n.id === noteId);
-      if (deletedIndex >= 0) {
-        deletedNote = prev[deletedIndex];
+  const deleteNote = useCallback(
+    async (noteId: string): Promise<void> => {
+      if (!notesService || !noteId) return;
+
+      // Store the note for potential rollback
+      let deletedNote: Note | undefined;
+      let deletedIndex: number = -1;
+
+      // Optimistic update: remove from list immediately
+      setNotes((prev) => {
+        deletedIndex = prev.findIndex((n) => n.id === noteId);
+        if (deletedIndex >= 0) {
+          deletedNote = prev[deletedIndex];
+        }
+        return prev.filter((n) => n.id !== noteId);
+      });
+
+      try {
+        await notesService.deleteNote(noteId);
+      } catch (err: any) {
+        // Rollback: restore the note if delete failed
+        if (deletedNote) {
+          setNotes((prev) => {
+            // Insert back at original position if possible
+            const newList = [...prev];
+            if (deletedIndex >= 0 && deletedIndex <= newList.length) {
+              newList.splice(deletedIndex, 0, deletedNote!);
+            } else {
+              newList.unshift(deletedNote!);
+            }
+            return newList;
+          });
+        }
+        setError(err?.message || 'Failed to delete note');
+        throw err;
       }
-      return prev.filter((n) => n.id !== noteId);
-    });
-    
-    try {
-      await notesService.deleteNote(noteId);
-    } catch (err: any) {
-      // Rollback: restore the note if delete failed
-      if (deletedNote) {
-        setNotes((prev) => {
-          // Insert back at original position if possible
-          const newList = [...prev];
-          if (deletedIndex >= 0 && deletedIndex <= newList.length) {
-            newList.splice(deletedIndex, 0, deletedNote!);
-          } else {
-            newList.unshift(deletedNote!);
-          }
-          return newList;
-        });
-      }
-      setError(err?.message || "Failed to delete note");
-      throw err;
-    }
-  }, [notesService]);
+    },
+    [notesService],
+  );
 
   /**
    * Toggle the starred status of a note with optimistic update.
    * Updates the UI immediately, then syncs with the backend.
    * If the backend call fails, the change is reverted.
    */
-  const toggleStar = useCallback(async (noteId: string): Promise<Note | undefined> => {
-    if (!notesService) {
-      const error = new Error("Notes service not available. Please try again.");
-      setError(error.message);
-      throw error;
-    }
-    
-    if (!noteId) {
-      const error = new Error("Cannot star note: Note ID is missing");
-      setError(error.message);
-      throw error;
-    }
-    
-    // Store the original state for potential rollback
-    let originalNote: Note | undefined;
-    
-    // Optimistic update: toggle starred immediately
-    setNotes((prev) => {
-      return prev.map((n) => {
-        if (n.id === noteId) {
-          originalNote = n;
-          return { ...n, isStarred: !n.isStarred };
-        }
-        return n;
+  const toggleStar = useCallback(
+    async (noteId: string): Promise<Note | undefined> => {
+      if (!notesService) {
+        const error = new Error('Notes service not available. Please try again.');
+        setError(error.message);
+        throw error;
+      }
+
+      if (!noteId) {
+        const error = new Error('Cannot star note: Note ID is missing');
+        setError(error.message);
+        throw error;
+      }
+
+      // Store the original state for potential rollback
+      let originalNote: Note | undefined;
+
+      // Optimistic update: toggle starred immediately
+      setNotes((prev) => {
+        return prev.map((n) => {
+          if (n.id === noteId) {
+            originalNote = n;
+            return { ...n, isStarred: !n.isStarred };
+          }
+          return n;
+        });
       });
-    });
-    
-    try {
-      const updated = await notesService.toggleStar(noteId);
-      // Update with the server response to ensure consistency
-      setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
-      return updated;
-    } catch (err: any) {
-      // Rollback: restore the original state if toggle failed
-      if (originalNote) {
-        setNotes((prev) => prev.map((n) => (n.id === noteId ? originalNote! : n)));
+
+      try {
+        const updated = await notesService.toggleStar(noteId);
+        // Update with the server response to ensure consistency
+        setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
+        return updated;
+      } catch (err: any) {
+        // Rollback: restore the original state if toggle failed
+        if (originalNote) {
+          setNotes((prev) => prev.map((n) => (n.id === noteId ? originalNote! : n)));
+        }
+
+        // Provide more specific error messages based on error type
+        let errorMessage = 'Failed to toggle star';
+        if (err?.code === 'AUTH_REQUIRED') {
+          errorMessage = 'Please sign in to star notes';
+        } else if (err?.code === 'NOT_FOUND') {
+          errorMessage = 'Note not found';
+        } else if (err?.code === 'NETWORK_ERROR') {
+          errorMessage = 'Network error. Please check your connection.';
+        } else if (err?.message) {
+          errorMessage = err.message;
+        }
+
+        setError(errorMessage);
+        throw err;
       }
-      
-      // Provide more specific error messages based on error type
-      let errorMessage = "Failed to toggle star";
-      if (err?.code === "AUTH_REQUIRED") {
-        errorMessage = "Please sign in to star notes";
-      } else if (err?.code === "NOT_FOUND") {
-        errorMessage = "Note not found";
-      } else if (err?.code === "NETWORK_ERROR") {
-        errorMessage = "Network error. Please check your connection.";
-      } else if (err?.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
-      throw err;
-    }
-  }, [notesService]);
+    },
+    [notesService],
+  );
 
   /**
    * Remove a note from the list without calling the backend.

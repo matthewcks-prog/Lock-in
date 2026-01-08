@@ -1,11 +1,11 @@
 /**
  * Base Adapter Interface for Site-Specific Integrations
- * 
+ *
  * Each supported site (Moodle, Edstem, etc.) implements this interface
  * to extract course context from the DOM.
  */
 
-import type { CourseContext, PageContext } from "../../core/domain/types";
+import type { CourseContext, PageContext } from '../../core/domain/types';
 
 /**
  * Base adapter interface that all site adapters must implement
@@ -59,7 +59,7 @@ export class GenericAdapter implements BaseAdapter {
   }
 
   getTopic(dom: Document): string | null {
-    const heading = dom.querySelector("h1, h2")?.textContent?.trim();
+    const heading = dom.querySelector('h1, h2')?.textContent?.trim();
     return heading || null;
   }
 
@@ -71,7 +71,7 @@ export class GenericAdapter implements BaseAdapter {
   }
 
   getPageContext(dom: Document, url: string): PageContext {
-    const heading = dom.querySelector("h1, h2")?.textContent?.trim() || dom.title;
+    const heading = dom.querySelector('h1, h2')?.textContent?.trim() || dom.title;
     return {
       url,
       title: dom.title,

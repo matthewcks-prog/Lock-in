@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { Star, Trash2 } from "lucide-react";
-import type { Note } from "@core/domain/Note";
-import type { NotesService } from "@core/services/notesService";
-import { useNoteAssets } from "../../hooks/useNoteAssets";
-import { useNoteEditor } from "../../hooks/useNoteEditor";
-import { ConfirmDialog, Toast, useToast } from "@shared/ui/components";
-import { NoteEditor } from "./NoteEditor";
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Star, Trash2 } from 'lucide-react';
+import type { Note } from '@core/domain/Note';
+import type { NotesService } from '@core/services/notesService';
+import { useNoteAssets } from '../../hooks/useNoteAssets';
+import { useNoteEditor } from '../../hooks/useNoteEditor';
+import { ConfirmDialog, Toast, useToast } from '@shared/ui/components';
+import { NoteEditor } from './NoteEditor';
 
 interface NotesPanelProps {
   notesService: NotesService | null | undefined;
@@ -24,12 +24,12 @@ interface NotesPanelProps {
 }
 
 function relativeLabel(iso: string | null | undefined) {
-  if (!iso) return "just now";
+  if (!iso) return 'just now';
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "just now";
+  if (Number.isNaN(date.getTime())) return 'just now';
   const delta = Date.now() - date.getTime();
   const minutes = Math.round(delta / 60000);
-  if (minutes <= 1) return "just now";
+  if (minutes <= 1) return 'just now';
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -59,15 +59,15 @@ export function NotesPanel({
   currentWeek,
   onNoteEditingChange,
 }: NotesPanelProps) {
-  const [view, setView] = useState<"current" | "all">("current");
-  const [filter, setFilter] = useState<"course" | "all" | "starred">("course");
-  const [search, setSearch] = useState("");
+  const [view, setView] = useState<'current' | 'all'>('current');
+  const [filter, setFilter] = useState<'course' | 'all' | 'starred'>('course');
+  const [search, setSearch] = useState('');
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Confirm dialog state for delete
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [noteToDeleteTitle, setNoteToDeleteTitle] = useState<string>("");
+  const [noteToDeleteTitle, setNoteToDeleteTitle] = useState<string>('');
 
   // Toast notification state
   const { toast, showToast, hideToast } = useToast();
@@ -110,7 +110,7 @@ export function NotesPanel({
   }, [editorActiveId, activeNoteId, onSelectNote]);
 
   useEffect(() => {
-    if (status === "saved" && note) {
+    if (status === 'saved' && note) {
       onNoteSaved(note);
     }
   }, [note, onNoteSaved, status]);
@@ -118,7 +118,7 @@ export function NotesPanel({
   useEffect(() => {
     // Keep the "editing" signal alive briefly after a save to avoid
     // collapsing the sidebar mid-autosave.
-    const isEditing = status === "editing" || status === "saving";
+    const isEditing = status === 'editing' || status === 'saving';
     if (isEditing) {
       onNoteEditingChange?.(true);
       return;
@@ -144,8 +144,7 @@ export function NotesPanel({
     return notes.find((n) => n.id === editorActiveId) || null;
   }, [editorActiveId, notes]);
 
-  const isCurrentNoteStarred =
-    currentNoteFromList?.isStarred ?? note?.isStarred ?? false;
+  const isCurrentNoteStarred = currentNoteFromList?.isStarred ?? note?.isStarred ?? false;
 
   const filteredNotes = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
@@ -153,10 +152,10 @@ export function NotesPanel({
       // Filter logic
       let matchesFilter = false;
 
-      if (filter === "all") {
+      if (filter === 'all') {
         // Show all notes regardless of course or page
         matchesFilter = true;
-      } else if (filter === "course") {
+      } else if (filter === 'course') {
         // Match notes with the same course code
         // If we have a course code in context, show notes from that course
         // If no course code in context, show notes without a course code
@@ -165,13 +164,13 @@ export function NotesPanel({
         } else {
           matchesFilter = item.courseCode == null;
         }
-      } else if (filter === "starred") {
+      } else if (filter === 'starred') {
         // Only show notes that are explicitly starred (isStarred === true)
         matchesFilter = item.isStarred === true;
       }
 
       // Search logic
-      const preview = item.previewText || item.content?.plainText || "";
+      const preview = item.previewText || item.content?.plainText || '';
       const matchesSearch =
         !searchTerm ||
         item.title.toLowerCase().includes(searchTerm) ||
@@ -184,15 +183,15 @@ export function NotesPanel({
   const handleNewNote = useCallback(() => {
     resetToNew();
     onSelectNote(null);
-    setView("current");
+    setView('current');
   }, [resetToNew, onSelectNote]);
 
   const handleSelectNote = useCallback(
     (noteId: string | null) => {
       onSelectNote(noteId);
-      setView("current");
+      setView('current');
     },
-    [onSelectNote]
+    [onSelectNote],
   );
 
   // Open delete confirmation dialog
@@ -200,15 +199,15 @@ export function NotesPanel({
     (noteId: string, noteTitle: string, e: React.MouseEvent) => {
       e.stopPropagation();
       setDeleteConfirmId(noteId);
-      setNoteToDeleteTitle(noteTitle || "Untitled");
+      setNoteToDeleteTitle(noteTitle || 'Untitled');
     },
-    []
+    [],
   );
 
   // Close delete confirmation dialog
   const closeDeleteConfirm = useCallback(() => {
     setDeleteConfirmId(null);
-    setNoteToDeleteTitle("");
+    setNoteToDeleteTitle('');
   }, []);
 
   // Execute the actual deletion
@@ -222,15 +221,15 @@ export function NotesPanel({
       await onDeleteNote(deleteConfirmId);
 
       // If we're in the "current" view editing this note, go back to list
-      if (view === "current" && editorActiveId === deleteConfirmId) {
+      if (view === 'current' && editorActiveId === deleteConfirmId) {
         resetToNew();
-        setView("all");
+        setView('all');
       }
 
-      showToast("Note deleted successfully", "success");
+      showToast('Note deleted successfully', 'success');
     } catch (err: any) {
-      setDeleteError(err?.message || "Failed to delete note");
-      showToast("Failed to delete note", "error");
+      setDeleteError(err?.message || 'Failed to delete note');
+      showToast('Failed to delete note', 'error');
     } finally {
       setIsDeleting(null);
       closeDeleteConfirm();
@@ -259,27 +258,27 @@ export function NotesPanel({
 
         // Show feedback to user
         if (updatedNote?.isStarred) {
-          showToast("Note starred", "star");
+          showToast('Note starred', 'star');
         } else {
-          showToast("Note unstarred", "info");
+          showToast('Note unstarred', 'info');
         }
       } catch (err: any) {
         // Show more specific error message based on error type
-        let errorMessage = "Failed to update star status";
-        if (err?.code === "AUTH_REQUIRED") {
-          errorMessage = "Please sign in to star notes";
-        } else if (err?.code === "NOT_FOUND") {
-          errorMessage = "Note not found";
-        } else if (err?.code === "NETWORK_ERROR") {
-          errorMessage = "Network error. Check your connection.";
+        let errorMessage = 'Failed to update star status';
+        if (err?.code === 'AUTH_REQUIRED') {
+          errorMessage = 'Please sign in to star notes';
+        } else if (err?.code === 'NOT_FOUND') {
+          errorMessage = 'Note not found';
+        } else if (err?.code === 'NETWORK_ERROR') {
+          errorMessage = 'Network error. Check your connection.';
         } else if (err?.message && err.message.length < 60) {
           errorMessage = err.message;
         }
-        showToast(errorMessage, "error");
-        console.error("[Lock-in] Toggle star failed:", err);
+        showToast(errorMessage, 'error');
+        console.error('[Lock-in] Toggle star failed:', err);
       }
     },
-    [onToggleStar, editorActiveId, onNoteSaved, showToast]
+    [onToggleStar, editorActiveId, onNoteSaved, showToast],
   );
 
   // Only show linked section and store sourceUrl when we have a valid week
@@ -293,15 +292,13 @@ export function NotesPanel({
         <div className="lockin-notes-header-left">
           <div className="lockin-notes-course-row">
             <span className="lockin-notes-label">Course:</span>
-            <strong className="lockin-notes-course-value">
-              {courseCode || "None"}
-            </strong>
+            <strong className="lockin-notes-course-value">{courseCode || 'None'}</strong>
           </div>
           {weekLabel && (
             <div className="lockin-notes-link-row">
               <span className="lockin-notes-label">Linked to:</span>
               <a
-                href={linkedTarget || "#"}
+                href={linkedTarget || '#'}
                 target="_blank"
                 rel="noreferrer"
                 className="lockin-notes-link-href"
@@ -316,19 +313,15 @@ export function NotesPanel({
           <div className="lockin-notes-toggle">
             <button
               type="button"
-              className={`lockin-notes-toggle-btn${
-                view === "current" ? " is-active" : ""
-              }`}
-              onClick={() => setView("current")}
+              className={`lockin-notes-toggle-btn${view === 'current' ? ' is-active' : ''}`}
+              onClick={() => setView('current')}
             >
               Current
             </button>
             <button
               type="button"
-              className={`lockin-notes-toggle-btn${
-                view === "all" ? " is-active" : ""
-              }`}
-              onClick={() => setView("all")}
+              className={`lockin-notes-toggle-btn${view === 'all' ? ' is-active' : ''}`}
+              onClick={() => setView('all')}
             >
               All notes
             </button>
@@ -337,29 +330,27 @@ export function NotesPanel({
 
         <div className="lockin-notes-header-right">
           {/* Show star/delete buttons when editing an existing note */}
-          {view === "current" && editorActiveId && (
+          {view === 'current' && editorActiveId && (
             <div className="lockin-notes-header-actions">
               <button
                 type="button"
                 className={`lockin-note-action-btn lockin-note-star-btn${
-                  isCurrentNoteStarred ? " is-starred" : ""
+                  isCurrentNoteStarred ? ' is-starred' : ''
                 }`}
                 onClick={(e) => handleToggleStar(editorActiveId, e)}
-                title={isCurrentNoteStarred ? "Unstar note" : "Star note"}
-                aria-label={isCurrentNoteStarred ? "Unstar note" : "Star note"}
+                title={isCurrentNoteStarred ? 'Unstar note' : 'Star note'}
+                aria-label={isCurrentNoteStarred ? 'Unstar note' : 'Star note'}
               >
                 <Star
                   size={16}
                   strokeWidth={2}
-                  fill={isCurrentNoteStarred ? "currentColor" : "none"}
+                  fill={isCurrentNoteStarred ? 'currentColor' : 'none'}
                 />
               </button>
               <button
                 type="button"
                 className="lockin-note-action-btn lockin-note-delete-btn"
-                onClick={(e) =>
-                  openDeleteConfirm(editorActiveId, note?.title || "", e)
-                }
+                onClick={(e) => openDeleteConfirm(editorActiveId, note?.title || '', e)}
                 disabled={isDeleting === editorActiveId}
                 title="Delete note"
                 aria-label="Delete note"
@@ -372,11 +363,7 @@ export function NotesPanel({
               </button>
             </div>
           )}
-          <button
-            type="button"
-            className="lockin-btn-primary"
-            onClick={handleNewNote}
-          >
+          <button type="button" className="lockin-btn-primary" onClick={handleNewNote}>
             + New note
           </button>
         </div>
@@ -398,11 +385,11 @@ export function NotesPanel({
 
       {/* Body: Editor or Notes List */}
       <div className="lockin-notes-body">
-        {view === "current" && (
+        {view === 'current' && (
           <NoteEditor
             note={note}
             status={status}
-            title={note?.title || ""}
+            title={note?.title || ''}
             onTitleChange={handleTitleChange}
             onContentChange={handleContentChange}
             onSaveNow={saveNow}
@@ -414,7 +401,7 @@ export function NotesPanel({
           />
         )}
 
-        {view === "all" && (
+        {view === 'all' && (
           <div className="lockin-notes-list-container">
             <div className="lockin-notes-filter-bar">
               <div className="lockin-notes-filter-group">
@@ -436,11 +423,7 @@ export function NotesPanel({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <button
-                type="button"
-                className="lockin-btn-ghost"
-                onClick={onRefreshNotes}
-              >
+              <button type="button" className="lockin-btn-ghost" onClick={onRefreshNotes}>
                 Refresh
               </button>
             </div>
@@ -457,7 +440,7 @@ export function NotesPanel({
                   <button
                     type="button"
                     className="lockin-btn-ghost lockin-notes-empty-btn"
-                    onClick={() => setView("current")}
+                    onClick={() => setView('current')}
                   >
                     Create a note
                   </button>
@@ -467,13 +450,13 @@ export function NotesPanel({
                   <div
                     key={item.id || item.title}
                     className={`lockin-note-card${
-                      item.id && item.id === editorActiveId ? " is-active" : ""
-                    }${item.isStarred ? " is-starred" : ""}`}
+                      item.id && item.id === editorActiveId ? ' is-active' : ''
+                    }${item.isStarred ? ' is-starred' : ''}`}
                     onClick={() => handleSelectNote(item.id || null)}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
+                      if (e.key === 'Enter' || e.key === ' ') {
                         handleSelectNote(item.id || null);
                       }
                     }}
@@ -489,9 +472,7 @@ export function NotesPanel({
                             aria-label="Starred"
                           />
                         )}
-                        <div className="lockin-note-card-title">
-                          {item.title || "Untitled"}
-                        </div>
+                        <div className="lockin-note-card-title">{item.title || 'Untitled'}</div>
                       </div>
                       <div className="lockin-note-card-actions">
                         {item.id && (
@@ -499,41 +480,30 @@ export function NotesPanel({
                             <button
                               type="button"
                               className={`lockin-note-action-btn lockin-note-star-btn${
-                                item.isStarred ? " is-starred" : ""
+                                item.isStarred ? ' is-starred' : ''
                               }`}
                               onClick={(e) => handleToggleStar(item.id!, e)}
-                              title={
-                                item.isStarred ? "Unstar note" : "Star note"
-                              }
-                              aria-label={
-                                item.isStarred ? "Unstar note" : "Star note"
-                              }
+                              title={item.isStarred ? 'Unstar note' : 'Star note'}
+                              aria-label={item.isStarred ? 'Unstar note' : 'Star note'}
                             >
                               <Star
                                 size={14}
                                 strokeWidth={2}
-                                fill={item.isStarred ? "currentColor" : "none"}
+                                fill={item.isStarred ? 'currentColor' : 'none'}
                               />
                             </button>
                             <button
                               type="button"
                               className="lockin-note-action-btn lockin-note-delete-btn"
                               onClick={(e) =>
-                                openDeleteConfirm(
-                                  item.id!,
-                                  item.title || "Untitled",
-                                  e
-                                )
+                                openDeleteConfirm(item.id!, item.title || 'Untitled', e)
                               }
                               disabled={isDeleting === item.id}
                               title="Delete note"
                               aria-label="Delete note"
                             >
                               {isDeleting === item.id ? (
-                                <span
-                                  className="lockin-inline-spinner"
-                                  aria-hidden="true"
-                                />
+                                <span className="lockin-inline-spinner" aria-hidden="true" />
                               ) : (
                                 <Trash2 size={14} strokeWidth={2} />
                               )}
@@ -543,14 +513,10 @@ export function NotesPanel({
                       </div>
                     </div>
                     {item.courseCode && (
-                      <span className="lockin-note-badge">
-                        {item.courseCode}
-                      </span>
+                      <span className="lockin-note-badge">{item.courseCode}</span>
                     )}
                     <div className="lockin-note-card-snippet">
-                      {item.previewText ||
-                        item.content?.plainText ||
-                        "No content"}
+                      {item.previewText || item.content?.plainText || 'No content'}
                     </div>
                     <div className="lockin-note-card-meta">
                       Updated {relativeLabel(item.updatedAt || item.createdAt)}

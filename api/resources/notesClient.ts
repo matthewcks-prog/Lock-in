@@ -1,4 +1,4 @@
-import type { ApiRequest, ApiRequestOptions } from "../fetcher";
+import type { ApiRequest, ApiRequestOptions } from '../fetcher';
 
 export interface ListNotesParams {
   sourceUrl?: string;
@@ -42,8 +42,8 @@ export function createNotesClient(apiRequest: ApiRequest) {
     note: NotePayload & { title: string },
     options?: ApiRequestOptions,
   ): Promise<any> {
-    return apiRequest<any>("/api/notes", {
-      method: "POST",
+    return apiRequest<any>('/api/notes', {
+      method: 'POST',
       body: JSON.stringify(note),
       ...options,
     });
@@ -55,10 +55,10 @@ export function createNotesClient(apiRequest: ApiRequest) {
     options?: ApiRequestOptions,
   ): Promise<any> {
     if (!noteId) {
-      throw new Error("noteId is required to update a note");
+      throw new Error('noteId is required to update a note');
     }
     return apiRequest<any>(`/api/notes/${noteId}`, {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify(note),
       ...options,
     });
@@ -66,28 +66,28 @@ export function createNotesClient(apiRequest: ApiRequest) {
 
   async function deleteNote(noteId: string): Promise<void> {
     if (!noteId) {
-      throw new Error("noteId is required to delete a note");
+      throw new Error('noteId is required to delete a note');
     }
     return apiRequest<void>(`/api/notes/${noteId}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   }
 
   async function toggleNoteStar(noteId: string): Promise<any> {
     if (!noteId) {
-      throw new Error("noteId is required to toggle star");
+      throw new Error('noteId is required to toggle star');
     }
     return apiRequest<any>(`/api/notes/${noteId}/star`, {
-      method: "PATCH",
+      method: 'PATCH',
     });
   }
 
   async function setNoteStar(noteId: string, isStarred: boolean): Promise<any> {
     if (!noteId) {
-      throw new Error("noteId is required to set star");
+      throw new Error('noteId is required to set star');
     }
     return apiRequest<any>(`/api/notes/${noteId}/star`, {
-      method: "PUT",
+      method: 'PUT',
       body: JSON.stringify({ isStarred }),
     });
   }
@@ -95,29 +95,31 @@ export function createNotesClient(apiRequest: ApiRequest) {
   async function listNotes(params: ListNotesParams = {}): Promise<any[]> {
     const { sourceUrl, courseCode, limit = 50 } = params;
     const queryParams = new URLSearchParams();
-    if (sourceUrl) queryParams.set("sourceUrl", sourceUrl);
-    if (courseCode) queryParams.set("courseCode", courseCode);
-    if (limit) queryParams.set("limit", String(limit));
+    if (sourceUrl) queryParams.set('sourceUrl', sourceUrl);
+    if (courseCode) queryParams.set('courseCode', courseCode);
+    if (limit) queryParams.set('limit', String(limit));
 
-    const endpoint = `/api/notes${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
+    const endpoint = `/api/notes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     return apiRequest<any[]>(endpoint, {
-      method: "GET",
+      method: 'GET',
     });
   }
 
   async function searchNotes(params: SearchNotesParams): Promise<any[]> {
     const { query, courseCode, k = 10 } = params;
     const queryParams = new URLSearchParams({ q: query, k: String(k) });
-    if (courseCode) queryParams.set("courseCode", courseCode);
+    if (courseCode) queryParams.set('courseCode', courseCode);
 
     return apiRequest<any[]>(`/api/notes/search?${queryParams.toString()}`, {
-      method: "GET",
+      method: 'GET',
     });
   }
 
-  async function chatWithNotes(params: ChatWithNotesParams): Promise<{ answer: string; usedNotes: any[] }> {
-    return apiRequest<{ answer: string; usedNotes: any[] }>("/api/notes/chat", {
-      method: "POST",
+  async function chatWithNotes(
+    params: ChatWithNotesParams,
+  ): Promise<{ answer: string; usedNotes: any[] }> {
+    return apiRequest<{ answer: string; usedNotes: any[] }>('/api/notes/chat', {
+      method: 'POST',
       body: JSON.stringify({ query: params.query, courseCode: params.courseCode, k: params.k }),
     });
   }

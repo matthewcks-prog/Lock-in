@@ -1,8 +1,4 @@
-const {
-  AppError,
-  ValidationError,
-  NotFoundError,
-} = require("../middleware/errorHandler");
+const { AppError, ValidationError, NotFoundError } = require('../middleware/errorHandler');
 const {
   createTranscriptJob,
   getTranscriptJob,
@@ -13,28 +9,28 @@ const {
   insertTranscriptJobChunk,
   getTranscriptJobChunkStats,
   listActiveTranscriptJobs,
-} = require("../repositories/transcriptsRepository");
+} = require('../repositories/transcriptsRepository');
 const {
   appendTranscriptChunk,
   startTranscriptProcessing,
   cancelTranscriptProcessing,
-} = require("../services/transcriptsService");
+} = require('../services/transcriptsService');
 const {
   TRANSCRIPT_DAILY_JOB_LIMIT,
   TRANSCRIPT_MAX_CONCURRENT_JOBS,
   TRANSCRIPT_MAX_TOTAL_BYTES,
   TRANSCRIPT_MAX_DURATION_MINUTES,
   TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE,
-} = require("../config");
+} = require('../config');
 
 const JOB_STATUS = {
-  CREATED: "created",
-  UPLOADING: "uploading",
-  UPLOADED: "uploaded",
-  PROCESSING: "processing",
-  DONE: "done",
-  ERROR: "error",
-  CANCELED: "canceled",
+  CREATED: 'created',
+  UPLOADING: 'uploading',
+  UPLOADED: 'uploaded',
+  PROCESSING: 'processing',
+  DONE: 'done',
+  ERROR: 'error',
+  CANCELED: 'canceled',
 };
 
 const ACTIVE_STATUSES = new Set([
@@ -50,20 +46,20 @@ const UPLOAD_RATE_WINDOWS = new Map();
 const UPLOAD_RATE_WINDOW_MS = 60 * 1000;
 
 function sanitizeMediaUrlForStorage(mediaUrl) {
-  if (!mediaUrl) return "";
+  if (!mediaUrl) return '';
   try {
     const url = new URL(mediaUrl);
-    url.hash = "";
-    url.search = "";
-    const segments = url.pathname.split("/").map((segment) => {
+    url.hash = '';
+    url.search = '';
+    const segments = url.pathname.split('/').map((segment) => {
       if (!segment) return segment;
-      if (segment.length > 32) return "[redacted]";
+      if (segment.length > 32) return '[redacted]';
       return segment;
     });
-    url.pathname = segments.join("/");
+    url.pathname = segments.join('/');
     return url.toString();
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -78,9 +74,7 @@ function coerceNumber(value) {
 
 function getStartOfTodayUTC() {
   const now = new Date();
-  return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
-  );
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 function enforceUploadRateLimit(userId, bytes) {
@@ -88,19 +82,17 @@ function enforceUploadRateLimit(userId, bytes) {
   const now = Date.now();
   const entry = UPLOAD_RATE_WINDOWS.get(userId);
   const windowEntry =
-    entry && now - entry.startedAt < UPLOAD_RATE_WINDOW_MS
-      ? entry
-      : { startedAt: now, bytes: 0 };
+    entry && now - entry.startedAt < UPLOAD_RATE_WINDOW_MS ? entry : { startedAt: now, bytes: 0 };
 
   if (windowEntry.bytes + bytes > TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE) {
     const retryAfterSeconds = Math.ceil(
-      (UPLOAD_RATE_WINDOW_MS - (now - windowEntry.startedAt)) / 1000
+      (UPLOAD_RATE_WINDOW_MS - (now - windowEntry.startedAt)) / 1000,
     );
     throw new AppError(
-      "Upload rate limit exceeded. Please wait before uploading more.",
-      "TRANSCRIPT_RATE_LIMIT",
+      'Upload rate limit exceeded. Please wait before uploading more.',
+      'TRANSCRIPT_RATE_LIMIT',
       429,
-      { retryAfterSeconds }
+      { retryAfterSeconds },
     );
   }
 
@@ -112,47 +104,33 @@ function parseExpectedTotalChunks(rawValue) {
   const value = coerceNumber(rawValue);
   if (value === null) return null;
   if (!Number.isInteger(value) || value <= 0) {
-    throw new ValidationError(
-      "Expected total chunks must be a positive integer",
-      "x-total-chunks"
-    );
+    throw new ValidationError('Expected total chunks must be a positive integer', 'x-total-chunks');
   }
   return value;
 }
 
 function ensureValidChunkIndex(chunkIndex) {
   if (!Number.isInteger(chunkIndex) || chunkIndex < 0) {
-    throw new ValidationError(
-      "Chunk index must be a non-negative integer",
-      "x-chunk-index"
-    );
+    throw new ValidationError('Chunk index must be a non-negative integer', 'x-chunk-index');
   }
 }
 
 async function createJob(req, res) {
   const userId = req.user?.id;
-  const {
-    fingerprint,
-    mediaUrl,
-    mediaUrlNormalized,
-    durationMs,
-    provider,
-    expectedTotalChunks,
-  } = req.body || {};
+  const { fingerprint, mediaUrl, mediaUrlNormalized, durationMs, provider, expectedTotalChunks } =
+    req.body || {};
 
   if (!userId) {
-    throw new ValidationError("User context missing");
+    throw new ValidationError('User context missing');
   }
-  if (!fingerprint || typeof fingerprint !== "string") {
-    throw new ValidationError("Fingerprint is required", "fingerprint");
+  if (!fingerprint || typeof fingerprint !== 'string') {
+    throw new ValidationError('Fingerprint is required', 'fingerprint');
   }
-  if (!mediaUrl || typeof mediaUrl !== "string") {
-    throw new ValidationError("mediaUrl is required", "mediaUrl");
+  if (!mediaUrl || typeof mediaUrl !== 'string') {
+    throw new ValidationError('mediaUrl is required', 'mediaUrl');
   }
 
-  const normalized = normalizeMediaUrlForStorage(
-    mediaUrlNormalized || mediaUrl
-  );
+  const normalized = normalizeMediaUrlForStorage(mediaUrlNormalized || mediaUrl);
   const redactedUrl = sanitizeMediaUrlForStorage(mediaUrl);
   const cached = await getTranscriptByFingerprint({ fingerprint, userId });
   if (cached?.transcript_json) {
@@ -172,20 +150,12 @@ async function createJob(req, res) {
     since: getStartOfTodayUTC().toISOString(),
   });
   if (dailyCount >= TRANSCRIPT_DAILY_JOB_LIMIT) {
-    throw new AppError(
-      "Daily transcription limit reached.",
-      "TRANSCRIPT_DAILY_LIMIT",
-      429
-    );
+    throw new AppError('Daily transcription limit reached.', 'TRANSCRIPT_DAILY_LIMIT', 429);
   }
 
   const activeCount = await countActiveTranscriptJobs({ userId });
   if (activeCount >= TRANSCRIPT_MAX_CONCURRENT_JOBS) {
-    throw new AppError(
-      "Too many active transcription jobs.",
-      "TRANSCRIPT_CONCURRENT_LIMIT",
-      429
-    );
+    throw new AppError('Too many active transcription jobs.', 'TRANSCRIPT_CONCURRENT_LIMIT', 429);
   }
 
   const durationMsValue = coerceNumber(durationMs);
@@ -194,15 +164,13 @@ async function createJob(req, res) {
     if (durationMsValue > maxMs) {
       throw new AppError(
         `Video exceeds ${TRANSCRIPT_MAX_DURATION_MINUTES} minute limit.`,
-        "TRANSCRIPT_DURATION_LIMIT",
-        400
+        'TRANSCRIPT_DURATION_LIMIT',
+        400,
       );
     }
   }
 
-  const expectedChunks = expectedTotalChunks
-    ? parseExpectedTotalChunks(expectedTotalChunks)
-    : null;
+  const expectedChunks = expectedTotalChunks ? parseExpectedTotalChunks(expectedTotalChunks) : null;
 
   const job = await createTranscriptJob({
     userId,
@@ -226,54 +194,38 @@ async function createJob(req, res) {
 async function uploadChunk(req, res) {
   const userId = req.user?.id;
   const jobId = req.params.id;
-  const chunkIndex = coerceNumber(req.headers["x-chunk-index"]);
-  const expectedTotalChunks = parseExpectedTotalChunks(
-    req.headers["x-total-chunks"]
-  );
+  const chunkIndex = coerceNumber(req.headers['x-chunk-index']);
+  const expectedTotalChunks = parseExpectedTotalChunks(req.headers['x-total-chunks']);
 
   if (!jobId) {
-    throw new ValidationError("Job ID is required", "id");
+    throw new ValidationError('Job ID is required', 'id');
   }
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
-    throw new ValidationError("Chunk payload is required", "chunk");
+    throw new ValidationError('Chunk payload is required', 'chunk');
   }
   if (chunkIndex === null) {
-    throw new ValidationError(
-      "Chunk index header is required",
-      "x-chunk-index"
-    );
+    throw new ValidationError('Chunk index header is required', 'x-chunk-index');
   }
   ensureValidChunkIndex(chunkIndex);
 
   const job = await getTranscriptJob({ jobId, userId });
   if (!job) {
-    throw new NotFoundError("Transcript job", jobId);
+    throw new NotFoundError('Transcript job', jobId);
   }
 
   if (job.status === JOB_STATUS.CANCELED) {
-    throw new AppError(
-      "This transcription job has been canceled.",
-      "TRANSCRIPT_CANCELED",
-      409
-    );
+    throw new AppError('This transcription job has been canceled.', 'TRANSCRIPT_CANCELED', 409);
   }
 
   if (!UPLOADABLE_STATUSES.has(job.status)) {
-    throw new AppError(
-      "Job is no longer accepting chunks.",
-      "TRANSCRIPT_INVALID_STATE",
-      409
-    );
+    throw new AppError('Job is no longer accepting chunks.', 'TRANSCRIPT_INVALID_STATE', 409);
   }
 
-  if (
-    job.expected_total_chunks &&
-    chunkIndex >= Number(job.expected_total_chunks)
-  ) {
+  if (job.expected_total_chunks && chunkIndex >= Number(job.expected_total_chunks)) {
     throw new AppError(
-      "Chunk index exceeds expected total chunks.",
-      "TRANSCRIPT_CHUNK_OUT_OF_RANGE",
-      400
+      'Chunk index exceeds expected total chunks.',
+      'TRANSCRIPT_CHUNK_OUT_OF_RANGE',
+      400,
     );
   }
 
@@ -283,19 +235,15 @@ async function uploadChunk(req, res) {
     expectedTotalChunks !== Number(job.expected_total_chunks)
   ) {
     throw new AppError(
-      "Expected total chunks header does not match job configuration.",
-      "TRANSCRIPT_TOTAL_CHUNKS_MISMATCH",
-      409
+      'Expected total chunks header does not match job configuration.',
+      'TRANSCRIPT_TOTAL_CHUNKS_MISMATCH',
+      409,
     );
   }
 
   const bytesReceived = Number(job.bytes_received || 0);
   if (bytesReceived + req.body.length > TRANSCRIPT_MAX_TOTAL_BYTES) {
-    throw new AppError(
-      "Upload exceeds maximum allowed size.",
-      "TRANSCRIPT_MAX_BYTES",
-      413
-    );
+    throw new AppError('Upload exceeds maximum allowed size.', 'TRANSCRIPT_MAX_BYTES', 413);
   }
 
   enforceUploadRateLimit(userId, req.body.length);
@@ -312,8 +260,7 @@ async function uploadChunk(req, res) {
 
   await appendTranscriptChunk(jobId, req.body, chunkIndex);
   const updates = {
-    status:
-      job.status === JOB_STATUS.CREATED ? JOB_STATUS.UPLOADING : job.status,
+    status: job.status === JOB_STATUS.CREATED ? JOB_STATUS.UPLOADING : job.status,
     error: null,
     bytes_received: bytesReceived + req.body.length,
   };
@@ -322,9 +269,7 @@ async function uploadChunk(req, res) {
     updates.expected_total_chunks = expectedTotalChunks;
   }
 
-  const expectedCount = Number(
-    updates.expected_total_chunks ?? job.expected_total_chunks
-  );
+  const expectedCount = Number(updates.expected_total_chunks ?? job.expected_total_chunks);
   if (Number.isFinite(expectedCount) && expectedCount > 0) {
     const stats = await getTranscriptJobChunkStats(jobId);
     if (
@@ -348,7 +293,7 @@ async function finalizeJob(req, res) {
 
   const job = await getTranscriptJob({ jobId, userId });
   if (!job) {
-    throw new NotFoundError("Transcript job", jobId);
+    throw new NotFoundError('Transcript job', jobId);
   }
 
   if (job.status === JOB_STATUS.DONE) {
@@ -382,15 +327,13 @@ async function finalizeJob(req, res) {
 
   const expectedChunks =
     job.expected_total_chunks ??
-    (expectedTotalChunks
-      ? parseExpectedTotalChunks(expectedTotalChunks)
-      : null);
+    (expectedTotalChunks ? parseExpectedTotalChunks(expectedTotalChunks) : null);
 
   if (!expectedChunks) {
     throw new AppError(
-      "Expected total chunks not provided.",
-      "TRANSCRIPT_TOTAL_CHUNKS_REQUIRED",
-      400
+      'Expected total chunks not provided.',
+      'TRANSCRIPT_TOTAL_CHUNKS_REQUIRED',
+      400,
     );
   }
 
@@ -400,15 +343,10 @@ async function finalizeJob(req, res) {
     stats.minIndex !== 0 ||
     stats.maxIndex !== expectedChunks - 1
   ) {
-    throw new AppError(
-      "Upload incomplete: missing chunks.",
-      "TRANSCRIPT_MISSING_CHUNKS",
-      400,
-      {
-        expectedTotalChunks: expectedChunks,
-        receivedChunks: stats.count,
-      }
-    );
+    throw new AppError('Upload incomplete: missing chunks.', 'TRANSCRIPT_MISSING_CHUNKS', 400, {
+      expectedTotalChunks: expectedChunks,
+      receivedChunks: stats.count,
+    });
   }
 
   await updateTranscriptJob({
@@ -424,9 +362,9 @@ async function finalizeJob(req, res) {
   startTranscriptProcessing(
     { ...job, expected_total_chunks: expectedChunks },
     {
-      languageHint: typeof languageHint === "string" ? languageHint : null,
+      languageHint: typeof languageHint === 'string' ? languageHint : null,
       maxMinutes: coerceNumber(maxMinutes),
-    }
+    },
   );
 
   return res.json({
@@ -441,7 +379,7 @@ async function cancelJob(req, res) {
 
   const job = await getTranscriptJob({ jobId, userId });
   if (!job) {
-    throw new NotFoundError("Transcript job", jobId);
+    throw new NotFoundError('Transcript job', jobId);
   }
 
   if (job.status === JOB_STATUS.DONE || job.status === JOB_STATUS.ERROR) {
@@ -455,7 +393,7 @@ async function cancelJob(req, res) {
   await updateTranscriptJob({
     jobId,
     userId,
-    updates: { status: JOB_STATUS.CANCELED, error: "Canceled" },
+    updates: { status: JOB_STATUS.CANCELED, error: 'Canceled' },
   });
 
   return res.json({
@@ -470,7 +408,7 @@ async function getJob(req, res) {
 
   const job = await getTranscriptJob({ jobId, userId });
   if (!job) {
-    throw new NotFoundError("Transcript job", jobId);
+    throw new NotFoundError('Transcript job', jobId);
   }
 
   let transcript = null;
@@ -496,7 +434,7 @@ async function getJob(req, res) {
 async function listActiveJobs(req, res) {
   const userId = req.user?.id;
   if (!userId) {
-    throw new ValidationError("User context missing");
+    throw new ValidationError('User context missing');
   }
 
   const jobs = await listActiveTranscriptJobs({ userId });
@@ -518,7 +456,7 @@ async function listActiveJobs(req, res) {
 async function cancelAllActiveJobs(req, res) {
   const userId = req.user?.id;
   if (!userId) {
-    throw new ValidationError("User context missing");
+    throw new ValidationError('User context missing');
   }
 
   const jobs = await listActiveTranscriptJobs({ userId });
@@ -532,7 +470,7 @@ async function cancelAllActiveJobs(req, res) {
         userId,
         updates: {
           status: JOB_STATUS.CANCELED,
-          error: "Canceled by user (bulk)",
+          error: 'Canceled by user (bulk)',
         },
       });
       canceled.push(job.id);

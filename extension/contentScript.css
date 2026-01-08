@@ -12,7 +12,8 @@
   height: auto;
   z-index: 2147483647;
   pointer-events: none;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
 }
 
 /* Toggle pill needs pointer-events to be clickable */
@@ -30,7 +31,11 @@ html {
   --lockin-sidebar-min: 360px;
   --lockin-sidebar-max: min(1500px, 75vw);
   --lockin-sidebar-ideal: 35vw;
-  --lockin-sidebar-width: clamp(var(--lockin-sidebar-min), var(--lockin-sidebar-ideal), var(--lockin-sidebar-max));
+  --lockin-sidebar-width: clamp(
+    var(--lockin-sidebar-min),
+    var(--lockin-sidebar-ideal),
+    var(--lockin-sidebar-max)
+  );
   /* Content width is the remaining space after sidebar (100vw - sidebar width) */
   --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
 }
@@ -47,7 +52,8 @@ body.lockin-sidebar-open {
   margin: 0;
   min-height: 100vh;
   box-sizing: border-box;
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+  transition:
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     margin-inline-end 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -137,7 +143,7 @@ body.lockin-sidebar-open #lockin-page-wrapper > #region-main-box {
   outline: none;
 }
 
-#lockin-sidebar[data-state="collapsed"] {
+#lockin-sidebar[data-state='collapsed'] {
   transform: translateX(100%);
 }
 
@@ -170,7 +176,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   border: none !important;
   color: white !important;
   cursor: pointer !important;
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35), 0 2px 6px rgba(0, 0, 0, 0.08) !important;
+  box-shadow:
+    0 4px 14px rgba(37, 99, 235, 0.35),
+    0 2px 6px rgba(0, 0, 0, 0.08) !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -185,7 +193,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 }
 
 #lockin-toggle-pill:hover {
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45), 0 3px 8px rgba(0, 0, 0, 0.12) !important;
+  box-shadow:
+    0 6px 20px rgba(37, 99, 235, 0.45),
+    0 3px 8px rgba(0, 0, 0, 0.12) !important;
   transform: scale(1.05) !important;
 }
 
@@ -193,7 +203,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   transform: scale(0.95) !important;
 }
 
-#lockin-sidebar[data-state="expanded"] ~ #lockin-toggle-pill {
+#lockin-sidebar[data-state='expanded'] ~ #lockin-toggle-pill {
   opacity: 0;
   pointer-events: none;
 }
@@ -379,7 +389,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   gap: 0;
 }
 
-.lockin-chat-container[data-history-state="closed"] {
+.lockin-chat-container[data-history-state='closed'] {
   grid-template-columns: 0 1fr;
 }
 
@@ -392,12 +402,14 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
-  transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.24s ease;
+  transition:
+    transform 0.24s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.24s ease;
   flex-shrink: 0;
   overflow: hidden;
 }
 
-.lockin-chat-history-panel[data-state="closed"] {
+.lockin-chat-history-panel[data-state='closed'] {
   transform: translateX(-100%);
   width: 0;
   min-width: 0;
@@ -406,7 +418,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   border-right: none;
 }
 
-.lockin-chat-history-panel[data-state="open"] {
+.lockin-chat-history-panel[data-state='open'] {
   transform: translateX(0);
   opacity: 1;
 }
@@ -483,7 +495,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   font-size: 18px;
   color: #9ca3af;
   opacity: 0;
-  transition: opacity 0.15s ease, color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    color 0.15s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -820,7 +834,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
   flex-shrink: 0;
 }
 
@@ -1051,7 +1067,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s ease, background 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    background 0.15s ease;
   white-space: nowrap;
 }
 
@@ -1139,7 +1157,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   width: 100%;
   color: #111827;
   border-radius: 10px;
-  transition: box-shadow 0.15s ease, background 0.15s ease;
+  transition:
+    box-shadow 0.15s ease,
+    background 0.15s ease;
 }
 
 .lockin-note-title-input:focus {
@@ -1239,7 +1259,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.15s ease, visibility 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    visibility 0.15s ease;
   z-index: 100;
 }
 
@@ -1370,7 +1392,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 /* Scroll-past-end: Allow scrolling so last line can reach the middle of viewport.
    This is a standard UX pattern in editors (VS Code, Notion, etc.) */
 .lockin-note-editor-scroll::after {
-  content: "";
+  content: '';
   display: block;
   height: 50vh;
   pointer-events: none;
@@ -1485,7 +1507,8 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 }
 
 .lockin-note-text-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
   background: #f3f4f6;
   padding: 2px 5px;
@@ -1493,7 +1516,8 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 }
 
 .lockin-note-code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
     monospace;
   background: #0f172a;
   color: #e2e8f0;
@@ -1569,7 +1593,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   box-sizing: border-box;
   border-radius: 8px;
   border: 2px solid transparent;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
   cursor: pointer;
 }
 
@@ -1603,7 +1629,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   pointer-events: auto;
   touch-action: none;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-  transition: transform 0.1s ease, background 0.1s ease;
+  transition:
+    transform 0.1s ease,
+    background 0.1s ease;
 }
 
 .lockin-resize-handle:hover {
@@ -2076,8 +2104,12 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 }
 
 @keyframes lockin-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .lockin-confirm-dialog {
@@ -2819,7 +2851,7 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   .lockin-sidebar-resize-handle {
     display: none;
   }
-  
+
   .lockin-chat-history-panel {
     position: absolute;
     left: 0;

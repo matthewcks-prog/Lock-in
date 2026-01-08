@@ -11,10 +11,12 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - Chrome API wrappers (storage, messaging)
 
 **This folder SHOULD contain**:
+
 - Built extension bundles (`/extension/dist/ui`, `/extension/dist/libs`) used by manifest/background/popup
 - Chrome API wrappers and extension-specific utilities
 
 **This folder should NOT contain**:
+
 - Business logic (that's in `/core`)
 - Site-specific adapters (that's in `/integrations`)
 - API client logic (that's in `/api`)
@@ -31,12 +33,14 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 ## File Responsibilities
 
 ### `manifest.json`
+
 - Extension configuration
 - Content script declarations
 - Permissions
 - **DO NOT** add business logic here
 
 ### `background.js`
+
 - Service worker (Chrome extension lifecycle)
 - Context menu handlers
 - Session management (per-tab)
@@ -45,6 +49,7 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - **Transcript extraction**: Uses `ExtensionFetcher` class (Chrome-specific CORS/credentials) and delegates to core providers via fetcher interface. No extraction algorithm logic here - that's in `/core/transcripts/providers/`.
 
 ### `contentScript-react.js`
+
 - **Active** content script (legacy `contentScript.js` removed)
 - Thin orchestrator only: detect site adapter, extract context, and mount React sidebar bundle from `/extension/dist/ui`
 - Delegates to helpers in `extension/content/` for page context, state store, sidebar host, session restore, and interactions
@@ -56,11 +61,13 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
   - Site-specific detection (use adapters from `/integrations`)
 
 ### `content/`
+
 - `pageContext.js` (adapter + page context; bundled from `pageContext.ts` importing `/integrations`), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (selection + Escape).
 - Extend functionality by adding focused helpers here instead of inflating `contentScript-react.js`.
 - Rebuild `pageContext.js` when adapters/page context logic change: `node_modules/.bin/esbuild extension/content/pageContext.ts --bundle --format=iife --platform=browser --target=es2018 --global-name=LockInPageContext --outfile=extension/content/pageContext.js`.
 
 ### `dist/ui/`
+
 - Built bundle lives here (`extension/dist/ui/index.js`), source lives under `/ui/extension`
 - Sidebar orchestrator: `ui/extension/LockInSidebar.tsx` (wraps chat + notes)
 - Notes UI: `ui/extension/notes/` (`NotesPanel`, Lexical `NoteEditor`, asset helpers)
@@ -68,12 +75,14 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - **These components are NOT shared with the web app** - they are specific to the extension sidebar
 
 ### `popup/`
+
 - Popup HTML, JS, CSS
 - Settings UI
 - Auth UI
 - **DO NOT** contain business logic - call API/client functions
 
 ### `dist/libs/`
+
 - `initApi.js` - Bundled API/auth client (LockInAPI/LockInAuth)
 - `contentLibs.js` - Bundled content helpers (LockInContent/Logger/Messaging/Storage)
 - `webvttParser.js` - Bundled WebVTT parser for background usage
@@ -118,11 +127,8 @@ const { adapter, pageContext } = window.LockInContent.resolveAdapterContext(Logg
 const root = document.createElement('div');
 document.body.appendChild(root);
 ReactDOM.render(
-  <LockInSidebar 
-    courseContext={pageContext.courseContext}
-    siteAdapter={adapter}
-  />,
-  root
+  <LockInSidebar courseContext={pageContext.courseContext} siteAdapter={adapter} />,
+  root,
 );
 
 // 4. Handle Chrome-specific events
@@ -195,6 +201,7 @@ When adding new Chrome extension features:
 ## Common Mistakes
 
 ### âŒ Putting business logic in content script
+
 ```javascript
 // BAD
 function createNote(title, content) {
@@ -211,6 +218,7 @@ const note = await noteService.createNote({ title, content });
 ```
 
 ### âŒ Hardcoding site detection
+
 ```javascript
 // BAD
 if (url.includes('learning.monash.edu')) {
@@ -225,10 +233,11 @@ const context = pageContext.courseContext;
 ```
 
 ### âŒ Building HTML strings
+
 ```javascript
 // BAD
 function renderChat(messages) {
-  return messages.map(m => `<div>${m.content}</div>`).join('');
+  return messages.map((m) => `<div>${m.content}</div>`).join('');
 }
 ```
 
@@ -250,7 +259,3 @@ function renderChat(messages) {
 - Keep it simple: extension code should be thin wrappers
 
 **Remember**: Extension code is Chrome-specific glue. Business logic lives in `/core`.
-
-
-
-

@@ -85,19 +85,19 @@
 
 ## B) Symbol Index
 
-| Symbol | File Path | Purpose |
-| --- | --- | --- |
-| `LockInSidebar` | `ui/extension/LockInSidebar.tsx` | Transcript button + panel host |
-| `useTranscripts` | `ui/extension/transcripts/useTranscripts.ts` | Detect/extract + AI fallback orchestration |
-| `detectVideosSync` | `core/transcripts/videoDetection.ts` | Panopto + HTML5 detection |
-| `PanoptoProvider` | `core/transcripts/providers/panoptoProvider.ts` | Panopto caption extraction |
-| `extractPanoptoTranscript` | `extension/background.js` | Background Panopto caption fetch + parse |
-| `extractHtml5Transcript` | `extension/background.js` | Background HTML5 caption fetch + parse |
-| `handlePanoptoMediaUrlFetch` | `extension/background.js` | Panopto AI media URL entrypoint |
-| `PanoptoMediaResolver` | `extension/background.js` | Viewer/embed parsing + MAIN-world probe + range validation |
-| `panoptoRuntimeProbe` | `extension/background.js` | MAIN-world probe used by `chrome.scripting.executeScript` |
-| `fetchWithCredentials` | `extension/background.js` | Authenticated HTML/VTT fetch helper |
-| `transcribeWithAI` | `ui/extension/transcripts/useTranscripts.ts` | Starts AI transcription pipeline |
+| Symbol                       | File Path                                       | Purpose                                                    |
+| ---------------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `LockInSidebar`              | `ui/extension/LockInSidebar.tsx`                | Transcript button + panel host                             |
+| `useTranscripts`             | `ui/extension/transcripts/useTranscripts.ts`    | Detect/extract + AI fallback orchestration                 |
+| `detectVideosSync`           | `core/transcripts/videoDetection.ts`            | Panopto + HTML5 detection                                  |
+| `PanoptoProvider`            | `core/transcripts/providers/panoptoProvider.ts` | Panopto caption extraction                                 |
+| `extractPanoptoTranscript`   | `extension/background.js`                       | Background Panopto caption fetch + parse                   |
+| `extractHtml5Transcript`     | `extension/background.js`                       | Background HTML5 caption fetch + parse                     |
+| `handlePanoptoMediaUrlFetch` | `extension/background.js`                       | Panopto AI media URL entrypoint                            |
+| `PanoptoMediaResolver`       | `extension/background.js`                       | Viewer/embed parsing + MAIN-world probe + range validation |
+| `panoptoRuntimeProbe`        | `extension/background.js`                       | MAIN-world probe used by `chrome.scripting.executeScript`  |
+| `fetchWithCredentials`       | `extension/background.js`                       | Authenticated HTML/VTT fetch helper                        |
+| `transcribeWithAI`           | `ui/extension/transcripts/useTranscripts.ts`    | Starts AI transcription pipeline                           |
 
 ---
 

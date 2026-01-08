@@ -35,12 +35,14 @@ Look for these patterns in console logs:
 **User Message**: "Authentication required. Please log in to [Platform]."
 
 **Solutions**:
+
 1. Ensure you're logged into the video platform (Panopto/Echo360) in the same browser
 2. Refresh the page and try again
 3. Check if your session expired - log out and log back in
 4. For Panopto: Ensure you're accessing the video through your institution's portal
 
 **Console Indicators**:
+
 - HTTP 401 or 403 responses
 - Redirects to login pages
 - "AUTH_REQUIRED" in error messages
@@ -54,17 +56,20 @@ Look for these patterns in console logs:
 **User Message**: "Request timeout. The server took too long to respond."
 
 **Solutions**:
+
 1. Check your internet connection speed
 2. Try again - the server may have been temporarily slow
 3. If consistently timing out, the video platform may be experiencing issues
 4. Check if your network has firewall restrictions
 
 **Console Indicators**:
+
 - "AbortError" in error messages
 - "timeout" in error messages
 - Logs showing "Fetching (attempt X/4)" but no response
 
 **Technical Details**:
+
 - Default timeout: 30 seconds
 - Retry attempts: 3 (4 total attempts)
 - Uses exponential backoff between retries
@@ -78,6 +83,7 @@ Look for these patterns in console logs:
 **User Message**: "Network error. Please check your internet connection and ensure you're logged into [Platform]."
 
 **Solutions**:
+
 1. Check your internet connection
 2. Disable VPN if active (may cause CORS issues)
 3. Check browser extensions that might block requests
@@ -86,12 +92,14 @@ Look for these patterns in console logs:
 6. Ensure you're logged into the video platform
 
 **Console Indicators**:
+
 - "Failed to fetch" in error messages
 - "NetworkError" in error messages
 - "CORS" in error messages
 - "Network request failed" in error messages
 
 **Technical Details**:
+
 - Background service worker handles CORS automatically
 - If you see CORS errors, the background script may not be running
 
@@ -104,11 +112,13 @@ Look for these patterns in console logs:
 **User Message**: "This video has no captions available."
 
 **Solutions**:
+
 1. Use AI transcription fallback (if available)
 2. Contact your instructor to request captions
 3. Check if captions are enabled for this video on the platform
 
 **Console Indicators**:
+
 - "No captions found" in logs
 - Caption URL extraction returns null
 - Video metadata shows `hasCaptions: false`
@@ -122,16 +132,19 @@ Look for these patterns in console logs:
 **User Message**: "Failed to extract transcript: [error details]"
 
 **Solutions**:
+
 1. Try AI transcription fallback (if available)
 2. Report the issue with console logs
 3. The caption file format may be unsupported
 
 **Console Indicators**:
+
 - WebVTT parsing errors
 - JSON parsing errors
 - "Invalid format" in error messages
 
 **Technical Details**:
+
 - Supports WebVTT, JSON, and plain text formats
 - HTML entity decoding is applied automatically
 
@@ -144,11 +157,13 @@ Look for these patterns in console logs:
 **User Message**: "Invalid video data."
 
 **Solutions**:
+
 1. Refresh the page and try again
 2. Ensure the video is fully loaded
 3. Try a different video to isolate the issue
 
 **Console Indicators**:
+
 - Missing video ID or embed URL
 - Invalid video metadata
 - Video detection failed
@@ -162,6 +177,7 @@ Look for these patterns in console logs:
 **User Message**: "Invalid response from server."
 
 **Solutions**:
+
 1. Try again - may be a temporary server issue
 2. Check if the video platform is experiencing issues
 3. Report the issue with console logs
@@ -172,13 +188,15 @@ Look for these patterns in console logs:
 
 **Meaning**: Video media is in a non-ready state (Echo360 specific).
 
-**User Message**: 
+**User Message**:
+
 - `MEDIA_PROCESSING`: "Video is still processing. Please try again later."
 - `MEDIA_FAILED`: "Video processing failed."
 - `MEDIA_PRELIMINARY`: "Video has preliminary captions only."
 - `MEDIA_HIDDEN`: "Video captions are hidden."
 
 **Solutions**:
+
 1. Wait for processing to complete (for `MEDIA_PROCESSING`)
 2. Contact support if `MEDIA_FAILED`
 3. Use AI transcription fallback if available
@@ -192,6 +210,7 @@ Look for these patterns in console logs:
 **User Message**: "Transcripts are not available for this video."
 
 **Solutions**:
+
 1. Use AI transcription fallback (if available)
 2. Check if transcripts are enabled for this video
 
@@ -223,12 +242,14 @@ Look for these patterns in console logs:
 ### 4. Verify Video Detection
 
 Look for logs like:
+
 ```
 [Lock-in Transcript:Panopto] Detected video: { id: "...", embedUrl: "..." }
 [Lock-in Transcript:Echo360] Detected video: { id: "...", baseUrl: "..." }
 ```
 
 If no detection logs appear:
+
 - Video may not be on a supported platform
 - Page structure may have changed
 - Extension may not be injecting correctly
@@ -266,7 +287,8 @@ If no detection logs appear:
 
 **Symptoms**: `NETWORK_ERROR` or `TIMEOUT` errors
 
-**Solution**: 
+**Solution**:
+
 - Check internet connection
 - Disable VPN
 - Try different network
@@ -276,7 +298,8 @@ If no detection logs appear:
 
 **Symptoms**: Detection fails, unexpected errors
 
-**Solution**: 
+**Solution**:
+
 - Report the issue with console logs
 - Platform may have updated their structure
 - Extension may need updates
@@ -285,7 +308,8 @@ If no detection logs appear:
 
 **Symptoms**: `NETWORK_ERROR` with CORS messages
 
-**Solution**: 
+**Solution**:
+
 - Background service worker should handle this automatically
 - If you see CORS errors, background script may not be running
 - Check `chrome://extensions` for service worker status
@@ -294,7 +318,8 @@ If no detection logs appear:
 
 **Symptoms**: `PARSE_ERROR` errors
 
-**Solution**: 
+**Solution**:
+
 - Use AI transcription fallback
 - Report the issue with the caption file URL
 
@@ -308,6 +333,7 @@ If caption extraction fails, AI transcription may be available:
 4. Transcript will appear when ready
 
 **Note**: AI transcription requires:
+
 - Media URL to be accessible
 - Backend service to be running
 - OpenAI API to be configured

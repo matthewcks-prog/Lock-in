@@ -1,16 +1,16 @@
-const { supabase } = require("../supabaseClient");
+const { supabase } = require('../supabaseClient');
 
 async function getTranscriptByFingerprint({ fingerprint, userId }) {
   if (!fingerprint || !userId) return null;
   const { data, error } = await supabase
-    .from("transcripts")
-    .select("*")
-    .eq("fingerprint", fingerprint)
-    .eq("user_id", userId)
+    .from('transcripts')
+    .select('*')
+    .eq('fingerprint', fingerprint)
+    .eq('user_id', userId)
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") {
+    if (error.code === 'PGRST116') {
       return null;
     }
     throw error;
@@ -43,8 +43,8 @@ async function upsertTranscriptCache({
   };
 
   const { data, error } = await supabase
-    .from("transcripts")
-    .upsert(payload, { onConflict: "user_id,fingerprint" })
+    .from('transcripts')
+    .upsert(payload, { onConflict: 'user_id,fingerprint' })
     .select()
     .single();
 
@@ -70,16 +70,12 @@ async function createTranscriptJob({
     media_url_normalized: mediaUrlNormalized,
     duration_ms: durationMs,
     provider,
-    status: "created",
+    status: 'created',
     expected_total_chunks: expectedTotalChunks ?? null,
     bytes_received: 0,
   };
 
-  const { data, error } = await supabase
-    .from("transcript_jobs")
-    .insert(payload)
-    .select()
-    .single();
+  const { data, error } = await supabase.from('transcript_jobs').insert(payload).select().single();
 
   if (error) {
     throw error;
@@ -88,14 +84,14 @@ async function createTranscriptJob({
 }
 
 async function getTranscriptJob({ jobId, userId }) {
-  let query = supabase.from("transcript_jobs").select("*").eq("id", jobId);
+  let query = supabase.from('transcript_jobs').select('*').eq('id', jobId);
   if (userId) {
-    query = query.eq("user_id", userId);
+    query = query.eq('user_id', userId);
   }
 
   const { data, error } = await query.single();
   if (error) {
-    if (error.code === "PGRST116") {
+    if (error.code === 'PGRST116') {
       return null;
     }
     throw error;
@@ -109,9 +105,9 @@ async function updateTranscriptJob({ jobId, userId, updates }) {
     updated_at: new Date().toISOString(),
   };
 
-  let query = supabase.from("transcript_jobs").update(payload).eq("id", jobId);
+  let query = supabase.from('transcript_jobs').update(payload).eq('id', jobId);
   if (userId) {
-    query = query.eq("user_id", userId);
+    query = query.eq('user_id', userId);
   }
 
   const { data, error } = await query.select().single();
@@ -124,34 +120,34 @@ async function updateTranscriptJob({ jobId, userId, updates }) {
 async function countTranscriptJobsSince({ userId, since }) {
   if (!userId || !since) return 0;
   const { error, count } = await supabase
-    .from("transcript_jobs")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("created_at", since);
+    .from('transcript_jobs')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .gte('created_at', since);
 
   if (error) {
     throw error;
   }
-  return typeof count === "number" ? count : 0;
+  return typeof count === 'number' ? count : 0;
 }
 
 async function countActiveTranscriptJobs({ userId }) {
   if (!userId) return 0;
   const { error, count } = await supabase
-    .from("transcript_jobs")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .in("status", ["created", "uploading", "uploaded", "processing"]);
+    .from('transcript_jobs')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .in('status', ['created', 'uploading', 'uploaded', 'processing']);
 
   if (error) {
     throw error;
   }
-  return typeof count === "number" ? count : 0;
+  return typeof count === 'number' ? count : 0;
 }
 
 async function insertTranscriptJobChunk({ jobId, chunkIndex, byteSize }) {
   const { data, error } = await supabase
-    .from("transcript_job_chunks")
+    .from('transcript_job_chunks')
     .insert({
       job_id: jobId,
       chunk_index: chunkIndex,
@@ -161,7 +157,7 @@ async function insertTranscriptJobChunk({ jobId, chunkIndex, byteSize }) {
     .single();
 
   if (error) {
-    if (error.code === "23505") {
+    if (error.code === '23505') {
       return { inserted: false };
     }
     throw error;
@@ -176,19 +172,19 @@ async function getTranscriptJobChunkStats(jobId) {
   }
 
   const { count, error: countError } = await supabase
-    .from("transcript_job_chunks")
-    .select("chunk_index", { count: "exact", head: true })
-    .eq("job_id", jobId);
+    .from('transcript_job_chunks')
+    .select('chunk_index', { count: 'exact', head: true })
+    .eq('job_id', jobId);
 
   if (countError) {
     throw countError;
   }
 
   const { data: minRows, error: minError } = await supabase
-    .from("transcript_job_chunks")
-    .select("chunk_index")
-    .eq("job_id", jobId)
-    .order("chunk_index", { ascending: true })
+    .from('transcript_job_chunks')
+    .select('chunk_index')
+    .eq('job_id', jobId)
+    .order('chunk_index', { ascending: true })
     .limit(1);
 
   if (minError) {
@@ -196,27 +192,21 @@ async function getTranscriptJobChunkStats(jobId) {
   }
 
   const { data: maxRows, error: maxError } = await supabase
-    .from("transcript_job_chunks")
-    .select("chunk_index")
-    .eq("job_id", jobId)
-    .order("chunk_index", { ascending: false })
+    .from('transcript_job_chunks')
+    .select('chunk_index')
+    .eq('job_id', jobId)
+    .order('chunk_index', { ascending: false })
     .limit(1);
 
   if (maxError) {
     throw maxError;
   }
 
-  const minIndex =
-    Array.isArray(minRows) && minRows.length > 0
-      ? minRows[0].chunk_index
-      : null;
-  const maxIndex =
-    Array.isArray(maxRows) && maxRows.length > 0
-      ? maxRows[0].chunk_index
-      : null;
+  const minIndex = Array.isArray(minRows) && minRows.length > 0 ? minRows[0].chunk_index : null;
+  const maxIndex = Array.isArray(maxRows) && maxRows.length > 0 ? maxRows[0].chunk_index : null;
 
   return {
-    count: typeof count === "number" ? count : 0,
+    count: typeof count === 'number' ? count : 0,
     minIndex,
     maxIndex,
   };
@@ -225,11 +215,11 @@ async function getTranscriptJobChunkStats(jobId) {
 async function listActiveTranscriptJobs({ userId }) {
   if (!userId) return [];
   const { data, error } = await supabase
-    .from("transcript_jobs")
-    .select("id, status, fingerprint, media_url, created_at, updated_at")
-    .eq("user_id", userId)
-    .in("status", ["created", "uploading", "uploaded", "processing"])
-    .order("created_at", { ascending: false });
+    .from('transcript_jobs')
+    .select('id, status, fingerprint, media_url, created_at, updated_at')
+    .eq('user_id', userId)
+    .in('status', ['created', 'uploading', 'uploaded', 'processing'])
+    .order('created_at', { ascending: false });
 
   if (error) {
     throw error;
@@ -242,10 +232,10 @@ async function listTranscriptJobsByStatusBefore({ statuses, updatedBefore }) {
   if (!updatedBefore) return [];
 
   const { data, error } = await supabase
-    .from("transcript_jobs")
-    .select("*")
-    .in("status", statuses)
-    .lt("updated_at", updatedBefore);
+    .from('transcript_jobs')
+    .select('*')
+    .in('status', statuses)
+    .lt('updated_at', updatedBefore);
 
   if (error) {
     throw error;

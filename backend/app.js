@@ -5,17 +5,13 @@
  * HTTP server itself. That makes it easy to import into tests.
  */
 
-const express = require("express");
-const cors = require("cors");
-const {
-  MAX_SELECTION_LENGTH,
-  MAX_USER_MESSAGE_LENGTH,
-  isOriginAllowed,
-} = require("./config");
-const lockinRoutes = require("./routes/lockinRoutes");
-const noteRoutes = require("./routes/noteRoutes");
-const transcriptsRoutes = require("./routes/transcriptsRoutes");
-const { errorHandler, notFoundHandler } = require("./middleware/errorHandler");
+const express = require('express');
+const cors = require('cors');
+const { MAX_SELECTION_LENGTH, MAX_USER_MESSAGE_LENGTH, isOriginAllowed } = require('./config');
+const lockinRoutes = require('./routes/lockinRoutes');
+const noteRoutes = require('./routes/noteRoutes');
+const transcriptsRoutes = require('./routes/transcriptsRoutes');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 
 function createApp() {
   const app = express();
@@ -31,30 +27,32 @@ function createApp() {
         const fs = require('fs');
         const logPath = 'c:\\Users\\matth\\Lock-in\\.cursor\\debug.log';
         try {
-          const logEntry = JSON.stringify({
-            location: 'app.js:29',
-            message: 'CORS origin check',
-            data: { origin, method: 'CORS middleware', requestType: 'preflight or actual' },
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'B2'
-          }) + '\n';
+          const logEntry =
+            JSON.stringify({
+              location: 'app.js:29',
+              message: 'CORS origin check',
+              data: { origin, method: 'CORS middleware', requestType: 'preflight or actual' },
+              timestamp: Date.now(),
+              sessionId: 'debug-session',
+              runId: 'run1',
+              hypothesisId: 'B2',
+            }) + '\n';
           fs.appendFileSync(logPath, logEntry, 'utf8');
         } catch (e) {}
         // #endregion
         const allowed = isOriginAllowed(origin);
         // #region agent log
         try {
-          const logEntry = JSON.stringify({
-            location: 'app.js:31',
-            message: 'CORS callback decision',
-            data: { origin, allowed, willAllow: allowed },
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'B2'
-          }) + '\n';
+          const logEntry =
+            JSON.stringify({
+              location: 'app.js:31',
+              message: 'CORS callback decision',
+              data: { origin, allowed, willAllow: allowed },
+              timestamp: Date.now(),
+              sessionId: 'debug-session',
+              runId: 'run1',
+              hypothesisId: 'B2',
+            }) + '\n';
           fs.appendFileSync(logPath, logEntry, 'utf8');
         } catch (e) {}
         // #endregion
@@ -66,34 +64,30 @@ function createApp() {
         }
       },
       credentials: true,
-    })
+    }),
   );
 
   // Lightweight structured request logging
   app.use((req, res, next) => {
     const body = req.body || {};
     const selection = body.selection || body.text;
-    const chatLength = Array.isArray(body.chatHistory)
-      ? body.chatHistory.length
-      : 0;
+    const chatLength = Array.isArray(body.chatHistory) ? body.chatHistory.length : 0;
 
     if (selection || chatLength) {
       console.log(
         `[${new Date().toISOString()}] ${req.method} ${req.path} - Mode: ${
-          body.mode || "n/a"
-        }, Selection length: ${
-          selection ? selection.length : 0
-        }, Chat messages: ${chatLength}`
+          body.mode || 'n/a'
+        }, Selection length: ${selection ? selection.length : 0}, Chat messages: ${chatLength}`,
       );
     }
     next();
   });
 
   // Health check
-  app.get("/health", (req, res) => {
+  app.get('/health', (req, res) => {
     res.json({
-      status: "ok",
-      message: "Lock-in API is running",
+      status: 'ok',
+      message: 'Lock-in API is running',
       limits: {
         maxSelectionLength: MAX_SELECTION_LENGTH,
         maxUserMessageLength: MAX_USER_MESSAGE_LENGTH,
@@ -102,9 +96,9 @@ function createApp() {
   });
 
   // API routes
-  app.use("/api", lockinRoutes);
-  app.use("/api", noteRoutes);
-  app.use("/api", transcriptsRoutes);
+  app.use('/api', lockinRoutes);
+  app.use('/api', noteRoutes);
+  app.use('/api', transcriptsRoutes);
 
   // 404 handler for unmatched routes
   app.use(notFoundHandler);

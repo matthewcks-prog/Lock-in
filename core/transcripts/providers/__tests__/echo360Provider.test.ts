@@ -29,7 +29,7 @@ describe('Echo360 URL utilities', () => {
     const echoUrl =
       'https://echo360.net.au/lesson/99999999-8888-7777-6666-555555555555/media/ffffffff-eeee-dddd-cccc-bbbbbbbbbbbb';
     const ltiUrl = `https://learning.monash.edu/mod/lti/launch.php?url=${encodeURIComponent(
-      echoUrl
+      echoUrl,
     )}`;
     const info = extractEcho360Info(ltiUrl);
     expect(info?.lessonId).toBe('99999999-8888-7777-6666-555555555555');
@@ -95,9 +95,7 @@ describe('Echo360Provider', () => {
       fetchJson: vi.fn().mockRejectedValueOnce(new Error('HTTP 404: Not Found')),
       fetchWithCredentials: vi
         .fn()
-        .mockResolvedValueOnce(
-          'WEBVTT\n\n00:00:00.000 --> 00:00:04.000\nHello Echo'
-        ),
+        .mockResolvedValueOnce('WEBVTT\n\n00:00:00.000 --> 00:00:04.000\nHello Echo'),
     };
 
     const video = {
@@ -120,7 +118,7 @@ describe('Echo360Provider', () => {
 
   it('detects videos and resolves mediaId from classroom HTML', async () => {
     const provider = new Echo360Provider();
-    
+
     // Mock fetcher that simulates classroom HTML with mediaId
     const fetcher = {
       fetchJson: vi.fn(),
@@ -133,13 +131,12 @@ describe('Echo360Provider', () => {
       `),
       fetchHtmlWithRedirectInfo: vi.fn().mockResolvedValue({
         html: `<script>{"mediaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}</script>`,
-        finalUrl: 'https://echo360.net.au/lesson/11111111-2222-3333-4444-555555555555/classroom'
+        finalUrl: 'https://echo360.net.au/lesson/11111111-2222-3333-4444-555555555555/classroom',
       }),
     };
 
     const context = {
-      pageUrl:
-        'https://echo360.net.au/lesson/11111111-2222-3333-4444-555555555555/classroom',
+      pageUrl: 'https://echo360.net.au/lesson/11111111-2222-3333-4444-555555555555/classroom',
       iframes: [],
     };
 
@@ -154,29 +151,26 @@ describe('Echo360Provider', () => {
 
   it('resolves mediaId from lesson API when HTML extraction fails', async () => {
     const provider = new Echo360Provider();
-    
+
     // Mock fetcher that simulates classroom HTML without mediaId,
     // but lesson API returns the medias array
     const fetcher = {
       fetchJson: vi.fn().mockResolvedValue({
         data: {
-          medias: [
-            { id: 'cdb84b16-ea4c-4990-8967-1184eba549de', type: 'video' }
-          ]
-        }
+          medias: [{ id: 'cdb84b16-ea4c-4990-8967-1184eba549de', type: 'video' }],
+        },
       }),
       fetchWithCredentials: vi.fn().mockResolvedValue(`
         <html><body>No media id here</body></html>
       `),
       fetchHtmlWithRedirectInfo: vi.fn().mockResolvedValue({
         html: `<html><body>No media id here</body></html>`,
-        finalUrl: 'https://echo360.net.au/lesson/G_6f71556b-833c-468e-9aba-89fbc66d6e6f/classroom'
+        finalUrl: 'https://echo360.net.au/lesson/G_6f71556b-833c-468e-9aba-89fbc66d6e6f/classroom',
       }),
     };
 
     const context = {
-      pageUrl:
-        'https://echo360.net.au/lesson/G_6f71556b-833c-468e-9aba-89fbc66d6e6f/classroom',
+      pageUrl: 'https://echo360.net.au/lesson/G_6f71556b-833c-468e-9aba-89fbc66d6e6f/classroom',
       iframes: [],
     };
 
@@ -187,16 +181,16 @@ describe('Echo360Provider', () => {
       echoMediaId: 'cdb84b16-ea4c-4990-8967-1184eba549de',
       echoBaseUrl: 'https://echo360.net.au',
     });
-    
+
     // Verify the lesson API was called
     expect(fetcher.fetchJson).toHaveBeenCalledWith(
-      expect.stringContaining('/api/ui/echoplayer/lessons/')
+      expect.stringContaining('/api/ui/echoplayer/lessons/'),
     );
   });
 
   it('detects all videos from syllabus API on section pages', async () => {
     const provider = new Echo360Provider();
-    
+
     // Mock syllabus API response with multiple lessons
     const syllabusResponse = {
       status: 'ok',
@@ -276,10 +270,10 @@ describe('Echo360Provider', () => {
     };
 
     const videos = await provider.detectVideosAsync!(context, fetcher);
-    
+
     // Should detect all 3 videos from syllabus
     expect(videos).toHaveLength(3);
-    
+
     // Verify first video
     expect(videos[0]).toMatchObject({
       id: 'cdb84b16-ea4c-4990-8967-1184eba549de',
@@ -289,30 +283,30 @@ describe('Echo360Provider', () => {
     });
     // Title should not include the date (date display was removed from UI)
     expect(videos[0].title).toBe('FIT2100_CL_S2/Class/01_OnCampus/Operating systems');
-    
+
     // Verify second video
     expect(videos[1]).toMatchObject({
       id: 'aabbccdd-1111-2222-3333-444455556666',
       provider: 'echo360',
       echoMediaId: 'aabbccdd-1111-2222-3333-444455556666',
     });
-    
+
     // Verify third video
     expect(videos[2]).toMatchObject({
       id: 'deadbeef-cafe-babe-face-123456789abc',
       provider: 'echo360',
       echoMediaId: 'deadbeef-cafe-babe-face-123456789abc',
     });
-    
+
     // Verify syllabus API was called with correct URL
     expect(fetcher.fetchJson).toHaveBeenCalledWith(
-      'https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/syllabus'
+      'https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/syllabus',
     );
   });
 
   it('skips unavailable media in syllabus response', async () => {
     const provider = new Echo360Provider();
-    
+
     const syllabusResponse = {
       status: 'ok',
       data: [
@@ -337,7 +331,7 @@ describe('Echo360Provider', () => {
     };
 
     const videos = await provider.detectVideosAsync!(context, fetcher);
-    
+
     // Should only include the available media
     expect(videos).toHaveLength(1);
     expect(videos[0].echoMediaId).toBe('available-media');
@@ -440,10 +434,7 @@ describe('Echo360Provider', () => {
     const videos = await provider.detectVideosAsync!(context, fetcher);
 
     expect(videos).toHaveLength(2);
-    expect(videos.map(video => video.echoMediaId)).toEqual([
-      'audio-media',
-      'audio-mime',
-    ]);
+    expect(videos.map((video) => video.echoMediaId)).toEqual(['audio-media', 'audio-mime']);
   });
 
   it('includes media when mediaType is missing', async () => {
@@ -478,33 +469,41 @@ describe('Echo360Provider', () => {
 
 describe('Section page detection', () => {
   it('extracts section ID from URL', () => {
-    expect(extractSectionId('https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/syllabus'))
-      .toBe('19bae95c-ee99-44c1-975d-c45f07ca3db7');
-    expect(extractSectionId('https://echo360.net.au/section/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/home'))
-      .toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
-    expect(extractSectionId('https://echo360.net.au/lesson/123/classroom'))
-      .toBeNull();
-    expect(extractSectionId('https://example.com/some/page'))
-      .toBeNull();
+    expect(
+      extractSectionId(
+        'https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/syllabus',
+      ),
+    ).toBe('19bae95c-ee99-44c1-975d-c45f07ca3db7');
+    expect(
+      extractSectionId('https://echo360.net.au/section/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/home'),
+    ).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(extractSectionId('https://echo360.net.au/lesson/123/classroom')).toBeNull();
+    expect(extractSectionId('https://example.com/some/page')).toBeNull();
   });
 
   it('detects section pages correctly', () => {
     // Section pages
-    expect(isEcho360SectionPage('https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/syllabus'))
-      .toBe(true);
-    expect(isEcho360SectionPage('https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/home'))
-      .toBe(true);
-    expect(isEcho360SectionPage('https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7'))
-      .toBe(true);
-    
+    expect(
+      isEcho360SectionPage(
+        'https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/syllabus',
+      ),
+    ).toBe(true);
+    expect(
+      isEcho360SectionPage(
+        'https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7/home',
+      ),
+    ).toBe(true);
+    expect(
+      isEcho360SectionPage('https://echo360.net.au/section/19bae95c-ee99-44c1-975d-c45f07ca3db7'),
+    ).toBe(true);
+
     // Not section pages - lesson pages
-    expect(isEcho360SectionPage('https://echo360.net.au/lesson/abc123/classroom'))
-      .toBe(false);
-    expect(isEcho360SectionPage('https://echo360.net.au/lessons/abc123'))
-      .toBe(false);
-    
+    expect(isEcho360SectionPage('https://echo360.net.au/lesson/abc123/classroom')).toBe(false);
+    expect(isEcho360SectionPage('https://echo360.net.au/lessons/abc123')).toBe(false);
+
     // Not section pages - non-Echo360
-    expect(isEcho360SectionPage('https://example.com/section/19bae95c-ee99-44c1-975d-c45f07ca3db7'))
-      .toBe(false);
+    expect(
+      isEcho360SectionPage('https://example.com/section/19bae95c-ee99-44c1-975d-c45f07ca3db7'),
+    ).toBe(false);
   });
 });

@@ -7,21 +7,21 @@
  * and controllers/ folders to keep things testable and maintainable.
  */
 
-require("dotenv").config();
+require('dotenv').config();
 
-const { createApp } = require("./app");
-const { PORT } = require("./config");
-const { startTranscriptJobReaper } = require("./services/transcriptsService");
+const { createApp } = require('./app');
+const { PORT } = require('./config');
+const { startTranscriptJobReaper } = require('./services/transcriptsService');
 
 const app = createApp();
 
 app.listen(PORT, () => {
   console.log(`Lock-in backend server running on http://localhost:${PORT}`);
-  console.log("Ready to help students learn!");
+  console.log('Ready to help students learn!');
 
   if (!process.env.OPENAI_API_KEY) {
-    console.warn("WARNING: OPENAI_API_KEY not found in environment variables!");
-    console.warn("   Please create a .env file with your OpenAI API key.");
+    console.warn('WARNING: OPENAI_API_KEY not found in environment variables!');
+    console.warn('   Please create a .env file with your OpenAI API key.');
   }
 
   startTranscriptJobReaper();

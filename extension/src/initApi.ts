@@ -1,16 +1,16 @@
 /**
  * Initialize API and Auth Clients for Extension
- * 
+ *
  * This file wires together the Chrome-specific storage with the Chrome-agnostic
  * API and auth clients. It is the bridge between extension code and shared code.
- * 
+ *
  * This is bundled by vite.config.initApi.ts into extension/dist/libs/initApi.js (IIFE format)
  * and exposes window.LockInAuth and window.LockInAPI for use by content scripts.
  */
 
-import { createAuthClient, type AuthClient } from "../../api/auth";
-import { createApiClient, type ApiClient } from "../../api/client";
-import { chromeStorage } from "./chromeStorage";
+import { createAuthClient, type AuthClient } from '../../api/auth';
+import { createApiClient, type ApiClient } from '../../api/client';
+import { chromeStorage } from './chromeStorage';
 
 /**
  * Extension configuration from window.LOCKIN_CONFIG (set by config.js)
@@ -27,12 +27,12 @@ export interface LockInConfig {
  * Get config from window (set by config.js)
  */
 export function getConfig(): LockInConfig {
-  const config = (typeof window !== "undefined" && (window as any).LOCKIN_CONFIG) || {};
+  const config = (typeof window !== 'undefined' && (window as any).LOCKIN_CONFIG) || {};
   return {
-    backendUrl: config.BACKEND_URL || "http://localhost:3000",
-    supabaseUrl: config.SUPABASE_URL || "",
-    supabaseAnonKey: config.SUPABASE_ANON_KEY || "",
-    sessionStorageKey: config.SESSION_STORAGE_KEY || "lockinSupabaseSession",
+    backendUrl: config.BACKEND_URL || 'http://localhost:3000',
+    supabaseUrl: config.SUPABASE_URL || '',
+    supabaseAnonKey: config.SUPABASE_ANON_KEY || '',
+    sessionStorageKey: config.SESSION_STORAGE_KEY || 'lockinSupabaseSession',
     tokenExpiryBufferMs: Number(config.TOKEN_EXPIRY_BUFFER_MS) || 60000,
   };
 }
@@ -49,7 +49,7 @@ export function initAuthClient(): AuthClient {
       sessionStorageKey: config.sessionStorageKey,
       tokenExpiryBufferMs: config.tokenExpiryBufferMs,
     },
-    chromeStorage
+    chromeStorage,
   );
 }
 
@@ -83,10 +83,10 @@ export function initClients(): { authClient: AuthClient; apiClient: ApiClient } 
   cachedClients = { authClient, apiClient };
 
   // Expose globally for legacy code and content scripts
-  if (typeof window !== "undefined") {
+  if (typeof window !== 'undefined') {
     (window as any).LockInAuth = authClient;
     (window as any).LockInAPI = apiClient;
-    
+
     // Also expose as authClient/apiClient for backward compatibility
     (window as any).authClient = authClient;
     (window as any).apiClient = apiClient;
@@ -103,10 +103,10 @@ export function getClients(): { authClient: AuthClient; apiClient: ApiClient } {
 }
 
 // Auto-initialize when loaded in browser context
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   initClients();
 }
 
 // Re-export types for convenience
-export type { AuthClient } from "../../api/auth";
-export type { ApiClient } from "../../api/client";
+export type { AuthClient } from '../../api/auth';
+export type { ApiClient } from '../../api/client';

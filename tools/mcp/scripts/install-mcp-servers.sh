@@ -19,6 +19,7 @@ servers=(
     "@modelcontextprotocol/server-playwright"
     "@modelcontextprotocol/server-fetch"
     "@modelcontextprotocol/server-postgres"
+    "@modelcontextprotocol/server-context7"
 )
 
 echo "Checking MCP server availability via npx..."

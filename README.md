@@ -15,12 +15,14 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 ### Extension (`extension/`)
 
 **Core Components:**
+
 - `contentScript-react.js` - React-based content script that mounts the sidebar bundle, handles Ctrl/Cmd selection triggers, and syncs the 65/35 layout class
 - `dist/ui/index.js` - Built React sidebar bundle (source lives in `/ui/extension`)
 - `background.js` - Service worker for context menus and session management
 - `popup.js` - Settings and authentication UI (reads `window.LockInAuth` from the bundled client)
 
 **Shared Modules:**
+
 - `config.js` - Runtime configuration (backend URL, Supabase credentials)
 - `messaging.js` - Typed message system for extension communication
 - `storage.js` - Wrapper for chrome.storage operations
@@ -29,6 +31,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 ### Backend (`backend/`)
 
 **Structure:**
+
 - `index.js` - Server entry point
 - `app.js` - Express application setup
 - `config.js` - Centralized configuration
@@ -45,16 +48,19 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 ### 1. Backend Setup
 
 1. Navigate to the backend directory:
+
    ```bash
    cd backend
    ```
 
 2. Install dependencies:
+
    ```bash
    npm install
    ```
 
 3. Create a `.env` file:
+
    ```env
    OPENAI_API_KEY=your_openai_api_key_here
    PORT=3000
@@ -63,6 +69,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
    ```
 
 4. Start the development server:
+
    ```bash
    npm run dev
    ```
@@ -72,11 +79,12 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 ### 2. Chrome Extension Setup
 
 1. Configure `extension/config.js`:
+
    ```javascript
    window.LOCKIN_CONFIG = {
-     BACKEND_URL: "http://localhost:3000",
-     SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
-     SUPABASE_ANON_KEY: "your-anon-key",
+     BACKEND_URL: 'http://localhost:3000',
+     SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
+     SUPABASE_ANON_KEY: 'your-anon-key',
    };
    ```
 
@@ -93,17 +101,20 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 ### 3. Usage
 
 #### Method 1: Keyboard Selection
+
 1. Hold **Ctrl** (Windows/Linux) or **Cmd** (Mac) and highlight any text
 2. The sidebar will open automatically
 3. Choose your mode: **Explain** or **General**
 4. View the AI-generated result in the sidebar
 
 #### Method 2: Right-Click Context Menu
+
 1. Highlight any text on any webpage
 2. Right-click and select "Lock-in: Explain"
 3. The sidebar will open with the selected mode
 
 #### Customizing Settings
+
 1. Click the Lock-in extension icon in Chrome's toolbar
 2. Adjust your preferred language for translations
 3. Set your difficulty level (High School or First-Year University)
@@ -116,6 +127,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 Main endpoint for processing text.
 
 **Request Body:**
+
 ```json
 {
   "selection": "The text to process",
@@ -128,6 +140,7 @@ Main endpoint for processing text.
 ```
 
 **Response:**
+
 ```json
 {
   "chatId": "uuid",
@@ -146,6 +159,7 @@ Main endpoint for processing text.
 List recent chats for authenticated user.
 
 **Query Parameters:**
+
 - `limit` (optional): Number of chats to return (default: 5)
 
 ### `DELETE /api/chats/:chatId`
@@ -198,23 +212,28 @@ The extension follows best practices:
 ### Backend Issues
 
 **Problem**: "OPENAI_API_KEY not found"
+
 - **Solution**: Make sure you created a `.env` file with your API key
 
 **Problem**: "Port 3000 already in use"
+
 - **Solution**: Change the PORT in `.env` or stop other services using port 3000
 
 ### Extension Issues
 
 **Problem**: Extension not loading
+
 - **Solution**: Check that all files are present, especially `manifest.json`
 
 **Problem**: No response when clicking buttons
+
 - **Solution**:
   1. Check that backend is running on `http://localhost:3000`
   2. Check Chrome DevTools Console for errors (F12)
   3. Verify `BACKEND_URL` in `config.js` matches your backend
 
 **Problem**: Authentication not working
+
 - **Solution**: Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `config.js`
 
 ## License

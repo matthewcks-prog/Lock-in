@@ -1,11 +1,9 @@
-const { randomUUID } = require("crypto");
-const { supabase } = require("../supabaseClient");
-const {
-  NOTE_ASSETS_BUCKET,
-} = require("../config");
-const noteAssetsRepository = require("../repositories/noteAssetsRepository");
-const notesRepository = require("../repositories/notesRepository");
-const { validateAssetFile } = require("../utils/assetValidation");
+const { randomUUID } = require('crypto');
+const { supabase } = require('../supabaseClient');
+const { NOTE_ASSETS_BUCKET } = require('../config');
+const noteAssetsRepository = require('../repositories/noteAssetsRepository');
+const notesRepository = require('../repositories/notesRepository');
+const { validateAssetFile } = require('../utils/assetValidation');
 
 // POST /api/notes/:noteId/assets
 async function uploadNoteAsset(req, res) {
@@ -17,7 +15,7 @@ async function uploadNoteAsset(req, res) {
     // Verify note ownership
     const note = await notesRepository.getNoteForUser({ userId, noteId });
     if (!note) {
-      return res.status(404).json({ error: "Note not found" });
+      return res.status(404).json({ error: 'Note not found' });
     }
 
     // Validate file and derive type/extension
@@ -38,8 +36,8 @@ async function uploadNoteAsset(req, res) {
       });
 
     if (uploadError) {
-      console.error("Failed to upload asset to storage:", uploadError);
-      return res.status(500).json({ error: "Failed to upload file" });
+      console.error('Failed to upload asset to storage:', uploadError);
+      return res.status(500).json({ error: 'Failed to upload file' });
     }
 
     // Persist DB record
@@ -57,7 +55,7 @@ async function uploadNoteAsset(req, res) {
       .getPublicUrl(storagePath);
 
     if (publicUrlError) {
-      console.warn("Failed to generate public URL for asset:", publicUrlError);
+      console.warn('Failed to generate public URL for asset:', publicUrlError);
     }
 
     const url = publicUrlData?.publicUrl || null;
@@ -68,9 +66,7 @@ async function uploadNoteAsset(req, res) {
     });
   } catch (err) {
     console.error(err);
-    return res
-      .status(500)
-      .json({ error: "Unexpected error uploading asset" });
+    return res.status(500).json({ error: 'Unexpected error uploading asset' });
   }
 }
 
@@ -83,25 +79,20 @@ async function listNoteAssets(req, res) {
     // Ensure note exists and belongs to user
     const note = await notesRepository.getNoteForUser({ userId, noteId });
     if (!note) {
-      return res.status(404).json({ error: "Note not found" });
+      return res.status(404).json({ error: 'Note not found' });
     }
 
-    const assets = await noteAssetsRepository.listAssetsForNote(
-      noteId,
-      userId
-    );
+    const assets = await noteAssetsRepository.listAssetsForNote(noteId, userId);
 
     const assetsWithUrls = assets.map((asset) => {
-      const { data } = supabase.storage
-        .from(NOTE_ASSETS_BUCKET)
-        .getPublicUrl(asset.storage_path);
+      const { data } = supabase.storage.from(NOTE_ASSETS_BUCKET).getPublicUrl(asset.storage_path);
       return { ...asset, url: data?.publicUrl || null };
     });
 
     res.json(assetsWithUrls);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to list assets" });
+    res.status(500).json({ error: 'Failed to list assets' });
   }
 }
 
@@ -113,7 +104,7 @@ async function deleteNoteAsset(req, res) {
 
     const asset = await noteAssetsRepository.getAssetById(assetId, userId);
     if (!asset) {
-      return res.status(404).json({ error: "Asset not found" });
+      return res.status(404).json({ error: 'Asset not found' });
     }
 
     const { error: storageError } = await supabase.storage
@@ -121,8 +112,8 @@ async function deleteNoteAsset(req, res) {
       .remove([asset.storage_path]);
 
     if (storageError) {
-      console.error("Failed to delete asset from storage:", storageError);
-      return res.status(500).json({ error: "Failed to delete asset" });
+      console.error('Failed to delete asset from storage:', storageError);
+      return res.status(500).json({ error: 'Failed to delete asset' });
     }
 
     await noteAssetsRepository.deleteAsset(assetId, userId);
@@ -130,7 +121,7 @@ async function deleteNoteAsset(req, res) {
     res.status(204).send();
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to delete asset" });
+    res.status(500).json({ error: 'Failed to delete asset' });
   }
 }
 

@@ -22,12 +22,7 @@ const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks to match backend
 /**
  * Known SSO/auth domains that indicate session expiration
  */
-const SSO_DOMAINS = [
-  "okta.com",
-  "auth0.com",
-  "login.microsoftonline.com",
-  "accounts.google.com",
-];
+const SSO_DOMAINS = ['okta.com', 'auth0.com', 'login.microsoftonline.com', 'accounts.google.com'];
 
 /**
  * Check if a URL is an SSO/authentication redirect
@@ -48,11 +43,11 @@ function isCdnUrl(url) {
   try {
     const hostname = new URL(url).hostname.toLowerCase();
     return (
-      hostname.includes("cloudfront.net") ||
-      hostname.includes("cdn.") ||
-      hostname.includes("akamai") ||
-      hostname.includes("fastly") ||
-      hostname.includes("cloudflare")
+      hostname.includes('cloudfront.net') ||
+      hostname.includes('cdn.') ||
+      hostname.includes('akamai') ||
+      hostname.includes('fastly') ||
+      hostname.includes('cloudflare')
     );
   } catch {
     return false;
@@ -60,7 +55,7 @@ function isCdnUrl(url) {
 }
 
 async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
-  console.log("[Lock-in MediaFetcher] Starting media fetch:", mediaUrl);
+  console.log('[Lock-in MediaFetcher] Starting media fetch:', mediaUrl);
 
   try {
     // Use manual redirect handling to properly handle auth + CDN scenarios
@@ -70,67 +65,55 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
     // 4. credentials: 'include' + ACAO: * = CORS error
     // Solution: Handle redirects manually, use credentials for origin, omit for CDN
 
-    console.log(
-      "[Lock-in MediaFetcher] Fetching with credentials + manual redirect"
-    );
+    console.log('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
     let response = await fetch(mediaUrl, {
-      method: "GET",
-      credentials: "include",
-      redirect: "manual", // Don't auto-follow redirects
+      method: 'GET',
+      credentials: 'include',
+      redirect: 'manual', // Don't auto-follow redirects
       signal,
     });
 
-    console.log(
-      "[Lock-in MediaFetcher] Initial response:",
-      response.status,
-      response.type
-    );
+    console.log('[Lock-in MediaFetcher] Initial response:', response.status, response.type);
 
     // Handle redirects manually
     if (
-      response.type === "opaqueredirect" ||
+      response.type === 'opaqueredirect' ||
       response.status === 0 ||
       (response.status >= 300 && response.status < 400)
     ) {
       // Try to get the redirect URL from headers (may not be available due to CORS)
-      const location = response.headers.get("location");
-      console.log(
-        "[Lock-in MediaFetcher] Redirect detected, location:",
-        location
-      );
+      const location = response.headers.get('location');
+      console.log('[Lock-in MediaFetcher] Redirect detected, location:', location);
 
       if (location) {
         // Check if redirecting to SSO (session expired)
         if (isSsoRedirect(location)) {
-          console.log(
-            "[Lock-in MediaFetcher] SSO redirect detected - session expired"
-          );
+          console.log('[Lock-in MediaFetcher] SSO redirect detected - session expired');
           return {
             success: false,
-            error:
-              "Your session has expired. Please refresh the page and log in again.",
-            errorCode: "SESSION_EXPIRED",
+            error: 'Your session has expired. Please refresh the page and log in again.',
+            errorCode: 'SESSION_EXPIRED',
           };
         }
 
         // Follow the redirect - use appropriate credentials mode
         const useCredentials = !isCdnUrl(location);
         console.log(
-          "[Lock-in MediaFetcher] Following redirect to:",
+          '[Lock-in MediaFetcher] Following redirect to:',
           location,
-          "with credentials:",
-          useCredentials
+          'with credentials:',
+          useCredentials,
         );
 
         response = await fetch(location, {
-          method: "GET",
-          credentials: useCredentials ? "include" : "omit",
+          method: 'GET',
+          credentials: useCredentials ? 'include' : 'omit',
           signal,
         });
         console.log(
-          "[Lock-in MediaFetcher] Redirect response:",
+          '[Lock-in MediaFetcher] Redirect response:',
           response.status,
-          response.statusText
+          response.statusText,
         );
       } else {
         // Can't get location header due to CORS - the redirect destination is cross-origin
@@ -141,31 +124,28 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
         // - But omits cookies for the CDN (cross-origin), avoiding the CORS conflict
         //   where CDN returns Access-Control-Allow-Origin: * which is incompatible with credentials
         console.log(
-          "[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials"
+          '[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials',
         );
         try {
           response = await fetch(mediaUrl, {
-            method: "GET",
-            credentials: "same-origin", // Credentials for origin only, not for CDN
+            method: 'GET',
+            credentials: 'same-origin', // Credentials for origin only, not for CDN
             signal,
           });
           console.log(
-            "[Lock-in MediaFetcher] Same-origin credentials fetch succeeded:",
-            response.status
+            '[Lock-in MediaFetcher] Same-origin credentials fetch succeeded:',
+            response.status,
           );
         } catch (sameOriginError) {
           // If same-origin also fails, the server might require 'include' for the initial request
           // Try a two-step approach: HEAD to warm up auth, then GET without credentials
+          console.log('[Lock-in MediaFetcher] Same-origin fetch failed:', sameOriginError.message);
           console.log(
-            "[Lock-in MediaFetcher] Same-origin fetch failed:",
-            sameOriginError.message
-          );
-          console.log(
-            "[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)"
+            '[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)',
           );
           response = await fetch(mediaUrl, {
-            method: "GET",
-            credentials: "omit",
+            method: 'GET',
+            credentials: 'omit',
             signal,
           });
         }
@@ -177,29 +157,28 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
       if (response.status === 401 || response.status === 403) {
         return {
           success: false,
-          error:
-            "Authentication required. Please refresh the page and ensure you are logged in.",
-          errorCode: "AUTH_REQUIRED",
+          error: 'Authentication required. Please refresh the page and ensure you are logged in.',
+          errorCode: 'AUTH_REQUIRED',
         };
       }
       return {
         success: false,
         error: `HTTP ${response.status}: ${response.statusText}`,
-        errorCode: "FETCH_ERROR",
+        errorCode: 'FETCH_ERROR',
       };
     }
 
     if (!response.body) {
       return {
         success: false,
-        error: "No response body available",
-        errorCode: "NO_BODY",
+        error: 'No response body available',
+        errorCode: 'NO_BODY',
       };
     }
 
-    const contentLength = response.headers.get("content-length");
+    const contentLength = response.headers.get('content-length');
     const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
-    console.log("[Lock-in MediaFetcher] Content-Length:", totalBytes);
+    console.log('[Lock-in MediaFetcher] Content-Length:', totalBytes);
 
     const reader = response.body.getReader();
     let buffer = new Uint8Array(0);
@@ -213,10 +192,10 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
         // Send any remaining buffer as the last chunk
         if (buffer.length > 0) {
           console.log(
-            "[Lock-in MediaFetcher] Sending final chunk:",
+            '[Lock-in MediaFetcher] Sending final chunk:',
             chunkIndex,
-            "size:",
-            buffer.length
+            'size:',
+            buffer.length,
           );
           await onChunk(buffer, chunkIndex, true);
         }
@@ -235,50 +214,42 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
         const chunk = buffer.slice(0, CHUNK_SIZE);
         buffer = buffer.slice(CHUNK_SIZE);
 
-        console.log(
-          "[Lock-in MediaFetcher] Sending chunk:",
-          chunkIndex,
-          "size:",
-          chunk.length
-        );
+        console.log('[Lock-in MediaFetcher] Sending chunk:', chunkIndex, 'size:', chunk.length);
         await onChunk(chunk, chunkIndex, false);
         chunkIndex++;
       }
     }
 
-    console.log(
-      "[Lock-in MediaFetcher] Fetch complete. Total bytes:",
-      totalBytesRead
-    );
+    console.log('[Lock-in MediaFetcher] Fetch complete. Total bytes:', totalBytesRead);
     return {
       success: true,
       totalBytes: totalBytesRead,
       chunksCount: chunkIndex + 1,
     };
   } catch (error) {
-    console.error("[Lock-in MediaFetcher] Fetch error:", error);
+    console.error('[Lock-in MediaFetcher] Fetch error:', error);
 
-    if (error.name === "AbortError") {
-      return { success: false, error: "Fetch aborted", errorCode: "ABORTED" };
+    if (error.name === 'AbortError') {
+      return { success: false, error: 'Fetch aborted', errorCode: 'ABORTED' };
     }
 
     const message = error instanceof Error ? error.message : String(error);
 
     // Check for CORS/network errors - likely session expiration causing SSO redirect
     if (
-      message.includes("Failed to fetch") ||
-      message.includes("NetworkError") ||
-      message.includes("CORS")
+      message.includes('Failed to fetch') ||
+      message.includes('NetworkError') ||
+      message.includes('CORS')
     ) {
       return {
         success: false,
         error:
-          "Could not fetch media. Your session may have expired - please refresh the page and ensure you are logged in.",
-        errorCode: "CORS_ERROR",
+          'Could not fetch media. Your session may have expired - please refresh the page and ensure you are logged in.',
+        errorCode: 'CORS_ERROR',
       };
     }
 
-    return { success: false, error: message, errorCode: "UNKNOWN_ERROR" };
+    return { success: false, error: message, errorCode: 'UNKNOWN_ERROR' };
   }
 }
 
@@ -292,7 +263,7 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
 async function handleMediaFetchRequest(payload, sendChunk) {
   const { mediaUrl, jobId, requestId } = payload;
 
-  console.log("[Lock-in MediaFetcher] Handling fetch request:", {
+  console.log('[Lock-in MediaFetcher] Handling fetch request:', {
     mediaUrl,
     jobId,
     requestId,
@@ -302,7 +273,7 @@ async function handleMediaFetchRequest(payload, sendChunk) {
     // Convert Uint8Array to base64 for messaging
     const base64 = arrayBufferToBase64(chunk);
     await sendChunk({
-      type: "MEDIA_CHUNK",
+      type: 'MEDIA_CHUNK',
       payload: {
         requestId,
         jobId,
@@ -319,7 +290,7 @@ async function handleMediaFetchRequest(payload, sendChunk) {
  * Convert ArrayBuffer/Uint8Array to base64 string
  */
 function arrayBufferToBase64(buffer) {
-  let binary = "";
+  let binary = '';
   const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
@@ -342,7 +313,7 @@ function base64ToArrayBuffer(base64) {
 }
 
 // Export for use in content script
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   window.LockInMediaFetcher = {
     fetchMediaAsChunks,
     handleMediaFetchRequest,

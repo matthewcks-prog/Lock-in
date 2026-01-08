@@ -1,6 +1,6 @@
 /**
  * Core Domain Types for Lock-in
- * 
+ *
  * Shared types and interfaces used across extension and web app.
  * No Chrome dependencies - pure TypeScript/JavaScript.
  */
@@ -8,22 +8,22 @@
 /**
  * Study mode types
  */
-export type StudyMode = "explain" | "general";
+export type StudyMode = 'explain' | 'general';
 
 /**
  * Difficulty level
  */
-export type DifficultyLevel = "highschool" | "university";
+export type DifficultyLevel = 'highschool' | 'university';
 
 /**
  * Theme preference
  */
-export type Theme = "light" | "dark" | "system";
+export type Theme = 'light' | 'dark' | 'system';
 
 /**
  * Chat message role
  */
-export type ChatRole = "user" | "assistant" | "system";
+export type ChatRole = 'user' | 'assistant' | 'system';
 
 /**
  * Chat message
@@ -73,7 +73,7 @@ export interface StudyResponse {
     description: string;
   }>;
   tags?: string[];
-  difficulty?: "easy" | "medium" | "hard";
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 /**
@@ -125,7 +125,7 @@ export interface UserPreferences {
   theme: Theme;
   accentColor: string;
   defaultMode: StudyMode;
-  modePreference: "fixed" | "lastUsed";
+  modePreference: 'fixed' | 'lastUsed';
 }
 
 /**
@@ -231,4 +231,4 @@ export type {
   NoteContentVersion,
   NoteStatus,
   NoteType,
-} from "./Note.ts";
+} from './Note.ts';

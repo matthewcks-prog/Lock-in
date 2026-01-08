@@ -1,8 +1,8 @@
-const { supabase } = require("../supabaseClient");
+const { supabase } = require('../supabaseClient');
 
 async function createAsset({ id, noteId, userId, type, mimeType, storagePath }) {
   const { data, error } = await supabase
-    .from("note_assets")
+    .from('note_assets')
     .insert({
       id,
       note_id: noteId,
@@ -20,11 +20,11 @@ async function createAsset({ id, noteId, userId, type, mimeType, storagePath }) 
 
 async function listAssetsForNote(noteId, userId) {
   const { data, error } = await supabase
-    .from("note_assets")
-    .select("*")
-    .eq("note_id", noteId)
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true });
+    .from('note_assets')
+    .select('*')
+    .eq('note_id', noteId)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true });
 
   if (error) throw error;
   return data;
@@ -32,14 +32,14 @@ async function listAssetsForNote(noteId, userId) {
 
 async function getAssetById(assetId, userId) {
   const { data, error } = await supabase
-    .from("note_assets")
-    .select("*")
-    .eq("id", assetId)
-    .eq("user_id", userId)
+    .from('note_assets')
+    .select('*')
+    .eq('id', assetId)
+    .eq('user_id', userId)
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") return null;
+    if (error.code === 'PGRST116') return null;
     throw error;
   }
   return data;
@@ -47,10 +47,10 @@ async function getAssetById(assetId, userId) {
 
 async function deleteAsset(assetId, userId) {
   const { error } = await supabase
-    .from("note_assets")
+    .from('note_assets')
     .delete()
-    .eq("id", assetId)
-    .eq("user_id", userId);
+    .eq('id', assetId)
+    .eq('user_id', userId);
 
   if (error) throw error;
 }

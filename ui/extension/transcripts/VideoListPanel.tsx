@@ -5,7 +5,7 @@
  * User can click a video to extract its transcript.
  */
 
-import type { DetectedVideo } from "../../../core/transcripts/types";
+import type { DetectedVideo } from '../../../core/transcripts/types';
 
 interface VideoListPanelProps {
   /** List of detected videos */
@@ -40,14 +40,14 @@ interface VideoListPanelProps {
 }
 
 type AiTranscriptionStatus =
-  | "idle"
-  | "starting"
-  | "uploading"
-  | "processing"
-  | "polling"
-  | "completed"
-  | "failed"
-  | "canceled";
+  | 'idle'
+  | 'starting'
+  | 'uploading'
+  | 'processing'
+  | 'polling'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
 
 interface AiTranscriptionUiState {
   status: AiTranscriptionStatus;
@@ -69,11 +69,11 @@ interface VideoExtractionResult {
  */
 function ProviderBadge({ provider }: { provider: string }) {
   const badgeColors: Record<string, { bg: string; text: string }> = {
-    panopto: { bg: "#1e3a5f", text: "#ffffff" },
-    echo360: { bg: "#b45309", text: "#ffffff" },
-    html5: { bg: "#2f6f44", text: "#ffffff" },
-    youtube: { bg: "#cc0000", text: "#ffffff" },
-    unknown: { bg: "#6b7280", text: "#ffffff" },
+    panopto: { bg: '#1e3a5f', text: '#ffffff' },
+    echo360: { bg: '#b45309', text: '#ffffff' },
+    html5: { bg: '#2f6f44', text: '#ffffff' },
+    youtube: { bg: '#cc0000', text: '#ffffff' },
+    unknown: { bg: '#6b7280', text: '#ffffff' },
   };
 
   const colors = badgeColors[provider] || badgeColors.unknown;
@@ -89,34 +89,33 @@ function ProviderBadge({ provider }: { provider: string }) {
   );
 }
 
-
 function isAiTranscriptionBusy(status: AiTranscriptionStatus): boolean {
   return (
-    status === "starting" ||
-    status === "uploading" ||
-    status === "processing" ||
-    status === "polling"
+    status === 'starting' ||
+    status === 'uploading' ||
+    status === 'processing' ||
+    status === 'polling'
   );
 }
 
 function getAiStatusLabel(status: AiTranscriptionStatus): string {
   switch (status) {
-    case "starting":
-      return "Preparing AI transcription";
-    case "uploading":
-      return "Uploading media";
-    case "processing":
-      return "Processing audio";
-    case "polling":
-      return "Transcribing";
-    case "completed":
-      return "Transcript ready";
-    case "failed":
-      return "AI transcription failed";
-    case "canceled":
-      return "Transcription canceled";
+    case 'starting':
+      return 'Preparing AI transcription';
+    case 'uploading':
+      return 'Uploading media';
+    case 'processing':
+      return 'Processing audio';
+    case 'polling':
+      return 'Transcribing';
+    case 'completed':
+      return 'Transcript ready';
+    case 'failed':
+      return 'AI transcription failed';
+    case 'canceled':
+      return 'Transcription canceled';
     default:
-      return "AI transcription";
+      return 'AI transcription';
   }
 }
 
@@ -147,25 +146,19 @@ function VideoListItem({
   const isThisExtracting = isExtracting && extractingVideoId === video.id;
   const isAnotherExtracting = isExtracting && extractingVideoId !== video.id;
   const aiForVideo =
-    aiTranscription.video && aiTranscription.video.id === video.id
-      ? aiTranscription
-      : null;
-  const aiStatus = aiForVideo?.status ?? "idle";
+    aiTranscription.video && aiTranscription.video.id === video.id ? aiTranscription : null;
+  const aiStatus = aiForVideo?.status ?? 'idle';
   const aiIsActive = aiForVideo ? isAiTranscriptionBusy(aiStatus) : false;
-  const aiIsFailed = aiForVideo?.status === "failed";
-  const aiIsCanceled = aiForVideo?.status === "canceled";
-  const aiIsCompleted = aiForVideo?.status === "completed";
+  const aiIsFailed = aiForVideo?.status === 'failed';
+  const aiIsCanceled = aiForVideo?.status === 'canceled';
+  const aiIsCompleted = aiForVideo?.status === 'completed';
   const aiErrorMessage = aiForVideo?.error || null;
   const noCaptions =
-    extractionResult &&
-    !extractionResult.success &&
-    extractionResult.errorCode === "NO_CAPTIONS";
-  const aiAvailable = Boolean(
-    noCaptions && extractionResult?.aiTranscriptionAvailable
-  );
+    extractionResult && !extractionResult.success && extractionResult.errorCode === 'NO_CAPTIONS';
+  const aiAvailable = Boolean(noCaptions && extractionResult?.aiTranscriptionAvailable);
   const extractionError =
     extractionResult && !extractionResult.success && !aiAvailable
-      ? extractionResult.error || "Failed to extract transcript"
+      ? extractionResult.error || 'Failed to extract transcript'
       : null;
   const showAiAction = aiAvailable && !aiIsActive && !aiIsCompleted;
   const showAiError = aiAvailable && (aiIsFailed || aiIsCanceled);
@@ -174,19 +167,15 @@ function VideoListItem({
   const disableAiAction = isExtracting || (isAiBusy && !aiIsActive);
   const progressLabel = getAiStatusLabel(aiStatus);
   const progressMessage =
-    aiForVideo?.progressMessage ||
-    "Working on your transcript. This can take a few minutes.";
+    aiForVideo?.progressMessage || 'Working on your transcript. This can take a few minutes.';
   const progressPercent = aiForVideo?.progressPercent;
   const aiActionSubtitle =
     disableAiAction && isAiBusy && !aiIsActive
-      ? "Another AI transcription is already running."
-      : "Generates captions when none are available.";
+      ? 'Another AI transcription is already running.'
+      : 'Generates captions when none are available.';
 
   return (
-    <div
-      className={`lockin-video-item ${isThisExtracting ? "is-extracting" : ""}`}
-      role="listitem"
-    >
+    <div className={`lockin-video-item ${isThisExtracting ? 'is-extracting' : ''}`} role="listitem">
       <button
         className="lockin-video-item-main"
         onClick={onSelect}
@@ -197,9 +186,7 @@ function VideoListItem({
           <div className="lockin-video-item-header">
             <ProviderBadge provider={video.provider} />
             <span className="lockin-video-item-title">{video.title}</span>
-            {noCaptions && (
-              <span className="lockin-video-item-badge">No transcript</span>
-            )}
+            {noCaptions && <span className="lockin-video-item-badge">No transcript</span>}
           </div>
         </div>
         <div className="lockin-video-item-action">
@@ -212,20 +199,15 @@ function VideoListItem({
       </button>
 
       {showAiProgress && (
-        <div
-          className="lockin-video-item-ai lockin-video-item-ai-active"
-          aria-live="polite"
-        >
+        <div className="lockin-video-item-ai lockin-video-item-ai-active" aria-live="polite">
           <div className="lockin-video-item-ai-main">
             <span className="lockin-inline-spinner" />
             <div className="lockin-video-item-ai-text">
               <div className="lockin-video-item-ai-title">{progressLabel}</div>
-              <div className="lockin-video-item-ai-subtitle">
-                {progressMessage}
-              </div>
+              <div className="lockin-video-item-ai-subtitle">{progressMessage}</div>
             </div>
           </div>
-          {typeof progressPercent === "number" && (
+          {typeof progressPercent === 'number' && (
             <div className="lockin-video-item-ai-progress">
               <div
                 className="lockin-video-item-ai-progress-bar"
@@ -235,11 +217,7 @@ function VideoListItem({
               />
             </div>
           )}
-          <button
-            className="lockin-video-item-ai-btn"
-            onClick={onCancelAi}
-            type="button"
-          >
+          <button className="lockin-video-item-ai-btn" onClick={onCancelAi} type="button">
             Cancel
           </button>
         </div>
@@ -249,9 +227,7 @@ function VideoListItem({
         <div className="lockin-video-item-ai lockin-video-item-ai-error">
           <div className="lockin-video-item-ai-text">
             <div className="lockin-video-item-ai-title">
-              {aiIsCanceled
-                ? "Transcription canceled"
-                : "AI transcription failed"}
+              {aiIsCanceled ? 'Transcription canceled' : 'AI transcription failed'}
             </div>
             <div className="lockin-video-item-ai-subtitle">
               {aiErrorMessage || "Try again when you're ready."}
@@ -272,9 +248,7 @@ function VideoListItem({
         <div className="lockin-video-item-ai">
           <div className="lockin-video-item-ai-text">
             <div className="lockin-video-item-ai-title">Transcribe with AI</div>
-            <div className="lockin-video-item-ai-subtitle">
-              {aiActionSubtitle}
-            </div>
+            <div className="lockin-video-item-ai-subtitle">{aiActionSubtitle}</div>
           </div>
           <button
             className="lockin-video-item-ai-btn"
@@ -287,9 +261,7 @@ function VideoListItem({
         </div>
       )}
 
-      {extractionError && (
-        <div className="lockin-video-item-error">{extractionError}</div>
-      )}
+      {extractionError && <div className="lockin-video-item-error">{extractionError}</div>}
     </div>
   );
 }
@@ -297,17 +269,11 @@ function VideoListItem({
 /**
  * Auth required prompt component
  */
-function AuthRequiredPrompt({
-  provider,
-  signInUrl,
-}: {
-  provider: string;
-  signInUrl: string;
-}) {
+function AuthRequiredPrompt({ provider, signInUrl }: { provider: string; signInUrl: string }) {
   const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
 
   const handleSignIn = () => {
-    window.open(signInUrl, "_blank", "noopener,noreferrer");
+    window.open(signInUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -315,16 +281,10 @@ function AuthRequiredPrompt({
       <p className="lockin-video-auth-message">
         Please sign in to {providerName} to view recordings.
       </p>
-      <button
-        className="lockin-video-auth-button"
-        onClick={handleSignIn}
-        type="button"
-      >
+      <button className="lockin-video-auth-button" onClick={handleSignIn} type="button">
         Open {providerName} Sign In
       </button>
-      <p className="lockin-video-auth-hint">
-        After signing in, close this panel and try again.
-      </p>
+      <p className="lockin-video-auth-hint">After signing in, close this panel and try again.</p>
     </div>
   );
 }
@@ -368,10 +328,7 @@ export function VideoListPanel({
             <span>Detecting videos...</span>
           </div>
         ) : authRequired ? (
-          <AuthRequiredPrompt
-            provider={authRequired.provider}
-            signInUrl={authRequired.signInUrl}
-          />
+          <AuthRequiredPrompt provider={authRequired.provider} signInUrl={authRequired.signInUrl} />
         ) : showError ? (
           <div className="lockin-video-list-error">
             <p>{error}</p>
@@ -379,12 +336,8 @@ export function VideoListPanel({
         ) : videos.length === 0 ? (
           <div className="lockin-video-list-empty">
             <p>No videos detected on this page.</p>
-            <p className="lockin-video-list-hint">
-              Supported: Panopto, Echo360, HTML5 videos
-            </p>
-            {detectionHint && (
-              <p className="lockin-video-list-hint">{detectionHint}</p>
-            )}
+            <p className="lockin-video-list-hint">Supported: Panopto, Echo360, HTML5 videos</p>
+            {detectionHint && <p className="lockin-video-list-hint">{detectionHint}</p>}
           </div>
         ) : (
           <div className="lockin-video-list" role="list">
@@ -410,7 +363,7 @@ export function VideoListPanel({
 
       <div className="lockin-video-list-footer">
         <p className="lockin-video-list-info">
-          {videos.length} video{videos.length !== 1 ? "s" : ""} found
+          {videos.length} video{videos.length !== 1 ? 's' : ''} found
         </p>
       </div>
     </div>

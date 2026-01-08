@@ -1,6 +1,6 @@
 // backend/repositories/notesRepository.js
 
-const { supabase } = require("../supabaseClient");
+const { supabase } = require('../supabaseClient');
 
 /**
  * Repository for notes CRUD operations.
@@ -17,7 +17,7 @@ const { supabase } = require("../supabaseClient");
 class ConflictError extends Error {
   constructor(message, currentUpdatedAt) {
     super(message);
-    this.name = "ConflictError";
+    this.name = 'ConflictError';
     this.status = 409;
     this.updatedAt = currentUpdatedAt;
   }
@@ -43,7 +43,7 @@ async function createNote({
     user_id: userId,
     title,
     content_json: contentJson || {}, // Ensure we always provide content_json (defaults to {} in DB but safer to be explicit)
-    editor_version: editorVersion || "lexical_v1",
+    editor_version: editorVersion || 'lexical_v1',
     content_plain: contentPlain || legacyContent || null, // Plain text content for search/display
     source_selection: sourceSelection,
     source_url: sourceUrl,
@@ -53,14 +53,10 @@ async function createNote({
     embedding,
   };
 
-  const { data, error } = await supabase
-    .from("notes")
-    .insert(insertData)
-    .select()
-    .single();
+  const { data, error } = await supabase.from('notes').insert(insertData).select().single();
 
   if (error) {
-    if (clientNoteId && error.code === "23505") {
+    if (clientNoteId && error.code === '23505') {
       const existing = await getNoteForUser({
         userId,
         noteId: clientNoteId,
@@ -84,7 +80,7 @@ async function createNote({
         });
       }
     }
-    console.error("Error creating note:", error);
+    console.error('Error creating note:', error);
     throw error;
   }
   return data;
@@ -92,14 +88,14 @@ async function createNote({
 
 async function listNotes({ userId, sourceUrl, courseCode, limit = 50 }) {
   let query = supabase
-    .from("notes")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false })
+    .from('notes')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (sourceUrl) query = query.eq("source_url", sourceUrl);
-  if (courseCode) query = query.eq("course_code", courseCode);
+  if (sourceUrl) query = query.eq('source_url', sourceUrl);
+  if (courseCode) query = query.eq('course_code', courseCode);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -135,7 +131,7 @@ async function updateNote({
   const updateData = {
     title,
     content_json: contentJson || {}, // Ensure we always provide content_json
-    editor_version: editorVersion || "lexical_v1",
+    editor_version: editorVersion || 'lexical_v1',
     content_plain: contentPlain || legacyContent || null, // Plain text content for search/display
     source_selection: sourceSelection,
     source_url: sourceUrl,
@@ -146,32 +142,28 @@ async function updateNote({
     updated_at: new Date().toISOString(), // Explicitly set updated_at for optimistic locking
   };
 
-  let query = supabase
-    .from("notes")
-    .update(updateData)
-    .eq("id", noteId)
-    .eq("user_id", userId);
+  let query = supabase.from('notes').update(updateData).eq('id', noteId).eq('user_id', userId);
 
   if (ifUnmodifiedSince) {
-    query = query.eq("updated_at", ifUnmodifiedSince);
+    query = query.eq('updated_at', ifUnmodifiedSince);
   }
 
   const { data, error } = await query.select().single();
 
   if (error) {
-    console.error("Error updating note:", error);
-    if (error.code === "PGRST116") {
+    console.error('Error updating note:', error);
+    if (error.code === 'PGRST116') {
       if (ifUnmodifiedSince) {
         const { data: currentNote, error: fetchError } = await supabase
-          .from("notes")
-          .select("updated_at")
-          .eq("id", noteId)
-          .eq("user_id", userId)
+          .from('notes')
+          .select('updated_at')
+          .eq('id', noteId)
+          .eq('user_id', userId)
           .single();
 
         if (fetchError) {
-          if (fetchError.code === "PGRST116") {
-            const notFoundError = new Error("Note not found");
+          if (fetchError.code === 'PGRST116') {
+            const notFoundError = new Error('Note not found');
             notFoundError.status = 404;
             throw notFoundError;
           }
@@ -179,12 +171,12 @@ async function updateNote({
         }
 
         throw new ConflictError(
-          "Note was modified by another session. Please refresh and try again.",
-          currentNote.updated_at
+          'Note was modified by another session. Please refresh and try again.',
+          currentNote.updated_at,
         );
       }
 
-      const notFoundError = new Error("Note not found");
+      const notFoundError = new Error('Note not found');
       notFoundError.status = 404;
       throw notFoundError;
     }
@@ -194,21 +186,13 @@ async function updateNote({
 }
 
 async function deleteNote({ userId, noteId }) {
-  const { error } = await supabase
-    .from("notes")
-    .delete()
-    .eq("id", noteId)
-    .eq("user_id", userId);
+  const { error } = await supabase.from('notes').delete().eq('id', noteId).eq('user_id', userId);
 
   if (error) throw error;
 }
 
-async function searchNotesByEmbedding({
-  userId,
-  queryEmbedding,
-  matchCount = 10,
-}) {
-  const { data, error } = await supabase.rpc("match_notes", {
+async function searchNotesByEmbedding({ userId, queryEmbedding, matchCount = 10 }) {
+  const { data, error } = await supabase.rpc('match_notes', {
     query_embedding: queryEmbedding,
     match_count: matchCount,
     in_user_id: userId,
@@ -220,15 +204,15 @@ async function searchNotesByEmbedding({
 
 async function getNoteForUser({ userId, noteId }) {
   const { data, error } = await supabase
-    .from("notes")
-    .select("*")
-    .eq("id", noteId)
-    .eq("user_id", userId)
+    .from('notes')
+    .select('*')
+    .eq('id', noteId)
+    .eq('user_id', userId)
     .single();
 
   if (error) {
     // PGRST116 = no rows found
-    if (error.code === "PGRST116") return null;
+    if (error.code === 'PGRST116') return null;
     throw error;
   }
   return data;
@@ -241,15 +225,15 @@ async function getNoteForUser({ userId, noteId }) {
 async function toggleStarred({ userId, noteId }) {
   // First, get the current starred status
   const { data: currentNote, error: fetchError } = await supabase
-    .from("notes")
-    .select("is_starred")
-    .eq("id", noteId)
-    .eq("user_id", userId)
+    .from('notes')
+    .select('is_starred')
+    .eq('id', noteId)
+    .eq('user_id', userId)
     .single();
 
   if (fetchError) {
-    if (fetchError.code === "PGRST116") {
-      const error = new Error("Note not found");
+    if (fetchError.code === 'PGRST116') {
+      const error = new Error('Note not found');
       error.status = 404;
       throw error;
     }
@@ -260,15 +244,15 @@ async function toggleStarred({ userId, noteId }) {
   const newValue = !currentNote.is_starred;
 
   const { data, error } = await supabase
-    .from("notes")
+    .from('notes')
     .update({ is_starred: newValue, updated_at: new Date().toISOString() })
-    .eq("id", noteId)
-    .eq("user_id", userId)
+    .eq('id', noteId)
+    .eq('user_id', userId)
     .select()
     .single();
 
   if (error) {
-    console.error("Error toggling starred:", error);
+    console.error('Error toggling starred:', error);
     throw error;
   }
 
@@ -280,20 +264,20 @@ async function toggleStarred({ userId, noteId }) {
  */
 async function setStarred({ userId, noteId, isStarred }) {
   const { data, error } = await supabase
-    .from("notes")
+    .from('notes')
     .update({ is_starred: isStarred, updated_at: new Date().toISOString() })
-    .eq("id", noteId)
-    .eq("user_id", userId)
+    .eq('id', noteId)
+    .eq('user_id', userId)
     .select()
     .single();
 
   if (error) {
-    if (error.code === "PGRST116") {
-      const notFoundError = new Error("Note not found");
+    if (error.code === 'PGRST116') {
+      const notFoundError = new Error('Note not found');
       notFoundError.status = 404;
       throw notFoundError;
     }
-    console.error("Error setting starred:", error);
+    console.error('Error setting starred:', error);
     throw error;
   }
 

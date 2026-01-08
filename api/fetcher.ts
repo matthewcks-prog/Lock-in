@@ -1,4 +1,4 @@
-import type { AuthClient } from "./auth";
+import type { AuthClient } from './auth';
 import {
   AppError,
   AuthError,
@@ -9,8 +9,8 @@ import {
   NotFoundError,
   RateLimitError,
   ValidationError,
-} from "../core/errors";
-import { createLogger } from "../core/utils/logger";
+} from '../core/errors';
+import { createLogger } from '../core/utils/logger';
 
 interface RetryConfig {
   maxRetries: number;
@@ -26,7 +26,7 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   retryableStatuses: [429, 502, 503, 504],
 };
 
-const logger = createLogger("ApiFetcher");
+const logger = createLogger('ApiFetcher');
 
 function calculateRetryDelay(attempt: number, config: RetryConfig): number {
   const exponentialDelay = config.baseDelayMs * Math.pow(2, attempt);
@@ -40,15 +40,15 @@ function sleep(ms: number): Promise<void> {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null;
 }
 
 function isErrorCode(value: unknown): value is ErrorCode {
-  return typeof value === "string" && Object.values(ErrorCodes).includes(value as ErrorCode);
+  return typeof value === 'string' && Object.values(ErrorCodes).includes(value as ErrorCode);
 }
 
 function extractErrorMessage(body: unknown, fallback: string): string {
-  if (typeof body === "string" && body.trim()) {
+  if (typeof body === 'string' && body.trim()) {
     return body;
   }
 
@@ -57,15 +57,15 @@ function extractErrorMessage(body: unknown, fallback: string): string {
   }
 
   const errorValue = body.error;
-  if (isRecord(errorValue) && typeof errorValue.message === "string") {
+  if (isRecord(errorValue) && typeof errorValue.message === 'string') {
     return errorValue.message;
   }
 
-  if (typeof errorValue === "string") {
+  if (typeof errorValue === 'string') {
     return errorValue;
   }
 
-  if (typeof body.message === "string") {
+  if (typeof body.message === 'string') {
     return body.message;
   }
 
@@ -78,11 +78,11 @@ function extractErrorCode(body: unknown): string | undefined {
   }
 
   const errorValue = body.error;
-  if (isRecord(errorValue) && typeof errorValue.code === "string") {
+  if (isRecord(errorValue) && typeof errorValue.code === 'string') {
     return errorValue.code;
   }
 
-  if (typeof body.code === "string") {
+  if (typeof body.code === 'string') {
     return body.code;
   }
 
@@ -90,7 +90,7 @@ function extractErrorCode(body: unknown): string | undefined {
 }
 
 function parseRetryAfterMs(response: Response): number | undefined {
-  const value = response.headers.get("retry-after");
+  const value = response.headers.get('retry-after');
   if (!value) return undefined;
 
   const seconds = Number(value);
@@ -140,7 +140,7 @@ function resolveErrorCode(status: number, code: string | undefined): ErrorCode {
 }
 
 function createAbortError(): AppError {
-  return new AppError("Request was aborted", ErrorCodes.ABORTED);
+  return new AppError('Request was aborted', ErrorCodes.ABORTED);
 }
 
 export interface ApiRequestOptions extends RequestInit {
@@ -164,7 +164,7 @@ async function createApiError(response: Response, originalError?: Error): Promis
     }
   }
 
-  const message = extractErrorMessage(body, "API request failed");
+  const message = extractErrorMessage(body, 'API request failed');
   const code = resolveErrorCode(response.status, extractErrorCode(body));
   const details = isRecord(body) ? body : body ? { body } : undefined;
   const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response) : undefined;
@@ -178,7 +178,11 @@ async function createApiError(response: Response, originalError?: Error): Promis
     case ErrorCodes.AUTH_REQUIRED:
     case ErrorCodes.INVALID_TOKEN:
     case ErrorCodes.SESSION_EXPIRED:
-      return new AuthError(message, code, { status: response.status, details, cause: originalError });
+      return new AuthError(message, code, {
+        status: response.status,
+        details,
+        cause: originalError,
+      });
     case ErrorCodes.RATE_LIMIT:
       return new RateLimitError(message, retryAfterMs, { cause: originalError });
     case ErrorCodes.VALIDATION_ERROR:
@@ -209,11 +213,19 @@ export function createFetcher(config: FetcherConfig) {
   const { backendUrl, authClient } = config;
   const clientConfig = { backendUrl };
 
-  async function apiRequest<T = unknown>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
-    const { retry = true, retryConfig: customRetryConfig, ifUnmodifiedSince, ...fetchOptions } = options;
+  async function apiRequest<T = unknown>(
+    endpoint: string,
+    options: ApiRequestOptions = {},
+  ): Promise<T> {
+    const {
+      retry = true,
+      retryConfig: customRetryConfig,
+      ifUnmodifiedSince,
+      ...fetchOptions
+    } = options;
 
     const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...customRetryConfig };
-    const url = endpoint.startsWith("http") ? endpoint : `${backendUrl}${endpoint}`;
+    const url = endpoint.startsWith('http') ? endpoint : `${backendUrl}${endpoint}`;
 
     if (fetchOptions.signal?.aborted) {
       throw createAbortError();
@@ -221,18 +233,21 @@ export function createFetcher(config: FetcherConfig) {
 
     const accessToken = await authClient.getValidAccessToken();
     if (!accessToken) {
-      throw new AuthError("Please sign in via the Lock-in popup before using the assistant.", ErrorCodes.AUTH_REQUIRED);
+      throw new AuthError(
+        'Please sign in via the Lock-in popup before using the assistant.',
+        ErrorCodes.AUTH_REQUIRED,
+      );
     }
 
     if (fetchOptions.signal?.aborted) {
       throw createAbortError();
     }
 
-    const isFormData = typeof FormData !== "undefined" && fetchOptions.body instanceof FormData;
+    const isFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
     const headers: HeadersInit = {
       Authorization: `Bearer ${accessToken}`,
-      ...(isFormData ? {} : { "Content-Type": "application/json" }),
-      ...(ifUnmodifiedSince ? { "If-Unmodified-Since": ifUnmodifiedSince } : {}),
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...(ifUnmodifiedSince ? { 'If-Unmodified-Since': ifUnmodifiedSince } : {}),
       ...(fetchOptions.headers || {}),
     };
 
@@ -266,12 +281,14 @@ export function createFetcher(config: FetcherConfig) {
           throw createAbortError();
         }
 
-        if (networkError instanceof Error && networkError.name === "AbortError") {
+        if (networkError instanceof Error && networkError.name === 'AbortError') {
           throw createAbortError();
         }
 
         const cause = networkError instanceof Error ? networkError : undefined;
-        lastError = new NetworkError("Unable to reach Lock-in. Please check your connection.", { cause });
+        lastError = new NetworkError('Unable to reach Lock-in. Please check your connection.', {
+          cause,
+        });
 
         if (retry && attempt < retryConfig.maxRetries) {
           continue;
@@ -284,9 +301,9 @@ export function createFetcher(config: FetcherConfig) {
         try {
           const body: unknown = await response.json();
           if (isRecord(body)) {
-            if (typeof body.updatedAt === "string") {
+            if (typeof body.updatedAt === 'string') {
               serverVersion = body.updatedAt;
-            } else if (typeof body.updated_at === "string") {
+            } else if (typeof body.updated_at === 'string') {
               serverVersion = body.updated_at;
             }
           }
@@ -294,12 +311,16 @@ export function createFetcher(config: FetcherConfig) {
           // ignore parse errors
         }
         throw new ConflictError(
-          "Note was modified by another session. Please refresh and try again.",
+          'Note was modified by another session. Please refresh and try again.',
           serverVersion,
         );
       }
 
-      if (retry && retryConfig.retryableStatuses.includes(response.status) && attempt < retryConfig.maxRetries) {
+      if (
+        retry &&
+        retryConfig.retryableStatuses.includes(response.status) &&
+        attempt < retryConfig.maxRetries
+      ) {
         lastError = await createApiError(response);
         continue;
       }
@@ -317,10 +338,10 @@ export function createFetcher(config: FetcherConfig) {
       }
 
       try {
-        const contentLength = response.headers.get("content-length");
-        const contentType = response.headers.get("content-type");
+        const contentLength = response.headers.get('content-length');
+        const contentType = response.headers.get('content-type');
 
-        if (contentLength === "0" || !contentType?.includes("application/json")) {
+        if (contentLength === '0' || !contentType?.includes('application/json')) {
           return undefined as T;
         }
 
@@ -329,13 +350,16 @@ export function createFetcher(config: FetcherConfig) {
           const errorValue = data.error;
           const errorDetails = isRecord(errorValue) ? errorValue : undefined;
           const message =
-            (typeof errorValue === "string" && errorValue) ||
-            (errorDetails && typeof errorDetails.message === "string" && errorDetails.message) ||
-            "Request failed";
+            (typeof errorValue === 'string' && errorValue) ||
+            (errorDetails && typeof errorDetails.message === 'string' && errorDetails.message) ||
+            'Request failed';
           const errorCode = isRecord(errorValue) ? errorValue.code : undefined;
           throw new AppError(
             message,
-            resolveErrorCode(response.status, typeof errorCode === "string" ? errorCode : undefined),
+            resolveErrorCode(
+              response.status,
+              typeof errorCode === 'string' ? errorCode : undefined,
+            ),
             { status: response.status, details: errorDetails },
           );
         }
@@ -345,11 +369,11 @@ export function createFetcher(config: FetcherConfig) {
           throw parseError;
         }
         const cause = parseError instanceof Error ? parseError : undefined;
-        throw new AppError("Failed to parse API response", ErrorCodes.PARSE_ERROR, { cause });
+        throw new AppError('Failed to parse API response', ErrorCodes.PARSE_ERROR, { cause });
       }
     }
 
-    throw lastError || new AppError("Request failed after retries", ErrorCodes.INTERNAL_ERROR);
+    throw lastError || new AppError('Request failed after retries', ErrorCodes.INTERNAL_ERROR);
   }
 
   function getBackendUrl(): string {

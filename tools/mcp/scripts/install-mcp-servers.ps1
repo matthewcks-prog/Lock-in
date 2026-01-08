@@ -17,7 +17,8 @@ $servers = @(
     "@modelcontextprotocol/server-bash",
     "@modelcontextprotocol/server-playwright",
     "@modelcontextprotocol/server-fetch",
-    "@modelcontextprotocol/server-postgres"
+    "@modelcontextprotocol/server-postgres",
+    "@modelcontextprotocol/server-context7"
 )
 
 Write-Host "Checking MCP server availability via npx..." -ForegroundColor Yellow
@@ -27,9 +28,9 @@ foreach ($server in $servers) {
     Write-Host "Checking $server..." -ForegroundColor Yellow -NoNewline
     $result = npx -y $server --version 2>&1
     if ($LASTEXITCODE -eq 0) {
-        Write-Host " ✓ Available" -ForegroundColor Green
+        Write-Host " Available" -ForegroundColor Green
     } else {
-        Write-Host " ✗ Not found (may need npm install -g $server)" -ForegroundColor Red
+        Write-Host " Not found (may need npm install -g $server)" -ForegroundColor Red
     }
 }
 
@@ -41,6 +42,5 @@ Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Yellow
 Write-Host "1. Create .cursor/mcp.json using the template in tools/mcp/config/" -ForegroundColor White
 Write-Host "2. Set up .env.local with Supabase read-only connection string" -ForegroundColor White
-Write-Host "3. Verify connections in Cursor Settings → MCP Servers" -ForegroundColor White
+Write-Host "3. Verify connections in Cursor Settings (MCP Servers)" -ForegroundColor White
 Write-Host ""
-

@@ -34,29 +34,24 @@ See `backend/migrations/004_vector_extension_schema.sql` for full migration deta
 ## High-level Entities
 
 - **User**
-
   - Comes from `auth.users` (Supabase).
   - Owns chats, messages, notes, folders, and AI request logs.
 
 - **Chats & Messages**
-
   - `chats` = conversation sessions (e.g. per page, per topic).
   - `chat_messages` = individual turns within a chat (user/assistant/system).
 
 - **Notes & Folders**
-
   - `notes` = saved study notes linked to pages/courses.
   - `folders` = user-defined groupings (e.g. "FIT2100 Week 1").
   - Currently there is **no explicit FK from notes → folders** – grouping is conceptual only.
 
 - **Note Assets**
-
   - `note_assets` = uploaded files attached to a note (images, PDFs, docs).
   - Files live in Supabase Storage bucket `note-assets` at `<user_id>/<note_id>/<asset_id>.<ext>`.
   - Table stores metadata + storage path; URLs are derived with `getPublicUrl`.
 
 - **AI Requests**
-
   - `ai_requests` = per-call log of AI usage (tokens in/out, mode).
   - Useful for analytics, quotas, and debugging.
 

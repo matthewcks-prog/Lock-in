@@ -1,13 +1,13 @@
 /**
  * Site Adapter Factory
- * 
+ *
  * Selects the appropriate adapter based on the current URL.
  */
 
-import type { BaseAdapter } from "./adapters/baseAdapter";
-import { GenericAdapter } from "./adapters/baseAdapter";
-import { MoodleAdapter } from "./adapters/moodleAdapter";
-import { EdstemAdapter } from "./adapters/edstemAdapter";
+import type { BaseAdapter } from './adapters/baseAdapter';
+import { GenericAdapter } from './adapters/baseAdapter';
+import { MoodleAdapter } from './adapters/moodleAdapter';
+import { EdstemAdapter } from './adapters/edstemAdapter';
 
 // Registry of all adapters (order matters - more specific first)
 const adapters: BaseAdapter[] = [
@@ -33,7 +33,7 @@ export function getAdapterForUrl(url: string): BaseAdapter {
  * Get adapter for current page
  */
 export function getCurrentAdapter(): BaseAdapter {
-  if (typeof window === "undefined" || !window.location) {
+  if (typeof window === 'undefined' || !window.location) {
     return new GenericAdapter();
   }
   return getAdapterForUrl(window.location.href);

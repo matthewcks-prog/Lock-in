@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from "react";
-import type { NoteAsset } from "../../core/domain/Note.ts";
-import type { NotesService } from "../../core/services/notesService.ts";
+import { useCallback, useRef, useState } from 'react';
+import type { NoteAsset } from '../../core/domain/Note.ts';
+import type { NotesService } from '../../core/services/notesService.ts';
 
 export interface UseNoteAssetsResult {
   noteAssets: NoteAsset[];
@@ -14,23 +14,23 @@ export interface UseNoteAssetsResult {
 
 /**
  * Hook for managing note assets (attachments).
- * 
+ *
  * IMPORTANT: This hook does NOT auto-fetch assets on mount or when noteId changes.
  * Assets are only loaded when explicitly requested via `reloadAssets()`.
  * This prevents excessive API calls during autosave cycles.
- * 
+ *
  * The hook includes request deduplication - if a request is already in progress
  * for the same noteId, subsequent calls will be ignored.
  */
 export function useNoteAssets(
   noteId: string | null | undefined,
-  notesService: NotesService | null | undefined
+  notesService: NotesService | null | undefined,
 ): UseNoteAssetsResult {
   const [noteAssets, setNoteAssets] = useState<NoteAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Track in-flight request to prevent duplicate requests
   const loadingNoteIdRef = useRef<string | null>(null);
 
@@ -50,7 +50,7 @@ export function useNoteAssets(
     setIsLoading(true);
     setError(null);
     setNoteAssets([]);
-    
+
     try {
       const assets = await notesService.listAssets(noteId);
       // Only update state if this is still the current request
@@ -60,7 +60,7 @@ export function useNoteAssets(
     } catch (err: any) {
       // Only update error if this is still the current request
       if (loadingNoteIdRef.current === noteId) {
-        setError(err?.message || "Failed to load attachments");
+        setError(err?.message || 'Failed to load attachments');
       }
     } finally {
       // Only clear loading if this is still the current request
@@ -77,11 +77,11 @@ export function useNoteAssets(
   const uploadAsset = useCallback(
     async (file: File): Promise<NoteAsset | null> => {
       if (!noteId) {
-        setError("Save the note before adding attachments.");
+        setError('Save the note before adding attachments.');
         return null;
       }
       if (!notesService?.uploadAsset) {
-        setError("Upload is not available.");
+        setError('Upload is not available.');
         return null;
       }
 
@@ -92,19 +92,19 @@ export function useNoteAssets(
         setNoteAssets((prev) => [...prev, asset]);
         return asset;
       } catch (err: any) {
-        setError(err?.message || "Failed to upload attachment");
+        setError(err?.message || 'Failed to upload attachment');
         return null;
       } finally {
         setIsUploading(false);
       }
     },
-    [noteId, notesService]
+    [noteId, notesService],
   );
 
   const deleteAsset = useCallback(
     async (assetId: string): Promise<boolean> => {
       if (!notesService?.deleteAsset) {
-        setError("Delete is not available.");
+        setError('Delete is not available.');
         return false;
       }
 
@@ -113,11 +113,11 @@ export function useNoteAssets(
         setNoteAssets((prev) => prev.filter((asset) => asset.id !== assetId));
         return true;
       } catch (err: any) {
-        setError(err?.message || "Failed to delete attachment");
+        setError(err?.message || 'Failed to delete attachment');
         return false;
       }
     },
-    [notesService]
+    [notesService],
   );
 
   return {

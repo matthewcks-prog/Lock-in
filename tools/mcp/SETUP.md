@@ -7,17 +7,20 @@ Follow these steps to set up MCP servers for the Lock-in project.
 MCP servers can be run via `npx` (recommended, no installation needed) or installed globally.
 
 **Windows:**
+
 ```powershell
 .\tools\mcp\scripts\install-mcp-servers.ps1
 ```
 
 **Linux/Ubuntu:**
+
 ```bash
 chmod +x tools/mcp/scripts/install-mcp-servers.sh
 ./tools/mcp/scripts/install-mcp-servers.sh
 ```
 
 Or manually check availability:
+
 ```bash
 npx -y @modelcontextprotocol/server-filesystem --version
 npx -y @modelcontextprotocol/server-git --version
@@ -44,6 +47,7 @@ npx -y @modelcontextprotocol/server-git --version
 ## Step 3: Set Up Environment Variables
 
 1. **Copy template:**
+
    ```bash
    cp tools/mcp/config/env.local.template .env.local
    ```
@@ -78,16 +82,19 @@ See `tools/mcp/SMOKE_TESTS.md` for 12 test prompts to validate functionality.
 ## Troubleshooting
 
 ### MCP Server Not Connecting
+
 - Check Cursor Settings → MCP Servers for error messages
 - Verify paths in `.cursor/mcp.json` are correct for your OS
 - Ensure MCP servers are available via `npx` (run install script)
 
 ### Database Connection Fails
+
 - Verify `.env.local` has correct `SUPABASE_READONLY_CONNECTION_STRING`
 - Check read-only user has proper permissions (SELECT on public schema)
 - Test connection string manually with `psql` or Supabase client
 
 ### Playwright Extension Loading Fails
+
 - Verify `EXTENSION_PATH` in `.env.local` points to `extension/` directory
 - Ensure extension is built (`npm run build`)
 - Check Playwright can access the extension directory
@@ -97,4 +104,3 @@ See `tools/mcp/SMOKE_TESTS.md` for 12 test prompts to validate functionality.
 - Read `tools/mcp/README.md` for detailed documentation
 - Review security boundaries and agent permission policy
 - Run smoke tests to validate setup
-

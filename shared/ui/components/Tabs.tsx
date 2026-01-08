@@ -5,7 +5,7 @@
  * Uses Tailwind CSS for styling.
  */
 
-import React from "react";
+import React from 'react';
 
 export interface Tab {
   id: string;
@@ -17,33 +17,25 @@ export interface TabsProps {
   tabs: Tab[];
   activeTab: string;
   onTabChange: (tabId: string) => void;
-  variant?: "line" | "pill";
+  variant?: 'line' | 'pill';
   ariaLabel?: string;
 }
 
-export function Tabs({
-  tabs,
-  activeTab,
-  onTabChange,
-  variant = "line",
-  ariaLabel,
-}: TabsProps) {
+export function Tabs({ tabs, activeTab, onTabChange, variant = 'line', ariaLabel }: TabsProps) {
   const containerClasses =
-    variant === "line"
-      ? "flex gap-0 border-b border-gray-200"
-      : "flex gap-2 bg-gray-100 p-1 rounded-lg";
+    variant === 'line'
+      ? 'flex gap-0 border-b border-gray-200'
+      : 'flex gap-2 bg-gray-100 p-1 rounded-lg';
 
   const tabClasses = (isActive: boolean) =>
-    variant === "line"
+    variant === 'line'
       ? `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
           isActive
-            ? "border-blue-600 text-blue-600"
-            : "border-transparent text-gray-600 hover:text-gray-900"
+            ? 'border-blue-600 text-blue-600'
+            : 'border-transparent text-gray-600 hover:text-gray-900'
         }`
       : `px-4 py-2 text-sm font-medium transition-colors rounded-md ${
-          isActive
-            ? "bg-white text-blue-600 shadow-sm"
-            : "text-gray-600 hover:text-gray-900"
+          isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
         }`;
 
   const tabRefs = React.useRef<(HTMLButtonElement | null)[]>([]);
@@ -58,21 +50,21 @@ export function Tabs({
     };
 
     switch (event.key) {
-      case "ArrowRight":
-      case "ArrowDown":
+      case 'ArrowRight':
+      case 'ArrowDown':
         event.preventDefault();
         focusTab(index + 1);
         break;
-      case "ArrowLeft":
-      case "ArrowUp":
+      case 'ArrowLeft':
+      case 'ArrowUp':
         event.preventDefault();
         focusTab(index - 1);
         break;
-      case "Home":
+      case 'Home':
         event.preventDefault();
         focusTab(0);
         break;
-      case "End":
+      case 'End':
         event.preventDefault();
         focusTab(tabs.length - 1);
         break;

@@ -52,16 +52,12 @@ async function fetchWithRetry(url, options, maxRetries = 3, timeoutMs = 30000) {
   };
 
   // NEW: Comprehensive logging
-  console.log(
-    `[Lock-in] Fetching (attempt ${attempt + 1}/${maxRetries + 1}): ${url}`
-  );
+  console.log(`[Lock-in] Fetching (attempt ${attempt + 1}/${maxRetries + 1}): ${url}`);
   const response = await fetch(url, fetchOptions);
-  console.log(
-    `[Lock-in] Response status: ${response.status} ${response.statusText}`
-  );
+  console.log(`[Lock-in] Response status: ${response.status} ${response.statusText}`);
 
   // NEW: Timeout-specific error handling
-  if (error.name === "AbortError") {
+  if (error.name === 'AbortError') {
     lastError = new Error(`Request timeout after ${timeoutMs}ms`);
   }
 }
@@ -139,9 +135,9 @@ catch (error) {
 ```javascript
 async function fetchWithCredentials(url) {
   const response = await fetchWithRetry(url, {
-    credentials: "include",
+    credentials: 'include',
     headers: {
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
   });
 }
@@ -151,22 +147,22 @@ async function fetchWithCredentials(url) {
 
 ```javascript
 async function fetchWithCredentials(url) {
-  console.log("[Lock-in] fetchWithCredentials:", url.substring(0, 100));
+  console.log('[Lock-in] fetchWithCredentials:', url.substring(0, 100));
 
   // NEW: URL validation
   try {
     new URL(url);
   } catch (e) {
-    console.error("[Lock-in] Invalid URL:", url, e);
-    throw new Error("Invalid URL provided");
+    console.error('[Lock-in] Invalid URL:', url, e);
+    throw new Error('Invalid URL provided');
   }
 
   const response = await fetchWithRetry(url, {
-    credentials: "include",
-    mode: "cors", // NEW: Explicit CORS mode
+    credentials: 'include',
+    mode: 'cors', // NEW: Explicit CORS mode
     headers: {
-      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "User-Agent": "Mozilla/5.0 (Chrome Extension)", // NEW: User-Agent header
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'User-Agent': 'Mozilla/5.0 (Chrome Extension)', // NEW: User-Agent header
     },
   });
 
@@ -197,23 +193,14 @@ export function extractCaptionVttUrl(html: string): string | null {
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);
       // NEW: Log which pattern matched
-      console.log(
-        `[Panopto] Caption URL found with pattern ${i + 1}:`,
-        url.substring(0, 100)
-      );
+      console.log(`[Panopto] Caption URL found with pattern ${i + 1}:`, url.substring(0, 100));
       return url;
     }
   }
 
   // NEW: Log when no caption found
-  console.warn(
-    "[Panopto] No caption URL found in embed HTML. HTML length:",
-    html.length
-  );
-  console.log(
-    "[Panopto] HTML sample:",
-    html.substring(0, 500).replace(/\s+/g, " ")
-  );
+  console.warn('[Panopto] No caption URL found in embed HTML. HTML length:', html.length);
+  console.log('[Panopto] HTML sample:', html.substring(0, 500).replace(/\s+/g, ' '));
 
   return null;
 }

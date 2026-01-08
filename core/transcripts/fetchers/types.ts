@@ -1,12 +1,12 @@
 /**
  * Fetcher Interfaces
- * 
+ *
  * Abstraction for network operations that can be implemented by:
  * - Chrome extension background script (with CORS bypass and credentials)
  * - Web app (standard fetch API)
  * - Node.js (server-side fetch)
  * - Test mocks
- * 
+ *
  * No Chrome dependencies - pure interfaces.
  */
 
@@ -18,7 +18,7 @@ import type { PanoptoInfo } from '../providers/panoptoProvider';
 export interface AsyncFetcher {
   /** Fetch HTML/text content with credentials included */
   fetchWithCredentials(url: string): Promise<string>;
-  
+
   /** Fetch JSON with credentials included */
   fetchJson<T>(url: string): Promise<T>;
 }
@@ -39,7 +39,7 @@ export interface EnhancedAsyncFetcher extends AsyncFetcher {
     redirected?: boolean;
     status?: number;
   }>;
-  
+
   /**
    * Extract Panopto info from HTML content.
    * Used for dynamic URL discovery when captions aren't found in initial URLs.
@@ -47,16 +47,14 @@ export interface EnhancedAsyncFetcher extends AsyncFetcher {
    */
   extractPanoptoInfoFromHtml?(
     html: string,
-    baseUrl: string
+    baseUrl: string,
   ): { info: PanoptoInfo; url?: string } | null;
 }
 
 /**
  * Type guard to check if fetcher supports redirect tracking
  */
-export function hasRedirectSupport(
-  fetcher: AsyncFetcher
-): fetcher is EnhancedAsyncFetcher {
+export function hasRedirectSupport(fetcher: AsyncFetcher): fetcher is EnhancedAsyncFetcher {
   return (
     'fetchHtmlWithRedirectInfo' in fetcher &&
     typeof fetcher.fetchHtmlWithRedirectInfo === 'function'
@@ -66,9 +64,7 @@ export function hasRedirectSupport(
 /**
  * Type guard to check if fetcher supports HTML parsing
  */
-export function hasHtmlParsingSupport(
-  fetcher: AsyncFetcher
-): fetcher is EnhancedAsyncFetcher {
+export function hasHtmlParsingSupport(fetcher: AsyncFetcher): fetcher is EnhancedAsyncFetcher {
   return (
     'extractPanoptoInfoFromHtml' in fetcher &&
     typeof fetcher.extractPanoptoInfoFromHtml === 'function'

@@ -1,0 +1,78 @@
+﻿{
+    "description":  "Documentation search and indexing",
+    "security":  {
+                     "readonly":  true,
+                     "max_results":  50,
+                     "rate_limit":  {
+                                        "searches_per_minute":  30
+                                    },
+                     "max_context_chars":  5000
+                 },
+    "server":  "lockin-docs",
+    "version":  "1.0.0",
+    "indexed_paths":  [
+                          "docs/**/*.md",
+                          "AGENTS.md",
+                          "CODE_OVERVIEW.md",
+                          "DATABASE.MD",
+                          "README.md",
+                          "extension/AGENTS.md",
+                          "extension/README.md"
+                      ],
+    "safety_features":  {
+                            "result_sanitization":  true,
+                            "query_validation":  true,
+                            "context_size_limit":  true
+                        },
+    "excluded_patterns":  [
+                              "**/node_modules/**",
+                              "**/.git/**",
+                              "**/coverage/**"
+                          ],
+    "metadata":  {
+                     "indexed_file_count":  32,
+                     "indexed_files":  [
+                                           "backend/README.md",
+                                           "docs/ARCHITECTURE.md",
+                                           "docs/MCP_SETUP.md",
+                                           "docs/PROMPT_LOG.md",
+                                           "docs/QUALITY_AUDIT_2025-12-16.md",
+                                           "docs/REFACTOR_PLAN.md",
+                                           "docs/REPO_MAP.md",
+                                           "docs/SMOKE_CHECKLIST.md",
+                                           "docs/STATUS.md",
+                                           "docs/TRANSCRIPT_REVIEW.md",
+                                           "docs/TRANSCRIPT_TROUBLESHOOTING.md",
+                                           "extension/icons/README.md",
+                                           "extension/AGENTS.md",
+                                           "extension/README.md",
+                                           "shared/ui/AGENTS.md",
+                                           "tools/mcp/config/README.md",
+                                           "tools/mcp/docs/FEATURE_WORKFLOW.md",
+                                           "tools/mcp/docs/README.md",
+                                           "tools/mcp/docs/SUPABASE_READONLY_SETUP.md",
+                                           "tools/mcp/docs/TROUBLESHOOTING.md",
+                                           "tools/mcp/docs/USAGE_GUIDELINES.md",
+                                           "tools/mcp/QUICK_START.md",
+                                           "tools/mcp/README.md",
+                                           "tools/mcp/SETUP.md",
+                                           "tools/mcp/SMOKE_TESTS.md",
+                                           "tools/mcp/SUPABASE_READONLY_SETUP.md",
+                                           "AGENTS.md",
+                                           "CODE_OVERVIEW.md",
+                                           "DATABASE.MD",
+                                           "README.md",
+                                           "TRANSCRIPT_FIX_SUMMARY.md",
+                                           "TRANSCRIPT_SYSTEM_MAP.md"
+                                       ],
+                     "source":  "Indexed from repository markdown files",
+                     "last_updated":  "2026-01-09 02:11:53",
+                     "auto_generated":  true
+                 },
+    "search_features":  {
+                            "code_block_extraction":  true,
+                            "full_text_search":  true,
+                            "fuzzy_matching":  true,
+                            "context_extraction":  true
+                        }
+}

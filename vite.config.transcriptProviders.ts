@@ -24,7 +24,7 @@ export default defineConfig({
   plugins: [
     ensureAsciiSafeOutput(
       resolve(process.cwd(), 'extension/dist/libs/transcriptProviders.js'),
-      'Processed transcriptProviders.js for ASCII compatibility'
+      'Processed transcriptProviders.js for ASCII compatibility',
     ),
   ],
   build: createIifeBuildConfig({

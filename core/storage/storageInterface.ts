@@ -1,11 +1,11 @@
 /**
  * Storage Interface
- * 
+ *
  * Abstraction for storage operations that can be implemented by:
  * - Chrome extension (chrome.storage)
  * - Web app (localStorage)
  * - Node.js (file system or database)
- * 
+ *
  * No Chrome dependencies - pure interface.
  */
 
@@ -31,7 +31,12 @@ export interface StorageInterface {
   /**
    * Listen for storage changes
    */
-  onChanged(callback: (changes: Record<string, { oldValue?: any; newValue?: any }>, areaName: string) => void): () => void;
+  onChanged(
+    callback: (
+      changes: Record<string, { oldValue?: any; newValue?: any }>,
+      areaName: string,
+    ) => void,
+  ): () => void;
 }
 
 /**

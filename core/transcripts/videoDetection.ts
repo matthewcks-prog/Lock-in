@@ -5,11 +5,7 @@
  * No Chrome dependencies - can be tested without browser.
  */
 
-import type {
-  DetectedVideo,
-  VideoDetectionContext,
-  VideoProvider,
-} from './types';
+import type { DetectedVideo, VideoDetectionContext, VideoProvider } from './types';
 
 import {
   extractPanoptoInfo as _extractPanoptoInfo,
@@ -17,9 +13,7 @@ import {
   buildPanoptoEmbedUrl,
   type PanoptoInfo,
 } from './providers/panoptoProvider';
-import {
-  detectEcho360Videos as _detectEcho360Videos,
-} from './providers/echo360Provider';
+import { detectEcho360Videos as _detectEcho360Videos } from './providers/echo360Provider';
 
 // Re-export Panopto functions for backwards compatibility
 export const extractPanoptoInfo = _extractPanoptoInfo;
@@ -44,7 +38,7 @@ export const MAX_IFRAME_DEPTH = 3;
  */
 export function detectPanoptoVideosFromIframes(
   iframes: VideoDetectionContext['iframes'],
-  pageUrl?: string
+  pageUrl?: string,
 ): DetectedVideo[] {
   const videos: DetectedVideo[] = [];
   const seenIds = new Set<string>();
@@ -84,10 +78,7 @@ export function detectPanoptoVideosFromIframes(
 
 // HTML5 Detection Functions
 
-function resolveUrl(
-  candidate: string | null | undefined,
-  baseUrl: string
-): string | null {
+function resolveUrl(candidate: string | null | undefined, baseUrl: string): string | null {
   if (!candidate) return null;
   try {
     return new URL(candidate, baseUrl).toString();
@@ -138,9 +129,7 @@ function isElementVisible(element: Element | null): boolean {
 function getElementLabel(el: Element | null): string | null {
   if (!el) return null;
   const label =
-    el.getAttribute('data-title') ||
-    el.getAttribute('aria-label') ||
-    el.getAttribute('title');
+    el.getAttribute('data-title') || el.getAttribute('aria-label') || el.getAttribute('title');
   return label ? label.trim() : null;
 }
 
@@ -179,11 +168,7 @@ function getFilenameTitle(mediaUrl: string | null): string | null {
   }
 }
 
-function getVideoTitle(
-  video: HTMLVideoElement,
-  mediaUrl: string | null,
-  index: number
-): string {
+function getVideoTitle(video: HTMLVideoElement, mediaUrl: string | null, index: number): string {
   const directTitle = getElementLabel(video);
   if (directTitle) return directTitle;
 
@@ -246,11 +231,9 @@ function getMediaUrl(video: HTMLVideoElement, baseUrl: string): string | null {
 
 function getTrackUrls(
   video: HTMLVideoElement,
-  baseUrl: string
+  baseUrl: string,
 ): Array<{ kind: string; label?: string; srclang?: string; src: string }> {
-  const tracks = Array.from(
-    video.querySelectorAll('track')
-  ) as HTMLTrackElement[];
+  const tracks = Array.from(video.querySelectorAll('track')) as HTMLTrackElement[];
   const results: Array<{
     kind: string;
     label?: string;
@@ -277,9 +260,7 @@ function getTrackUrls(
   return results;
 }
 
-function getDrmInfo(
-  video: HTMLVideoElement
-): { detected: boolean; reason?: string } {
+function getDrmInfo(video: HTMLVideoElement): { detected: boolean; reason?: string } {
   if (video.mediaKeys) {
     return { detected: true, reason: 'mediaKeys' };
   }
@@ -315,12 +296,9 @@ function buildDomSelector(element: Element): string | undefined {
     }
 
     const siblings = Array.from(parent.children) as Element[];
-    const sameTagSiblings = siblings.filter(
-      (child) => child.tagName === currentTagName
-    );
+    const sameTagSiblings = siblings.filter((child) => child.tagName === currentTagName);
     const index = sameTagSiblings.indexOf(current);
-    const suffix =
-      sameTagSiblings.length > 1 ? `:nth-of-type(${index + 1})` : '';
+    const suffix = sameTagSiblings.length > 1 ? `:nth-of-type(${index + 1})` : '';
     segments.unshift(`${tagName}${suffix}`);
 
     current = parent;
@@ -339,18 +317,16 @@ function hashString(value: string): string {
   return Math.abs(hash).toString(36);
 }
 
-export function detectHtml5Videos(
-  context: VideoDetectionContext
-): DetectedVideo[] {
+export function detectHtml5Videos(context: VideoDetectionContext): DetectedVideo[] {
   const doc = context.document;
   if (!doc) {
     return [];
   }
 
   const baseUrl = doc.baseURI || context.pageUrl;
-  const videoElements = Array.from(
-    doc.querySelectorAll('video')
-  ).filter((video) => isElementVisible(video)) as HTMLVideoElement[];
+  const videoElements = Array.from(doc.querySelectorAll('video')).filter((video) =>
+    isElementVisible(video),
+  ) as HTMLVideoElement[];
   const videos: DetectedVideo[] = [];
 
   for (let index = 0; index < videoElements.length; index += 1) {
@@ -362,9 +338,7 @@ export function detectHtml5Videos(
     const title = getVideoTitle(video, mediaUrl, index);
     const durationMs = getVideoDurationMs(video);
     const drmInfo = getDrmInfo(video);
-    const drmFields = drmInfo.detected
-      ? { drmDetected: true, drmReason: drmInfo.reason }
-      : {};
+    const drmFields = drmInfo.detected ? { drmDetected: true, drmReason: drmInfo.reason } : {};
 
     const idSource = mediaUrl ? `${mediaUrl}_${index}` : `video_${index}`;
     const id = domId || `html5_${hashString(idSource)}`;
@@ -406,14 +380,9 @@ export interface VideoDetectionResult {
 /**
  * Detect videos synchronously from page context.
  */
-export function detectVideosSync(
-  context: VideoDetectionContext
-): VideoDetectionResult {
+export function detectVideosSync(context: VideoDetectionContext): VideoDetectionResult {
   // Check for Panopto videos via embedded iframes and current URL
-  const panoptoFromIframes = detectPanoptoVideosFromIframes(
-    context.iframes,
-    context.pageUrl
-  );
+  const panoptoFromIframes = detectPanoptoVideosFromIframes(context.iframes, context.pageUrl);
 
   if (panoptoFromIframes.length > 0) {
     const result: VideoDetectionResult = {
@@ -460,24 +429,18 @@ export function detectVideosSync(
  * Collect iframe information from a document.
  * This should be called from content script context where document is available.
  */
-export function collectIframeInfo(
-  doc: Document,
-  depth = 0
-): VideoDetectionContext['iframes'] {
+export function collectIframeInfo(doc: Document, depth = 0): VideoDetectionContext['iframes'] {
   if (depth > MAX_IFRAME_DEPTH) {
     return [];
   }
 
-  const iframes = Array.from(
-    doc.querySelectorAll('iframe')
-  ) as HTMLIFrameElement[];
-  
+  const iframes = Array.from(doc.querySelectorAll('iframe')) as HTMLIFrameElement[];
+
   const result: VideoDetectionContext['iframes'] = [];
 
   for (const iframe of iframes) {
     if (!isElementVisible(iframe)) continue;
-    const src =
-      iframe.src || iframe.getAttribute('data-src') || iframe.dataset.src || '';
+    const src = iframe.src || iframe.getAttribute('data-src') || iframe.dataset.src || '';
     if (src) {
       result.push({
         src,
@@ -510,4 +473,3 @@ export function buildDetectionContext(doc: Document): VideoDetectionContext {
     document: doc,
   };
 }
-

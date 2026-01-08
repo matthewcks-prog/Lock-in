@@ -2,8 +2,8 @@
  * Transcript controller job lifecycle tests.
  */
 
-const test = require("node:test");
-const assert = require("node:assert/strict");
+const test = require('node:test');
+const assert = require('node:assert/strict');
 
 function createRepoState() {
   return {
@@ -16,10 +16,10 @@ function createStubRepo(state) {
   return {
     async createTranscriptJob(payload) {
       const job = {
-        id: payload.jobId || "job-1",
+        id: payload.jobId || 'job-1',
         user_id: payload.userId,
         fingerprint: payload.fingerprint,
-        status: "created",
+        status: 'created',
         error: null,
         bytes_received: 0,
         expected_total_chunks: payload.expectedTotalChunks ?? null,
@@ -107,9 +107,9 @@ function createReq({ userId, jobId, body, headers }) {
 }
 
 function loadController({ repo, service }) {
-  const repoPath = require.resolve("../../repositories/transcriptsRepository");
-  const servicePath = require.resolve("../../services/transcriptsService");
-  const controllerPath = require.resolve("../../controllers/transcriptsController");
+  const repoPath = require.resolve('../../repositories/transcriptsRepository');
+  const servicePath = require.resolve('../../services/transcriptsService');
+  const controllerPath = require.resolve('../../controllers/transcriptsController');
 
   const originalRepo = require.cache[repoPath];
   const originalService = require.cache[servicePath];
@@ -119,7 +119,7 @@ function loadController({ repo, service }) {
   require.cache[servicePath] = { exports: service };
   delete require.cache[controllerPath];
 
-  const controller = require("../../controllers/transcriptsController");
+  const controller = require('../../controllers/transcriptsController');
 
   return {
     controller,
@@ -143,7 +143,7 @@ function loadController({ repo, service }) {
   };
 }
 
-test("accepts out-of-order chunks and marks job uploaded", async () => {
+test('accepts out-of-order chunks and marks job uploaded', async () => {
   const state = createRepoState();
   const flags = { started: false, canceled: false };
   const repo = createStubRepo(state);
@@ -151,10 +151,10 @@ test("accepts out-of-order chunks and marks job uploaded", async () => {
   const { controller, restore } = loadController({ repo, service });
 
   try {
-    state.jobs.set("job-1", {
-      id: "job-1",
-      user_id: "user-1",
-      status: "created",
+    state.jobs.set('job-1', {
+      id: 'job-1',
+      user_id: 'user-1',
+      status: 'created',
       expected_total_chunks: 2,
       bytes_received: 0,
     });
@@ -162,34 +162,34 @@ test("accepts out-of-order chunks and marks job uploaded", async () => {
     const res1 = createRes();
     await controller.uploadChunk(
       createReq({
-        userId: "user-1",
-        jobId: "job-1",
-        body: Buffer.from("a"),
-        headers: { "x-chunk-index": "1", "x-total-chunks": "2" },
+        userId: 'user-1',
+        jobId: 'job-1',
+        body: Buffer.from('a'),
+        headers: { 'x-chunk-index': '1', 'x-total-chunks': '2' },
       }),
-      res1
+      res1,
     );
 
-    assert.equal(state.jobs.get("job-1").status, "uploading");
+    assert.equal(state.jobs.get('job-1').status, 'uploading');
 
     const res2 = createRes();
     await controller.uploadChunk(
       createReq({
-        userId: "user-1",
-        jobId: "job-1",
-        body: Buffer.from("b"),
-        headers: { "x-chunk-index": "0", "x-total-chunks": "2" },
+        userId: 'user-1',
+        jobId: 'job-1',
+        body: Buffer.from('b'),
+        headers: { 'x-chunk-index': '0', 'x-total-chunks': '2' },
       }),
-      res2
+      res2,
     );
 
-    assert.equal(state.jobs.get("job-1").status, "uploaded");
+    assert.equal(state.jobs.get('job-1').status, 'uploaded');
   } finally {
     restore();
   }
 });
 
-test("rejects finalize when chunks are missing", async () => {
+test('rejects finalize when chunks are missing', async () => {
   const state = createRepoState();
   const flags = { started: false, canceled: false };
   const repo = createStubRepo(state);
@@ -197,32 +197,32 @@ test("rejects finalize when chunks are missing", async () => {
   const { controller, restore } = loadController({ repo, service });
 
   try {
-    state.jobs.set("job-2", {
-      id: "job-2",
-      user_id: "user-1",
-      status: "uploading",
+    state.jobs.set('job-2', {
+      id: 'job-2',
+      user_id: 'user-1',
+      status: 'uploading',
       expected_total_chunks: 2,
       bytes_received: 1,
-      fingerprint: "fp-2",
+      fingerprint: 'fp-2',
     });
-    state.chunks.set("job-2", new Map([[0, 1]]));
+    state.chunks.set('job-2', new Map([[0, 1]]));
 
-    const req = createReq({ userId: "user-1", jobId: "job-2", body: {} });
+    const req = createReq({ userId: 'user-1', jobId: 'job-2', body: {} });
     const res = createRes();
 
     await assert.rejects(
       () => controller.finalizeJob(req, res),
       (err) => {
-        assert.equal(err.code, "TRANSCRIPT_MISSING_CHUNKS");
+        assert.equal(err.code, 'TRANSCRIPT_MISSING_CHUNKS');
         return true;
-      }
+      },
     );
   } finally {
     restore();
   }
 });
 
-test("rejects chunk uploads after cancel", async () => {
+test('rejects chunk uploads after cancel', async () => {
   const state = createRepoState();
   const flags = { started: false, canceled: false };
   const repo = createStubRepo(state);
@@ -230,43 +230,43 @@ test("rejects chunk uploads after cancel", async () => {
   const { controller, restore } = loadController({ repo, service });
 
   try {
-    state.jobs.set("job-3", {
-      id: "job-3",
-      user_id: "user-1",
-      status: "uploading",
+    state.jobs.set('job-3', {
+      id: 'job-3',
+      user_id: 'user-1',
+      status: 'uploading',
       expected_total_chunks: 2,
       bytes_received: 1,
     });
 
     const cancelRes = createRes();
     await controller.cancelJob(
-      createReq({ userId: "user-1", jobId: "job-3", body: {} }),
-      cancelRes
+      createReq({ userId: 'user-1', jobId: 'job-3', body: {} }),
+      cancelRes,
     );
 
-    assert.equal(state.jobs.get("job-3").status, "canceled");
+    assert.equal(state.jobs.get('job-3').status, 'canceled');
 
     const req = createReq({
-      userId: "user-1",
-      jobId: "job-3",
-      body: Buffer.from("c"),
-      headers: { "x-chunk-index": "1", "x-total-chunks": "2" },
+      userId: 'user-1',
+      jobId: 'job-3',
+      body: Buffer.from('c'),
+      headers: { 'x-chunk-index': '1', 'x-total-chunks': '2' },
     });
     const res = createRes();
 
     await assert.rejects(
       () => controller.uploadChunk(req, res),
       (err) => {
-        assert.equal(err.code, "TRANSCRIPT_CANCELED");
+        assert.equal(err.code, 'TRANSCRIPT_CANCELED');
         return true;
-      }
+      },
     );
   } finally {
     restore();
   }
 });
 
-test("cancel mid-processing stops job", async () => {
+test('cancel mid-processing stops job', async () => {
   const state = createRepoState();
   const flags = { started: false, canceled: false };
   const repo = createStubRepo(state);
@@ -274,21 +274,18 @@ test("cancel mid-processing stops job", async () => {
   const { controller, restore } = loadController({ repo, service });
 
   try {
-    state.jobs.set("job-4", {
-      id: "job-4",
-      user_id: "user-1",
-      status: "processing",
+    state.jobs.set('job-4', {
+      id: 'job-4',
+      user_id: 'user-1',
+      status: 'processing',
       expected_total_chunks: 2,
       bytes_received: 2,
     });
 
     const res = createRes();
-    await controller.cancelJob(
-      createReq({ userId: "user-1", jobId: "job-4", body: {} }),
-      res
-    );
+    await controller.cancelJob(createReq({ userId: 'user-1', jobId: 'job-4', body: {} }), res);
 
-    assert.equal(state.jobs.get("job-4").status, "canceled");
+    assert.equal(state.jobs.get('job-4').status, 'canceled');
     assert.equal(flags.canceled, true);
   } finally {
     restore();

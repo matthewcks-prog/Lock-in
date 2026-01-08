@@ -1,9 +1,9 @@
 /**
  * Chrome Storage Wrapper for Extension Content Scripts
- * 
+ *
  * Provides storage abstraction with both sync and local storage support.
  * Exposes window.LockInStorage for use by content scripts.
- * 
+ *
  * This is bundled by vite.config.contentLibs.ts into extension/dist/libs/
  */
 
@@ -11,18 +11,18 @@
  * Storage keys used throughout the extension
  */
 export const STORAGE_KEYS = {
-  SIDEBAR_IS_OPEN: "lockin_sidebar_isOpen",
-  SIDEBAR_ACTIVE_TAB: "lockin_sidebar_activeTab",
-  CURRENT_CHAT_ID: "lockinCurrentChatId",
-  ACTIVE_MODE: "lockinActiveMode",
-  MODE_PREFERENCE: "modePreference",
-  DEFAULT_MODE: "defaultMode",
-  LAST_USED_MODE: "lastUsedMode",
-  HIGHLIGHTING_ENABLED: "highlightingEnabled",
-  SELECTED_NOTE_ID: "lockin_selectedNoteId",
+  SIDEBAR_IS_OPEN: 'lockin_sidebar_isOpen',
+  SIDEBAR_ACTIVE_TAB: 'lockin_sidebar_activeTab',
+  CURRENT_CHAT_ID: 'lockinCurrentChatId',
+  ACTIVE_MODE: 'lockinActiveMode',
+  MODE_PREFERENCE: 'modePreference',
+  DEFAULT_MODE: 'defaultMode',
+  LAST_USED_MODE: 'lastUsedMode',
+  HIGHLIGHTING_ENABLED: 'highlightingEnabled',
+  SELECTED_NOTE_ID: 'lockin_selectedNoteId',
 } as const;
 
-export type StorageKey = typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS];
+export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
 /**
  * Storage change event
@@ -44,7 +44,7 @@ export interface Storage {
   setLocal: (key: string, value: unknown) => Promise<void>;
   removeLocal: (keys: string | string[]) => Promise<void>;
   onChanged: (
-    callback: (changes: Record<string, StorageChange>, areaName: string) => void
+    callback: (changes: Record<string, StorageChange>, areaName: string) => void,
   ) => () => void;
 }
 
@@ -153,11 +153,11 @@ function createStorage(): Storage {
     },
 
     onChanged(
-      callback: (changes: Record<string, StorageChange>, areaName: string) => void
+      callback: (changes: Record<string, StorageChange>, areaName: string) => void,
     ): () => void {
       const listener = (
         changes: { [key: string]: chrome.storage.StorageChange },
-        areaName: string
+        areaName: string,
       ) => {
         // Convert Chrome's StorageChange format to our interface format
         const normalizedChanges: Record<string, StorageChange> = {};
@@ -184,7 +184,7 @@ function createStorage(): Storage {
 const storage = createStorage();
 
 // Expose globally for content scripts
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   (window as any).LockInStorage = storage;
 }
 
