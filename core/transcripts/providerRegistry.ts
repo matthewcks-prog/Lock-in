@@ -58,6 +58,13 @@ export interface TranscriptProviderV2 {
     video: DetectedVideo,
     fetcher: AsyncFetcher | EnhancedAsyncFetcher,
   ): Promise<TranscriptExtractionResult>;
+
+  /**
+   * Get a hint message when no videos are detected.
+   * This allows provider-specific guidance (e.g., "Open a lesson page").
+   * Returns null if no hint is available.
+   */
+  getEmptyDetectionHint?(context: VideoDetectionContext): string | null;
 }
 
 /**

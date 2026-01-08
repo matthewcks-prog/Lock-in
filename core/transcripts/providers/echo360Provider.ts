@@ -752,6 +752,19 @@ export class Echo360Provider implements TranscriptProviderV2 {
     return detectEcho360Videos(context);
   }
 
+  /**
+   * Get a hint message when no Echo360 videos are detected.
+   * Provides guidance for users on Echo360 section pages.
+   */
+  getEmptyDetectionHint(context: VideoDetectionContext): string | null {
+    // Only show hint if we're on an Echo360 page
+    if (!isEcho360Url(context.pageUrl)) {
+      return null;
+    }
+    return 'Echo360 tip: open a lesson page or the syllabus list to load videos.';
+  }
+
+
   async detectVideosAsync(
     context: VideoDetectionContext,
     fetcher: AsyncFetcher,
@@ -791,13 +804,13 @@ export class Echo360Provider implements TranscriptProviderV2 {
     const mergedVideos =
       syllabusVideos.length > 0
         ? syncVideos.map((video) => {
-            const match = findMatchingSyllabusVideo(video, syllabusVideos, requestId);
-            if (match) {
-              matchedCount += 1;
-              return mergeSyllabusMetadata(video, match);
-            }
-            return video;
-          })
+          const match = findMatchingSyllabusVideo(video, syllabusVideos, requestId);
+          if (match) {
+            matchedCount += 1;
+            return mergeSyllabusMetadata(video, match);
+          }
+          return video;
+        })
         : syncVideos;
 
     if (syllabusVideos.length > 0) {
@@ -824,11 +837,11 @@ export class Echo360Provider implements TranscriptProviderV2 {
       const resolved = await resolveEcho360Info(video.embedUrl, fetcher, requestId);
       const updated: DetectedVideo = resolved?.mediaId
         ? {
-            ...video,
-            echoMediaId: resolved.mediaId,
-            echoLessonId: resolved.lessonId || video.echoLessonId,
-            echoBaseUrl: resolved.baseUrl || video.echoBaseUrl,
-          }
+          ...video,
+          echoMediaId: resolved.mediaId,
+          echoLessonId: resolved.lessonId || video.echoLessonId,
+          echoBaseUrl: resolved.baseUrl || video.echoBaseUrl,
+        }
         : video;
       const key =
         getUniqueKey(updated.echoMediaId ?? null, updated.echoLessonId ?? null) || updated.id;
