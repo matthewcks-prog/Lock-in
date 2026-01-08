@@ -4,7 +4,20 @@
  * Components and hooks for video transcript extraction in the extension sidebar.
  */
 
-export { VideoListPanel } from './VideoListPanel';
+// Transcript-specific components (wrapping generic video components)
+export {
+    TranscriptVideoListPanel,
+    TranscriptVideoStatus,
+    isAiTranscriptionBusy,
+    getAiStatusLabel,
+} from './components';
+export type {
+    TranscriptVideoListPanelProps,
+    AiTranscriptionUiState,
+    VideoExtractionResult,
+    AiTranscriptionStatus,
+} from './components';
+
 export { TranscriptMessage } from './TranscriptMessage';
 export { useTranscripts } from './useTranscripts';
 

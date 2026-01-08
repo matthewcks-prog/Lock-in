@@ -15,7 +15,7 @@ import { useNotesList } from '../hooks/useNotesList';
 import { NotesPanel } from './notes/NotesPanel';
 import { createNoteContentFromPlainText } from './notes/content';
 import { TranscriptMessage } from './transcripts/TranscriptMessage';
-import { VideoListPanel } from './transcripts/VideoListPanel';
+import { TranscriptVideoListPanel } from './transcripts/components';
 import { useTranscripts } from './transcripts/useTranscripts';
 
 interface StorageAdapter {
@@ -1130,7 +1130,7 @@ export function LockInSidebar({
                           />
                         )}
                         {transcriptState.isVideoListOpen && (
-                          <VideoListPanel
+                          <TranscriptVideoListPanel
                             videos={transcriptState.videos}
                             isLoading={transcriptState.isDetecting}
                             isExtracting={transcriptState.isExtracting}
