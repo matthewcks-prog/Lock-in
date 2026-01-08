@@ -3,6 +3,7 @@
 Purpose: Quick orientation for humans/AI. For current implementation details, see `CODE_OVERVIEW.md`.
 
 ## Tree (max 4 levels)
+
 ```
 backend/
   index.js, app.js, routes/, controllers/, middleware/, migrations/
@@ -25,9 +26,12 @@ shared/
   ui/components/ (Button, Card, ConfirmDialog, Toast, TextInput, Tabs)
 docs/
   AGENTS.md, ARCHITECTURE.md, REPO_MAP.md, STATUS.md, REFACTOR_PLAN.md, PROMPT_LOG.md, SMOKE_CHECKLIST.md, TRANSCRIPT_TROUBLESHOOTING.md, QUALITY_AUDIT_2025-12-16.md
+tools/
+  mcp/ (MCP server setup, configs, scripts for AI assistant tooling)
 ```
 
 ## Entrypoints & Outputs
+
 - **Extension content script**: `extension/contentScript-react.js` (injects sidebar and loads `extension/dist/ui/index.js`).
 - **Sidebar UI source**: `ui/extension/index.tsx` (renders `<LockInSidebar />`); builds to `extension/dist/ui/index.js`.
 - **API/auth bundle**: `extension/src/initApi.ts` → `extension/dist/libs/initApi.js` (`window.LockInAPI` / `window.LockInAuth`).
@@ -35,6 +39,7 @@ docs/
 - **Backend**: `backend/index.js` (Express server bootstraps from `app.js`).
 
 ## Transcript System
+
 - **Detection**: `core/transcripts/videoDetection.ts` (Panopto/Echo360/HTML5 DOM detection)
 - **Providers**: `core/transcripts/providers/` (Panopto, Echo360) - business logic, no Chrome APIs
 - **Fetcher interfaces**: `core/transcripts/fetchers/types.ts` (AsyncFetcher, EnhancedAsyncFetcher)
@@ -44,6 +49,7 @@ docs/
 - **UI hooks**: `ui/extension/transcripts/hooks/` (useTranscripts - React state management)
 
 ## Build Commands (npm scripts)
+
 - `npm run build:initApi` → `extension/dist/libs/initApi.js`
 - `npm run build:contentLibs` → `extension/dist/libs/contentLibs.js`
 - `npm run build:transcriptProviders` -> `extension/dist/libs/transcriptProviders.js`
@@ -54,6 +60,13 @@ docs/
 **Note:** `extension/dist/ui/**` and `extension/dist/libs/**` are build outputs—do not hand-edit.
 
 ## Tests & Guardrails
+
 - Unit tests: `core/utils/__tests__/`, `integrations/adapters/__tests__/` (vitest, jsdom).
 - Guardrail commands: `npm run lint`, `npm run test`, `npm run type-check`, `npm run build`, `npm run verify-build`.
 - Manual: see `docs/SMOKE_CHECKLIST.md` (run §1 for build/load sanity).
+
+## MCP Tooling
+
+- **MCP servers**: `tools/mcp/` contains setup, configs, and scripts for AI assistant tooling (Cursor AI).
+- **Documentation**: See `tools/mcp/README.md` for complete setup guide.
+- **Config updates**: Run `npm run mcp:docs:draft` → review → `npm run mcp:docs:publish` when adding tables/scripts/file types.

@@ -45,13 +45,13 @@ Run this checklist:
 
 ### Expected Results
 
-| Step          | Expected                                                                        |
-| ------------- | ------------------------------------------------------------------------------- |
-| type-check    | Exits with code 0, no type errors                                               |
-| build         | Exits with code 0, files generated in `extension/dist/libs/` and `extension/dist/ui/`            |
-| verify-build  | Exits with code 0, all expected files present                                   |
-| Load unpacked | Extension loads without errors, icon visible in toolbar                         |
-| New tab       | No console errors related to Lock-in; content scripts loaded on supported sites |
+| Step          | Expected                                                                              |
+| ------------- | ------------------------------------------------------------------------------------- |
+| type-check    | Exits with code 0, no type errors                                                     |
+| build         | Exits with code 0, files generated in `extension/dist/libs/` and `extension/dist/ui/` |
+| verify-build  | Exits with code 0, all expected files present                                         |
+| Load unpacked | Extension loads without errors, icon visible in toolbar                               |
+| New tab       | No console errors related to Lock-in; content scripts loaded on supported sites       |
 
 ### How to Verify Console
 
@@ -202,7 +202,7 @@ Run this checklist:
 console.log(window.__LOCKIN_LOADED__);
 
 // In background console - check service worker active
-console.log("Background active");
+console.log('Background active');
 
 // Check storage state
 chrome.storage.local.get(null, (data) => console.log(data));

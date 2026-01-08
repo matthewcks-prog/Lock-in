@@ -68,7 +68,7 @@ function isRetryableError(error: unknown): boolean {
  * Delay helper for retry backoff.
  */
 function sleep(delayMs: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, delayMs));
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 /**
@@ -77,7 +77,7 @@ function sleep(delayMs: number): Promise<void> {
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  errorMessage: string
+  errorMessage: string,
 ): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<T>((_resolve, reject) => {
@@ -103,7 +103,7 @@ export async function fetchWithRetry<T>(
     maxRetries?: number;
     retryDelayMs?: number;
     timeoutMs?: number;
-  }
+  },
 ): Promise<T> {
   const {
     requestId,
@@ -125,7 +125,7 @@ export async function fetchWithRetry<T>(
       return await withTimeout(
         request,
         timeoutMs,
-        `${context} request timed out after ${timeoutMs}ms`
+        `${context} request timed out after ${timeoutMs}ms`,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -162,7 +162,7 @@ export async function fetchWithRetry<T>(
 
 export async function fetchHtmlWithRedirect(
   url: string,
-  fetcher: AsyncFetcher
+  fetcher: AsyncFetcher,
 ): Promise<{ html: string; finalUrl: string }> {
   if (hasRedirectSupport(fetcher) && fetcher.fetchHtmlWithRedirectInfo) {
     const result = await fetcher.fetchHtmlWithRedirectInfo(url);

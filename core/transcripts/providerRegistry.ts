@@ -11,10 +11,7 @@ import type {
   VideoDetectionContext,
   TranscriptExtractionResult,
 } from './types';
-import type {
-  AsyncFetcher,
-  EnhancedAsyncFetcher,
-} from './fetchers/types';
+import type { AsyncFetcher, EnhancedAsyncFetcher } from './fetchers/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Interface (Extended)
@@ -49,7 +46,7 @@ export interface TranscriptProviderV2 {
    */
   detectVideosAsync?(
     context: VideoDetectionContext,
-    fetcher: AsyncFetcher
+    fetcher: AsyncFetcher,
   ): Promise<DetectedVideo[]>;
 
   /**
@@ -59,7 +56,7 @@ export interface TranscriptProviderV2 {
    */
   extractTranscript?(
     video: DetectedVideo,
-    fetcher: AsyncFetcher | EnhancedAsyncFetcher
+    fetcher: AsyncFetcher | EnhancedAsyncFetcher,
   ): Promise<TranscriptExtractionResult>;
 }
 
@@ -181,4 +178,3 @@ export function detectVideosFromRegistry(context: VideoDetectionContext): {
 // Example:
 //   import { PanoptoProvider } from './providers/panoptoProvider';
 //   registerProvider(new PanoptoProvider());
-

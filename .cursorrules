@@ -1,0 +1,33 @@
+# Lock-in Project Context
+
+## Project Constraints
+- **Extension-first**: Primary UI is the Chrome extension sidebar.
+- **Chrome Isolation**:
+  - `/extension`: Chrome APIs allowed (`chrome.runtime`, `chrome.storage`).
+  - `/core` & `/api`: **NO** Chrome APIs. Pure JS/TS only.
+  - `/ui/extension`: Extension-specific React components.
+- **Single Widget**: Re-use `LockInSidebar.tsx` for all sites. Use adapters for site differences.
+
+## Core Loop
+Every feature must support: **Capture** -> **Understand** -> **Distil** -> **Organise** -> **Act**.
+
+## Tech Stack
+- React 18
+- Tailwind CSS (Use standard classes, avoid arbitrary values)
+- Vite (Build tool)
+- Supabase (Backend/Auth)
+- TanStack Query (State)
+
+## Coding Style ("Vibe" Friendly)
+- **Functional**: Prefer functional components and hooks.
+- **Typed**: strict TypeScript. Define types in `core/domain`.
+- **Clean**: Small files (<200 lines). Single Responsibility.
+- **D.R.Y**: Extract shared logic to `/core` hooks or services.
+
+## Architecture
+- `core/transcripts`: Provider pattern for video extraction.
+- `integrations/adapters`: Strategy pattern for site-specific logic (`BaseAdapter`).
+
+## Common Tasks
+- **New Site**: Add adapter in `integrations/adapters`, register in `integrations/index.ts`.
+- **New Feature**: Add domain logic in `core`, UI in `ui/extension`.

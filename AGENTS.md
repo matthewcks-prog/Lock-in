@@ -40,6 +40,7 @@ This project uses a structured documentation approach:
 **Doc stability**: `/AGENTS.md` and `docs/ARCHITECTURE.md` are stable contracts; `docs/STATUS.md` and `CODE_OVERVIEW.md` are living snapshots; `docs/REPO_MAP.md` is a concise navigation map.
 
 **When to update docs:**
+
 - **`/AGENTS.md`**: Only when architectural boundaries, coding rules, or workflow patterns change
 - **`DATABASE.MD`**: When schema changes (new tables/columns, migrations)
 - **`CODE_OVERVIEW.md`**: When file structure or implementation patterns change
@@ -57,6 +58,7 @@ This project uses a structured documentation approach:
   - Will have its own page/layout components under `/web`
 
 Both share:
+
 - Same Supabase backend + auth
 - Same domain models (`/core`)
 - Same API client (`/api`)
@@ -152,6 +154,7 @@ To add a new site integration:
 See `CODE_OVERVIEW.md` for detailed file structure and current implementation patterns.
 
 **Key boundaries:**
+
 - `/extension` - Chrome-specific code only
 - `/core` - Business logic, domain models (NO Chrome dependencies)
 - `/integrations` - Site-specific adapters
@@ -188,7 +191,16 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
    - Update folder `AGENTS.md` if folder-specific conventions change
    - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
 
-5. **Summarize what changed**
+5. **Update MCP documentation (if applicable)**
+   - **When to update**: New database tables, new npm scripts, new file types/folders
+   - **How to update**:
+     1. Run `npm run mcp:docs:draft` (or `tools/mcp/scripts/update-mcp-docs.ps1 -Draft`) to preview changes
+     2. Review generated configs in `tools/mcp/config/`
+     3. Run `npm run mcp:docs:publish` (or `tools/mcp/scripts/update-mcp-docs.ps1 -Publish`) to stage for commit
+   - **Detailed workflow**: See `tools/mcp/docs/FEATURE_WORKFLOW.md`
+   - **Note**: MCP configs are auto-generated from `DATABASE.MD`, `package.json`, and repository structure
+
+6. **Summarize what changed**
    - List code changes (files + purpose)
    - List doc changes (`.md` files updated and what changed)
    - Note any TODOs or follow-ups
@@ -217,6 +229,9 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - [ ] Are types defined in `/core/domain/types.ts`?
 - [ ] Is state managed properly (React hooks or TanStack Query)?
 - [ ] Are components small and focused?
+- [ ] If adding new database tables → Updated `DATABASE.MD` → Ran `npm run mcp:docs:draft` → Reviewed → `npm run mcp:docs:publish`?
+- [ ] If adding new npm scripts → Ran `npm run mcp:docs:draft` → Reviewed → `npm run mcp:docs:publish`?
+- [ ] If adding new file types/folders → Ran `npm run mcp:docs:draft` → Reviewed → `npm run mcp:docs:publish`?
 
 ---
 
@@ -335,6 +350,7 @@ When making changes related to refactor preparation (guardrails, documentation, 
 This ensures the refactor plan and prompt log stay accurate and reflect the current state of refactor preparation work.
 
 **Examples of refactor-prep changes:**
+
 - Adding TypeScript type definitions for globals
 - Creating/updating build scripts (`verify-build`, etc.)
 - Adding ESLint rules for architectural boundaries

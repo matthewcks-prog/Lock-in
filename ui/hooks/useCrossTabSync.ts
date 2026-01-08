@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from 'react';
 
-const DEFAULT_SYNC_KEY = "lockin_sync_event";
+const DEFAULT_SYNC_KEY = 'lockin_sync_event';
 
 export interface CrossTabSyncEvent<T = unknown> {
   type: string;
@@ -17,9 +17,7 @@ interface UseCrossTabSyncOptions {
 export function useCrossTabSync(options: UseCrossTabSyncOptions) {
   const { onEvent, storageKey = DEFAULT_SYNC_KEY } = options;
   const handlerRef = useRef(onEvent);
-  const instanceIdRef = useRef(
-    `sync-${Date.now()}-${Math.random().toString(16).slice(2)}`
-  );
+  const instanceIdRef = useRef(`sync-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   const lastSeenRef = useRef<Record<string, number>>({});
   const lastSentRef = useRef<Record<string, number>>({});
 
@@ -29,7 +27,7 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions) {
 
   const broadcast = useCallback(
     (type: string, payload?: unknown, throttleMs = 0) => {
-      if (typeof chrome === "undefined" || !chrome.storage?.local) return;
+      if (typeof chrome === 'undefined' || !chrome.storage?.local) return;
       const now = Date.now();
       const lastSent = lastSentRef.current[type] || 0;
       if (throttleMs > 0 && now - lastSent < throttleMs) {
@@ -44,17 +42,17 @@ export function useCrossTabSync(options: UseCrossTabSyncOptions) {
       };
       chrome.storage.local.set({ [storageKey]: event });
     },
-    [storageKey]
+    [storageKey],
   );
 
   useEffect(() => {
-    if (typeof chrome === "undefined" || !chrome.storage?.onChanged) return;
+    if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return;
 
     const handleStorageChange = (
       changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
+      areaName: string,
     ) => {
-      if (areaName !== "local") return;
+      if (areaName !== 'local') return;
       const change = changes[storageKey];
       if (!change?.newValue) return;
       const event = change.newValue as CrossTabSyncEvent;

@@ -41,6 +41,7 @@ The MCP Postgres server should use a read-only connection to prevent accidental 
    - Your project ref is in the URL: `https://[PROJECT_REF].supabase.co`
 
 2. **Build Connection String**
+
    ```
    postgresql://mcp_readonly:[PASSWORD]@[PROJECT_REF].supabase.co:5432/postgres?sslmode=require
    ```
@@ -59,6 +60,7 @@ The MCP Postgres server should use a read-only connection to prevent accidental 
 1. **Open `.env.local`** in repo root (create if it doesn't exist)
 
 2. **Add connection string:**
+
    ```bash
    SUPABASE_READONLY_CONNECTION_STRING=postgresql://mcp_readonly:[PASSWORD]@[PROJECT_REF].supabase.co:5432/postgres?sslmode=require
    ```
@@ -70,11 +72,13 @@ The MCP Postgres server should use a read-only connection to prevent accidental 
 ## Step 4: Test Connection
 
 1. **Via psql** (if installed):
+
    ```bash
    psql "postgresql://mcp_readonly:[PASSWORD]@[PROJECT_REF].supabase.co:5432/postgres?sslmode=require"
    ```
 
 2. **Via Supabase Client:**
+
    ```javascript
    const { createClient } = require('@supabase/supabase-js');
    const supabase = createClient(SUPABASE_URL, READONLY_KEY);
@@ -82,7 +86,7 @@ The MCP Postgres server should use a read-only connection to prevent accidental 
    ```
 
 3. **Via MCP:**
-   - In Cursor, try: "SELECT COUNT(*) FROM notes"
+   - In Cursor, try: "SELECT COUNT(\*) FROM notes"
    - Should return a count (or 0 if no data)
 
 ## Security Notes
@@ -96,18 +100,20 @@ The MCP Postgres server should use a read-only connection to prevent accidental 
 ## Troubleshooting
 
 ### "Permission denied" errors
+
 - Verify user has `USAGE` on `public` schema
 - Check `GRANT SELECT` was run for all tables
 - Ensure `ALTER DEFAULT PRIVILEGES` was run for future tables
 
 ### Connection fails
+
 - Verify password is correct
 - Check project reference in connection string
 - Ensure `sslmode=require` is included
 - Test connection string manually with `psql` or Supabase client
 
 ### Can't see tables
+
 - Verify `GRANT SELECT ON ALL TABLES` was run
 - Check you're querying `public` schema (not `auth` or `extensions`)
 - List tables: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';`
-

@@ -9,26 +9,18 @@
       warn: console.warn,
       error: console.error,
     };
-    const PAGE_WRAPPER_ID = "lockin-page-wrapper";
-    const LOCKIN_ROOT_ID = "lockin-root";
-    const WRAPPER_SKIP_TAGS = new Set([
-      "SCRIPT",
-      "STYLE",
-      "NOSCRIPT",
-      "LINK",
-      "META",
-    ]);
+    const PAGE_WRAPPER_ID = 'lockin-page-wrapper';
+    const LOCKIN_ROOT_ID = 'lockin-root';
+    const WRAPPER_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'LINK', 'META']);
     let sidebarInstance = null;
     let pageObserver = null;
     const runtimeStorage =
-      typeof window !== "undefined" &&
-      window.LockInContent &&
-      window.LockInContent.storage
+      typeof window !== 'undefined' && window.LockInContent && window.LockInContent.storage
         ? window.LockInContent.storage
         : Storage;
 
     function injectStyles() {
-      log.debug("Styles verification: CSS should be loaded from manifest");
+      log.debug('Styles verification: CSS should be loaded from manifest');
     }
 
     function shouldMoveNode(node, wrapper, lockinRoot) {
@@ -36,18 +28,18 @@
       if (node === wrapper || node === lockinRoot) return false;
       if (node.nodeType === Node.COMMENT_NODE) return false;
       if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = node.tagName || "";
+        const tag = node.tagName || '';
         if (WRAPPER_SKIP_TAGS.has(tag)) return false;
         // Don't move fixed/absolute positioned elements - they're likely modals/popups
         // that need to stay as direct body children for correct stacking behavior
         try {
           const style = window.getComputedStyle(node);
-          const position = style.getPropertyValue("position");
-          if (position === "fixed" || position === "absolute") {
+          const position = style.getPropertyValue('position');
+          if (position === 'fixed' || position === 'absolute') {
             return false;
           }
           // Don't move elements with very high z-index (likely overlays)
-          const zIndex = parseInt(style.getPropertyValue("z-index"), 10);
+          const zIndex = parseInt(style.getPropertyValue('z-index'), 10);
           if (!isNaN(zIndex) && zIndex > 1000) {
             return false;
           }
@@ -68,7 +60,7 @@
     }
 
     function startPageWrapperObserver(wrapper) {
-      if (!wrapper || pageObserver || typeof MutationObserver === "undefined") {
+      if (!wrapper || pageObserver || typeof MutationObserver === 'undefined') {
         return;
       }
       const body = document.body;
@@ -97,7 +89,7 @@
     }
 
     function ensurePageWrapper() {
-      if (typeof document === "undefined") return null;
+      if (typeof document === 'undefined') return null;
       const body = document.body;
       if (!body) return null;
 
@@ -114,7 +106,7 @@
         return wrapper;
       }
 
-      wrapper = document.createElement("div");
+      wrapper = document.createElement('div');
       wrapper.id = PAGE_WRAPPER_ID;
 
       if (lockinRoot && lockinRoot.parentNode === body) {
@@ -142,7 +134,7 @@
             const data = await runtimeStorage.get(key);
             return data[key];
           } catch (error) {
-            log.warn("Storage get error:", error);
+            log.warn('Storage get error:', error);
             return null;
           }
         },
@@ -151,7 +143,7 @@
           try {
             await runtimeStorage.set({ [key]: value });
           } catch (error) {
-            log.warn("Storage set error:", error);
+            log.warn('Storage set error:', error);
           }
         },
         getLocal: async (key) => {
@@ -160,7 +152,7 @@
             const data = await runtimeStorage.getLocal(key);
             return data[key];
           } catch (error) {
-            log.warn("Storage getLocal error:", error);
+            log.warn('Storage getLocal error:', error);
             return null;
           }
         },
@@ -169,21 +161,15 @@
           try {
             await runtimeStorage.setLocal(key, value);
           } catch (error) {
-            log.warn("Storage setLocal error:", error);
+            log.warn('Storage setLocal error:', error);
           }
         },
       };
     }
 
-    function renderSidebar({
-      apiClient,
-      adapter,
-      pageContext,
-      state,
-      onToggle,
-    }) {
+    function renderSidebar({ apiClient, adapter, pageContext, state, onToggle }) {
       if (!window.LockInUI || !window.LockInUI.createLockInSidebar) {
-        log.error("LockInUI.createLockInSidebar not available");
+        log.error('LockInUI.createLockInSidebar not available');
         return;
       }
 
@@ -204,7 +190,7 @@
       };
 
       if (!sidebarInstance) {
-        log.debug("Creating new sidebar instance (first time)");
+        log.debug('Creating new sidebar instance (first time)');
         sidebarInstance = window.LockInUI.createLockInSidebar(sidebarProps);
       } else {
         sidebarInstance.updateProps(sidebarProps);

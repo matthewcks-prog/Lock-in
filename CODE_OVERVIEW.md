@@ -20,22 +20,18 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Core Files
 
 - **`manifest.json`**
-
   - Chrome Extension manifest (permissions, content scripts, background service worker, icons).
 
 - **`config.js`**
-
   - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key).
   - Single source of truth for runtime URLs.
 
 - **`contentScript-react.js`**
-
   - Thin orchestrator injected into webpages.
   - Delegates to helpers in `extension/content/` for adapter resolution, state, interactions, and session restore.
   - Hands off rendering to the built React bundle.
 
 - **`content/` helpers**
-
   - `pageContext.js` (adapter + page context resolution, imports `/integrations` bundle with fallback inference).
   - `stateStore.js` (sidebar/selection/mode state + storage sync).
   - `sidebarHost.js` (mounts/upgrades React sidebar, injects the page wrapper used for layout shifts, and keeps new body nodes inside it).
@@ -43,11 +39,9 @@ This is a living overview of the current codebase. Update it whenever files move
   - `interactions.js` (selection + Escape handlers).
 
 - **`background.js`**
-
   - Service worker for background tasks, context menus, and session routing.
 
 - **`popup.js`**
-
   - Toolbar popup UI logic, settings, and auth UI.
 
 - **`dist/ui/index.js`**
@@ -56,19 +50,15 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Shared Modules
 
 - **`messaging.js`**
-
   - Typed message system for extension communication.
 
 - **`storage.js`**
-
   - Wrapper for `chrome.storage` with defaults and async/await helpers.
 
 - **`contentRuntime.ts` + `contentLibs.ts`**
-
   - Canonical versioned content runtime exposed as `window.LockInContent` (storage/messaging/session/logger + adapter resolver); bundled to `extension/dist/libs/contentLibs.js`. Legacy compat aliases have been removed (canonical API only).
 
 - **`dist/libs/initApi.js` + `/api` (TS)**
-
   - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/src/initApi.ts`).
   - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets), and `api/client.ts` composes them to keep the same public method bag.
 
@@ -115,7 +105,6 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Application Setup
 
 - **`app.js`**
-
   - Express application factory.
   - Configures middleware (CORS, JSON parsing, logging).
   - Wires up routes and error handling.
@@ -127,28 +116,22 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Routes & Controllers
 
 - **`routes/lockinRoutes.js`**
-
   - HTTP route definitions and middleware wiring.
 
 - **`routes/noteRoutes.js`**
-
   - Authenticated routes for notes CRUD, search, note chat, and note asset upload/list/delete.
 
 - **`routes/transcriptsRoutes.js`**
-
   - Authenticated routes for transcript job creation, chunk upload, finalize, cancel, and status polling.
 
 - **`controllers/lockinController.js`**
-
   - Handlers for AI processing, chat listing/deletion, chat messages, and chat title generation (OpenAI summarization + persistence).
   - Input validation and error handling.
 
 - **`controllers/notesController.js`**
-
   - Notes CRUD, including embeddings.
 
 - **`controllers/notesChatController.js`**
-
   - Handles chat over notes.
 
 - **`controllers/noteAssetsController.js`**
@@ -161,19 +144,15 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Data Layer
 
 - **`chatRepository.js`**
-
   - Database access layer for chats and chat messages (Supabase).
 
 - **`notesRepository.js`**
-
   - Data access for notes, embeddings, and ownership checks.
 
 - **`noteAssetsRepository.js`**
-
   - Data access for the `note_assets` table (create/list/get/delete).
 
 - **`transcriptsRepository.js`**
-
   - Data access for per-user transcript cache, transcript job records, and chunk tracking.
 
 - **`supabaseClient.js`**
@@ -192,11 +171,9 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Middleware
 
 - **`authMiddleware.js`**
-
   - Validates Supabase JWT tokens and attaches user context.
 
 - **`rateLimiter.js`**
-
   - Per-user rate limiting backed by Supabase.
 
 - **`middleware/uploadMiddleware.js`**
@@ -277,3 +254,8 @@ The system is designed to handle thousands of concurrent users:
 - **Backend request flow**: Start with `backend/routes/lockinRoutes.js`, then `controllers/lockinController.js`.
 - **Auth & persistence**: Supabase auth client lives in `/api/auth.ts` and is bundled to the extension via `extension/dist/libs/initApi.js` (`window.LockInAuth`); backend enforcement via `backend/middleware/authMiddleware.js`.
 - **API communication**: Use the bundled `/api/client.ts` exposed through `extension/dist/libs/initApi.js` (`window.LockInAPI`); backend logic in `openaiClient.js`. The client includes typed methods for note assets (`uploadNoteAsset`, `listNoteAssets`, `deleteNoteAsset`) that return `NoteAsset` objects with camelCase fields.
+
+## MCP Tooling
+
+- **MCP servers**: `tools/mcp/` contains setup and configuration for AI assistant tooling (Cursor AI). This is development tooling, not runtime code.
+- **Documentation**: See `tools/mcp/README.md` for complete setup guide. When adding new database tables, npm scripts, or file types, run `npm run mcp:docs:draft` → review → `npm run mcp:docs:publish` to keep MCP configs in sync.

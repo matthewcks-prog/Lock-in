@@ -1,11 +1,11 @@
 /**
  * Chrome Storage Adapter
- * 
+ *
  * Implements StorageInterface using Chrome's storage.sync API.
  * This is the bridge between the Chrome-agnostic core code and Chrome-specific storage.
  */
 
-import type { StorageInterface } from "../../core/storage/storageInterface";
+import type { StorageInterface } from '../../core/storage/storageInterface';
 
 /**
  * Chrome storage implementation of StorageInterface
@@ -61,11 +61,14 @@ export const chromeStorage: StorageInterface = {
   },
 
   onChanged(
-    callback: (changes: Record<string, { oldValue?: any; newValue?: any }>, areaName: string) => void
+    callback: (
+      changes: Record<string, { oldValue?: any; newValue?: any }>,
+      areaName: string,
+    ) => void,
   ): () => void {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
+      areaName: string,
     ) => {
       // Convert Chrome's StorageChange format to our interface format
       const normalizedChanges: Record<string, { oldValue?: any; newValue?: any }> = {};
@@ -141,14 +144,17 @@ export const chromeLocalStorage: StorageInterface = {
   },
 
   onChanged(
-    callback: (changes: Record<string, { oldValue?: any; newValue?: any }>, areaName: string) => void
+    callback: (
+      changes: Record<string, { oldValue?: any; newValue?: any }>,
+      areaName: string,
+    ) => void,
   ): () => void {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
-      areaName: string
+      areaName: string,
     ) => {
       // Only fire for local storage changes
-      if (areaName !== "local") return;
+      if (areaName !== 'local') return;
 
       const normalizedChanges: Record<string, { oldValue?: any; newValue?: any }> = {};
       for (const key in changes) {

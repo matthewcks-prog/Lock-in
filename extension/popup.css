@@ -9,7 +9,13 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   width: 380px;
   background: #f8f9fa;
 }
@@ -76,7 +82,7 @@ label {
   cursor: pointer;
 }
 
-.toggle-label input[type="checkbox"] {
+.toggle-label input[type='checkbox'] {
   appearance: none;
   -webkit-appearance: none;
   width: 44px;
@@ -89,8 +95,8 @@ label {
   flex-shrink: 0;
 }
 
-.toggle-label input[type="checkbox"]::before {
-  content: "";
+.toggle-label input[type='checkbox']::before {
+  content: '';
   position: absolute;
   top: 2px;
   left: 2px;
@@ -102,11 +108,11 @@ label {
   transition: transform 0.2s ease;
 }
 
-.toggle-label input[type="checkbox"]:checked {
+.toggle-label input[type='checkbox']:checked {
   background: #667eea;
 }
 
-.toggle-label input[type="checkbox"]:checked::before {
+.toggle-label input[type='checkbox']:checked::before {
   transform: translateX(20px);
 }
 
@@ -147,7 +153,7 @@ label {
 }
 
 .toggle-slider:before {
-  content: "";
+  content: '';
   position: absolute;
   height: 20px;
   width: 20px;
@@ -244,7 +250,7 @@ label {
   background: #f9fafb;
 }
 
-.radio-label input[type="radio"] {
+.radio-label input[type='radio'] {
   margin-right: 10px;
   width: 18px;
   height: 18px;
@@ -332,7 +338,9 @@ label {
   font-weight: 600;
   cursor: pointer;
   border: none;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .primary-button {
@@ -424,7 +432,9 @@ label {
   cursor: pointer;
   padding: 6px 8px;
   border-radius: 6px;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .text-button:hover {
@@ -455,7 +465,9 @@ label {
   padding: 10px 12px;
   background: white;
   cursor: pointer;
-  transition: border 0.2s ease, background 0.2s ease;
+  transition:
+    border 0.2s ease,
+    background 0.2s ease;
 }
 
 .chat-item:hover {

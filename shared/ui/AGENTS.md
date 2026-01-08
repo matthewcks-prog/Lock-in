@@ -25,22 +25,26 @@ These are low-level UI primitives (Button, Card, TextInput, Tabs) that provide c
 ## Components
 
 ### `Button.tsx`
+
 - Reusable button with variants (primary, secondary, ghost, danger)
 - Sizes: sm, md, lg
 - Loading state support
 - Accessible and keyboard-friendly
 
 ### `Card.tsx`
+
 - Container component for content
 - Optional active state
 - Clickable variant
 
 ### `TextInput.tsx`
+
 - Text input with optional label
 - Error and helper text support
 - Accessible form input
 
 ### `Tabs.tsx`
+
 - Tabbed interface component
 - Variants: line, pill
 - Accessible tab navigation
@@ -66,7 +70,7 @@ function MyComponent() {
 ### In Web App (future)
 
 ```typescript
-import { Button, Card, TextInput } from "@shared/ui/components";
+import { Button, Card, TextInput } from '@shared/ui/components';
 // Same API, consistent styling
 ```
 

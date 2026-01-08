@@ -42,9 +42,7 @@ function findHtml5VideoElement(video: DetectedVideo): HTMLVideoElement | null {
   }
 
   if (video.mediaUrl) {
-    const candidates = Array.from(
-      document.querySelectorAll('video')
-    ) as HTMLVideoElement[];
+    const candidates = Array.from(document.querySelectorAll('video')) as HTMLVideoElement[];
     for (const candidate of candidates) {
       const candidateUrl = getCandidateMediaUrl(candidate);
       if (candidateUrl && candidateUrl === video.mediaUrl) {
@@ -66,7 +64,7 @@ function getCueText(cue: TextTrackCue): string {
 
 function buildTranscriptFromCues(
   cues: TextTrackCueList,
-  durationSeconds: number
+  durationSeconds: number,
 ): TranscriptResult | null {
   const segments: TranscriptResult['segments'] = [];
   const textParts: string[] = [];
@@ -102,7 +100,7 @@ function buildTranscriptFromCues(
 
 async function waitForTrackCues(
   track: TextTrack,
-  timeoutMs: number
+  timeoutMs: number,
 ): Promise<TextTrackCueList | null> {
   const deadline = Date.now() + timeoutMs;
 
@@ -120,7 +118,7 @@ async function waitForTrackCues(
 }
 
 export async function extractHtml5TranscriptFromDom(
-  video: DetectedVideo
+  video: DetectedVideo,
 ): Promise<TranscriptExtractionResult | null> {
   const videoEl = findHtml5VideoElement(video);
   if (!videoEl) {
@@ -128,7 +126,7 @@ export async function extractHtml5TranscriptFromDom(
   }
 
   const captionTracks = Array.from(videoEl.textTracks || []).filter(
-    (track) => track.kind === 'captions' || track.kind === 'subtitles'
+    (track) => track.kind === 'captions' || track.kind === 'subtitles',
   );
 
   if (captionTracks.length === 0) {

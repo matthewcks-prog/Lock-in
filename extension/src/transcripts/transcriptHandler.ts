@@ -1,19 +1,16 @@
 /**
  * Transcript Message Handler
- * 
+ *
  * Handles transcript-related messages from content scripts.
  * Runs in the background service worker context.
- * 
+ *
  * This module provides the background-side logic for:
  * - Fetching Panopto embed HTML (cross-origin)
  * - Extracting caption URLs
  * - Fetching and parsing VTT captions
  */
 
-import type {
-  DetectedVideo,
-  TranscriptExtractionResult,
-} from '@core/transcripts/types';
+import type { DetectedVideo, TranscriptExtractionResult } from '@core/transcripts/types';
 import type { PanoptoInfo } from '@core/transcripts';
 import {
   buildPanoptoEmbedUrl,
@@ -50,14 +47,9 @@ interface HtmlFetchResult {
 const PANOPTO_LOG_PREFIX = '[Lock-in Transcript:Panopto]';
 
 function isDebugEnabled(): boolean {
-  const config = (globalThis as { LOCKIN_CONFIG?: Record<string, unknown> })
-    .LOCKIN_CONFIG;
-  const logLevel =
-    typeof config?.LOG_LEVEL === 'string'
-      ? config.LOG_LEVEL.toLowerCase()
-      : null;
-  const debug =
-    config?.DEBUG === true || config?.DEBUG === 'true' || logLevel === 'debug';
+  const config = (globalThis as { LOCKIN_CONFIG?: Record<string, unknown> }).LOCKIN_CONFIG;
+  const logLevel = typeof config?.LOG_LEVEL === 'string' ? config.LOG_LEVEL.toLowerCase() : null;
+  const debug = config?.DEBUG === true || config?.DEBUG === 'true' || logLevel === 'debug';
 
   return debug;
 }
@@ -105,12 +97,7 @@ function looksLikeAuthPage(html: string): boolean {
   return false;
 }
 
-const SSO_DOMAINS = [
-  'okta.com',
-  'auth0.com',
-  'login.microsoftonline.com',
-  'accounts.google.com',
-];
+const SSO_DOMAINS = ['okta.com', 'auth0.com', 'login.microsoftonline.com', 'accounts.google.com'];
 
 function isSsoRedirectUrl(url: string): boolean {
   try {
@@ -150,9 +137,7 @@ function resolveCaptionUrl(captionUrl: string, baseUrl: string): string {
 
 function decodeEscapedUrl(value: string): string {
   return value
-    .replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex) =>
-      String.fromCharCode(parseInt(hex, 16))
-    )
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_match, hex) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/\\\//g, '/')
     .replace(/\\\\/g, '\\')
     .replace(/\\\"/g, '"')
@@ -164,10 +149,7 @@ function decodeEscapedUrl(value: string): string {
     .trim();
 }
 
-function normalizePanoptoCandidateUrl(
-  candidate: string,
-  baseUrl: string
-): string | null {
+function normalizePanoptoCandidateUrl(candidate: string, baseUrl: string): string | null {
   const decoded = decodeEscapedUrl(candidate);
   if (!decoded || decoded.startsWith('javascript:')) return null;
   const withProtocol = decoded.startsWith('//') ? `https:${decoded}` : decoded;
@@ -180,7 +162,7 @@ function normalizePanoptoCandidateUrl(
 
 function extractPanoptoInfoFromHtml(
   html: string,
-  baseUrl: string
+  baseUrl: string,
 ): { info: PanoptoInfo; url: string } | null {
   const candidates = new Set<string>();
   const urlMatches = html.match(/(?:https?:)?\/\/[^\s"'<>]+/gi) || [];
@@ -213,7 +195,7 @@ function extractPanoptoInfoFromHtml(
 }
 
 async function resolvePanoptoInfoFromWrapperUrl(
-  url: string
+  url: string,
 ): Promise<{ info: PanoptoInfo | null; authRequired: boolean; finalUrl?: string }> {
   try {
     const { html, finalUrl } = await fetchHtmlWithCredentials(url);
@@ -246,17 +228,17 @@ async function fetchHtmlWithCredentials(url: string): Promise<HtmlFetchResult> {
     method: 'GET',
     credentials: 'include',
     headers: {
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
   });
-  
+
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
       throw new Error('AUTH_REQUIRED');
     }
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
-  
+
   const html = await response.text();
   return {
     html,
@@ -274,17 +256,17 @@ async function fetchVttContent(url: string): Promise<string> {
     method: 'GET',
     credentials: 'include',
     headers: {
-      'Accept': 'text/vtt,text/plain,*/*',
+      Accept: 'text/vtt,text/plain,*/*',
     },
   });
-  
+
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
       throw new Error('AUTH_REQUIRED');
     }
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
-  
+
   return response.text();
 }
 
@@ -292,17 +274,13 @@ async function fetchVttContent(url: string): Promise<string> {
  * Extract transcript from a Panopto video
  */
 export async function extractPanoptoTranscript(
-  video: DetectedVideo
+  video: DetectedVideo,
 ): Promise<TranscriptExtractionResult> {
   try {
     // Prefer embed URLs because Panopto viewer pages often omit caption metadata.
     const primaryEmbedUrl = resolvePanoptoEmbedUrl(video);
     const viewerUrl = resolvePanoptoViewerUrl(video);
-    const candidateUrls = [
-      primaryEmbedUrl,
-      viewerUrl,
-      video.embedUrl,
-    ].filter(Boolean) as string[];
+    const candidateUrls = [primaryEmbedUrl, viewerUrl, video.embedUrl].filter(Boolean) as string[];
     const uniqueCandidateUrls = Array.from(new Set(candidateUrls));
     debugLog('Panopto transcript request', {
       videoId: video.id,
@@ -318,9 +296,7 @@ export async function extractPanoptoTranscript(
       pendingUrls.push(candidate);
     };
 
-    const extractFromUrl = async (
-      url: string
-    ): Promise<TranscriptExtractionResult | null> => {
+    const extractFromUrl = async (url: string): Promise<TranscriptExtractionResult | null> => {
       debugLog('Fetching Panopto HTML', { url: formatUrlForLog(url) });
       const { html, finalUrl, redirected, status } = await fetchHtmlWithCredentials(url);
       anyFetched = true;
@@ -433,7 +409,7 @@ export async function extractPanoptoTranscript(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    
+
     if (message === 'AUTH_REQUIRED') {
       return {
         success: false,
@@ -442,7 +418,7 @@ export async function extractPanoptoTranscript(
         aiTranscriptionAvailable: true,
       };
     }
-    
+
     if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
       return {
         success: false,
@@ -451,7 +427,7 @@ export async function extractPanoptoTranscript(
         aiTranscriptionAvailable: true,
       };
     }
-    
+
     return {
       success: false,
       error: `Failed to extract transcript: ${message}`,
@@ -465,7 +441,7 @@ export async function extractPanoptoTranscript(
  * Handle transcript extraction message
  */
 export async function handleTranscriptMessage(
-  message: TranscriptMessage
+  message: TranscriptMessage,
 ): Promise<TranscriptResponse> {
   if (message.type !== 'EXTRACT_TRANSCRIPT') {
     return {
@@ -473,9 +449,9 @@ export async function handleTranscriptMessage(
       error: `Unknown message type: ${message.type}`,
     };
   }
-  
+
   const { video } = message.payload;
-  
+
   switch (video.provider) {
     case 'panopto': {
       const result = await extractPanoptoTranscript(video);
@@ -484,7 +460,7 @@ export async function handleTranscriptMessage(
         data: result,
       };
     }
-    
+
     case 'html5': {
       // HTML5 videos should primarily be handled by DOM extraction in the content script.
       // If we reach here, it means DOM extraction failed and there are no track URLs.
@@ -494,7 +470,7 @@ export async function handleTranscriptMessage(
           try {
             const vttContent = await fetchVttContent(track.src);
             const transcript = parseWebVtt(vttContent);
-            
+
             if (transcript.segments.length > 0) {
               return {
                 success: true,
@@ -506,19 +482,20 @@ export async function handleTranscriptMessage(
           }
         }
       }
-      
+
       // No captions available for this HTML5 video
       return {
         success: false,
         data: {
           success: false,
-          error: 'No captions available for this video. This video does not have embedded subtitles or captions.',
+          error:
+            'No captions available for this video. This video does not have embedded subtitles or captions.',
           errorCode: 'NO_CAPTIONS',
           aiTranscriptionAvailable: true,
         },
       };
     }
-    
+
     default:
       return {
         success: false,
@@ -532,7 +509,7 @@ export async function handleTranscriptMessage(
  * Used to enable AI transcription for Panopto videos
  */
 export async function fetchPanoptoMediaUrl(
-  video: DetectedVideo
+  video: DetectedVideo,
 ): Promise<{ success: boolean; mediaUrl?: string; error?: string }> {
   try {
     if (video.provider !== 'panopto') {
@@ -598,11 +575,12 @@ export async function fetchPanoptoMediaUrl(
     }
 
     const mediaUrl = extractPanoptoMediaUrl(html);
-    
+
     if (!mediaUrl) {
       return {
         success: false,
-        error: 'Could not find video URL. The video may be restricted or not available for download.',
+        error:
+          'Could not find video URL. The video may be restricted or not available for download.',
       };
     }
 
@@ -617,7 +595,7 @@ export async function fetchPanoptoMediaUrl(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[Lock-in Transcript:Panopto] Error fetching media URL:', message);
-    
+
     return {
       success: false,
       error: `Failed to fetch video URL: ${message}`,

@@ -25,7 +25,7 @@ export default defineConfig({
   plugins: [
     ensureAsciiSafeOutput(
       resolve(process.cwd(), 'extension/dist/libs/webvttParser.js'),
-      'Processed webvttParser.js for ASCII compatibility'
+      'Processed webvttParser.js for ASCII compatibility',
     ),
   ],
   build: createIifeBuildConfig({
@@ -40,4 +40,3 @@ export default defineConfig({
     extensions: ['.ts', '.js'],
   },
 });
-

@@ -1,6 +1,6 @@
 /**
  * Transcript Types
- * 
+ *
  * Core type definitions for video transcript extraction.
  * No Chrome dependencies - pure TypeScript.
  */
@@ -125,7 +125,20 @@ export interface TranscriptExtractionResult {
   /** Error message (if failed) */
   error?: string;
   /** Error code for programmatic handling */
-  errorCode?: 'AUTH_REQUIRED' | 'LOCKIN_AUTH_REQUIRED' | 'NO_CAPTIONS' | 'NETWORK_ERROR' | 'PARSE_ERROR' | 'NOT_AVAILABLE' | 'INVALID_VIDEO' | 'MEDIA_PROCESSING' | 'MEDIA_FAILED' | 'MEDIA_PRELIMINARY' | 'MEDIA_HIDDEN' | 'INVALID_RESPONSE' | 'TIMEOUT';
+  errorCode?:
+    | 'AUTH_REQUIRED'
+    | 'LOCKIN_AUTH_REQUIRED'
+    | 'NO_CAPTIONS'
+    | 'NETWORK_ERROR'
+    | 'PARSE_ERROR'
+    | 'NOT_AVAILABLE'
+    | 'INVALID_VIDEO'
+    | 'MEDIA_PROCESSING'
+    | 'MEDIA_FAILED'
+    | 'MEDIA_PRELIMINARY'
+    | 'MEDIA_HIDDEN'
+    | 'INVALID_RESPONSE'
+    | 'TIMEOUT';
   /** Whether AI transcription is available as fallback */
   aiTranscriptionAvailable?: boolean;
 }
@@ -140,13 +153,13 @@ export interface TranscriptExtractionResult {
 export interface TranscriptProvider {
   /** Provider type identifier */
   readonly provider: VideoProvider;
-  
+
   /** Check if this provider can handle the given URL */
   canHandle(url: string): boolean;
-  
+
   /** Detect videos on a page */
   detectVideos(context: VideoDetectionContext): DetectedVideo[];
-  
+
   /** Extract caption URL from embed HTML (optional) */
   extractCaptionUrl?(html: string, video: DetectedVideo): string | null;
 }

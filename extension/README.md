@@ -100,9 +100,9 @@ All runtime URLs live in `extension/config.js`:
 
 ```javascript
 window.LOCKIN_CONFIG = {
-  BACKEND_URL: "http://localhost:3000",
-  SUPABASE_URL: "https://YOUR-PROJECT.supabase.co",
-  SUPABASE_ANON_KEY: "your-anon-key",
+  BACKEND_URL: 'http://localhost:3000',
+  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
+  SUPABASE_ANON_KEY: 'your-anon-key',
 };
 ```
 
@@ -144,46 +144,52 @@ The extension follows best practices:
 
 ## Permissions
 
-| Permission      | Purpose                                    |
-| --------------- | ------------------------------------------ |
-| `activeTab`     | Access current tab when extension clicked  |
+| Permission      | Purpose                                   |
+| --------------- | ----------------------------------------- |
+| `activeTab`     | Access current tab when extension clicked |
 | `scripting`     | Inject content scripts into webpages      |
-| `storage`       | Save user settings                         |
-| `contextMenus`  | Add right-click menu items                 |
-| `tabs`          | Get tab information                        |
+| `storage`       | Save user settings                        |
+| `contextMenus`  | Add right-click menu items                |
+| `tabs`          | Get tab information                       |
 | `webNavigation` | Detect navigation events                  |
 
 ## Browser Compatibility
 
 ### Supported
+
 - Chrome 88+
 - Edge 88+ (Chromium-based)
 - Brave 1.20+
 - Opera 74+
 
 ### Not Supported
+
 - Firefox (different manifest format)
 - Safari (different extension system)
 
 ## Troubleshooting
 
 ### Extension Not Loading
+
 1. Check that all files are present
 2. Verify `manifest.json` is valid JSON
 3. Check Chrome DevTools Console for errors
 
 ### No Response from Backend
+
 1. Verify backend is running
 2. Check `BACKEND_URL` in `config.js`
 3. Check Network tab in DevTools
 4. Verify authentication is working
 
 ### Authentication Issues
+
 1. Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `config.js`
 2. Check popup for error messages
 3. Try signing out and back in
 
 ### Notes Not Saving
+
 1. Verify backend notes API is working
 2. Check browser console for errors
 3. Verify user is authenticated

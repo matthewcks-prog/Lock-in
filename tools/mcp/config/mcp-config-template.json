@@ -57,7 +57,10 @@
         "READ_ONLY_MODE": "true",
         "ALLOWED_SCHEMAS": "public"
       }
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-context7"]
     }
   }
 }
-

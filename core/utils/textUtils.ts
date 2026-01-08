@@ -1,6 +1,6 @@
 /**
  * Text Processing Utilities
- * 
+ *
  * Pure utility functions for text manipulation - no dependencies.
  */
 
@@ -8,8 +8,8 @@
  * Escape HTML to prevent XSS
  */
 export function escapeHtml(text: string): string {
-  if (typeof text !== "string") return "";
-  const div = document.createElement("div");
+  if (typeof text !== 'string') return '';
+  const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
 }
@@ -19,7 +19,7 @@ export function escapeHtml(text: string): string {
  * Pattern: 3 uppercase letters followed by 4 digits
  */
 export function extractCourseCodeFromText(text: string): string | null {
-  if (!text || typeof text !== "string") return null;
+  if (!text || typeof text !== 'string') return null;
   const match = text.match(/\b([A-Z]{3}\d{4})\b/i);
   return match ? match[1].toUpperCase() : null;
 }
@@ -28,21 +28,21 @@ export function extractCourseCodeFromText(text: string): string | null {
  * Format timestamp for display
  */
 export function formatTimestamp(timestamp: string | null | undefined): string {
-  if (!timestamp) return "Just now";
+  if (!timestamp) return 'Just now';
 
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "";
+  if (Number.isNaN(date.getTime())) return '';
 
   const diff = Date.now() - date.getTime();
   const minutes = Math.floor(diff / 60000);
 
   if (minutes < 60) {
-    return minutes <= 1 ? "Just now" : `${minutes} min ago`;
+    return minutes <= 1 ? 'Just now' : `${minutes} min ago`;
   }
 
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return `${hours} hr${hours > 1 ? "s" : ""} ago`;
+    return `${hours} hr${hours > 1 ? 's' : ''} ago`;
   }
 
   return date.toLocaleDateString();
@@ -52,10 +52,10 @@ export function formatTimestamp(timestamp: string | null | undefined): string {
  * Build fallback chat title from timestamp
  */
 export function buildFallbackChatTitle(timestamp: string | null | undefined): string {
-  if (!timestamp) return "Untitled chat";
+  if (!timestamp) return 'Untitled chat';
 
   const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return "Untitled chat";
+  if (Number.isNaN(date.getTime())) return 'Untitled chat';
 
-  return `Chat from ${date.toISOString().split("T")[0]}`;
+  return `Chat from ${date.toISOString().split('T')[0]}`;
 }

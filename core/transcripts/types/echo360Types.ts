@@ -39,7 +39,9 @@ export interface Echo360SyllabusLesson {
 }
 
 export interface Echo360SyllabusEntry {
-  lesson?: Echo360SyllabusLesson | { lesson?: Echo360SyllabusLesson; medias?: Echo360SyllabusMedia[] };
+  lesson?:
+    | Echo360SyllabusLesson
+    | { lesson?: Echo360SyllabusLesson; medias?: Echo360SyllabusMedia[] };
   medias?: Echo360SyllabusMedia[];
   media?: Echo360SyllabusMedia | Echo360SyllabusMedia[];
 }

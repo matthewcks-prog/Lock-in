@@ -1,5 +1,7 @@
 # MCP Server Setup for Lock-in
 
+**This is the canonical reference for MCP setup and configuration in the Lock-in project.**
+
 This directory contains documentation and configuration for Model Context Protocol (MCP) servers used in the Lock-in project.
 
 ## Overview
@@ -44,6 +46,12 @@ MCP servers enable Cursor AI to interact with the codebase, run commands, query 
    - Query Supabase PostgreSQL
    - **READ-ONLY by default** (SELECT only)
 
+7. **Context7** (`@modelcontextprotocol/server-context7`)
+   - Up-to-date, version-specific documentation for libraries/frameworks
+   - Provides latest React, TypeScript, Supabase, Vite, Lexical docs
+   - Helps AI generate accurate code with current APIs
+   - No configuration needed - automatically used when AI mentions libraries
+
 ## Configuration
 
 ### MCP Config Location
@@ -70,32 +78,38 @@ EXTENSION_PATH=C:\Users\matth\.cursor\worktrees\Lock-in\hmg\extension
 ## Security Boundaries
 
 ### Filesystem
+
 - ✅ Scope: Repo root directory only
 - ✅ Block: Access to `node_modules/`, `.git/` internals
 - ✅ Allow: All source files, configs, docs
 
 ### Git
+
 - ✅ Read-only by default (log, show, diff, blame)
 - ⚠️ Write operations require explicit user confirmation
 - ❌ Block: `git push --force`, `git reset --hard`
 
 ### Shell
+
 - ✅ Working directory: Repo root (or subdirectories)
 - ✅ Allowed: `npm`, `node`, `npx`, `cd`, `git` (read-only)
 - ❌ Blocked: `rm -rf`, `del /s /q`, `git push --force`
 - ⚠️ Production commands require confirmation
 
 ### Playwright
+
 - ✅ Allowed domains: `localhost`, `learning.monash.edu`, `edstem.org`, `panopto.com`, `echo360.org`
 - ❌ Block: External domains, file:// URLs
 - ✅ Timeout: 30s per page load
 
 ### Fetch
+
 - ✅ Allowed origins: `http://localhost:3000`, `https://*.supabase.co`
 - ❌ Block: External APIs, production URLs
 - ✅ Rate limit: 10 requests/minute
 
 ### Postgres
+
 - ✅ Read-only mode: SELECT only
 - ✅ Schema scope: `public` only (no `auth`, `extensions` schemas)
 - ❌ Block: DROP, TRUNCATE, DELETE, UPDATE, CREATE, ALTER
@@ -104,12 +118,14 @@ EXTENSION_PATH=C:\Users\matth\.cursor\worktrees\Lock-in\hmg\extension
 ## Agent Permission Policy
 
 ### Automatic (No Confirmation)
+
 - ✅ Read operations (filesystem read, git log, database SELECT)
 - ✅ Build/test commands (`npm run build`, `npm test`)
 - ✅ Navigation/search operations
 - ✅ Health checks (`GET /health`)
 
 ### Require Confirmation
+
 - ⚠️ Write operations (git commit, git push, database INSERT/UPDATE/DELETE)
 - ⚠️ Production deployments (`npm publish`, `git push origin main`)
 - ⚠️ Destructive commands (`git reset --hard`, `rm -rf`)
@@ -117,6 +133,7 @@ EXTENSION_PATH=C:\Users\matth\.cursor\worktrees\Lock-in\hmg\extension
 - ⚠️ Environment variable changes (`.env` files)
 
 ### Never Allow
+
 - ❌ Modify production database (use read-only connection)
 - ❌ Push to main/master without PR
 - ❌ Delete `node_modules/` or build artifacts
@@ -128,6 +145,7 @@ EXTENSION_PATH=C:\Users\matth\.cursor\worktrees\Lock-in\hmg\extension
 See **[SETUP.md](SETUP.md)** for detailed step-by-step setup instructions.
 
 Quick start:
+
 1. **Install MCP servers** - Run `tools/mcp/scripts/install-mcp-servers.ps1` (Windows) or `install-mcp-servers.sh` (Linux)
 2. **Create `.cursor/mcp.json`** - Copy template from `tools/mcp/config/mcp.json.template` and update paths
 3. **Set up `.env.local`** - Copy `tools/mcp/config/env.local.template` to `.env.local` and fill in values
@@ -150,16 +168,19 @@ See **[SUPABASE_READONLY_SETUP.md](SUPABASE_READONLY_SETUP.md)** for detailed in
 ## Troubleshooting
 
 ### MCP Server Not Connecting
+
 - Check Cursor Settings → MCP Servers for error messages
 - Verify paths in `.cursor/mcp.json` are correct for your OS
 - Ensure MCP servers are installed (via npm or Cursor registry)
 
 ### Database Connection Fails
+
 - Verify `.env.local` has correct `SUPABASE_READONLY_CONNECTION_STRING`
 - Check read-only user has proper permissions
 - Test connection string manually with `psql` or Supabase client
 
 ### Playwright Extension Loading Fails
+
 - Verify `EXTENSION_PATH` in `.env.local` points to `extension/` directory
 - Ensure extension is built (`npm run build`)
 - Check Playwright can access the extension directory
@@ -169,4 +190,3 @@ See **[SUPABASE_READONLY_SETUP.md](SUPABASE_READONLY_SETUP.md)** for detailed in
 - [MCP Specification](https://modelcontextprotocol.io/)
 - [Cursor MCP Documentation](https://docs.cursor.com/mcp)
 - Main setup plan: See project root plan file
-

@@ -14,7 +14,7 @@ describe('Panopto Detection', () => {
   describe('extractPanoptoInfo', () => {
     it('extracts from embed URL', () => {
       const info = extractPanoptoInfo(
-        'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678'
+        'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678',
       );
       expect(info).toEqual({
         deliveryId: 'abc12345-1234-5678-9abc-def012345678',
@@ -24,7 +24,7 @@ describe('Panopto Detection', () => {
 
     it('extracts from viewer URL', () => {
       const info = extractPanoptoInfo(
-        'https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=abc12345-1234-5678-9abc-def012345678'
+        'https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=abc12345-1234-5678-9abc-def012345678',
       );
       expect(info).toEqual({
         deliveryId: 'abc12345-1234-5678-9abc-def012345678',
@@ -39,11 +39,9 @@ describe('Panopto Detection', () => {
 
   describe('isPanoptoUrl', () => {
     it('returns true for Panopto embed URLs', () => {
-      expect(
-        isPanoptoUrl(
-          'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc123'
-        )
-      ).toBe(true);
+      expect(isPanoptoUrl('https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc123')).toBe(
+        true,
+      );
     });
 
     it('returns false for non-Panopto URLs', () => {
@@ -89,7 +87,7 @@ describe('Panopto Detection', () => {
 
       expect(videos).toHaveLength(1);
       expect(videos[0].embedUrl).toBe(
-        'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc123'
+        'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc123',
       );
     });
 
@@ -196,12 +194,8 @@ describe('Unified Detection', () => {
       expect(result.provider).toBe('echo360');
       expect(result.videos).toHaveLength(1);
       expect(result.videos[0].provider).toBe('echo360');
-      expect(result.videos[0].echoLessonId).toBe(
-        '11111111-2222-3333-4444-555555555555'
-      );
-      expect(result.videos[0].echoMediaId).toBe(
-        'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
-      );
+      expect(result.videos[0].echoLessonId).toBe('11111111-2222-3333-4444-555555555555');
+      expect(result.videos[0].echoMediaId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     });
 
     it('ignores hidden HTML5 videos', () => {
@@ -230,4 +224,3 @@ describe('Unified Detection', () => {
     });
   });
 });
-

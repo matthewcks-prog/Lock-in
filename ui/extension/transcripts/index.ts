@@ -7,4 +7,3 @@
 export { VideoListPanel } from './VideoListPanel';
 export { TranscriptMessage } from './TranscriptMessage';
 export { useTranscripts } from './useTranscripts';
-

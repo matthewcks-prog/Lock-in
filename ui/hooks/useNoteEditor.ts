@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Note, NoteContent, NoteStatus } from "../../core/domain/Note.ts";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { Note, NoteContent, NoteStatus } from '../../core/domain/Note.ts';
 import type {
   CreateNoteInput,
   NotesService,
   UpdateNoteInput,
-} from "../../core/services/notesService.ts";
+} from '../../core/services/notesService.ts';
 
 /**
  * Autosave debounce delay (ms).
@@ -26,7 +26,7 @@ const MAX_SAVE_RETRIES = 3;
 /**
  * Local storage key for offline queue
  */
-const OFFLINE_QUEUE_KEY = "lockin_offline_notes_queue";
+const OFFLINE_QUEUE_KEY = 'lockin_offline_notes_queue';
 
 interface PendingSave {
   noteId: string | null;
@@ -73,9 +73,7 @@ export interface UseNoteEditorResult {
  */
 function createClientNoteId(): string {
   const globalCrypto =
-    typeof globalThis !== "undefined"
-      ? (globalThis.crypto as Crypto | undefined)
-      : undefined;
+    typeof globalThis !== 'undefined' ? (globalThis.crypto as Crypto | undefined) : undefined;
 
   if (globalCrypto?.randomUUID) {
     return globalCrypto.randomUUID();
@@ -92,10 +90,10 @@ function createClientNoteId(): string {
 
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
   bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
-  return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'));
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex
     .slice(6, 8)
-    .join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10, 16).join("")}`;
+    .join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
 }
 
 function getQueueKey(save: PendingSave): string {
@@ -119,9 +117,7 @@ function normalizeOfflineQueue(queue: PendingSave[]): PendingSave[] {
     }
   });
 
-  return Array.from(latestByKey.values()).sort(
-    (a, b) => a.timestamp - b.timestamp
-  );
+  return Array.from(latestByKey.values()).sort((a, b) => a.timestamp - b.timestamp);
 }
 
 function loadOfflineQueue(): PendingSave[] {
@@ -143,7 +139,7 @@ function saveOfflineQueue(queue: PendingSave[]): void {
     const normalized = normalizeOfflineQueue(queue);
     localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(normalized));
   } catch {
-    console.error("[NoteEditor] Failed to save offline queue");
+    console.error('[NoteEditor] Failed to save offline queue');
   }
 }
 
@@ -178,23 +174,23 @@ function createDraftNote(opts: {
 }): Note {
   return {
     id: null,
-    title: "",
+    title: '',
     content: {
-      version: "lexical_v1",
+      version: 'lexical_v1',
       editorState: null,
       legacyHtml: null,
-      plainText: "",
+      plainText: '',
     },
     sourceUrl: opts.sourceUrl ?? null,
     sourceSelection: opts.sourceSelection ?? null,
     courseCode: opts.courseCode ?? null,
-    noteType: "manual",
+    noteType: 'manual',
     tags: [],
     createdAt: null,
     updatedAt: null,
     linkedLabel: opts.courseCode ?? undefined,
     isStarred: false,
-    previewText: "",
+    previewText: '',
   };
 }
 
@@ -209,14 +205,17 @@ function createContentFingerprint(title: string, content: NoteContent): string {
 }
 
 export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResult {
-  const { notesService, noteId, defaultCourseCode, defaultSourceUrl, sourceSelection } =
-    options;
+  const { notesService, noteId, defaultCourseCode, defaultSourceUrl, sourceSelection } = options;
 
   const [activeNoteId, setActiveNoteId] = useState<string | null>(noteId ?? null);
   const [note, setNote] = useState<Note | null>(
-    createDraftNote({ courseCode: defaultCourseCode, sourceUrl: defaultSourceUrl, sourceSelection })
+    createDraftNote({
+      courseCode: defaultCourseCode,
+      sourceUrl: defaultSourceUrl,
+      sourceSelection,
+    }),
   );
-  const [status, setStatus] = useState<NoteStatus>("idle");
+  const [status, setStatus] = useState<NoteStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -269,7 +268,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     if (targetId) {
       clientNoteIdRef.current = targetId;
     }
-    
+
     // Skip if we're already loading this note or it's already loaded
     if (targetId === loadingNoteIdRef.current) {
       return;
@@ -277,7 +276,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     if (targetId === lastLoadedNoteIdRef.current && targetId !== null) {
       return;
     }
-    
+
     if (!targetId) {
       loadingNoteIdRef.current = null;
       lastLoadedNoteIdRef.current = null;
@@ -292,7 +291,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
         // Set fingerprint for the initial draft to prevent unnecessary save on first change
         lastSavedFingerprintRef.current = createContentFingerprint(draft.title, draft.content);
       }
-      setStatus("idle");
+      setStatus('idle');
       setIsLoading(false);
       return;
     }
@@ -306,25 +305,22 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     loadingNoteIdRef.current = targetId;
     setIsLoading(true);
     setError(null);
-    
+
     let cancelled = false;
-    
+
     (async () => {
       try {
         const loaded = await service.getNote(targetId);
         if (cancelled) return;
-        
+
         setNote(loaded);
-        lastSavedFingerprintRef.current = createContentFingerprint(
-          loaded.title,
-          loaded.content
-        );
+        lastSavedFingerprintRef.current = createContentFingerprint(loaded.title, loaded.content);
         lastLoadedNoteIdRef.current = targetId;
-        setStatus("idle");
+        setStatus('idle');
       } catch (err: any) {
         if (cancelled) return;
-        setError(err?.message || "Failed to load note");
-        setStatus("error");
+        setError(err?.message || 'Failed to load note');
+        setStatus('error');
       } finally {
         if (!cancelled) {
           loadingNoteIdRef.current = null;
@@ -332,7 +328,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
         }
       }
     })();
-    
+
     return () => {
       cancelled = true;
     };
@@ -341,7 +337,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
   /**
    * Persist the current note to the backend.
    * Uses a ref to always access the latest note state, avoiding stale closures.
-   * 
+   *
    * Scalability considerations:
    * - Fingerprint check prevents unnecessary API calls when content hasn't changed
    * - AbortController cancels in-flight saves if a new save is triggered
@@ -353,10 +349,10 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
 
   const persist = useCallback(async () => {
     const currentNote = noteRef.current;
-    
+
     if (!notesService || !currentNote) {
-      setError("Notes service unavailable");
-      setStatus("error");
+      setError('Notes service unavailable');
+      setStatus('error');
       return;
     }
 
@@ -374,11 +370,11 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     // Skip save if content hasn't changed since last save
     const fingerprint = createContentFingerprint(currentNote.title, currentNote.content);
     if (fingerprint === lastSavedFingerprintRef.current) {
-      setStatus("saved");
+      setStatus('saved');
       if (savedResetRef.current) {
         window.clearTimeout(savedResetRef.current);
       }
-      savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
+      savedResetRef.current = window.setTimeout(() => setStatus('idle'), SAVED_RESET_DELAY_MS);
       return;
     }
 
@@ -392,14 +388,14 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    setStatus("saving");
+    setStatus('saving');
     setError(null);
-    
+
     // Create pending save for offline queue
     const pendingSave: PendingSave = {
       noteId: currentNote.id,
       clientNoteId,
-      title: currentNote.title || "Untitled note",
+      title: currentNote.title || 'Untitled note',
       content: currentNote.content,
       courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
       sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
@@ -429,7 +425,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
         });
       } else {
         const payload: CreateNoteInput = {
-          title: currentNote.title || "Untitled note",
+          title: currentNote.title || 'Untitled note',
           content: currentNote.content,
           courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
           sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
@@ -458,7 +454,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
         ? createContentFingerprint(latestNote.title, latestNote.content)
         : null;
       if (latestFingerprint && latestFingerprint !== fingerprint) {
-        setStatus("editing");
+        setStatus('editing');
         return;
       }
 
@@ -470,31 +466,31 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
       if (saved.id) {
         clientNoteIdRef.current = saved.id;
       }
-      lastSavedFingerprintRef.current = createContentFingerprint(
-        saved.title,
-        saved.content
-      );
-      setStatus("saved");
+      lastSavedFingerprintRef.current = createContentFingerprint(saved.title, saved.content);
+      setStatus('saved');
       if (savedResetRef.current) {
         window.clearTimeout(savedResetRef.current);
       }
-      savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
+      savedResetRef.current = window.setTimeout(() => setStatus('idle'), SAVED_RESET_DELAY_MS);
     } catch (err: any) {
-      if (controller.signal.aborted || err?.code === "ABORTED") return;
-      
+      if (controller.signal.aborted || err?.code === 'ABORTED') return;
+
       // Check if this is a network error or retryable error
-      const isNetworkError = err?.code === "NETWORK_ERROR" || !navigator.onLine;
-      const isRetryable = isNetworkError || err?.code === "RATE_LIMIT" || err?.status === 429 || err?.status >= 500;
-      
+      const isNetworkError = err?.code === 'NETWORK_ERROR' || !navigator.onLine;
+      const isRetryable =
+        isNetworkError || err?.code === 'RATE_LIMIT' || err?.status === 429 || err?.status >= 500;
+
       if (isRetryable && pendingSave.retryCount < MAX_SAVE_RETRIES) {
         // Add to offline queue for later retry
         addToOfflineQueue(pendingSave);
         setPendingSaveCount(loadOfflineQueue().length);
-        setError(isNetworkError ? "Saved offline - will sync when connected" : "Save queued for retry");
-        setStatus("error");
+        setError(
+          isNetworkError ? 'Saved offline - will sync when connected' : 'Save queued for retry',
+        );
+        setStatus('error');
       } else {
-        setError(err?.message || "Failed to save note");
-        setStatus("error");
+        setError(err?.message || 'Failed to save note');
+        setStatus('error');
       }
     }
   }, [defaultCourseCode, defaultSourceUrl, notesService, sourceSelection]);
@@ -516,33 +512,37 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
   const handleContentChange = useCallback(
     (content: NoteContent) => {
       setNote((prev) => {
-        const base = prev ?? createDraftNote({
-          courseCode: defaultCourseCode,
-          sourceUrl: defaultSourceUrl,
-          sourceSelection,
-        });
+        const base =
+          prev ??
+          createDraftNote({
+            courseCode: defaultCourseCode,
+            sourceUrl: defaultSourceUrl,
+            sourceSelection,
+          });
         return { ...base, content };
       });
-      setStatus("editing");
+      setStatus('editing');
       scheduleSave();
     },
-    [defaultCourseCode, defaultSourceUrl, scheduleSave, sourceSelection]
+    [defaultCourseCode, defaultSourceUrl, scheduleSave, sourceSelection],
   );
 
   const handleTitleChange = useCallback(
     (title: string) => {
       setNote((prev) => {
-        const base = prev ?? createDraftNote({
-          courseCode: defaultCourseCode,
-          sourceUrl: defaultSourceUrl,
-          sourceSelection,
-        });
+        const base =
+          prev ??
+          createDraftNote({
+            courseCode: defaultCourseCode,
+            sourceUrl: defaultSourceUrl,
+            sourceSelection,
+          });
         return { ...base, title };
       });
-      setStatus("editing");
+      setStatus('editing');
       scheduleSave();
     },
-    [defaultCourseCode, defaultSourceUrl, scheduleSave, sourceSelection]
+    [defaultCourseCode, defaultSourceUrl, scheduleSave, sourceSelection],
   );
 
   const saveNow = useCallback(async () => {
@@ -565,7 +565,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     });
     setNote(draft);
     lastSavedFingerprintRef.current = null;
-    setStatus("idle");
+    setStatus('idle');
     setError(null);
   }, [defaultCourseCode, defaultSourceUrl, sourceSelection]);
 
@@ -575,12 +575,12 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
    */
   const syncOfflineQueue = useCallback(async () => {
     if (!notesService) return;
-    
+
     const queue = loadOfflineQueue();
     if (queue.length === 0) return;
-    
+
     console.log(`[NoteEditor] Syncing ${queue.length} offline saves`);
-    
+
     for (const pendingSave of queue) {
       const queueKey = getQueueKey(pendingSave);
       try {
@@ -613,23 +613,24 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
           };
           saved = await notesService.createNote(payload);
         }
-        
+
         // Successfully saved - remove from queue
         removeFromOfflineQueue(queueKey);
-        console.log(`[NoteEditor] Synced offline save for note ${pendingSave.noteId || pendingSave.clientNoteId || 'new'}`);
+        console.log(
+          `[NoteEditor] Synced offline save for note ${pendingSave.noteId || pendingSave.clientNoteId || 'new'}`,
+        );
 
         if (saved) {
           const latestNote = noteRef.current;
           const pendingFingerprint = createContentFingerprint(
             pendingSave.title,
-            pendingSave.content
+            pendingSave.content,
           );
           const latestFingerprint = latestNote
             ? createContentFingerprint(latestNote.title, latestNote.content)
             : null;
           const isSameDraft =
-            !latestNote?.id &&
-            clientNoteIdRef.current === pendingSave.clientNoteId;
+            !latestNote?.id && clientNoteIdRef.current === pendingSave.clientNoteId;
           const isSameNote = latestNote?.id && latestNote.id === saved.id;
 
           if ((isSameDraft || isSameNote) && latestFingerprint === pendingFingerprint) {
@@ -638,33 +639,30 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
             if (saved.id) {
               clientNoteIdRef.current = saved.id;
             }
-            lastSavedFingerprintRef.current = createContentFingerprint(
-              saved.title,
-              saved.content
-            );
-            setStatus("saved");
+            lastSavedFingerprintRef.current = createContentFingerprint(saved.title, saved.content);
+            setStatus('saved');
             if (savedResetRef.current) {
               window.clearTimeout(savedResetRef.current);
             }
-            savedResetRef.current = window.setTimeout(() => setStatus("idle"), SAVED_RESET_DELAY_MS);
+            savedResetRef.current = window.setTimeout(
+              () => setStatus('idle'),
+              SAVED_RESET_DELAY_MS,
+            );
           }
         }
       } catch (err: any) {
         console.error(`[NoteEditor] Failed to sync offline save:`, err);
         const isRetryable =
-          err?.code === "NETWORK_ERROR" ||
-          err?.code === "RATE_LIMIT" ||
+          err?.code === 'NETWORK_ERROR' ||
+          err?.code === 'RATE_LIMIT' ||
           err?.status === 429 ||
           err?.status >= 500;
-        const isStale =
-          err?.code === "CONFLICT" || err?.code === "NOT_FOUND";
-        
+        const isStale = err?.code === 'CONFLICT' || err?.code === 'NOT_FOUND';
+
         // Increment retry count
         const queue = loadOfflineQueue();
         const updated = queue.map((s) =>
-          getQueueKey(s) === queueKey
-            ? { ...s, retryCount: (s.retryCount ?? 0) + 1 }
-            : s
+          getQueueKey(s) === queueKey ? { ...s, retryCount: (s.retryCount ?? 0) + 1 } : s,
         );
         let filtered = updated.filter((s) => s.retryCount < MAX_SAVE_RETRIES);
         if (!isRetryable || isStale) {
@@ -673,19 +671,19 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
         saveOfflineQueue(filtered);
       }
     }
-    
+
     setPendingSaveCount(loadOfflineQueue().length);
   }, [notesService]);
 
   // Sync offline queue when coming back online
   useEffect(() => {
     const handleOnline = () => {
-      console.log("[NoteEditor] Back online - syncing offline queue");
+      console.log('[NoteEditor] Back online - syncing offline queue');
       void syncOfflineQueue();
     };
-    
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, [syncOfflineQueue]);
 
   return {

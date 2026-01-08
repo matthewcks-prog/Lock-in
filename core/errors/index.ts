@@ -1,6 +1,6 @@
 /**
  * Error Types Module
- * 
+ *
  * Exports all error types and utilities for consistent error handling.
  */
 
@@ -15,6 +15,6 @@ export {
   ErrorCodes,
   isAppError,
   wrapError,
-} from "./AppError";
+} from './AppError';
 
-export type { ErrorCode } from "./AppError";
+export type { ErrorCode } from './AppError';

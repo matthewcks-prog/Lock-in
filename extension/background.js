@@ -7,58 +7,46 @@
 
 // Import shared libraries
 try {
-  importScripts("dist/libs/webvttParser.js");
+  importScripts('dist/libs/webvttParser.js');
 } catch (e) {
-  console.warn("Lock-in: Failed to import webvttParser.js:", e);
+  console.warn('Lock-in: Failed to import webvttParser.js:', e);
 }
 try {
-  importScripts("dist/libs/transcriptProviders.js");
+  importScripts('dist/libs/transcriptProviders.js');
 } catch (e) {
-  console.warn("Lock-in: Failed to import transcriptProviders.js:", e);
+  console.warn('Lock-in: Failed to import transcriptProviders.js:', e);
 }
 try {
-  importScripts("config.js");
+  importScripts('config.js');
 } catch (e) {
-  console.warn("Lock-in: Failed to import config.js:", e);
+  console.warn('Lock-in: Failed to import config.js:', e);
 }
 try {
-  importScripts("src/networkUtils.js");
+  importScripts('src/networkUtils.js');
 } catch (e) {
-  console.warn("Lock-in: Failed to import networkUtils.js:", e);
+  console.warn('Lock-in: Failed to import networkUtils.js:', e);
 }
 try {
-  importScripts("src/panoptoResolver.js");
+  importScripts('src/panoptoResolver.js');
 } catch (e) {
-  console.warn("Lock-in: Failed to import panoptoResolver.js:", e);
+  console.warn('Lock-in: Failed to import panoptoResolver.js:', e);
 }
 
 // Import messaging system (available via global in service worker)
-const Messaging =
-  typeof self !== "undefined" && self.LockInMessaging
-    ? self.LockInMessaging
-    : null;
+const Messaging = typeof self !== 'undefined' && self.LockInMessaging ? self.LockInMessaging : null;
 
 // Get shared VTT parser
-const WebVtt =
-  typeof self !== "undefined" && self.LockInWebVtt ? self.LockInWebVtt : null;
+const WebVtt = typeof self !== 'undefined' && self.LockInWebVtt ? self.LockInWebVtt : null;
 const TranscriptProviders =
-  typeof self !== "undefined" && self.LockInTranscriptProviders
+  typeof self !== 'undefined' && self.LockInTranscriptProviders
     ? self.LockInTranscriptProviders
     : null;
 const NetworkUtils =
-  typeof self !== "undefined" && self.LockInNetworkUtils
-    ? self.LockInNetworkUtils
-    : null;
+  typeof self !== 'undefined' && self.LockInNetworkUtils ? self.LockInNetworkUtils : null;
 const PanoptoResolver =
-  typeof self !== "undefined" && self.LockInPanoptoResolver
-    ? self.LockInPanoptoResolver
-    : null;
-const {
-  fetchWithRetry,
-  fetchWithCredentials,
-  fetchVttContent,
-  fetchHtmlWithRedirectInfo,
-} = NetworkUtils || {};
+  typeof self !== 'undefined' && self.LockInPanoptoResolver ? self.LockInPanoptoResolver : null;
+const { fetchWithRetry, fetchWithCredentials, fetchVttContent, fetchHtmlWithRedirectInfo } =
+  NetworkUtils || {};
 const {
   extractCaptionVttUrl,
   resolveCaptionUrl,
@@ -79,22 +67,22 @@ const {
  * Uses shared parser from dist/libs/webvttParser.js if available, otherwise fallback
  */
 function parseWebVtt(vttContent) {
-  if (WebVtt && typeof WebVtt.parseWebVtt === "function") {
+  if (WebVtt && typeof WebVtt.parseWebVtt === 'function') {
     return WebVtt.parseWebVtt(vttContent);
   }
   // Fallback: minimal parser in case shared lib not loaded
-  console.warn("Lock-in: Using fallback VTT parser");
+  console.warn('Lock-in: Using fallback VTT parser');
   const lines = vttContent.split(/\r?\n/);
   const segments = [];
   const textParts = [];
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith("WEBVTT") && !trimmed.includes("-->")) {
+    if (trimmed && !trimmed.startsWith('WEBVTT') && !trimmed.includes('-->')) {
       textParts.push(trimmed);
     }
   }
   return {
-    plainText: textParts.join(" "),
+    plainText: textParts.join(' '),
     segments,
     durationMs: 0,
   };
@@ -104,7 +92,7 @@ function parseWebVtt(vttContent) {
  * Extract transcript from a Panopto video
  */
 async function extractPanoptoTranscript(video) {
-  console.log("[Lock-in] extractPanoptoTranscript starting for:", {
+  console.log('[Lock-in] extractPanoptoTranscript starting for:', {
     id: video.id,
     title: video.title,
     embedUrl: video.embedUrl,
@@ -113,11 +101,11 @@ async function extractPanoptoTranscript(video) {
   try {
     // Validate video embedUrl
     if (!video.embedUrl) {
-      console.error("[Lock-in] No embedUrl provided for Panopto video");
+      console.error('[Lock-in] No embedUrl provided for Panopto video');
       return {
         success: false,
-        error: "No video URL provided",
-        errorCode: "INVALID_VIDEO",
+        error: 'No video URL provided',
+        errorCode: 'INVALID_VIDEO',
         aiTranscriptionAvailable: true,
       };
     }
@@ -126,7 +114,7 @@ async function extractPanoptoTranscript(video) {
     if (video.panoptoTenant && video.id) {
       candidateUrls.push(
         buildPanoptoEmbedUrl(video.panoptoTenant, video.id),
-        buildPanoptoViewerUrl(video.panoptoTenant, video.id)
+        buildPanoptoViewerUrl(video.panoptoTenant, video.id),
       );
     }
 
@@ -134,14 +122,12 @@ async function extractPanoptoTranscript(video) {
     if (directInfo) {
       candidateUrls.push(
         buildPanoptoEmbedUrl(directInfo.tenant, directInfo.deliveryId),
-        buildPanoptoViewerUrl(directInfo.tenant, directInfo.deliveryId)
+        buildPanoptoViewerUrl(directInfo.tenant, directInfo.deliveryId),
       );
     }
 
     candidateUrls.push(video.embedUrl);
-    const pendingUrls = Array.from(
-      new Set(candidateUrls.filter(Boolean))
-    );
+    const pendingUrls = Array.from(new Set(candidateUrls.filter(Boolean)));
     const visitedUrls = new Set();
     let anyFetched = false;
     let primaryError = null;
@@ -154,56 +140,46 @@ async function extractPanoptoTranscript(video) {
     };
 
     const extractFromUrl = async (url) => {
-      console.log("[Lock-in] Fetching Panopto HTML:", url.substring(0, 120));
+      console.log('[Lock-in] Fetching Panopto HTML:', url.substring(0, 120));
       const { html, finalUrl } = await fetchHtmlWithRedirectInfo(url);
       anyFetched = true;
 
       const captionUrl = extractCaptionVttUrl(html);
       if (!captionUrl) {
         const resolvedInfo = extractPanoptoInfoFromUrl(finalUrl);
-        const fromHtml = extractPanoptoInfoFromHtml(
-          html,
-          finalUrl || url
-        );
+        const fromHtml = extractPanoptoInfoFromHtml(html, finalUrl || url);
         const info = resolvedInfo || fromHtml?.info;
 
         if (fromHtml?.url) {
           enqueueCandidate(fromHtml.url);
         }
         if (info) {
-          enqueueCandidate(
-            buildPanoptoEmbedUrl(info.tenant, info.deliveryId)
-          );
-          enqueueCandidate(
-            buildPanoptoViewerUrl(info.tenant, info.deliveryId)
-          );
+          enqueueCandidate(buildPanoptoEmbedUrl(info.tenant, info.deliveryId));
+          enqueueCandidate(buildPanoptoViewerUrl(info.tenant, info.deliveryId));
         }
         return null;
       }
 
-      console.log("[Lock-in] Caption URL found:", captionUrl.substring(0, 100));
-      const resolvedCaptionUrl = resolveCaptionUrl(
-        captionUrl,
-        finalUrl || url
-      );
+      console.log('[Lock-in] Caption URL found:', captionUrl.substring(0, 100));
+      const resolvedCaptionUrl = resolveCaptionUrl(captionUrl, finalUrl || url);
 
-      console.log("[Lock-in] Fetching VTT content...");
+      console.log('[Lock-in] Fetching VTT content...');
       const vttContent = await fetchVttContent(resolvedCaptionUrl);
 
-      console.log("[Lock-in] Parsing VTT content...");
+      console.log('[Lock-in] Parsing VTT content...');
       const transcript = parseWebVtt(vttContent);
 
       if (transcript.segments.length === 0) {
-        console.warn("[Lock-in] Parsed transcript has no segments");
+        console.warn('[Lock-in] Parsed transcript has no segments');
         return {
           success: false,
-          error: "Caption file is empty or could not be parsed",
-          errorCode: "PARSE_ERROR",
+          error: 'Caption file is empty or could not be parsed',
+          errorCode: 'PARSE_ERROR',
           aiTranscriptionAvailable: true,
         };
       }
 
-      console.log("[Lock-in] Transcript extracted successfully:", {
+      console.log('[Lock-in] Transcript extracted successfully:', {
         segments: transcript.segments.length,
         plainTextLength: transcript.plainText?.length || 0,
         durationMs: transcript.durationMs,
@@ -224,7 +200,7 @@ async function extractPanoptoTranscript(video) {
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        if (message === "AUTH_REQUIRED") {
+        if (message === 'AUTH_REQUIRED') {
           throw error;
         }
         if (!primaryError) {
@@ -239,42 +215,42 @@ async function extractPanoptoTranscript(video) {
 
     return {
       success: false,
-      error: "No captions available for this video",
-      errorCode: "NO_CAPTIONS",
+      error: 'No captions available for this video',
+      errorCode: 'NO_CAPTIONS',
       aiTranscriptionAvailable: true,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[Lock-in] extractPanoptoTranscript error:", message, error);
+    console.error('[Lock-in] extractPanoptoTranscript error:', message, error);
 
     // Auth error
-    if (message === "AUTH_REQUIRED") {
+    if (message === 'AUTH_REQUIRED') {
       return {
         success: false,
-        error: "Authentication required. Please log in to Panopto.",
-        errorCode: "AUTH_REQUIRED",
+        error: 'Authentication required. Please log in to Panopto.',
+        errorCode: 'AUTH_REQUIRED',
         aiTranscriptionAvailable: true,
       };
     }
 
     // Timeout error
-    if (message.includes("timeout") || message.includes("AbortError")) {
+    if (message.includes('timeout') || message.includes('AbortError')) {
       return {
         success: false,
-        error: "Request timeout. The server took too long to respond.",
-        errorCode: "TIMEOUT",
+        error: 'Request timeout. The server took too long to respond.',
+        errorCode: 'TIMEOUT',
         aiTranscriptionAvailable: true,
       };
     }
 
     // Network/CORS errors
     if (
-      message.includes("Failed to fetch") ||
-      message.includes("NetworkError") ||
-      message.includes("CORS") ||
-      message.includes("Network request failed")
+      message.includes('Failed to fetch') ||
+      message.includes('NetworkError') ||
+      message.includes('CORS') ||
+      message.includes('Network request failed')
     ) {
-      console.error("[Lock-in] Network error details:", {
+      console.error('[Lock-in] Network error details:', {
         message,
         embedUrl: video.embedUrl,
         error: error.toString(),
@@ -283,7 +259,7 @@ async function extractPanoptoTranscript(video) {
         success: false,
         error:
           "Network error. Please check your internet connection and ensure you're logged into Panopto.",
-        errorCode: "NETWORK_ERROR",
+        errorCode: 'NETWORK_ERROR',
         aiTranscriptionAvailable: true,
       };
     }
@@ -292,7 +268,7 @@ async function extractPanoptoTranscript(video) {
     return {
       success: false,
       error: `Failed to extract transcript: ${message}`,
-      errorCode: "PARSE_ERROR",
+      errorCode: 'PARSE_ERROR',
       aiTranscriptionAvailable: true,
     };
   }
@@ -302,24 +278,20 @@ async function extractPanoptoTranscript(video) {
  * Extract transcript from an HTML5 video using track URLs
  */
 async function extractHtml5Transcript(video) {
-  console.log(
-    "[Lock-in BG] extractHtml5Transcript called for video:",
-    video.id,
-    video.title
-  );
+  console.log('[Lock-in BG] extractHtml5Transcript called for video:', video.id, video.title);
   const tracks = Array.isArray(video.trackUrls) ? video.trackUrls : [];
   console.log(
-    "[Lock-in BG] Track URLs found:",
+    '[Lock-in BG] Track URLs found:',
     tracks.length,
-    tracks.map((t) => t?.src)
+    tracks.map((t) => t?.src),
   );
 
   if (tracks.length === 0) {
-    console.log("[Lock-in BG] No caption tracks available for HTML5 video");
+    console.log('[Lock-in BG] No caption tracks available for HTML5 video');
     return {
       success: false,
-      error: "No captions found",
-      errorCode: "NO_CAPTIONS",
+      error: 'No captions found',
+      errorCode: 'NO_CAPTIONS',
       aiTranscriptionAvailable: true,
     };
   }
@@ -337,34 +309,30 @@ async function extractHtml5Transcript(video) {
       }
 
       lastError = {
-        error: "Caption file is empty or could not be parsed",
-        errorCode: "PARSE_ERROR",
+        error: 'Caption file is empty or could not be parsed',
+        errorCode: 'PARSE_ERROR',
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
 
-      if (message === "AUTH_REQUIRED") {
+      if (message === 'AUTH_REQUIRED') {
         return {
           success: false,
-          error: "Authentication required to access captions.",
-          errorCode: "AUTH_REQUIRED",
+          error: 'Authentication required to access captions.',
+          errorCode: 'AUTH_REQUIRED',
           aiTranscriptionAvailable: true,
         };
       }
 
-      if (
-        message.includes("Failed to fetch") ||
-        message.includes("NetworkError")
-      ) {
+      if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
         lastError = {
-          error:
-            "Captions could not be fetched due to browser restrictions or network errors.",
-          errorCode: "NOT_AVAILABLE",
+          error: 'Captions could not be fetched due to browser restrictions or network errors.',
+          errorCode: 'NOT_AVAILABLE',
         };
       } else {
         lastError = {
           error: `Failed to fetch captions: ${message}`,
-          errorCode: "NOT_AVAILABLE",
+          errorCode: 'NOT_AVAILABLE',
         };
       }
     }
@@ -381,8 +349,8 @@ async function extractHtml5Transcript(video) {
 
   return {
     success: false,
-    error: "No captions found",
-    errorCode: "NO_CAPTIONS",
+    error: 'No captions found',
+    errorCode: 'NO_CAPTIONS',
     aiTranscriptionAvailable: true,
   };
 }
@@ -434,23 +402,23 @@ class ExtensionFetcher {
  * Delegates to core providers while preserving Chrome-specific fetching.
  */
 async function handleTranscriptExtraction(video) {
-  console.log("[Lock-in BG] handleTranscriptExtraction called");
+  console.log('[Lock-in BG] handleTranscriptExtraction called');
   if (!video || !video.provider) {
     return {
       success: false,
-      error: "No video provider specified",
-      errorCode: "INVALID_VIDEO",
+      error: 'No video provider specified',
+      errorCode: 'INVALID_VIDEO',
       aiTranscriptionAvailable: true,
     };
   }
 
   switch (video.provider) {
-    case "panopto": {
-      console.log("[Lock-in BG] Handling Panopto video");
+    case 'panopto': {
+      console.log('[Lock-in BG] Handling Panopto video');
 
       const Provider =
         (TranscriptProviders && TranscriptProviders.PanoptoProvider) ||
-        (typeof self !== "undefined" && self.PanoptoProvider
+        (typeof self !== 'undefined' && self.PanoptoProvider
           ? self.PanoptoProvider.PanoptoProvider || self.PanoptoProvider
           : null);
 
@@ -459,27 +427,21 @@ async function handleTranscriptExtraction(video) {
           const provider = new Provider();
           const fetcher = new ExtensionFetcher();
           const result = await provider.extractTranscript(video, fetcher);
-          console.log(
-            "[Lock-in BG] Panopto result (via provider):",
-            result.success
-          );
+          console.log('[Lock-in BG] Panopto result (via provider):', result.success);
           return result;
         } catch (error) {
-          console.warn(
-            "[Lock-in BG] Provider extraction failed, using legacy:",
-            error
-          );
+          console.warn('[Lock-in BG] Provider extraction failed, using legacy:', error);
           // Fall through to legacy function
         }
       }
 
       // Legacy extraction (preserved for backward compatibility)
       const result = await extractPanoptoTranscript(video);
-      console.log("[Lock-in BG] Panopto result (legacy):", result.success);
+      console.log('[Lock-in BG] Panopto result (legacy):', result.success);
       return result;
     }
-    case "echo360": {
-      console.log("[Lock-in BG] Handling Echo360 video", {
+    case 'echo360': {
+      console.log('[Lock-in BG] Handling Echo360 video', {
         videoId: video.id,
         embedUrl: video.embedUrl,
         lessonId: video.echoLessonId,
@@ -491,9 +453,9 @@ async function handleTranscriptExtraction(video) {
         try {
           const provider = new TranscriptProviders.Echo360Provider();
           const fetcher = new ExtensionFetcher();
-          console.log("[Lock-in BG] Echo360 provider created, starting extraction");
+          console.log('[Lock-in BG] Echo360 provider created, starting extraction');
           const result = await provider.extractTranscript(video, fetcher);
-          console.log("[Lock-in BG] Echo360 extraction completed", {
+          console.log('[Lock-in BG] Echo360 extraction completed', {
             success: result.success,
             error: result.error,
             errorCode: result.errorCode,
@@ -503,43 +465,40 @@ async function handleTranscriptExtraction(video) {
           });
           return result;
         } catch (error) {
-          console.error(
-            "[Lock-in BG] Echo360 provider extraction failed:",
-            {
-              error: error?.message,
-              stack: error?.stack,
-              errorObject: error,
-              videoId: video.id,
-              embedUrl: video.embedUrl,
-            }
-          );
+          console.error('[Lock-in BG] Echo360 provider extraction failed:', {
+            error: error?.message,
+            stack: error?.stack,
+            errorObject: error,
+            videoId: video.id,
+            embedUrl: video.embedUrl,
+          });
           return {
             success: false,
-            error: "Failed to extract Echo360 transcript",
-            errorCode: "NOT_AVAILABLE",
+            error: 'Failed to extract Echo360 transcript',
+            errorCode: 'NOT_AVAILABLE',
             aiTranscriptionAvailable: true,
           };
         }
       }
-      console.warn("[Lock-in BG] Echo360 provider is not available");
+      console.warn('[Lock-in BG] Echo360 provider is not available');
       return {
         success: false,
-        error: "Echo360 provider is not available",
-        errorCode: "NOT_AVAILABLE",
+        error: 'Echo360 provider is not available',
+        errorCode: 'NOT_AVAILABLE',
         aiTranscriptionAvailable: true,
       };
     }
-    case "html5": {
-      console.log("[Lock-in BG] Handling HTML5 video");
+    case 'html5': {
+      console.log('[Lock-in BG] Handling HTML5 video');
       const result = await extractHtml5Transcript(video);
-      console.log("[Lock-in BG] HTML5 result:", result.success);
+      console.log('[Lock-in BG] HTML5 result:', result.success);
       return result;
     }
     default:
       return {
         success: false,
         error: `Unsupported video provider: ${video.provider}`,
-        errorCode: "NOT_AVAILABLE",
+        errorCode: 'NOT_AVAILABLE',
         aiTranscriptionAvailable: true,
       };
   }
@@ -547,7 +506,7 @@ async function handleTranscriptExtraction(video) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 async function handleEcho360VideoDetection(context) {
-  console.log("[Lock-in BG] handleEcho360VideoDetection called", {
+  console.log('[Lock-in BG] handleEcho360VideoDetection called', {
     hasContext: !!context,
     pageUrl: context?.pageUrl,
     iframeCount: Array.isArray(context?.iframes) ? context.iframes.length : 0,
@@ -555,10 +514,10 @@ async function handleEcho360VideoDetection(context) {
   });
 
   if (!context || !context.pageUrl) {
-    console.warn("[Lock-in BG] No detection context provided for Echo360");
+    console.warn('[Lock-in BG] No detection context provided for Echo360');
     return {
       success: false,
-      error: "No detection context provided",
+      error: 'No detection context provided',
     };
   }
 
@@ -570,17 +529,17 @@ async function handleEcho360VideoDetection(context) {
         pageUrl: context.pageUrl,
         iframes: Array.isArray(context.iframes) ? context.iframes : [],
       };
-      console.log("[Lock-in BG] Echo360 provider created, starting detection", {
+      console.log('[Lock-in BG] Echo360 provider created, starting detection', {
         pageUrl: normalizedContext.pageUrl,
         iframeCount: normalizedContext.iframes.length,
-        hasDetectVideosAsync: typeof provider.detectVideosAsync === "function",
-        hasDetectVideosSync: typeof provider.detectVideosSync === "function",
+        hasDetectVideosAsync: typeof provider.detectVideosAsync === 'function',
+        hasDetectVideosSync: typeof provider.detectVideosSync === 'function',
       });
-      
-      if (typeof provider.detectVideosAsync === "function") {
-        console.log("[Lock-in BG] Using async detection");
+
+      if (typeof provider.detectVideosAsync === 'function') {
+        console.log('[Lock-in BG] Using async detection');
         const videos = await provider.detectVideosAsync(normalizedContext, fetcher);
-        console.log("[Lock-in BG] Echo360 async detection completed", {
+        console.log('[Lock-in BG] Echo360 async detection completed', {
           videoCount: videos.length,
           videos: videos.map((v) => ({
             id: v.id,
@@ -593,10 +552,10 @@ async function handleEcho360VideoDetection(context) {
         });
         return { success: true, videos };
       }
-      if (typeof provider.detectVideosSync === "function") {
-        console.log("[Lock-in BG] Using sync detection");
+      if (typeof provider.detectVideosSync === 'function') {
+        console.log('[Lock-in BG] Using sync detection');
         const videos = provider.detectVideosSync(normalizedContext);
-        console.log("[Lock-in BG] Echo360 sync detection completed", {
+        console.log('[Lock-in BG] Echo360 sync detection completed', {
           videoCount: videos.length,
           videos: videos.map((v) => ({
             id: v.id,
@@ -609,24 +568,24 @@ async function handleEcho360VideoDetection(context) {
         });
         return { success: true, videos };
       }
-      console.warn("[Lock-in BG] Echo360 provider missing detection methods");
+      console.warn('[Lock-in BG] Echo360 provider missing detection methods');
     } catch (error) {
-      console.error("[Lock-in BG] Echo360 detection failed", {
+      console.error('[Lock-in BG] Echo360 detection failed', {
         error: error?.message,
         stack: error?.stack,
         errorObject: error,
       });
       return {
         success: false,
-        error: error?.message || "Echo360 detection failed",
+        error: error?.message || 'Echo360 detection failed',
       };
     }
   }
 
-  console.warn("[Lock-in BG] Echo360 provider is not available");
+  console.warn('[Lock-in BG] Echo360 provider is not available');
   return {
     success: false,
-    error: "Echo360 provider is not available",
+    error: 'Echo360 provider is not available',
   };
 }
 
@@ -641,18 +600,18 @@ const AI_TRANSCRIPTION_JOBS = new Map();
  * @returns {Promise<Object>} - { success, mediaUrl?, error? }
  */
 async function handlePanoptoMediaUrlFetch(video, options = {}) {
-  console.log("[Lock-in BG] Fetching Panopto media URL for AI transcription");
-  console.log("[Lock-in BG] Video:", {
+  console.log('[Lock-in BG] Fetching Panopto media URL for AI transcription');
+  console.log('[Lock-in BG] Video:', {
     id: video.id,
     provider: video.provider,
     embedUrl: video.embedUrl,
     panoptoTenant: video.panoptoTenant,
   });
 
-  if (video.provider !== "panopto") {
+  if (video.provider !== 'panopto') {
     return {
       success: false,
-      error: "Not a Panopto video",
+      error: 'Not a Panopto video',
     };
   }
 
@@ -671,8 +630,8 @@ async function handlePanoptoMediaUrlFetch(video, options = {}) {
       if (resolved.authRequired) {
         return {
           success: false,
-          error: "Authentication required. Please log in to Panopto.",
-          errorCode: "AUTH_REQUIRED",
+          error: 'Authentication required. Please log in to Panopto.',
+          errorCode: 'AUTH_REQUIRED',
         };
       }
       resolvedInfo = resolved.info;
@@ -681,26 +640,19 @@ async function handlePanoptoMediaUrlFetch(video, options = {}) {
     if (!resolvedInfo) {
       return {
         success: false,
-        error:
-          "Could not resolve this Panopto link. Open the video once and try again.",
-        errorCode: "NOT_AVAILABLE",
+        error: 'Could not resolve this Panopto link. Open the video once and try again.',
+        errorCode: 'NOT_AVAILABLE',
       };
     }
 
-    const resolvedEmbedUrl = buildPanoptoEmbedUrl(
-      resolvedInfo.tenant,
-      resolvedInfo.deliveryId
-    );
+    const resolvedEmbedUrl = buildPanoptoEmbedUrl(resolvedInfo.tenant, resolvedInfo.deliveryId);
     const resolverResult = await PanoptoMediaResolver.resolve({
       tenant: resolvedInfo.tenant,
       deliveryId: resolvedInfo.deliveryId,
       embedUrl: resolvedEmbedUrl,
       tabId,
     });
-    console.log(
-      "[Lock-in BG] Panopto media URL fetch (v2) result:",
-      resolverResult.ok
-    );
+    console.log('[Lock-in BG] Panopto media URL fetch (v2) result:', resolverResult.ok);
     return {
       success: resolverResult.ok,
       mediaUrl: resolverResult.mediaUrl,
@@ -711,10 +663,10 @@ async function handlePanoptoMediaUrlFetch(video, options = {}) {
       debug: resolverResult.debug,
     };
   } catch (error) {
-    console.error("[Lock-in BG] Error fetching Panopto media URL:", error);
+    console.error('[Lock-in BG] Error fetching Panopto media URL:', error);
     return {
       success: false,
-      error: error.message || "Failed to fetch media URL",
+      error: error.message || 'Failed to fetch media URL',
     };
   }
 }
@@ -724,21 +676,19 @@ const AI_POLL_INTERVAL_MS = 3000;
 const AI_POLL_MAX_ATTEMPTS = 160;
 
 function getConfigValue(key, fallback) {
-  if (typeof self === "undefined" || !self.LOCKIN_CONFIG) {
+  if (typeof self === 'undefined' || !self.LOCKIN_CONFIG) {
     return fallback;
   }
   const value = self.LOCKIN_CONFIG[key];
-  return value === undefined || value === null || value === ""
-    ? fallback
-    : value;
+  return value === undefined || value === null || value === '' ? fallback : value;
 }
 
 function getBackendUrl() {
-  return getConfigValue("BACKEND_URL", "http://localhost:3000");
+  return getConfigValue('BACKEND_URL', 'http://localhost:3000');
 }
 
 function getSessionStorageKey() {
-  return getConfigValue("SESSION_STORAGE_KEY", "lockinSupabaseSession");
+  return getConfigValue('SESSION_STORAGE_KEY', 'lockinSupabaseSession');
 }
 
 async function getAuthToken() {
@@ -749,57 +699,57 @@ async function getAuthToken() {
     if (!session) return null;
     return session.accessToken || session.access_token || null;
   } catch (error) {
-    console.error("[Lock-in] Failed to read auth session:", error);
+    console.error('[Lock-in] Failed to read auth session:', error);
     return null;
   }
 }
 
 const TRACKING_QUERY_KEYS = new Set([
-  "utm_source",
-  "utm_medium",
-  "utm_campaign",
-  "utm_term",
-  "utm_content",
-  "utm_id",
-  "utm_name",
-  "gclid",
-  "dclid",
-  "fbclid",
-  "msclkid",
-  "yclid",
-  "igshid",
-  "_ga",
-  "_gid",
-  "_gac",
-  "_gl",
-  "mc_cid",
-  "mc_eid",
-  "hsa_acc",
-  "hsa_cam",
-  "hsa_grp",
-  "hsa_ad",
-  "hsa_src",
-  "hsa_tgt",
-  "hsa_kw",
-  "hsa_mt",
-  "hsa_net",
-  "hsa_ver",
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'utm_id',
+  'utm_name',
+  'gclid',
+  'dclid',
+  'fbclid',
+  'msclkid',
+  'yclid',
+  'igshid',
+  '_ga',
+  '_gid',
+  '_gac',
+  '_gl',
+  'mc_cid',
+  'mc_eid',
+  'hsa_acc',
+  'hsa_cam',
+  'hsa_grp',
+  'hsa_ad',
+  'hsa_src',
+  'hsa_tgt',
+  'hsa_kw',
+  'hsa_mt',
+  'hsa_net',
+  'hsa_ver',
 ]);
 
 function normalizeMediaUrl(mediaUrl) {
-  if (!mediaUrl) return "";
+  if (!mediaUrl) return '';
   try {
     const url = new URL(mediaUrl);
-    url.hash = "";
+    url.hash = '';
     const params = url.searchParams;
     for (const key of Array.from(params.keys())) {
       const lowerKey = key.toLowerCase();
-      if (lowerKey.startsWith("utm_") || TRACKING_QUERY_KEYS.has(lowerKey)) {
+      if (lowerKey.startsWith('utm_') || TRACKING_QUERY_KEYS.has(lowerKey)) {
         params.delete(key);
       }
     }
     const nextSearch = params.toString();
-    url.search = nextSearch ? `?${nextSearch}` : "";
+    url.search = nextSearch ? `?${nextSearch}` : '';
     return url.toString();
   } catch {
     return mediaUrl;
@@ -811,7 +761,7 @@ function isAuthStatus(status) {
 }
 
 function isBlobUrl(mediaUrl) {
-  return typeof mediaUrl === "string" && mediaUrl.startsWith("blob:");
+  return typeof mediaUrl === 'string' && mediaUrl.startsWith('blob:');
 }
 
 function createErrorWithCode(message, code) {
@@ -821,8 +771,8 @@ function createErrorWithCode(message, code) {
 }
 
 function getErrorCode(error) {
-  if (!error || typeof error !== "object") return null;
-  if ("code" in error && typeof error.code === "string") {
+  if (!error || typeof error !== 'object') return null;
+  if ('code' in error && typeof error.code === 'string') {
     return error.code;
   }
   return null;
@@ -831,8 +781,8 @@ function getErrorCode(error) {
 async function fetchMediaHeadMetadata(mediaUrl, signal) {
   try {
     const response = await fetchWithRetry(mediaUrl, {
-      method: "HEAD",
-      credentials: "include",
+      method: 'HEAD',
+      credentials: 'include',
       signal,
     });
 
@@ -844,18 +794,18 @@ async function fetchMediaHeadMetadata(mediaUrl, signal) {
       return { ok: false, status: response.status };
     }
 
-    if (response.type === "opaque") {
+    if (response.type === 'opaque') {
       return { ok: false, opaque: true };
     }
 
-    const etag = response.headers.get("etag");
-    const lastModified = response.headers.get("last-modified");
-    const contentLength = response.headers.get("content-length");
+    const etag = response.headers.get('etag');
+    const lastModified = response.headers.get('last-modified');
+    const contentLength = response.headers.get('content-length');
     return {
       ok: true,
-      etag: etag ? etag.trim() : "",
-      lastModified: lastModified ? lastModified.trim() : "",
-      contentLength: contentLength ? contentLength.trim() : "",
+      etag: etag ? etag.trim() : '',
+      lastModified: lastModified ? lastModified.trim() : '',
+      contentLength: contentLength ? contentLength.trim() : '',
     };
   } catch (error) {
     if (signal?.aborted) {
@@ -876,15 +826,15 @@ function fallbackHash(value) {
 }
 
 async function hashStringSha256(value) {
-  if (typeof crypto === "undefined" || !crypto.subtle) {
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
     return fallbackHash(value);
   }
   const encoded = new TextEncoder().encode(value);
-  const buffer = await crypto.subtle.digest("SHA-256", encoded);
+  const buffer = await crypto.subtle.digest('SHA-256', encoded);
   const bytes = new Uint8Array(buffer);
   return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 function createProgressEmitter(tabId, requestId) {
@@ -895,11 +845,8 @@ function createProgressEmitter(tabId, requestId) {
     if (!tabId) return;
 
     const percent =
-      typeof info.percent === "number"
-        ? Math.max(0, Math.min(100, info.percent))
-        : undefined;
-    const percentBucket =
-      typeof percent === "number" ? Math.floor(percent) : null;
+      typeof info.percent === 'number' ? Math.max(0, Math.min(100, info.percent)) : undefined;
+    const percentBucket = typeof percent === 'number' ? Math.floor(percent) : null;
     const shouldSkip =
       stage === lastStage &&
       percentBucket !== null &&
@@ -915,7 +862,7 @@ function createProgressEmitter(tabId, requestId) {
 
     try {
       chrome.tabs.sendMessage(tabId, {
-        type: "TRANSCRIBE_MEDIA_AI_PROGRESS",
+        type: 'TRANSCRIBE_MEDIA_AI_PROGRESS',
         payload: {
           requestId,
           jobId: info.jobId || null,
@@ -925,7 +872,7 @@ function createProgressEmitter(tabId, requestId) {
         },
       });
     } catch (error) {
-      console.warn("[Lock-in] Failed to send progress update:", error);
+      console.warn('[Lock-in] Failed to send progress update:', error);
     }
   };
 }
@@ -948,12 +895,12 @@ async function fetchJsonWithAuth(url, token, options = {}) {
 
   if (!response.ok) {
     // Extract error message - handle both string and object error formats
-    let message = "Request failed";
+    let message = 'Request failed';
     if (data?.error?.message) {
       message = data.error.message;
-    } else if (typeof data?.error === "string") {
+    } else if (typeof data?.error === 'string') {
       message = data.error;
-    } else if (typeof data?.message === "string") {
+    } else if (typeof data?.message === 'string') {
       message = data.message;
     } else if (response.statusText) {
       message = response.statusText;
@@ -975,8 +922,8 @@ async function fetchJsonWithAuth(url, token, options = {}) {
 async function createTranscriptionJob({ token, payload, signal }) {
   const backendUrl = getBackendUrl();
   return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs`, token, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
     signal,
   });
@@ -1015,17 +962,8 @@ function base64ToArrayBuffer(base64) {
  * @param {function} onChunk - Callback for each chunk received
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-async function fetchMediaViaContentScript({
-  tabId,
-  mediaUrl,
-  jobId,
-  requestId,
-  onChunk,
-}) {
-  console.log(
-    "[Lock-in BG] Requesting content script to fetch media:",
-    mediaUrl
-  );
+async function fetchMediaViaContentScript({ tabId, mediaUrl, jobId, requestId, onChunk }) {
+  console.log('[Lock-in BG] Requesting content script to fetch media:', mediaUrl);
 
   // Set up chunk receiver
   let resolveComplete;
@@ -1046,28 +984,28 @@ async function fetchMediaViaContentScript({
     // Send request to content script - this kicks off the fetch
     // The content script will send chunks via separate MEDIA_CHUNK messages
     const result = await chrome.tabs.sendMessage(tabId, {
-      type: "FETCH_MEDIA_FOR_TRANSCRIPTION",
+      type: 'FETCH_MEDIA_FOR_TRANSCRIPTION',
       payload: { mediaUrl, jobId, requestId },
     });
 
-    console.log("[Lock-in BG] Content script fetch result:", result);
+    console.log('[Lock-in BG] Content script fetch result:', result);
 
     if (!result || !result.success) {
       throw createErrorWithCode(
-        result?.error || "Content script failed to fetch media",
-        result?.errorCode || "CONTENT_FETCH_ERROR"
+        result?.error || 'Content script failed to fetch media',
+        result?.errorCode || 'CONTENT_FETCH_ERROR',
       );
     }
 
     // Wait for all chunks to be processed
     // The handleMediaChunkMessage will resolve this when isLast=true
-    console.log("[Lock-in BG] Waiting for all chunks to be uploaded...");
+    console.log('[Lock-in BG] Waiting for all chunks to be uploaded...');
     await completePromise;
-    console.log("[Lock-in BG] All chunks uploaded successfully");
+    console.log('[Lock-in BG] All chunks uploaded successfully');
 
     return result;
   } catch (error) {
-    console.error("[Lock-in BG] Content script media fetch error:", error);
+    console.error('[Lock-in BG] Content script media fetch error:', error);
     throw error;
   } finally {
     pendingMediaChunks.delete(requestId);
@@ -1078,23 +1016,15 @@ async function fetchMediaViaContentScript({
  * Handle MEDIA_CHUNK messages from content script
  */
 function handleMediaChunkMessage(message) {
-  const { requestId, chunkIndex, chunkData, chunkSize, isLast } =
-    message.payload || {};
+  const { requestId, chunkIndex, chunkData, chunkSize, isLast } = message.payload || {};
 
   const handler = pendingMediaChunks.get(requestId);
   if (!handler) {
-    console.warn("[Lock-in BG] Received chunk for unknown request:", requestId);
+    console.warn('[Lock-in BG] Received chunk for unknown request:', requestId);
     return;
   }
 
-  console.log(
-    "[Lock-in BG] Received chunk:",
-    chunkIndex,
-    "size:",
-    chunkSize,
-    "isLast:",
-    isLast
-  );
+  console.log('[Lock-in BG] Received chunk:', chunkIndex, 'size:', chunkSize, 'isLast:', isLast);
 
   // Convert base64 to Uint8Array
   const chunkBytes = base64ToArrayBuffer(chunkData);
@@ -1129,25 +1059,22 @@ async function uploadMediaInChunks({
   const sendChunkToBackend = async (chunk, index, maxRetries = 5) => {
     const headers = {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/octet-stream",
-      "x-chunk-index": String(index),
+      'Content-Type': 'application/octet-stream',
+      'x-chunk-index': String(index),
     };
 
     let lastError = null;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       if (signal?.aborted) {
-        throw new Error("CANCELED");
+        throw new Error('CANCELED');
       }
 
-      const response = await fetch(
-        `${backendUrl}/api/transcripts/jobs/${jobId}/chunks`,
-        {
-          method: "PUT",
-          headers,
-          body: chunk,
-          signal,
-        }
-      );
+      const response = await fetch(`${backendUrl}/api/transcripts/jobs/${jobId}/chunks`, {
+        method: 'PUT',
+        headers,
+        body: chunk,
+        signal,
+      });
 
       if (response.ok) {
         return response.json();
@@ -1155,7 +1082,7 @@ async function uploadMediaInChunks({
 
       // Handle rate limiting with exponential backoff
       if (response.status === 429) {
-        const retryAfterHeader = response.headers.get("Retry-After");
+        const retryAfterHeader = response.headers.get('Retry-After');
         let retryAfterMs;
 
         if (retryAfterHeader) {
@@ -1168,7 +1095,7 @@ async function uploadMediaInChunks({
         console.log(
           `[Lock-in BG] Rate limited on chunk ${index}, retrying in ${retryAfterMs}ms (attempt ${
             attempt + 1
-          }/${maxRetries})`
+          }/${maxRetries})`,
         );
         await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
         continue;
@@ -1182,26 +1109,16 @@ async function uploadMediaInChunks({
         /* ignore */
       }
       lastError = new Error(
-        data?.error?.message ||
-          data?.error ||
-          `Chunk upload failed: ${response.status}`
+        data?.error?.message || data?.error || `Chunk upload failed: ${response.status}`,
       );
       break;
     }
 
-    throw (
-      lastError ||
-      new Error(`Chunk ${index} upload failed after ${maxRetries} retries`)
-    );
+    throw lastError || new Error(`Chunk ${index} upload failed after ${maxRetries} retries`);
   };
 
   // Known SSO domains that indicate session expiration
-  const SSO_DOMAINS = [
-    "okta.com",
-    "auth0.com",
-    "login.microsoftonline.com",
-    "accounts.google.com",
-  ];
+  const SSO_DOMAINS = ['okta.com', 'auth0.com', 'login.microsoftonline.com', 'accounts.google.com'];
 
   const isSsoRedirect = (url) => {
     try {
@@ -1216,11 +1133,11 @@ async function uploadMediaInChunks({
     try {
       const hostname = new URL(url).hostname.toLowerCase();
       return (
-        hostname.includes("cloudfront.net") ||
-        hostname.includes("cdn.") ||
-        hostname.includes("akamai") ||
-        hostname.includes("fastly") ||
-        hostname.includes("cloudflare")
+        hostname.includes('cloudfront.net') ||
+        hostname.includes('cdn.') ||
+        hostname.includes('akamai') ||
+        hostname.includes('fastly') ||
+        hostname.includes('cloudflare')
       );
     } catch {
       return false;
@@ -1232,96 +1149,83 @@ async function uploadMediaInChunks({
   let usedContentScript = false;
 
   try {
-    console.log("[Lock-in BG] Attempting direct media fetch:", mediaUrl);
+    console.log('[Lock-in BG] Attempting direct media fetch:', mediaUrl);
 
     // Use manual redirect to handle Moodle → CDN redirects properly
     // Moodle needs credentials, CDN doesn't (and CDN returns Access-Control-Allow-Origin: *)
     response = await fetch(mediaUrl, {
-      method: "GET",
-      credentials: "include",
-      redirect: "manual",
+      method: 'GET',
+      credentials: 'include',
+      redirect: 'manual',
       signal,
     });
 
-    console.log(
-      "[Lock-in BG] Initial response:",
-      response.status,
-      response.type
-    );
+    console.log('[Lock-in BG] Initial response:', response.status, response.type);
 
     // Handle redirects manually
     if (
-      response.type === "opaqueredirect" ||
+      response.type === 'opaqueredirect' ||
       response.status === 0 ||
       (response.status >= 300 && response.status < 400)
     ) {
-      const location = response.headers.get("location");
-      console.log("[Lock-in BG] Redirect detected, location:", location);
+      const location = response.headers.get('location');
+      console.log('[Lock-in BG] Redirect detected, location:', location);
 
       if (location) {
         // Check for SSO redirect (session expired)
         if (isSsoRedirect(location)) {
           throw createErrorWithCode(
-            "Your session has expired. Please refresh the page and log in again.",
-            "SESSION_EXPIRED"
+            'Your session has expired. Please refresh the page and log in again.',
+            'SESSION_EXPIRED',
           );
         }
 
         // Follow redirect with appropriate credentials
         const useCredentials = !isCdnUrl(location);
-        console.log(
-          "[Lock-in BG] Following redirect, credentials:",
-          useCredentials
-        );
+        console.log('[Lock-in BG] Following redirect, credentials:', useCredentials);
 
         response = await fetch(location, {
-          method: "GET",
-          credentials: useCredentials ? "include" : "omit",
+          method: 'GET',
+          credentials: useCredentials ? 'include' : 'omit',
           signal,
         });
       } else {
         // Can't get location - fall back to content script
-        console.log(
-          "[Lock-in BG] No location header, falling back to content script"
-        );
-        throw createErrorWithCode("CORS_BLOCKED", "CORS_BLOCKED");
+        console.log('[Lock-in BG] No location header, falling back to content script');
+        throw createErrorWithCode('CORS_BLOCKED', 'CORS_BLOCKED');
       }
     }
 
     // Check for CORS/opaque issues
-    if (response.type === "opaque") {
-      console.log(
-        "[Lock-in BG] Got opaque response, will try content script fallback"
-      );
-      throw createErrorWithCode("CORS_BLOCKED", "CORS_BLOCKED");
+    if (response.type === 'opaque') {
+      console.log('[Lock-in BG] Got opaque response, will try content script fallback');
+      throw createErrorWithCode('CORS_BLOCKED', 'CORS_BLOCKED');
     }
 
     if (!response.ok) {
       if (isAuthStatus(response.status)) {
         throw createErrorWithCode(
-          "Authentication required. Please refresh the page and log in.",
-          "AUTH_REQUIRED"
+          'Authentication required. Please refresh the page and log in.',
+          'AUTH_REQUIRED',
         );
       }
-      throw createErrorWithCode(`HTTP ${response.status}`, "FETCH_ERROR");
+      throw createErrorWithCode(`HTTP ${response.status}`, 'FETCH_ERROR');
     }
 
-    console.log("[Lock-in BG] Direct fetch successful");
+    console.log('[Lock-in BG] Direct fetch successful');
   } catch (error) {
     // Check if we should try content script fallback
     const shouldFallback =
-      error?.code === "CORS_BLOCKED" ||
-      error?.code === "NOT_AVAILABLE" ||
+      error?.code === 'CORS_BLOCKED' ||
+      error?.code === 'NOT_AVAILABLE' ||
       (error?.message &&
-        (error.message.includes("CORS") ||
-          error.message.includes("opaque") ||
-          error.message.includes("Failed to fetch") ||
-          error.message.includes("NetworkError")));
+        (error.message.includes('CORS') ||
+          error.message.includes('opaque') ||
+          error.message.includes('Failed to fetch') ||
+          error.message.includes('NetworkError')));
 
     if (shouldFallback && tabId) {
-      console.log(
-        "[Lock-in BG] Trying content script fallback for media fetch"
-      );
+      console.log('[Lock-in BG] Trying content script fallback for media fetch');
       usedContentScript = true;
 
       try {
@@ -1350,37 +1254,30 @@ async function uploadMediaInChunks({
           usedContentScript: true,
         };
       } catch (contentError) {
-        console.error(
-          "[Lock-in BG] Content script fallback failed:",
-          contentError
-        );
+        console.error('[Lock-in BG] Content script fallback failed:', contentError);
         throw createErrorWithCode(
-          contentError?.message ||
-            "Media could not be fetched via content script.",
-          contentError?.code || "CONTENT_FETCH_ERROR"
+          contentError?.message || 'Media could not be fetched via content script.',
+          contentError?.code || 'CONTENT_FETCH_ERROR',
         );
       }
     }
 
     // Re-throw original error if we can't fallback
-    if (error?.name === "AbortError") throw error;
+    if (error?.name === 'AbortError') throw error;
     if (error?.code) throw error;
 
     throw createErrorWithCode(
-      "Media could not be fetched due to browser restrictions (CORS/opaque response) or network errors.",
-      "NOT_AVAILABLE"
+      'Media could not be fetched due to browser restrictions (CORS/opaque response) or network errors.',
+      'NOT_AVAILABLE',
     );
   }
 
   // Process the direct fetch response
-  if (!response.body || typeof response.body.getReader !== "function") {
-    throw createErrorWithCode(
-      "Streaming not supported for this media.",
-      "NOT_AVAILABLE"
-    );
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    throw createErrorWithCode('Streaming not supported for this media.', 'NOT_AVAILABLE');
   }
 
-  const totalBytesHeader = response.headers.get("content-length");
+  const totalBytesHeader = response.headers.get('content-length');
   const totalBytes = totalBytesHeader ? Number(totalBytesHeader) : null;
   const totalChunks =
     Number.isFinite(totalBytes) && totalBytes > 0
@@ -1394,28 +1291,25 @@ async function uploadMediaInChunks({
   const sendChunk = async (chunk, maxRetries = 5) => {
     const headers = {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/octet-stream",
-      "x-chunk-index": String(chunkIndex),
+      'Content-Type': 'application/octet-stream',
+      'x-chunk-index': String(chunkIndex),
     };
     if (totalChunks) {
-      headers["x-total-chunks"] = String(totalChunks);
+      headers['x-total-chunks'] = String(totalChunks);
     }
 
     let lastError = null;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       if (signal?.aborted) {
-        throw new Error("CANCELED");
+        throw new Error('CANCELED');
       }
 
-      const uploadResponse = await fetch(
-        `${backendUrl}/api/transcripts/jobs/${jobId}/chunks`,
-        {
-          method: "PUT",
-          headers,
-          body: chunk,
-          signal,
-        }
-      );
+      const uploadResponse = await fetch(`${backendUrl}/api/transcripts/jobs/${jobId}/chunks`, {
+        method: 'PUT',
+        headers,
+        body: chunk,
+        signal,
+      });
 
       if (uploadResponse.ok) {
         chunkIndex += 1;
@@ -1424,7 +1318,7 @@ async function uploadMediaInChunks({
 
       // Handle rate limiting with exponential backoff
       if (uploadResponse.status === 429) {
-        const retryAfterHeader = uploadResponse.headers.get("Retry-After");
+        const retryAfterHeader = uploadResponse.headers.get('Retry-After');
         let retryAfterMs;
 
         if (retryAfterHeader) {
@@ -1437,7 +1331,7 @@ async function uploadMediaInChunks({
         console.log(
           `[Lock-in BG] Rate limited on chunk ${chunkIndex}, retrying in ${retryAfterMs}ms (attempt ${
             attempt + 1
-          }/${maxRetries})`
+          }/${maxRetries})`,
         );
         await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
         continue;
@@ -1453,15 +1347,12 @@ async function uploadMediaInChunks({
       lastError = new Error(
         data?.error?.message ||
           data?.error ||
-          `Failed to upload chunk ${chunkIndex}: ${uploadResponse.status}`
+          `Failed to upload chunk ${chunkIndex}: ${uploadResponse.status}`,
       );
       break;
     }
 
-    throw (
-      lastError ||
-      new Error(`Chunk ${chunkIndex} upload failed after ${maxRetries} retries`)
-    );
+    throw lastError || new Error(`Chunk ${chunkIndex} upload failed after ${maxRetries} retries`);
   };
 
   while (true) {
@@ -1506,123 +1397,97 @@ async function uploadMediaInChunks({
   };
 }
 
-async function finalizeTranscriptionJob({
-  jobId,
-  token,
-  options,
-  expectedTotalChunks,
-  signal,
-}) {
+async function finalizeTranscriptionJob({ jobId, token, options, expectedTotalChunks, signal }) {
   const backendUrl = getBackendUrl();
   const payload = Object.assign({}, options || {});
   if (expectedTotalChunks) {
     payload.expectedTotalChunks = expectedTotalChunks;
   }
-  return fetchJsonWithAuth(
-    `${backendUrl}/api/transcripts/jobs/${jobId}/finalize`,
-    token,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal,
-    }
-  );
+  return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}/finalize`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
 }
 
 async function pollTranscriptJob({ jobId, token, signal, onProgress }) {
   const backendUrl = getBackendUrl();
   for (let attempt = 0; attempt < AI_POLL_MAX_ATTEMPTS; attempt += 1) {
     if (signal?.aborted) {
-      throw new Error("CANCELED");
+      throw new Error('CANCELED');
     }
 
-    const data = await fetchJsonWithAuth(
-      `${backendUrl}/api/transcripts/jobs/${jobId}`,
-      token,
-      { method: "GET", signal }
-    );
+    const data = await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}`, token, {
+      method: 'GET',
+      signal,
+    });
 
     const job = data?.job || data;
-    if (
-      (job?.status === "done" || job?.status === "completed") &&
-      job.transcript
-    ) {
+    if ((job?.status === 'done' || job?.status === 'completed') && job.transcript) {
       return job.transcript;
     }
-    if (job?.status === "error" || job?.status === "failed") {
+    if (job?.status === 'error' || job?.status === 'failed') {
       // Extract error message - handle both string and object error formats
       const errorMsg =
-        typeof job.error === "string"
-          ? job.error
-          : job.error?.message || "AI transcription failed";
+        typeof job.error === 'string' ? job.error : job.error?.message || 'AI transcription failed';
       throw new Error(errorMsg);
     }
-    if (job?.status === "canceled") {
-      throw new Error("CANCELED");
+    if (job?.status === 'canceled') {
+      throw new Error('CANCELED');
     }
 
     if (onProgress) {
-      onProgress({ message: "Transcribing..." });
+      onProgress({ message: 'Transcribing...' });
     }
     await new Promise((resolve) => setTimeout(resolve, AI_POLL_INTERVAL_MS));
   }
 
-  throw new Error("AI transcription timed out");
+  throw new Error('AI transcription timed out');
 }
 
 async function cancelTranscriptJob({ jobId, token }) {
   if (!jobId || !token) return;
   const backendUrl = getBackendUrl();
   try {
-    await fetchJsonWithAuth(
-      `${backendUrl}/api/transcripts/jobs/${jobId}/cancel`,
-      token,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      }
-    );
+    await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}/cancel`, token, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
   } catch (error) {
-    console.warn("[Lock-in] Failed to cancel transcript job:", error);
+    console.warn('[Lock-in] Failed to cancel transcript job:', error);
   }
 }
 
 async function listActiveTranscriptJobs({ token }) {
-  if (!token) throw new Error("No auth token provided");
+  if (!token) throw new Error('No auth token provided');
   const backendUrl = getBackendUrl();
   return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/active`, token, {
-    method: "GET",
+    method: 'GET',
   });
 }
 
 async function cancelAllActiveTranscriptJobs({ token }) {
-  if (!token) throw new Error("No auth token provided");
+  if (!token) throw new Error('No auth token provided');
   const backendUrl = getBackendUrl();
-  return fetchJsonWithAuth(
-    `${backendUrl}/api/transcripts/jobs/cancel-all`,
-    token,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
-    }
-  );
+  return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/cancel-all`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
 }
 
 async function handleAiTranscriptionStart(payload, sender) {
   const video = payload?.video;
   const options = payload?.options || {};
-  const requestId =
-    payload?.requestId ||
-    `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const requestId = payload?.requestId || `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   if (!video || !video.mediaUrl) {
     return {
       success: false,
-      error: "Media URL not available for AI transcription.",
-      errorCode: "NOT_AVAILABLE",
+      error: 'Media URL not available for AI transcription.',
+      errorCode: 'NOT_AVAILABLE',
       requestId,
     };
   }
@@ -1638,47 +1503,39 @@ async function handleAiTranscriptionStart(payload, sender) {
   };
 
   AI_TRANSCRIPTION_JOBS.set(requestId, jobState);
-  progress("starting", { message: "Preparing AI transcription..." });
+  progress('starting', { message: 'Preparing AI transcription...' });
 
   try {
     if (isBlobUrl(video.mediaUrl)) {
       throw createErrorWithCode(
-        "This video uses a blob URL and cannot be accessed for AI transcription.",
-        "NOT_AVAILABLE"
+        'This video uses a blob URL and cannot be accessed for AI transcription.',
+        'NOT_AVAILABLE',
       );
     }
 
     if (video.drmDetected) {
-      const reason = video.drmReason ? ` (${video.drmReason})` : "";
+      const reason = video.drmReason ? ` (${video.drmReason})` : '';
       throw createErrorWithCode(
         `This video appears to be DRM-protected${reason}. AI transcription is not available.`,
-        "NOT_AVAILABLE"
+        'NOT_AVAILABLE',
       );
     }
 
     const token = await getAuthToken();
     if (!token) {
       throw createErrorWithCode(
-        "Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.",
-        "LOCKIN_AUTH_REQUIRED"
+        'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
+        'LOCKIN_AUTH_REQUIRED',
       );
     }
 
     const mediaUrlNormalized = normalizeMediaUrl(video.mediaUrl);
-    const headInfo = await fetchMediaHeadMetadata(
-      video.mediaUrl,
-      abortController.signal
-    );
+    const headInfo = await fetchMediaHeadMetadata(video.mediaUrl, abortController.signal);
     if (headInfo?.authRequired) {
-      throw createErrorWithCode(
-        "Authentication required to access this media.",
-        "AUTH_REQUIRED"
-      );
+      throw createErrorWithCode('Authentication required to access this media.', 'AUTH_REQUIRED');
     }
 
-    const headContentLength = headInfo?.contentLength
-      ? Number(headInfo.contentLength)
-      : null;
+    const headContentLength = headInfo?.contentLength ? Number(headInfo.contentLength) : null;
     const expectedTotalChunks =
       Number.isFinite(headContentLength) && headContentLength > 0
         ? Math.ceil(headContentLength / AI_UPLOAD_CHUNK_BYTES)
@@ -1686,11 +1543,11 @@ async function handleAiTranscriptionStart(payload, sender) {
 
     const fingerprintSource = [
       mediaUrlNormalized,
-      headInfo?.etag || "",
-      headInfo?.lastModified || "",
-      headInfo?.contentLength || "",
-      video.durationMs || "",
-    ].join("|");
+      headInfo?.etag || '',
+      headInfo?.lastModified || '',
+      headInfo?.contentLength || '',
+      video.durationMs || '',
+    ].join('|');
     const fingerprint = await hashStringSha256(fingerprintSource);
 
     const jobResponse = await createTranscriptionJob({
@@ -1700,19 +1557,19 @@ async function handleAiTranscriptionStart(payload, sender) {
         mediaUrl: video.mediaUrl,
         mediaUrlNormalized,
         durationMs: video.durationMs || null,
-        provider: video.provider || "unknown",
+        provider: video.provider || 'unknown',
         expectedTotalChunks,
       },
       signal: abortController.signal,
     });
 
     if (jobResponse?.job?.transcript) {
-      progress("completed", { message: "Transcript ready." });
+      progress('completed', { message: 'Transcript ready.' });
       return {
         success: true,
         transcript: jobResponse.job.transcript,
         jobId: jobResponse.job.id,
-        status: "completed",
+        status: 'completed',
         cached: true,
         requestId,
       };
@@ -1720,28 +1577,25 @@ async function handleAiTranscriptionStart(payload, sender) {
 
     const jobId = jobResponse?.job?.id || jobResponse?.jobId;
     if (!jobId) {
-      throw new Error("Failed to create transcription job");
+      throw new Error('Failed to create transcription job');
     }
 
     jobState.jobId = jobId;
-    progress("uploading", { jobId, message: "Uploading media..." });
+    progress('uploading', { jobId, message: 'Uploading media...' });
 
     const uploadStats = await uploadMediaInChunks({
       jobId,
       mediaUrl: video.mediaUrl,
       token,
       signal: abortController.signal,
-      onProgress: (info) => progress("uploading", { jobId, ...info }),
+      onProgress: (info) => progress('uploading', { jobId, ...info }),
       tabId,
       requestId,
     });
 
-    progress("processing", { jobId, message: "Processing audio..." });
+    progress('processing', { jobId, message: 'Processing audio...' });
     const expectedTotalChunksForFinalize =
-      uploadStats?.totalChunks ||
-      expectedTotalChunks ||
-      uploadStats?.chunkCount ||
-      null;
+      uploadStats?.totalChunks || expectedTotalChunks || uploadStats?.chunkCount || null;
     await finalizeTranscriptionJob({
       jobId,
       token,
@@ -1750,78 +1604,74 @@ async function handleAiTranscriptionStart(payload, sender) {
       signal: abortController.signal,
     });
 
-    progress("polling", { jobId, message: "Transcribing..." });
+    progress('polling', { jobId, message: 'Transcribing...' });
     const transcript = await pollTranscriptJob({
       jobId,
       token,
       signal: abortController.signal,
-      onProgress: (info) => progress("polling", { jobId, ...info }),
+      onProgress: (info) => progress('polling', { jobId, ...info }),
     });
 
-    progress("completed", { jobId, message: "Transcript ready." });
+    progress('completed', { jobId, message: 'Transcript ready.' });
     return {
       success: true,
       transcript,
       jobId,
-      status: "completed",
+      status: 'completed',
       requestId,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const errorCode = getErrorCode(error);
     const status = error?.status;
-    if (abortController.signal.aborted || message === "CANCELED") {
-      progress("canceled", { jobId: jobState.jobId, message: "Canceled." });
+    if (abortController.signal.aborted || message === 'CANCELED') {
+      progress('canceled', { jobId: jobState.jobId, message: 'Canceled.' });
       return {
         success: false,
-        error: "Transcription canceled.",
-        errorCode: "CANCELED",
+        error: 'Transcription canceled.',
+        errorCode: 'CANCELED',
         jobId: jobState.jobId,
-        status: "canceled",
+        status: 'canceled',
         requestId,
       };
     }
-    if (errorCode === "LOCKIN_AUTH_REQUIRED") {
-      progress("failed", {
+    if (errorCode === 'LOCKIN_AUTH_REQUIRED') {
+      progress('failed', {
         jobId: jobState.jobId,
-        message: "Lock-in sign-in required.",
+        message: 'Lock-in sign-in required.',
       });
       return {
         success: false,
         error:
-          "Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.",
-        errorCode: "LOCKIN_AUTH_REQUIRED",
+          'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
+        errorCode: 'LOCKIN_AUTH_REQUIRED',
         jobId: jobState.jobId,
-        status: "failed",
+        status: 'failed',
         requestId,
       };
     }
-    if (
-      errorCode === "AUTH_REQUIRED" ||
-      message === "AUTH_REQUIRED" ||
-      isAuthStatus(status)
-    ) {
-      progress("failed", {
+    if (errorCode === 'AUTH_REQUIRED' || message === 'AUTH_REQUIRED' || isAuthStatus(status)) {
+      progress('failed', {
         jobId: jobState.jobId,
-        message: "Media authentication required.",
+        message: 'Media authentication required.',
       });
       return {
         success: false,
         error:
-          "Media authentication required. Please refresh the page and ensure you are logged in to the learning platform.",
-        errorCode: "AUTH_REQUIRED",
+          'Media authentication required. Please refresh the page and ensure you are logged in to the learning platform.',
+        errorCode: 'AUTH_REQUIRED',
         jobId: jobState.jobId,
-        status: "failed",
+        status: 'failed',
         requestId,
       };
     }
-    progress("failed", { jobId: jobState.jobId, message });
+    progress('failed', { jobId: jobState.jobId, message });
     return {
       success: false,
-      error: message || "Failed to transcribe media.",
-      errorCode: errorCode || "NOT_AVAILABLE",
+      error: message || 'Failed to transcribe media.',
+      errorCode: errorCode || 'NOT_AVAILABLE',
       jobId: jobState.jobId,
-      status: "failed",
+      status: 'failed',
       requestId,
     };
   } finally {
@@ -1847,7 +1697,7 @@ async function handleAiTranscriptionCancel(payload) {
 }
 
 // Session management
-const SESSION_STORAGE_PREFIX = "lockin_session_";
+const SESSION_STORAGE_PREFIX = 'lockin_session_';
 
 /**
  * Get session key for a specific tab
@@ -1871,7 +1721,7 @@ async function getSession(tabId) {
     const result = await chrome.storage.local.get([key]);
     return result[key] || null;
   } catch (error) {
-    console.error("Lock-in: Failed to get session:", error);
+    console.error('Lock-in: Failed to get session:', error);
     return null;
   }
 }
@@ -1888,16 +1738,14 @@ async function saveSession(tabId, sessionData) {
   const key = getSessionKey(tabId);
   const storedSession = {
     ...(sessionData || {}),
-    chatHistory: Array.isArray(sessionData?.chatHistory)
-      ? sessionData.chatHistory
-      : [],
+    chatHistory: Array.isArray(sessionData?.chatHistory) ? sessionData.chatHistory : [],
     updatedAt: Date.now(),
   };
 
   try {
     await chrome.storage.local.set({ [key]: storedSession });
   } catch (error) {
-    console.error("Lock-in: Failed to save session:", error);
+    console.error('Lock-in: Failed to save session:', error);
   }
 }
 
@@ -1913,7 +1761,7 @@ async function clearSession(tabId) {
   try {
     await chrome.storage.local.remove(key);
   } catch (error) {
-    console.error("Lock-in: Failed to clear session:", error);
+    console.error('Lock-in: Failed to clear session:', error);
   }
 }
 
@@ -1931,165 +1779,125 @@ async function handleMessage(message, sender) {
 
   try {
     switch (messageType) {
-      case "getTabId":
-      case "GET_TAB_ID": {
-        return Messaging
-          ? Messaging.createSuccessResponse({ tabId })
-          : { tabId };
+      case 'getTabId':
+      case 'GET_TAB_ID': {
+        return Messaging ? Messaging.createSuccessResponse({ tabId }) : { tabId };
       }
 
-      case "getSession":
-      case "GET_SESSION": {
+      case 'getSession':
+      case 'GET_SESSION': {
         const session = await getSession(tabId);
-        return Messaging
-          ? Messaging.createSuccessResponse({ session })
-          : { session };
+        return Messaging ? Messaging.createSuccessResponse({ session }) : { session };
       }
 
-      case "saveSession":
-      case "SAVE_SESSION": {
+      case 'saveSession':
+      case 'SAVE_SESSION': {
         const sessionData = message.sessionData || message.payload?.sessionData;
         await saveSession(tabId, sessionData);
-        return Messaging
-          ? Messaging.createSuccessResponse({ success: true })
-          : { success: true };
+        return Messaging ? Messaging.createSuccessResponse({ success: true }) : { success: true };
       }
 
-      case "clearSession":
-      case "CLEAR_SESSION": {
+      case 'clearSession':
+      case 'CLEAR_SESSION': {
         await clearSession(tabId);
-        return Messaging
-          ? Messaging.createSuccessResponse({ success: true })
-          : { success: true };
+        return Messaging ? Messaging.createSuccessResponse({ success: true }) : { success: true };
       }
 
-      case "getSettings":
-      case "GET_SETTINGS": {
+      case 'getSettings':
+      case 'GET_SETTINGS': {
         return new Promise((resolve) => {
-          chrome.storage.sync.get(
-            ["preferredLanguage", "difficultyLevel"],
-            (data) => {
-              resolve(Messaging ? Messaging.createSuccessResponse(data) : data);
-            }
-          );
+          chrome.storage.sync.get(['preferredLanguage', 'difficultyLevel'], (data) => {
+            resolve(Messaging ? Messaging.createSuccessResponse(data) : data);
+          });
         });
       }
 
-      case "saveSettings":
-      case "UPDATE_SETTINGS": {
+      case 'saveSettings':
+      case 'UPDATE_SETTINGS': {
         const settings = message.settings || message.payload?.settings || {};
         return new Promise((resolve) => {
           chrome.storage.sync.set(settings, () => {
             resolve(
-              Messaging
-                ? Messaging.createSuccessResponse({ success: true })
-                : { success: true }
+              Messaging ? Messaging.createSuccessResponse({ success: true }) : { success: true },
             );
           });
         });
       }
 
-      case "extractTranscript":
-      case "EXTRACT_TRANSCRIPT": {
-        console.log("[Lock-in BG] EXTRACT_TRANSCRIPT message received");
+      case 'extractTranscript':
+      case 'EXTRACT_TRANSCRIPT': {
+        console.log('[Lock-in BG] EXTRACT_TRANSCRIPT message received');
         const video = message.video || message.payload?.video;
         if (!video) {
-          console.warn(
-            "[Lock-in BG] No video provided in EXTRACT_TRANSCRIPT message"
-          );
+          console.warn('[Lock-in BG] No video provided in EXTRACT_TRANSCRIPT message');
           return Messaging
-            ? Messaging.createErrorResponse("No video provided")
-            : { error: "No video provided" };
+            ? Messaging.createErrorResponse('No video provided')
+            : { error: 'No video provided' };
         }
-        console.log(
-          "[Lock-in BG] Processing EXTRACT_TRANSCRIPT for:",
-          video.provider,
-          video.id
-        );
+        console.log('[Lock-in BG] Processing EXTRACT_TRANSCRIPT for:', video.provider, video.id);
         const result = await handleTranscriptExtraction(video);
-        console.log("[Lock-in BG] EXTRACT_TRANSCRIPT result:", result.success);
+        console.log('[Lock-in BG] EXTRACT_TRANSCRIPT result:', result.success);
         return Messaging
           ? result.success
             ? Messaging.createSuccessResponse(result)
-            : Messaging.createErrorResponse(
-                result.error || "Failed to extract transcript",
-                result
-              )
+            : Messaging.createErrorResponse(result.error || 'Failed to extract transcript', result)
           : result;
       }
 
-      case "DETECT_ECHO360_VIDEOS": {
+      case 'DETECT_ECHO360_VIDEOS': {
         const context = message.context || message.payload?.context;
         const result = await handleEcho360VideoDetection(context);
         return Messaging
           ? result.success
             ? Messaging.createSuccessResponse(result)
-            : Messaging.createErrorResponse(
-                result.error || "Echo360 detection failed",
-                result
-              )
+            : Messaging.createErrorResponse(result.error || 'Echo360 detection failed', result)
           : result;
       }
 
-      case "FETCH_PANOPTO_MEDIA_URL": {
-        console.log("[Lock-in BG] FETCH_PANOPTO_MEDIA_URL message received");
+      case 'FETCH_PANOPTO_MEDIA_URL': {
+        console.log('[Lock-in BG] FETCH_PANOPTO_MEDIA_URL message received');
         const video = message.video || message.payload?.video;
         if (!video) {
-          console.warn(
-            "[Lock-in BG] No video provided in FETCH_PANOPTO_MEDIA_URL message"
-          );
+          console.warn('[Lock-in BG] No video provided in FETCH_PANOPTO_MEDIA_URL message');
           return Messaging
-            ? Messaging.createErrorResponse("No video provided")
-            : { success: false, error: "No video provided" };
+            ? Messaging.createErrorResponse('No video provided')
+            : { success: false, error: 'No video provided' };
         }
-        console.log(
-          "[Lock-in BG] Fetching media URL for:",
-          video.provider,
-          video.id
-        );
+        console.log('[Lock-in BG] Fetching media URL for:', video.provider, video.id);
         const result = await handlePanoptoMediaUrlFetch(video, { tabId });
-        console.log(
-          "[Lock-in BG] FETCH_PANOPTO_MEDIA_URL result:",
-          result.success
-        );
+        console.log('[Lock-in BG] FETCH_PANOPTO_MEDIA_URL result:', result.success);
         return Messaging
           ? result.success
             ? Messaging.createSuccessResponse(result)
-            : Messaging.createErrorResponse(
-                result.error || "Failed to fetch media URL",
-                result
-              )
+            : Messaging.createErrorResponse(result.error || 'Failed to fetch media URL', result)
           : result;
       }
 
-
-      case "TRANSCRIBE_MEDIA_AI": {
-        const action = message.action || message.payload?.action || "start";
-        if (action === "cancel") {
+      case 'TRANSCRIBE_MEDIA_AI': {
+        const action = message.action || message.payload?.action || 'start';
+        if (action === 'cancel') {
           return handleAiTranscriptionCancel(message.payload || message);
         }
         const payload = message.payload || message;
         return handleAiTranscriptionStart(payload, sender);
       }
 
-      case "MEDIA_CHUNK": {
+      case 'MEDIA_CHUNK': {
         // Handle media chunks from content script
         handleMediaChunkMessage(message);
         return { received: true };
       }
 
-      case "LIST_ACTIVE_TRANSCRIPT_JOBS": {
+      case 'LIST_ACTIVE_TRANSCRIPT_JOBS': {
         const token = message.token || message.payload?.token;
         if (!token) {
           return Messaging
-            ? Messaging.createErrorResponse("No auth token provided")
-            : { success: false, error: "No auth token provided" };
+            ? Messaging.createErrorResponse('No auth token provided')
+            : { success: false, error: 'No auth token provided' };
         }
         try {
           const result = await listActiveTranscriptJobs({ token });
-          return Messaging
-            ? Messaging.createSuccessResponse(result)
-            : { success: true, ...result };
+          return Messaging ? Messaging.createSuccessResponse(result) : { success: true, ...result };
         } catch (error) {
           return Messaging
             ? Messaging.createErrorResponse(error.message)
@@ -2097,18 +1905,16 @@ async function handleMessage(message, sender) {
         }
       }
 
-      case "CANCEL_ALL_ACTIVE_TRANSCRIPT_JOBS": {
+      case 'CANCEL_ALL_ACTIVE_TRANSCRIPT_JOBS': {
         const token = message.token || message.payload?.token;
         if (!token) {
           return Messaging
-            ? Messaging.createErrorResponse("No auth token provided")
-            : { success: false, error: "No auth token provided" };
+            ? Messaging.createErrorResponse('No auth token provided')
+            : { success: false, error: 'No auth token provided' };
         }
         try {
           const result = await cancelAllActiveTranscriptJobs({ token });
-          return Messaging
-            ? Messaging.createSuccessResponse(result)
-            : { success: true, ...result };
+          return Messaging ? Messaging.createSuccessResponse(result) : { success: true, ...result };
         } catch (error) {
           return Messaging
             ? Messaging.createErrorResponse(error.message)
@@ -2122,11 +1928,9 @@ async function handleMessage(message, sender) {
       }
     }
   } catch (error) {
-    console.error("Lock-in: Error handling message:", error);
+    console.error('Lock-in: Error handling message:', error);
     const errorMessage = error.message || String(error);
-    return Messaging
-      ? Messaging.createErrorResponse(errorMessage)
-      : { error: errorMessage };
+    return Messaging ? Messaging.createErrorResponse(errorMessage) : { error: errorMessage };
   }
 }
 
@@ -2134,30 +1938,27 @@ async function handleMessage(message, sender) {
 chrome.runtime.onInstalled.addListener(() => {
   // Create context menu
   chrome.contextMenus.create({
-    id: "lockin-process",
-    title: "Lock-in: Explain",
-    contexts: ["selection"],
+    id: 'lockin-process',
+    title: 'Lock-in: Explain',
+    contexts: ['selection'],
   });
 
-  console.log("Lock-in extension installed successfully!");
+  console.log('Lock-in extension installed successfully!');
 });
 
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === "lockin-process" && info.selectionText) {
+  if (info.menuItemId === 'lockin-process' && info.selectionText) {
     // Send message to content script to show the mode selector
     chrome.tabs
       .sendMessage(tab.id, {
-        type: "SHOW_MODE_SELECTOR",
+        type: 'SHOW_MODE_SELECTOR',
         payload: {
           text: info.selectionText,
         },
       })
       .catch((error) => {
-        console.error(
-          "Lock-in: Failed to send message to content script:",
-          error
-        );
+        console.error('Lock-in: Failed to send message to content script:', error);
       });
   }
 });
@@ -2187,7 +1988,7 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
 });
 
 // Set up message listener
-if (Messaging && typeof Messaging.setupMessageListener === "function") {
+if (Messaging && typeof Messaging.setupMessageListener === 'function') {
   Messaging.setupMessageListener(handleMessage);
 } else {
   // Fallback to legacy message handling
@@ -2204,4 +2005,4 @@ if (Messaging && typeof Messaging.setupMessageListener === "function") {
 }
 
 // Log when service worker starts
-console.log("Lock-in background service worker started");
+console.log('Lock-in background service worker started');

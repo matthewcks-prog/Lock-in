@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import type { ApiClient } from "@api/client";
-import { LockInSidebar } from "../LockInSidebar";
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import type { ApiClient } from '@api/client';
+import { LockInSidebar } from '../LockInSidebar';
 
 const actEnvironment = globalThis as typeof globalThis & {
   IS_REACT_ACT_ENVIRONMENT?: boolean;
@@ -16,16 +16,14 @@ type StorageStub = {
   setLocal: (key: string, value: unknown) => Promise<void>;
 };
 
-const ACTIVE_CHAT_ID_KEY = "lockin_sidebar_activeChatId";
-const SIDEBAR_ACTIVE_TAB_KEY = "lockin_sidebar_activeTab";
-const SELECTED_NOTE_ID_KEY = "lockin_sidebar_selectedNoteId";
+const ACTIVE_CHAT_ID_KEY = 'lockin_sidebar_activeChatId';
+const SIDEBAR_ACTIVE_TAB_KEY = 'lockin_sidebar_activeTab';
+const SELECTED_NOTE_ID_KEY = 'lockin_sidebar_selectedNoteId';
 
 function createStorageStub(values: Record<string, unknown> = {}): StorageStub {
   return {
     get: vi.fn((key: string) =>
-      Promise.resolve(
-        Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null
-      )
+      Promise.resolve(Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null),
     ),
     set: vi.fn(() => Promise.resolve()),
     getLocal: vi.fn(() => Promise.resolve(null)),
@@ -61,12 +59,12 @@ async function flushPromises(cycles = 1) {
   }
 }
 
-describe("LockInSidebar chat history", () => {
+describe('LockInSidebar chat history', () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
-    container = document.createElement("div");
+    container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
   });
@@ -76,17 +74,17 @@ describe("LockInSidebar chat history", () => {
       root.unmount();
     });
     container.remove();
-    document.body.innerHTML = "";
+    document.body.innerHTML = '';
     vi.restoreAllMocks();
   });
 
-  it("loads chat history entries from the API", async () => {
+  it('loads chat history entries from the API', async () => {
     const apiClient = createApiClientStub({
       getRecentChats: vi.fn().mockResolvedValue([
         {
-          id: "chat-1",
-          title: "Arrays and stacks overview",
-          updated_at: "2025-01-01T00:00:00.000Z",
+          id: 'chat-1',
+          title: 'Arrays and stacks overview',
+          updated_at: '2025-01-01T00:00:00.000Z',
         },
       ]),
     });
@@ -104,7 +102,7 @@ describe("LockInSidebar chat history", () => {
           onToggle={vi.fn()}
           currentMode="explain"
           storage={storage}
-        />
+        />,
       );
     });
     await act(async () => {
@@ -112,33 +110,33 @@ describe("LockInSidebar chat history", () => {
     });
 
     expect(apiClient.getRecentChats).toHaveBeenCalledWith({ limit: 8 });
-    const title = document.querySelector(".lockin-history-title");
-    expect(title?.textContent).toBe("Arrays and stacks overview");
+    const title = document.querySelector('.lockin-history-title');
+    expect(title?.textContent).toBe('Arrays and stacks overview');
   });
 
-  it("loads messages when a history item is selected", async () => {
+  it('loads messages when a history item is selected', async () => {
     const apiClient = createApiClientStub({
       getRecentChats: vi.fn().mockResolvedValue([
         {
-          id: "chat-2",
-          title: "Graph theory basics",
-          updated_at: "2025-01-02T00:00:00.000Z",
+          id: 'chat-2',
+          title: 'Graph theory basics',
+          updated_at: '2025-01-02T00:00:00.000Z',
         },
       ]),
       getChatMessages: vi.fn().mockResolvedValue([
         {
-          id: "msg-1",
-          role: "user",
-          input_text: "What is a graph?",
+          id: 'msg-1',
+          role: 'user',
+          input_text: 'What is a graph?',
           output_text: null,
-          created_at: "2025-01-02T00:00:01.000Z",
+          created_at: '2025-01-02T00:00:01.000Z',
         },
         {
-          id: "msg-2",
-          role: "assistant",
+          id: 'msg-2',
+          role: 'assistant',
           input_text: null,
-          output_text: "A graph models nodes and edges.",
-          created_at: "2025-01-02T00:00:02.000Z",
+          output_text: 'A graph models nodes and edges.',
+          created_at: '2025-01-02T00:00:02.000Z',
         },
       ]),
     });
@@ -152,7 +150,7 @@ describe("LockInSidebar chat history", () => {
           onToggle={vi.fn()}
           currentMode="explain"
           storage={storage}
-        />
+        />,
       );
     });
     await act(async () => {
@@ -160,7 +158,7 @@ describe("LockInSidebar chat history", () => {
     });
 
     const historyButton = document.querySelector(
-      ".lockin-history-item"
+      '.lockin-history-item',
     ) as HTMLButtonElement | null;
     expect(historyButton).not.toBeNull();
 
@@ -171,26 +169,26 @@ describe("LockInSidebar chat history", () => {
       await flushPromises(2);
     });
 
-    expect(apiClient.getChatMessages).toHaveBeenCalledWith("chat-2");
-    const bubbles = Array.from(
-      document.querySelectorAll(".lockin-chat-bubble")
-    ).map((node) => node.textContent);
-    expect(bubbles).toContain("What is a graph?");
-    expect(bubbles).toContain("A graph models nodes and edges.");
-    expect(historyButton?.classList.contains("active")).toBe(true);
+    expect(apiClient.getChatMessages).toHaveBeenCalledWith('chat-2');
+    const bubbles = Array.from(document.querySelectorAll('.lockin-chat-bubble')).map(
+      (node) => node.textContent,
+    );
+    expect(bubbles).toContain('What is a graph?');
+    expect(bubbles).toContain('A graph models nodes and edges.');
+    expect(historyButton?.classList.contains('active')).toBe(true);
   });
 
-  it("restores the last active chat from storage", async () => {
-    const storedChatId = "11111111-1111-1111-8111-111111111111";
+  it('restores the last active chat from storage', async () => {
+    const storedChatId = '11111111-1111-1111-8111-111111111111';
     const apiClient = createApiClientStub({
       getRecentChats: vi.fn().mockResolvedValue([]),
       getChatMessages: vi.fn().mockResolvedValue([
         {
-          id: "msg-3",
-          role: "assistant",
+          id: 'msg-3',
+          role: 'assistant',
           input_text: null,
-          output_text: "Restored message content.",
-          created_at: "2025-01-03T00:00:00.000Z",
+          output_text: 'Restored message content.',
+          created_at: '2025-01-03T00:00:00.000Z',
         },
       ]),
     });
@@ -206,7 +204,7 @@ describe("LockInSidebar chat history", () => {
           onToggle={vi.fn()}
           currentMode="explain"
           storage={storage}
-        />
+        />,
       );
     });
     await act(async () => {
@@ -214,7 +212,7 @@ describe("LockInSidebar chat history", () => {
     });
 
     expect(apiClient.getChatMessages).toHaveBeenCalledWith(storedChatId);
-    const bubble = document.querySelector(".lockin-chat-bubble");
-    expect(bubble?.textContent).toBe("Restored message content.");
+    const bubble = document.querySelector('.lockin-chat-bubble');
+    expect(bubble?.textContent).toBe('Restored message content.');
   });
 });

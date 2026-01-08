@@ -65,10 +65,10 @@ const ECHO360_DOMAIN_SUFFIXES = [
 export function isEcho360SectionPage(url: string): boolean {
   // Must be an Echo360 URL first
   if (!isEcho360Url(url)) return false;
-  
+
   const sectionId = extractSectionId(url);
   if (!sectionId) return false;
-  
+
   try {
     const parsed = new URL(url);
     const path = parsed.pathname.toLowerCase();
@@ -96,7 +96,7 @@ function createRequestId(): string {
 export function isEcho360Domain(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
   return ECHO360_DOMAIN_SUFFIXES.some(
-    suffix => normalized === suffix || normalized.endsWith(`.${suffix}`)
+    (suffix) => normalized === suffix || normalized.endsWith(`.${suffix}`),
   );
 }
 
@@ -139,7 +139,9 @@ function extractLessonIdFromPath(pathname: string): string | null {
  */
 function extractMediaIdFromPath(pathname: string): string | null {
   // Match /media/{uuid} or /medias/{uuid}
-  const match = pathname.match(/\/medias?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+  const match = pathname.match(
+    /\/medias?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
+  );
   return match ? match[1].toLowerCase() : null;
 }
 
@@ -150,7 +152,7 @@ export function extractEcho360Info(rawUrl: string): Echo360Info | null {
   try {
     // First check if this URL contains an embedded Echo360 URL (e.g., LTI launch URLs)
     const decoded = safeDecodeUri(rawUrl);
-    
+
     // Look for embedded Echo360 URL in query params
     try {
       const outerUrl = new URL(decoded);
@@ -166,9 +168,9 @@ export function extractEcho360Info(rawUrl: string): Echo360Info | null {
     } catch {
       // Not a valid URL with params, continue
     }
-    
+
     const url = new URL(decoded);
-    
+
     if (!isEcho360Domain(url.hostname)) {
       return null;
     }
@@ -202,7 +204,7 @@ function extractMediaIdFromHtml(html: string): string | null {
     // id property inside medias arrays
     /"medias"\s*:\s*\[\s*\{[^}]*"id"\s*:\s*"([0-9a-f-]{36})"/i,
   ];
-  
+
   for (const pattern of jsonPatterns) {
     const match = html.match(pattern);
     if (match?.[1]) {
@@ -250,9 +252,9 @@ function buildLessonInfoUrl(baseUrl: string, lessonId: string): string {
  */
 function extractMediaIdFromLessonInfo(lessonData: unknown): string | null {
   if (!lessonData || typeof lessonData !== 'object') return null;
-  
+
   const data = lessonData as Record<string, unknown>;
-  
+
   // Check for direct medias array
   if (Array.isArray(data.medias) && data.medias.length > 0) {
     const firstMedia = data.medias[0] as Record<string, unknown>;
@@ -263,17 +265,17 @@ function extractMediaIdFromLessonInfo(lessonData: unknown): string | null {
       return firstMedia.mediaId.toLowerCase();
     }
   }
-  
+
   // Check for data wrapper
   if (data.data && typeof data.data === 'object') {
     return extractMediaIdFromLessonInfo(data.data);
   }
-  
+
   // Check for lesson wrapper
   if (data.lesson && typeof data.lesson === 'object') {
     return extractMediaIdFromLessonInfo(data.lesson);
   }
-  
+
   // Check for medias in nested structure
   const nestedKeys = ['video', 'media', 'content', 'sections'];
   for (const key of nestedKeys) {
@@ -287,7 +289,7 @@ function extractMediaIdFromLessonInfo(lessonData: unknown): string | null {
       }
     }
   }
-  
+
   return null;
 }
 
@@ -332,7 +334,12 @@ function buildTranscriptUrl(baseUrl: string, lessonId: string, mediaId: string):
 /**
  * Build transcript file URL (VTT or text format)
  */
-function buildTranscriptFileUrl(baseUrl: string, lessonId: string, mediaId: string, format: 'vtt' | 'text'): string {
+function buildTranscriptFileUrl(
+  baseUrl: string,
+  lessonId: string,
+  mediaId: string,
+  format: 'vtt' | 'text',
+): string {
   return `${baseUrl}/api/ui/echoplayer/lessons/${encodeURIComponent(lessonId)}/medias/${encodeURIComponent(mediaId)}/transcript-file?format=${format}`;
 }
 
@@ -378,7 +385,10 @@ function normalizeConfidence(raw: unknown): number | undefined {
 }
 
 function buildTranscriptResult(segments: TranscriptSegment[]): TranscriptResult {
-  const plainText = segments.map(s => s.text).join(' ').trim();
+  const plainText = segments
+    .map((s) => s.text)
+    .join(' ')
+    .trim();
   const lastSegment = segments[segments.length - 1];
   return {
     plainText,
@@ -410,7 +420,7 @@ function extractEcho360TranscriptCues(raw: unknown): UnknownRecord[] | null {
 
   if (!Array.isArray(cuesValue)) return null;
   const cues = cuesValue
-    .map(cue => asRecord(cue))
+    .map((cue) => asRecord(cue))
     .filter((cue): cue is UnknownRecord => Boolean(cue));
   if (cues.length === 0 && cuesValue.length > 0) return null;
   return cues;
@@ -426,15 +436,27 @@ export function normalizeEcho360TranscriptJson(raw: unknown): TranscriptResult |
   const segments: TranscriptSegment[] = [];
 
   for (const record of cues) {
-    const startMs = Math.max(0, Math.round(
-      typeof record.startMs === 'number' ? record.startMs : 
-      typeof record.start === 'number' ? record.start : 0
-    ));
-    const endMs = Math.max(startMs, Math.round(
-      typeof record.endMs === 'number' ? record.endMs :
-      typeof record.end === 'number' ? record.end : startMs
-    ));
-    
+    const startMs = Math.max(
+      0,
+      Math.round(
+        typeof record.startMs === 'number'
+          ? record.startMs
+          : typeof record.start === 'number'
+            ? record.start
+            : 0,
+      ),
+    );
+    const endMs = Math.max(
+      startMs,
+      Math.round(
+        typeof record.endMs === 'number'
+          ? record.endMs
+          : typeof record.end === 'number'
+            ? record.end
+            : startMs,
+      ),
+    );
+
     const text = cleanText(String(record.content ?? record.text ?? ''));
     if (!text) continue;
 
@@ -467,7 +489,7 @@ export function normalizeEcho360TranscriptJson(raw: unknown): TranscriptResult |
 async function resolveEcho360Info(
   embedUrl: string,
   fetcher: AsyncFetcher,
-  requestId: string
+  requestId: string,
 ): Promise<Echo360Info | null> {
   log('info', requestId, 'Resolving Echo360 info', { embedUrl });
 
@@ -489,11 +511,11 @@ async function resolveEcho360Info(
     try {
       const classroomUrl = buildClassroomUrl(directInfo.baseUrl, directInfo.lessonId);
       log('info', requestId, 'Fetching classroom page', { classroomUrl });
-      
+
       const { html, finalUrl } = await fetchHtmlWithRedirect(classroomUrl, fetcher);
-      log('info', requestId, 'Classroom page fetched', { 
-        htmlLength: html.length, 
-        finalUrl 
+      log('info', requestId, 'Classroom page fetched', {
+        htmlLength: html.length,
+        finalUrl,
       });
 
       const htmlInfo = parseEcho360InfoFromHtml(html, finalUrl);
@@ -503,12 +525,12 @@ async function resolveEcho360Info(
           mediaId: htmlInfo.mediaId,
           baseUrl: directInfo.baseUrl,
         };
-        log('info', requestId, 'Resolved mediaId from classroom HTML', { 
-          mediaId: resolved.mediaId 
+        log('info', requestId, 'Resolved mediaId from classroom HTML', {
+          mediaId: resolved.mediaId,
         });
         return resolved;
       }
-      
+
       log('warn', requestId, 'No mediaId found in classroom HTML');
     } catch (error) {
       log('warn', requestId, 'Classroom fetch failed', {
@@ -520,13 +542,13 @@ async function resolveEcho360Info(
     try {
       const lessonInfoUrl = buildLessonInfoUrl(directInfo.baseUrl, directInfo.lessonId);
       log('info', requestId, 'Fetching lesson info from API', { lessonInfoUrl });
-      
+
       const lessonData = await fetcher.fetchJson<unknown>(lessonInfoUrl);
-      log('info', requestId, 'Lesson info fetched', { 
+      log('info', requestId, 'Lesson info fetched', {
         hasData: !!lessonData,
         dataType: typeof lessonData,
       });
-      
+
       const mediaId = extractMediaIdFromLessonInfo(lessonData);
       if (mediaId) {
         const resolved: Echo360Info = {
@@ -534,12 +556,12 @@ async function resolveEcho360Info(
           mediaId,
           baseUrl: directInfo.baseUrl,
         };
-        log('info', requestId, 'Resolved mediaId from lesson API', { 
-          mediaId: resolved.mediaId 
+        log('info', requestId, 'Resolved mediaId from lesson API', {
+          mediaId: resolved.mediaId,
         });
         return resolved;
       }
-      
+
       log('warn', requestId, 'No mediaId found in lesson API response');
     } catch (error) {
       log('warn', requestId, 'Lesson info API fetch failed', {
@@ -552,10 +574,10 @@ async function resolveEcho360Info(
   try {
     log('info', requestId, 'Fetching embed URL directly', { embedUrl });
     const { html, finalUrl } = await fetchHtmlWithRedirect(embedUrl, fetcher);
-    
+
     const urlInfo = extractEcho360Info(finalUrl);
     const htmlInfo = parseEcho360InfoFromHtml(html, finalUrl);
-    
+
     const lessonId = urlInfo?.lessonId || htmlInfo?.lessonId || directInfo?.lessonId;
     const mediaId = urlInfo?.mediaId || htmlInfo?.mediaId;
     const baseUrl = urlInfo?.baseUrl || htmlInfo?.baseUrl || directInfo?.baseUrl;
@@ -584,7 +606,7 @@ function generateVideoId(info: Echo360Info | null, embedUrl: string): string {
   // Hash the URL for fallback ID
   let hash = 0;
   for (let i = 0; i < embedUrl.length; i++) {
-    hash = ((hash << 5) - hash) + embedUrl.charCodeAt(i);
+    hash = (hash << 5) - hash + embedUrl.charCodeAt(i);
     hash |= 0;
   }
   return `echo_${Math.abs(hash).toString(36)}`;
@@ -601,7 +623,7 @@ export function detectEcho360Videos(context: VideoDetectionContext): DetectedVid
   const addVideo = (url: string, title: string) => {
     const info = extractEcho360Info(url);
     if (!hasEcho360VideoIdentifiers(info)) return;
-    
+
     const id = generateVideoId(info, url);
     if (seenIds.has(id)) return;
     seenIds.add(id);
@@ -637,7 +659,7 @@ export function detectEcho360Videos(context: VideoDetectionContext): DetectedVid
  */
 function mergeSyllabusMetadata(
   syncVideo: DetectedVideo,
-  syllabusVideo: DetectedVideo
+  syllabusVideo: DetectedVideo,
 ): DetectedVideo {
   return {
     ...syncVideo,
@@ -655,7 +677,7 @@ function mergeSyllabusMetadata(
 function findMatchingSyllabusVideo(
   syncVideo: DetectedVideo,
   syllabusVideos: DetectedVideo[],
-  requestId: string
+  requestId: string,
 ): DetectedVideo | null {
   if (syllabusVideos.length === 0) return null;
 
@@ -665,7 +687,7 @@ function findMatchingSyllabusVideo(
 
   if (mediaId) {
     const match = syllabusVideos.find(
-      video => video.echoMediaId === mediaId || video.id === mediaId
+      (video) => video.echoMediaId === mediaId || video.id === mediaId,
     );
     if (match) {
       log('debug', requestId, 'Matched syllabus video by mediaId', {
@@ -679,7 +701,7 @@ function findMatchingSyllabusVideo(
 
   if (lessonId) {
     const match = syllabusVideos.find(
-      video => video.echoLessonId === lessonId || video.id === lessonId
+      (video) => video.echoLessonId === lessonId || video.id === lessonId,
     );
     if (match) {
       log('debug', requestId, 'Matched syllabus video by lessonId', {
@@ -692,7 +714,7 @@ function findMatchingSyllabusVideo(
   }
 
   const embedUrl = syncVideo.embedUrl.toLowerCase();
-  const urlMatch = syllabusVideos.find(video => {
+  const urlMatch = syllabusVideos.find((video) => {
     const mediaMatch = video.echoMediaId && embedUrl.includes(video.echoMediaId.toLowerCase());
     const lessonMatch = video.echoLessonId && embedUrl.includes(video.echoLessonId.toLowerCase());
     return Boolean(mediaMatch || lessonMatch);
@@ -732,7 +754,7 @@ export class Echo360Provider implements TranscriptProviderV2 {
 
   async detectVideosAsync(
     context: VideoDetectionContext,
-    fetcher: AsyncFetcher
+    fetcher: AsyncFetcher,
   ): Promise<DetectedVideo[]> {
     const requestId = createRequestId();
     log('info', requestId, 'Starting async detection', { pageUrl: context.pageUrl });
@@ -742,18 +764,14 @@ export class Echo360Provider implements TranscriptProviderV2 {
 
     if (sectionId) {
       log('info', requestId, 'Section ID detected, fetching syllabus', { sectionId });
-      syllabusVideos = await fetchVideosFromSyllabus(
-        context.pageUrl,
-        fetcher,
-        requestId
-      );
+      syllabusVideos = await fetchVideosFromSyllabus(context.pageUrl, fetcher, requestId);
     }
 
     if (isEcho360SectionPage(context.pageUrl)) {
       if (syllabusVideos.length > 0) {
         log('info', requestId, 'Syllabus detection complete', {
           count: syllabusVideos.length,
-          withMediaId: syllabusVideos.filter(v => v.echoMediaId).length,
+          withMediaId: syllabusVideos.filter((v) => v.echoMediaId).length,
         });
         return syllabusVideos;
       }
@@ -763,23 +781,24 @@ export class Echo360Provider implements TranscriptProviderV2 {
 
     // Start with sync detection for non-section pages or as fallback
     const syncVideos = detectEcho360Videos(context);
-    
+
     if (syncVideos.length === 0) {
       log('info', requestId, 'No videos found in sync detection');
       return [];
     }
 
     let matchedCount = 0;
-    const mergedVideos = syllabusVideos.length > 0
-      ? syncVideos.map(video => {
-        const match = findMatchingSyllabusVideo(video, syllabusVideos, requestId);
-        if (match) {
-          matchedCount += 1;
-          return mergeSyllabusMetadata(video, match);
-        }
-        return video;
-      })
-      : syncVideos;
+    const mergedVideos =
+      syllabusVideos.length > 0
+        ? syncVideos.map((video) => {
+            const match = findMatchingSyllabusVideo(video, syllabusVideos, requestId);
+            if (match) {
+              matchedCount += 1;
+              return mergeSyllabusMetadata(video, match);
+            }
+            return video;
+          })
+        : syncVideos;
 
     if (syllabusVideos.length > 0) {
       log('info', requestId, 'Merged syllabus metadata', {
@@ -791,11 +810,10 @@ export class Echo360Provider implements TranscriptProviderV2 {
     // Try to resolve missing mediaIds
     const enhancedVideos: DetectedVideo[] = [];
     const seenKeys = new Set<string>();
-    
+
     for (const video of mergedVideos) {
       if (video.echoMediaId) {
-        const key =
-          getUniqueKey(video.echoMediaId ?? null, video.echoLessonId ?? null) || video.id;
+        const key = getUniqueKey(video.echoMediaId ?? null, video.echoLessonId ?? null) || video.id;
         if (seenKeys.has(key)) continue;
         seenKeys.add(key);
         enhancedVideos.push(video);
@@ -813,16 +831,15 @@ export class Echo360Provider implements TranscriptProviderV2 {
           }
         : video;
       const key =
-        getUniqueKey(updated.echoMediaId ?? null, updated.echoLessonId ?? null) ||
-        updated.id;
+        getUniqueKey(updated.echoMediaId ?? null, updated.echoLessonId ?? null) || updated.id;
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
       enhancedVideos.push(updated);
     }
 
-    log('info', requestId, 'Async detection complete', { 
+    log('info', requestId, 'Async detection complete', {
       count: enhancedVideos.length,
-      withMediaId: enhancedVideos.filter(v => v.echoMediaId).length,
+      withMediaId: enhancedVideos.filter((v) => v.echoMediaId).length,
     });
 
     return enhancedVideos;
@@ -830,7 +847,7 @@ export class Echo360Provider implements TranscriptProviderV2 {
 
   async extractTranscript(
     video: DetectedVideo,
-    fetcher: AsyncFetcher
+    fetcher: AsyncFetcher,
   ): Promise<TranscriptExtractionResult> {
     const requestId = createRequestId();
     log('info', requestId, 'Starting transcript extraction', {
@@ -842,10 +859,15 @@ export class Echo360Provider implements TranscriptProviderV2 {
     try {
       let lessonId = video.echoLessonId;
       let mediaId = video.echoMediaId;
-      let baseUrl = video.echoBaseUrl || (() => {
-        try { return new URL(video.embedUrl).origin; } 
-        catch { return ''; }
-      })();
+      let baseUrl =
+        video.echoBaseUrl ||
+        (() => {
+          try {
+            return new URL(video.embedUrl).origin;
+          } catch {
+            return '';
+          }
+        })();
 
       // Resolve missing IDs if needed
       if (!lessonId || !mediaId) {
@@ -893,8 +915,7 @@ export class Echo360Provider implements TranscriptProviderV2 {
         }
         const payloadRecord = asRecord(jsonPayload);
         const hasTranscriptFields =
-          payloadRecord &&
-          ('cues' in payloadRecord || 'contentJson' in payloadRecord);
+          payloadRecord && ('cues' in payloadRecord || 'contentJson' in payloadRecord);
         if (hasTranscriptFields) {
           nonEmptyResponseCount += 1;
           invalidResponseCount += 1;
@@ -903,7 +924,7 @@ export class Echo360Provider implements TranscriptProviderV2 {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         log('warn', requestId, 'JSON endpoint failed', { error: msg });
-        
+
         if (msg === 'AUTH_REQUIRED') {
           return {
             success: false,
@@ -962,9 +983,7 @@ export class Echo360Provider implements TranscriptProviderV2 {
         });
         const plainText = cleanText(textContent);
         if (plainText) {
-          const transcript = buildTranscriptResult([
-            { startMs: 0, endMs: null, text: plainText },
-          ]);
+          const transcript = buildTranscriptResult([{ startMs: 0, endMs: null, text: plainText }]);
           log('info', requestId, 'Text transcript extracted');
           return { success: true, transcript };
         }

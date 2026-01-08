@@ -25,6 +25,9 @@ desktop.ini
 *.swo
 *~
 
+# Cursor IDE (user-specific MCP configs)
+.cursor/mcp.json
+
 # Build outputs
 dist/
 build/

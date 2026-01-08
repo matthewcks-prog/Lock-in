@@ -12,10 +12,7 @@ import { DEFAULT_TIMEOUT_MS, fetchWithRetry } from '../utils/echo360Network';
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SYLLABUS_CACHE_TTL_MS = 5 * 60 * 1000;
 
-const syllabusCache = new Map<
-  string,
-  { data: DetectedVideo[]; timestamp: number }
->();
+const syllabusCache = new Map<string, { data: DetectedVideo[]; timestamp: number }>();
 
 /**
  * Extract section ID from Echo360 URL
@@ -26,7 +23,7 @@ export function extractSectionId(url: string): string | null {
     const parsed = new URL(url);
     // Match /section/{uuid}
     const match = parsed.pathname.match(
-      /\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i
+      /\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
     );
     return match ? match[1].toLowerCase() : null;
   } catch {
@@ -98,10 +95,7 @@ function extractLessonIdFromRecord(record: UnknownRecord | null): string | null 
 function extractLessonNameFromRecord(record: UnknownRecord | null): string {
   if (!record) return '';
   return (
-    readString(record.displayName) ||
-    readString(record.name) ||
-    readString(record.title) ||
-    ''
+    readString(record.displayName) || readString(record.name) || readString(record.title) || ''
   );
 }
 
@@ -109,11 +103,7 @@ function extractTimingStart(record: UnknownRecord | null): string | null {
   if (!record) return null;
   const timing = asRecord(record.timing);
   if (timing) {
-    return (
-      readString(timing.start) ||
-      readString(timing.startTime) ||
-      readString(timing.startsAt)
-    );
+    return readString(timing.start) || readString(timing.startTime) || readString(timing.startsAt);
   }
   return null;
 }
@@ -125,11 +115,7 @@ function extractMediaIdFromRecord(record: UnknownRecord | null): string | null {
 
 function extractMediaTitle(record: UnknownRecord | null): string | null {
   if (!record) return null;
-  return (
-    readString(record.title) ||
-    readString(record.name) ||
-    readString(record.displayName)
-  );
+  return readString(record.title) || readString(record.name) || readString(record.displayName);
 }
 
 /**
@@ -221,7 +207,7 @@ function validateSyllabusResponse(response: unknown): response is Echo360Syllabu
   if (!payload) return false;
   const entries = extractSyllabusEntries(response);
   if (!entries || !Array.isArray(entries)) return false;
-  if (entries.length > 0 && !entries.some(entry => asRecord(entry))) {
+  if (entries.length > 0 && !entries.some((entry) => asRecord(entry))) {
     return false;
   }
   return true;
@@ -259,7 +245,7 @@ function isMediaReadyForTranscript(media: UnknownRecord): boolean {
  * Provide a skip reason for media not ready for transcripts.
  */
 function getMediaStatusSkipReason(
-  media: UnknownRecord
+  media: UnknownRecord,
 ): { code: TranscriptExtractionResult['errorCode']; reason: string } | null {
   const status = getMediaStatusSnapshot(media);
   if (status.isAvailable === false) {
@@ -287,7 +273,7 @@ function logMediaStatus(
   requestId: string,
   media: UnknownRecord,
   mediaId: string | null,
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
 ): void {
   const status = getMediaStatusSnapshot(media);
   const mediaTypeRaw = extractMediaTypeRaw(media);
@@ -307,7 +293,7 @@ function logMediaStatus(
 export function parseSyllabusResponse(
   response: unknown,
   baseUrl: string,
-  requestId: string
+  requestId: string,
 ): DetectedVideo[] {
   const videos: DetectedVideo[] = [];
   const seenIds = new Set<string>();
@@ -349,8 +335,7 @@ export function parseSyllabusResponse(
       extractLessonIdFromRecord(lessonWrapper) ||
       extractLessonIdFromRecord(entryRecord);
     const lessonName = extractLessonNameFromRecord(lessonRecord);
-    const timingStart =
-      extractTimingStart(lessonRecord) || extractTimingStart(lessonWrapper);
+    const timingStart = extractTimingStart(lessonRecord) || extractTimingStart(lessonWrapper);
     const dateLabel = formatLessonDateLabel(timingStart);
     const isFolderLesson =
       (lessonRecord as Echo360SyllabusLesson | null)?.isFolderLesson === true ||
@@ -362,7 +347,7 @@ export function parseSyllabusResponse(
       lessonWrapper?.medias,
       lessonWrapper?.media,
       (lessonRecord as UnknownRecord | null)?.medias,
-      (lessonRecord as UnknownRecord | null)?.media
+      (lessonRecord as UnknownRecord | null)?.media,
     );
 
     let addedMedia = false;
@@ -413,8 +398,7 @@ export function parseSyllabusResponse(
         continue;
       }
 
-      const mediaLessonId =
-        lessonId || extractLessonIdFromRecord(mediaRecord);
+      const mediaLessonId = lessonId || extractLessonIdFromRecord(mediaRecord);
       if (!mediaLessonId) {
         log('warn', requestId, 'Media entry missing lessonId', { mediaId });
         continue;
@@ -427,12 +411,8 @@ export function parseSyllabusResponse(
       // Prefer lesson's displayName over media title for consistency
       const mediaTitle = lessonName || extractMediaTitle(mediaRecord) || '';
       const titleWithDate = appendAudioSuffix(
-        buildSyllabusTitle(
-          mediaTitle,
-          dateLabel,
-          'Echo360 video'
-        ),
-        isAudioOnly || isAudioType
+        buildSyllabusTitle(mediaTitle, dateLabel, 'Echo360 video'),
+        isAudioOnly || isAudioType,
       );
 
       videos.push({
@@ -453,11 +433,7 @@ export function parseSyllabusResponse(
       if (key && seenIds.has(key)) continue;
       if (key) seenIds.add(key);
 
-      const titleWithDate = buildSyllabusTitle(
-        lessonName,
-        dateLabel,
-        'Echo360 lesson'
-      );
+      const titleWithDate = buildSyllabusTitle(lessonName, dateLabel, 'Echo360 lesson');
 
       videos.push({
         id: lessonId,
@@ -485,7 +461,7 @@ export function parseSyllabusResponse(
 export async function fetchVideosFromSyllabus(
   pageUrl: string,
   fetcher: AsyncFetcher,
-  requestId: string
+  requestId: string,
 ): Promise<DetectedVideo[]> {
   const sectionId = extractSectionId(pageUrl);
   if (!sectionId) {

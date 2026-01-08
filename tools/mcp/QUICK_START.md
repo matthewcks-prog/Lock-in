@@ -13,11 +13,13 @@ Get MCP servers up and running in 5 minutes.
 ### 1. Install MCP Servers (2 min)
 
 **Windows:**
+
 ```powershell
 .\tools\mcp\scripts\install-mcp-servers.ps1
 ```
 
 **Linux:**
+
 ```bash
 chmod +x tools/mcp/scripts/install-mcp-servers.sh
 ./tools/mcp/scripts/install-mcp-servers.sh
@@ -53,4 +55,3 @@ chmod +x tools/mcp/scripts/install-mcp-servers.sh
 - **Server not connecting?** Check paths in `.cursor/mcp.json`
 - **Database fails?** Verify read-only user permissions (see `SUPABASE_READONLY_SETUP.md`)
 - **Need help?** See `README.md` troubleshooting section
-
