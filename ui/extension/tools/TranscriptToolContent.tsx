@@ -7,12 +7,13 @@
  */
 
 import { useEffect, useCallback } from 'react';
-import type { ToolContentProps } from './types';
 import { useTranscripts } from '../transcripts/useTranscripts';
 import { TranscriptVideoListPanel } from '../transcripts/components';
 import { TranscriptMessage } from '../transcripts/TranscriptMessage';
+import { useNoteSaveContext } from '../contexts/NoteSaveContext';
 
-export function TranscriptToolContent({ onSaveAsNote }: ToolContentProps) {
+export function TranscriptToolContent() {
+  const { saveNote } = useNoteSaveContext();
   const {
     state: transcriptState,
     detectAndAutoExtract,
@@ -37,13 +38,6 @@ export function TranscriptToolContent({ onSaveAsNote }: ToolContentProps) {
     clearError();
   }, [closeVideoList, clearError]);
 
-  const handleSaveAsNote = useCallback(
-    (content: string) => {
-      onSaveAsNote(content);
-    },
-    [onSaveAsNote],
-  );
-
   // Determine if we should show the video list
   // Show list if: it's open, OR we have no transcript yet, OR we have videos but no extraction yet
   const showVideoList =
@@ -59,7 +53,7 @@ export function TranscriptToolContent({ onSaveAsNote }: ToolContentProps) {
           <TranscriptMessage
             transcript={transcriptState.lastTranscript.transcript}
             videoTitle={transcriptState.lastTranscript.video.title || 'Video'}
-            onSaveAsNote={handleSaveAsNote}
+            saveNote={saveNote}
           />
           {/* Button to change video if multiple videos exist */}
           {transcriptState.videos.length > 1 && !showVideoList && (
