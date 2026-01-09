@@ -16,8 +16,7 @@ export type ToolType = 'video' | 'pdf' | 'text';
 export interface ToolContentProps {
     /** Callback to close the tool and return to Chat/Notes */
     onClose: () => void;
-    /** Callback to save content as a note */
-    onSaveAsNote: (content: string) => void;
+
 }
 
 /**

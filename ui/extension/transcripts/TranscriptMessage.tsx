@@ -6,14 +6,16 @@
 
 import { useCallback } from 'react';
 import type { TranscriptResult, TranscriptSegment } from '../../../core/transcripts/types';
+import type { SaveNoteOptions } from '../../hooks/useNoteSave';
+import type { Note } from '@core/domain/Note';
 
 interface TranscriptMessageProps {
   /** The transcript data */
   transcript: TranscriptResult;
   /** Video title for display */
   videoTitle: string;
-  /** Callback to save as note */
-  onSaveAsNote: (content: string) => void;
+  /** Save note function from context */
+  saveNote: (options: SaveNoteOptions) => Promise<Note | null>;
 }
 
 /**
@@ -84,7 +86,7 @@ function downloadFile(filename: string, content: string, mimeType: string) {
 export function TranscriptMessage({
   transcript,
   videoTitle,
-  onSaveAsNote,
+  saveNote,
 }: TranscriptMessageProps) {
   const handleDownloadTxt = useCallback(() => {
     const content = formatAsPlainText(transcript, videoTitle);
@@ -98,10 +100,23 @@ export function TranscriptMessage({
     downloadFile(`transcript_${safeTitle}.vtt`, content, 'text/vtt');
   }, [transcript.segments, videoTitle]);
 
-  const handleSaveNote = useCallback(() => {
+  const handleSaveNote = useCallback(async () => {
     const noteContent = `# Transcript: ${videoTitle}\n\n${transcript.plainText}`;
-    onSaveAsNote(noteContent);
-  }, [transcript.plainText, videoTitle, onSaveAsNote]);
+    try {
+      await saveNote({
+        content: noteContent,
+        noteType: 'transcript',
+        onSuccess: (note) => {
+          console.log('Transcript saved as note:', note.id);
+        },
+        onError: (error) => {
+          console.error('Failed to save transcript:', error);
+        },
+      });
+    } catch (error) {
+      console.error('Failed to save note:', error);
+    }
+  }, [transcript.plainText, videoTitle, saveNote]);
 
   return (
     <div className="lockin-transcript-message">

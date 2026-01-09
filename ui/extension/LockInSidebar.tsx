@@ -13,8 +13,8 @@ import { createNotesService } from '../../core/services/notesService.ts';
 import type { NotesService } from '../../core/services/notesService.ts';
 import { useNotesList } from '../hooks/useNotesList';
 import { NotesPanel } from './notes/NotesPanel';
-import { createNoteContentFromPlainText } from './notes/content';
 import { ToolProvider, useToolContext, StudyToolsDropdown, getToolById } from './tools';
+import { NoteSaveProvider, useNoteSaveContext } from './contexts/NoteSaveContext';
 
 interface StorageAdapter {
   get: (key: string) => Promise<any>;
@@ -130,17 +130,26 @@ function buildInitialChatTitle(text: string) {
 }
 
 interface SaveNoteActionProps {
-  onSaveAsNote: () => void;
+  content: string;
 }
 
-function SaveNoteAction({ onSaveAsNote }: SaveNoteActionProps) {
+function SaveNoteAction({ content }: SaveNoteActionProps) {
+  const { saveNote } = useNoteSaveContext();
+
+  const handleSave = async () => {
+    await saveNote({
+      content,
+      noteType: 'manual',
+    });
+  };
+
   return (
     <div className="lockin-chat-save-note-action">
       <button
         className="lockin-chat-save-note-btn"
         onClick={(e) => {
           e.stopPropagation();
-          onSaveAsNote();
+          handleSave();
         }}
         type="button"
       >
@@ -931,34 +940,6 @@ function LockInSidebarContent({
     );
   };
 
-  const handleSaveAsNote = useCallback(
-    async (messageContent: string) => {
-      if (!notesService) {
-        setActiveTab(NOTES_TAB_ID);
-        return;
-      }
-
-      try {
-        const title = messageContent.split('\n')[0].trim().slice(0, 50) || 'Untitled note';
-
-        const createdNote = await notesService.createNote({
-          title,
-          content: createNoteContentFromPlainText(messageContent.trim()),
-          sourceUrl: pageUrl,
-          courseCode: courseCode || null,
-          noteType: 'manual',
-        });
-
-        upsertNote(createdNote);
-        setSelectedNoteId(createdNote.id);
-        setActiveTab(NOTES_TAB_ID);
-      } catch (error: any) {
-        console.error('Failed to save note:', error);
-        setActiveTab(NOTES_TAB_ID);
-      }
-    },
-    [courseCode, notesService, pageUrl, upsertNote],
-  );
 
   const renderChatMessages = () => {
     if (!messages.length) {
@@ -981,7 +962,7 @@ function LockInSidebarContent({
             {message.content}
           </div>
           {message.role === 'assistant' && !message.isPending ? (
-            <SaveNoteAction onSaveAsNote={() => handleSaveAsNote(message.content)} />
+            <SaveNoteAction content={message.content} />
           ) : null}
         </div>
       );
@@ -989,7 +970,14 @@ function LockInSidebarContent({
   };
 
   return (
-    <>
+    <NoteSaveProvider
+      notesService={notesService}
+      pageUrl={pageUrl}
+      courseCode={courseCode}
+      upsertNote={upsertNote}
+      setSelectedNoteId={setSelectedNoteId}
+      setActiveTab={setActiveTab}
+    >
       {!isOpen && (
         <button id="lockin-toggle-pill" onClick={onToggle} aria-label="Open Lock-in sidebar">
           Lock-in
@@ -1199,19 +1187,20 @@ function LockInSidebarContent({
             const ToolComponent = tool.component;
             return (
               <div className="lockin-tool-panel">
-                <ToolComponent onClose={closeTool} onSaveAsNote={handleSaveAsNote} />
+                <ToolComponent onClose={closeTool} />
               </div>
             );
           })()}
         </div>
       )}
-    </>
+    </NoteSaveProvider>
   );
 }
 
 /**
  * LockInSidebar - Main sidebar component with Study Tools support.
  * Wraps content with ToolProvider for tool state management.
+ * NoteSaveProvider is inside LockInSidebarContent for access to internal state.
  */
 export function LockInSidebar(props: LockInSidebarProps) {
   return (

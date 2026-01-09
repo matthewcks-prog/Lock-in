@@ -28,7 +28,16 @@ export interface NoteContent {
 
 export type NoteStatus = 'idle' | 'editing' | 'saving' | 'saved' | 'error';
 
-export type NoteType = 'manual' | 'definition' | 'formula' | 'concept' | 'general' | 'ai-generated';
+export type NoteType =
+  | 'manual'
+  | 'definition'
+  | 'formula'
+  | 'concept'
+  | 'general'
+  | 'ai-generated'
+  | 'transcript'
+  | 'quiz'
+  | 'key_takeaways';
 
 export type NoteAssetType = 'image' | 'document' | 'audio' | 'video' | 'other';
 
