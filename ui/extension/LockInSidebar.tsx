@@ -14,9 +14,7 @@ import type { NotesService } from '../../core/services/notesService.ts';
 import { useNotesList } from '../hooks/useNotesList';
 import { NotesPanel } from './notes/NotesPanel';
 import { createNoteContentFromPlainText } from './notes/content';
-import { TranscriptMessage } from './transcripts/TranscriptMessage';
-import { TranscriptVideoListPanel } from './transcripts/components';
-import { useTranscripts } from './transcripts/useTranscripts';
+import { ToolProvider, useToolContext, StudyToolsDropdown, getToolById } from './tools';
 
 interface StorageAdapter {
   get: (key: string) => Promise<any>;
@@ -69,6 +67,7 @@ const MODE_OPTIONS: Array<{ value: StudyMode; label: string; hint: string }> = [
 
 const CHAT_TAB_ID = 'chat';
 const NOTES_TAB_ID = 'notes';
+const TOOL_TAB_ID = 'tool';
 const SIDEBAR_ACTIVE_TAB_KEY = 'lockin_sidebar_activeTab';
 const MODE_STORAGE_KEY = 'lockinActiveMode';
 const SELECTED_NOTE_ID_KEY = 'lockin_sidebar_selectedNoteId';
@@ -200,7 +199,7 @@ function ModeSelector({
   );
 }
 
-export function LockInSidebar({
+function LockInSidebarContent({
   apiClient,
   isOpen,
   onToggle,
@@ -210,6 +209,9 @@ export function LockInSidebar({
   storage,
   activeTabExternal,
 }: LockInSidebarProps) {
+  // Tool context for Study Tools integration
+  const { activeToolId, activeToolTitle, closeTool } = useToolContext();
+
   const [activeTab, setActiveTab] = useState<string>(activeTabExternal || CHAT_TAB_ID);
   const [mode, setMode] = useState<StudyMode>(currentMode);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
@@ -277,16 +279,6 @@ export function LockInSidebar({
     notesService,
     limit: 50,
   });
-
-  const {
-    state: transcriptState,
-    detectAndAutoExtract,
-    closeVideoList,
-    extractTranscript,
-    transcribeWithAI,
-    cancelAiTranscription,
-    clearError,
-  } = useTranscripts();
 
   const applySplitLayout = useCallback((open: boolean) => {
     const body = document.body;
@@ -409,15 +401,7 @@ export function LockInSidebar({
     });
   }, []);
 
-  const handleTranscriptClick = useCallback(() => {
-    setIsHistoryOpen(false);
-    detectAndAutoExtract();
-  }, [detectAndAutoExtract]);
 
-  const handleTranscriptPanelClose = useCallback(() => {
-    closeVideoList();
-    clearError();
-  }, [closeVideoList, clearError]);
 
   useEffect(() => {
     if (!storage) return;
@@ -628,6 +612,13 @@ export function LockInSidebar({
       }
     }
   }, [isNoteEditing, isOpen, onToggle]);
+
+  // Auto-switch to tool tab when a tool is opened
+  useEffect(() => {
+    if (activeToolId) {
+      setActiveTab(TOOL_TAB_ID);
+    }
+  }, [activeToolId]);
 
   const upsertHistory = useCallback(
     (
@@ -1034,7 +1025,35 @@ export function LockInSidebar({
                     </button>
                   );
                 })}
+                {/* Active Tool tab - only shows when a tool is open */}
+                {activeToolId && (
+                  <button
+                    className={`lockin-tab lockin-tab-closable ${activeTab === TOOL_TAB_ID ? 'lockin-tab-active' : ''}`}
+                    onClick={() => handleTabChange(TOOL_TAB_ID)}
+                    role="tab"
+                    aria-selected={activeTab === TOOL_TAB_ID}
+                  >
+                    <span>{activeToolTitle}</span>
+                    <span
+                      className="lockin-tab-close"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTool();
+                        if (activeTab === TOOL_TAB_ID) {
+                          handleTabChange(CHAT_TAB_ID);
+                        }
+                      }}
+                      role="button"
+                      aria-label={`Close ${activeToolTitle}`}
+                    >
+                      ×
+                    </span>
+                  </button>
+                )}
               </div>
+            </div>
+            <div className="lockin-top-bar-right">
+              <StudyToolsDropdown />
             </div>
             <button className="lockin-close-btn" onClick={onToggle} aria-label="Close sidebar">
               x
@@ -1060,23 +1079,6 @@ export function LockInSidebar({
                   </button>
                 </div>
                 <div className="lockin-chat-toolbar-right">
-                  <button
-                    className="lockin-extract-transcript-btn"
-                    onClick={handleTranscriptClick}
-                    type="button"
-                    disabled={transcriptState.isDetecting || transcriptState.isExtracting}
-                  >
-                    {transcriptState.isDetecting || transcriptState.isExtracting ? (
-                      <>
-                        <span className="lockin-inline-spinner" />
-                        <span>
-                          {transcriptState.isExtracting ? 'Fetching transcript...' : 'Detecting...'}
-                        </span>
-                      </>
-                    ) : (
-                      <span>Transcript</span>
-                    )}
-                  </button>
                   <ModeSelector value={mode} onSelect={(newMode) => setMode(newMode)} />
                   <button className="lockin-new-chat-btn" onClick={startBlankChat}>
                     + New chat
@@ -1122,36 +1124,6 @@ export function LockInSidebar({
                   <div className="lockin-chat-content">
                     <div className="lockin-chat-messages-wrapper">
                       <div className="lockin-chat-messages">
-                        {transcriptState.lastTranscript && (
-                          <TranscriptMessage
-                            transcript={transcriptState.lastTranscript.transcript}
-                            videoTitle={transcriptState.lastTranscript.video.title || 'Video'}
-                            onSaveAsNote={handleSaveAsNote}
-                          />
-                        )}
-                        {transcriptState.isVideoListOpen && (
-                          <TranscriptVideoListPanel
-                            videos={transcriptState.videos}
-                            isLoading={transcriptState.isDetecting}
-                            isExtracting={transcriptState.isExtracting}
-                            extractingVideoId={transcriptState.extractingVideoId}
-                            onSelectVideo={(video) => {
-                              void extractTranscript(video);
-                            }}
-                            onClose={handleTranscriptPanelClose}
-                            error={transcriptState.error || undefined}
-                            detectionHint={transcriptState.detectionHint || undefined}
-                            authRequired={transcriptState.authRequired}
-                            extractionResults={transcriptState.extractionsByVideoId}
-                            aiTranscription={transcriptState.aiTranscription}
-                            onTranscribeWithAI={(video) => {
-                              void transcribeWithAI(video);
-                            }}
-                            onCancelAi={() => {
-                              void cancelAiTranscription();
-                            }}
-                          />
-                        )}
                         {renderChatMessages()}
                         {chatError && <div className="lockin-chat-error">{chatError}</div>}
                       </div>
@@ -1219,8 +1191,32 @@ export function LockInSidebar({
               onNoteEditingChange={setIsNoteEditing}
             />
           )}
+
+          {/* Tool panel - renders active tool content */}
+          {activeTab === TOOL_TAB_ID && activeToolId && (() => {
+            const tool = getToolById(activeToolId);
+            if (!tool) return null;
+            const ToolComponent = tool.component;
+            return (
+              <div className="lockin-tool-panel">
+                <ToolComponent onClose={closeTool} onSaveAsNote={handleSaveAsNote} />
+              </div>
+            );
+          })()}
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * LockInSidebar - Main sidebar component with Study Tools support.
+ * Wraps content with ToolProvider for tool state management.
+ */
+export function LockInSidebar(props: LockInSidebarProps) {
+  return (
+    <ToolProvider>
+      <LockInSidebarContent {...props} />
+    </ToolProvider>
   );
 }

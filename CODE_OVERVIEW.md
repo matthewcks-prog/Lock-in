@@ -81,7 +81,6 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`core/transcripts/providers/echo360Provider.ts`** - Echo360 provider: detection + transcript extraction with JSON transcript endpoint (primary), VTT/TXT fallback, and syllabus API integration for section pages. Uses fetcher interface for network operations.
 - **`core/transcripts/videoDetection.ts`** - Panopto + Echo360 + HTML5 video detection from DOM context
 - **`core/transcripts/providerRegistry.ts`** - Provider registry and TranscriptProviderV2 interface
-- **`ui/extension/transcripts/`** - UI components (VideoListPanel, TranscriptMessage, useTranscripts hook) plus HTML5 DOM textTracks extractor (`extractHtml5TranscriptFromDom.ts`)
 - **`extension/dist/libs/transcriptProviders.js`** - Bundled transcript providers for background usage (loaded via `importScripts`).
 - **`extension/src/networkUtils.js`** - Background fetch helpers (retry, credentials, VTT/HTML fetch, redirect tracking) used by transcript helpers.
 - **`extension/src/panoptoResolver.js`** - Panopto extraction helpers + PanoptoMediaResolver for AI media URL resolution.
@@ -89,6 +88,29 @@ This is a living overview of the current codebase. Update it whenever files move
 - **AI fallback**: `useTranscripts.ts` triggers `FETCH_PANOPTO_MEDIA_URL` when captions are missing, then `TRANSCRIBE_MEDIA_AI` streams media to backend transcript jobs.
 
 **Key pattern**: Business logic (extraction algorithm) in `/core/transcripts/providers/`. Chrome-specific fetching in `/extension/background.js` (ExtensionFetcher). Providers depend on fetcher interface, enabling testing and future web app reuse.
+
+### Video UI Components (`ui/extension/videos/` + `ui/extension/transcripts/components/`)
+
+**Architecture**: Decoupled generic video selection UI from feature-specific logic using render props pattern.
+
+**Generic video components** (`ui/extension/videos/`):
+- **`VideoListPanel.tsx`** - Generic panel with loading, empty, error, auth-required states
+- **`VideoListItem.tsx`** - Generic selectable video item with render props for customization
+- **`ProviderBadge.tsx`** - Badge showing video provider (Panopto, Echo360, HTML5, etc.)
+- **`types.ts`** - Shared types for render props (`VideoItemBadgeRenderer`, `VideoItemActionRenderer`, etc.)
+
+**Transcript-specific wrappers** (`ui/extension/transcripts/components/`):
+- **`TranscriptVideoListPanel.tsx`** - Wraps `VideoListPanel` with transcript extraction and AI transcription features
+- **`TranscriptVideoStatus.tsx`** - AI transcription progress, errors, "Transcribe with AI" action
+- **`types.ts`** - Transcript-specific types (`AiTranscriptionUiState`, `VideoExtractionResult`)
+
+**Transcript hooks** (`ui/extension/transcripts/hooks/`):
+- **`useVideoDetection.ts`** - Video detection logic with retry for delayed players
+- **`useTranscriptExtraction.ts`** - Transcript extraction state management
+- **`useAiTranscription.ts`** - AI transcription with progress polling
+- **`useTranscripts.ts`** - Composition hook combining the above three
+
+**Key pattern**: Generic components handle shared concerns (loading states, video list, selection). Feature-specific code injects custom UI via render props (`renderItemBadge`, `renderItemActions`, `renderItemStatus`). This enables reuse for future features (e.g., "Key Takeaways", "Quiz Me") that need video selection.
 
 ### Styling
 
