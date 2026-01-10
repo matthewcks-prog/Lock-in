@@ -1,57 +1,52 @@
-# MCP Quick Start Guide
+# MCP Quick Start
 
-Get MCP servers up and running in 5 minutes.
+Get MCP servers running in under 5 minutes.
 
 ## Prerequisites
 
-- Node.js and npm installed
-- Cursor IDE
-- Supabase project access
+- Node.js 18+ installed
+- AI IDE with MCP support (Cursor, Copilot, VS Code, etc.)
 
 ## Steps
 
-### 1. Install MCP Servers (2 min)
+### 1. Copy Template to IDE Config
 
-**Windows:**
+**Cursor (recommended):**
 
 ```powershell
-.\tools\mcp\scripts\install-mcp-servers.ps1
+mkdir .cursor -ErrorAction SilentlyContinue
+Copy-Item tools\mcp\config\mcp.json.template .cursor\mcp.json
 ```
 
-**Linux:**
+### 2. Edit Config with Your Path
 
-```bash
-chmod +x tools/mcp/scripts/install-mcp-servers.sh
-./tools/mcp/scripts/install-mcp-servers.sh
+Open `.cursor/mcp.json` and replace `{{REPO_ROOT}}`:
+
+```json
+"args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\YOUR_NAME\\Lock-in"]
 ```
 
-### 2. Configure MCP (2 min)
+### 3. Restart IDE
 
-1. Copy `tools/mcp/config/mcp.json.template` to `.cursor/mcp.json`
-2. Update paths in the config file:
-   - Windows: Replace `C:\Users\matth\.cursor\worktrees\Lock-in\hmg` with your repo path
-   - Linux: Replace `/home/user/path/to/repo` with your repo path
+Close and reopen Cursor.
 
-### 3. Set Up Environment (1 min)
+### 4. Test
 
-1. Copy `tools/mcp/config/env.local.template` to `.env.local` in repo root
-2. Follow `SUPABASE_READONLY_SETUP.md` to create read-only user
-3. Fill in `SUPABASE_READONLY_CONNECTION_STRING` in `.env.local`
+Ask the AI: "List files in the core folder"
 
-### 4. Verify (30 sec)
+## Optional: Database Access
 
-1. Open Cursor Settings → MCP Servers
-2. Check all servers show "Connected"
-3. Run quick test: "List files in core/transcripts/providers"
+To query Supabase directly:
 
-## Next Steps
-
-- Read `SETUP.md` for detailed instructions
-- Run `SMOKE_TESTS.md` to validate functionality
-- Review `README.md` for security boundaries
+1. Create a read-only database user (see `docs/SUPABASE_READONLY_SETUP.md`)
+2. Update the postgres section in your mcp.json with your connection string
+3. Restart IDE
+4. Test: "Query the notes table"
 
 ## Troubleshooting
 
-- **Server not connecting?** Check paths in `.cursor/mcp.json`
-- **Database fails?** Verify read-only user permissions (see `SUPABASE_READONLY_SETUP.md`)
-- **Need help?** See `README.md` troubleshooting section
+- **Path not found**: Check your path uses double backslashes on Windows
+- **Config not loading**: Ensure valid JSON syntax
+- **Database fails**: Check connection string and that Supabase project isn't paused
+
+See `docs/TROUBLESHOOTING.md` for more help.

@@ -67,6 +67,6 @@ tools/
 
 ## MCP Tooling
 
-- **MCP servers**: `tools/mcp/` contains setup, configs, and scripts for AI assistant tooling (Cursor AI).
-- **Documentation**: See `tools/mcp/README.md` for complete setup guide.
-- **Config updates**: Run `npm run mcp:docs:draft` → review → `npm run mcp:docs:publish` when adding tables/scripts/file types.
+- **MCP servers**: `tools/mcp/` contains setup for AI assistant tooling (Cursor AI).
+- **Documentation**: See `tools/mcp/README.md` for setup guide.
+- **One-time setup**: Copy `mcp.json.template` to your IDE's config location and update paths.

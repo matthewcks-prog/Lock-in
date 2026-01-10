@@ -281,5 +281,5 @@ The system is designed to handle thousands of concurrent users:
 
 ## MCP Tooling
 
-- **MCP servers**: `tools/mcp/` contains setup and configuration for AI assistant tooling (Cursor AI). This is development tooling, not runtime code.
-- **Documentation**: See `tools/mcp/README.md` for complete setup guide. When adding new database tables, npm scripts, or file types, run `npm run mcp:docs:draft` → review → `npm run mcp:docs:publish` to keep MCP configs in sync.
+- **MCP servers**: `tools/mcp/` contains setup for AI assistant tooling (Cursor AI). This is development tooling, not runtime code.
+- **Documentation**: See `tools/mcp/README.md` for setup guide. One-time setup: copy `mcp.json.template` to your IDE's config location and update paths.
