@@ -18,6 +18,7 @@ describe('manifest content_scripts order', () => {
 
     const expectedScripts = Object.freeze([
       'config.js',
+      'dist/libs/sentry.js',
       'dist/libs/initApi.js',
       'dist/libs/contentLibs.js',
       'content/stateStore.js',

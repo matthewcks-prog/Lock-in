@@ -13,110 +13,152 @@
         <p class="subtitle">Study Assistant</p>
       </div>
 
-      <!-- Highlighting Toggle Section -->
-      <div class="settings-section">
-        <label class="toggle-label">
-          <span>
-            <span class="label-text">Text Highlighting</span>
-            <span class="label-description">Enable Lock-in on all pages</span>
-          </span>
-          <input type="checkbox" id="highlighting-toggle" checked />
-        </label>
-      </div>
-
-      <!-- Mode Preferences Section -->
-      <div class="settings-section">
-        <label>
-          <span class="label-text">Mode Preferences</span>
-          <span class="label-description">How Lock-in should remember your choice</span>
-        </label>
-
-        <div class="mode-preference-group">
-          <label class="radio-label">
-            <input type="radio" name="modePreference" value="fixed" checked />
-            <span>Always use this mode:</span>
-          </label>
-
-          <div class="segmented-control" id="default-mode-control">
-            <button class="segment-btn active" data-mode="explain">
-              <span class="icon">💡</span>
-              <span>Explain</span>
-            </button>
-          </div>
-
-          <label class="radio-label" style="margin-top: 12px">
-            <input type="radio" name="modePreference" value="lastUsed" />
-            <span>Remember my last used mode</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Difficulty Level Section -->
-      <div class="settings-section">
-        <label>
-          <span class="label-text">Difficulty Level</span>
-          <span class="label-description">Adjust explanation complexity</span>
-        </label>
-        <div class="radio-group">
-          <label class="radio-label">
-            <input type="radio" name="difficulty" value="highschool" checked />
-            <span>High School</span>
-          </label>
-          <label class="radio-label">
-            <input type="radio" name="difficulty" value="university" />
-            <span>First-Year University</span>
-          </label>
-        </div>
-      </div>
-
       <div id="status-message" class="status-message"></div>
 
-      <div class="settings-section auth-section">
-        <label>
-          <span class="label-text">Lock-in Account</span>
-          <span class="label-description">Sign in to save your history across highlights.</span>
-        </label>
+      <!-- Account Section - Collapsible -->
+      <div class="settings-accordion">
+        <button class="accordion-header" aria-expanded="true" data-section="account">
+          <span class="accordion-icon">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="accordion-title">Account</span>
+          <span class="accordion-status" id="account-status">Not signed in</span>
+        </button>
+        <div class="accordion-content" id="account-content">
+          <div class="auth-section">
+            <div id="auth-view-logged-out">
+              <div class="auth-tabs">
+                <button class="auth-tab active" data-mode="login">Log in</button>
+                <button class="auth-tab" data-mode="signup">Sign up</button>
+              </div>
+              <form id="auth-form" class="auth-form">
+                <input
+                  type="email"
+                  id="auth-email"
+                  class="auth-input"
+                  placeholder="Email"
+                  autocomplete="email"
+                  required
+                />
+                <div class="password-input-wrapper" id="password-wrapper">
+                  <input
+                    type="password"
+                    id="auth-password"
+                    class="auth-input"
+                    placeholder="Password"
+                    autocomplete="current-password"
+                    required
+                  />
+                  <button type="button" class="password-toggle" id="password-toggle" aria-label="Show password">
+                    <svg class="eye-icon eye-open" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <svg class="eye-icon eye-closed" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  </button>
+                </div>
+                <button type="submit" class="primary-button" id="auth-submit-button">
+                  <span class="btn-text">Log in</span>
+                  <span class="btn-spinner" style="display: none;">
+                    <svg class="spinner-icon" width="16" height="16" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="31.4 31.4" transform="rotate(-90 12 12)"/>
+                    </svg>
+                  </span>
+                </button>
+                <div class="auth-links">
+                  <button type="button" class="text-link" id="forgot-password-link">Forgot password?</button>
+                </div>
+                <p class="auth-hint" id="auth-mode-hint">
+                  Use your Lock-in account email and password.
+                </p>
+              </form>
+            </div>
 
-        <div id="auth-view-logged-out">
-          <p class="auth-intro" id="auth-intro-message">
-            Sign in to use Lock-in and keep your conversations in sync.
-          </p>
-          <div class="auth-tabs">
-            <button class="auth-tab active" data-mode="login">Log in</button>
-            <button class="auth-tab" data-mode="signup">Sign up</button>
+            <div id="auth-view-logged-in" class="hidden">
+              <div class="logged-in-info">
+                <div class="user-avatar">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <div class="user-details">
+                  <span class="user-email" id="auth-user-email">user@example.com</span>
+                  <span class="user-status">Signed in</span>
+                </div>
+              </div>
+              <button id="logout-button" class="secondary-button">Sign Out</button>
+            </div>
+
+            <div id="auth-message" class="auth-message"></div>
           </div>
-          <form id="auth-form" class="auth-form">
-            <input
-              type="email"
-              id="auth-email"
-              class="auth-input"
-              placeholder="Email"
-              autocomplete="email"
-              required
-            />
-            <input
-              type="password"
-              id="auth-password"
-              class="auth-input"
-              placeholder="Password"
-              autocomplete="current-password"
-              required
-            />
-            <button type="submit" class="primary-button" id="auth-submit-button">Log in</button>
-            <p class="auth-hint" id="auth-mode-hint">
-              Use your Lock-in account email and password.
-            </p>
-          </form>
         </div>
+      </div>
 
-        <div id="auth-view-logged-in" class="hidden">
-          <p class="auth-status-text">
-            Signed in as <span id="auth-user-email">user@example.com</span>
-          </p>
-          <button id="logout-button" class="secondary-button">Sign Out</button>
+      <!-- Help & Support Section - Collapsible -->
+      <div class="settings-accordion">
+        <button class="accordion-header" aria-expanded="false" data-section="help">
+          <span class="accordion-icon">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="accordion-title">Help & Support</span>
+        </button>
+        <div class="accordion-content collapsed" id="help-content">
+          <div class="help-section">
+            <p class="help-intro">Need help or want to share your thoughts?</p>
+            <div class="help-buttons">
+              <a href="mailto:feedback@lockin.study?subject=Lock-in%20Feedback" class="help-btn">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span>Send Feedback</span>
+              </a>
+              <a href="https://github.com/lockin-study/lockin/issues/new" target="_blank" rel="noopener noreferrer" class="help-btn help-btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>Report Issue</span>
+              </a>
+            </div>
+          </div>
         </div>
+      </div>
 
-        <div id="auth-message" class="auth-message"></div>
+      <!-- Privacy Section - Collapsible -->
+      <div class="settings-accordion">
+        <button class="accordion-header" aria-expanded="false" data-section="privacy">
+          <span class="accordion-icon">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="accordion-title">Privacy</span>
+        </button>
+        <div class="accordion-content collapsed" id="privacy-content">
+          <div class="privacy-section">
+            <label class="toggle-row">
+              <span class="toggle-label">
+                <span class="toggle-title">Send anonymous error reports</span>
+                <span class="toggle-desc">Help improve Lock-in. No study content is ever sent.</span>
+              </span>
+              <input type="checkbox" id="telemetry-toggle" class="toggle-input" checked />
+              <span class="toggle-slider"></span>
+            </label>
+            <!-- Dev-only: Test Sentry connection -->
+            <button id="sentry-test-button" class="secondary-button" style="display: none; margin-top: 12px;">
+              Test Sentry Connection
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="footer">
@@ -126,6 +168,7 @@
     </div>
 
     <script src="config.js"></script>
+    <script src="dist/libs/sentry.js"></script>
     <script src="dist/libs/initApi.js"></script>
     <script src="popup.js"></script>
   </body>

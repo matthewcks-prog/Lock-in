@@ -26,6 +26,14 @@ import {
   type ListNoteAssetsParams,
   type DeleteNoteAssetParams,
 } from './resources/assetsClient';
+import {
+  createFeedbackClient,
+  type SubmitFeedbackParams,
+  type FeedbackType,
+  type FeedbackStatus,
+  type FeedbackContext,
+  type FeedbackRecord,
+} from './resources/feedbackClient';
 
 export interface ApiClientConfig {
   backendUrl: string;
@@ -50,6 +58,7 @@ export function createApiClient(config: ApiClientConfig) {
     chatWithNotes,
   } = createNotesClient(apiRequest);
   const { uploadNoteAsset, listNoteAssets, deleteNoteAsset } = createAssetsClient(apiRequest);
+  const { submitFeedback, listFeedback, getFeedback } = createFeedbackClient(apiRequest);
 
   return {
     apiRequest,
@@ -70,6 +79,9 @@ export function createApiClient(config: ApiClientConfig) {
     uploadNoteAsset,
     listNoteAssets,
     deleteNoteAsset,
+    submitFeedback,
+    listFeedback,
+    getFeedback,
   };
 }
 
@@ -85,4 +97,9 @@ export type {
   UploadNoteAssetParams,
   ListNoteAssetsParams,
   DeleteNoteAssetParams,
+  SubmitFeedbackParams,
+  FeedbackType,
+  FeedbackStatus,
+  FeedbackContext,
+  FeedbackRecord,
 };

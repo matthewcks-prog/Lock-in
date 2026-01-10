@@ -278,6 +278,50 @@ CREATE TABLE public.ai_requests (
 
 ---
 
+### `feedback`
+
+User-submitted feedback (bug reports, feature requests, questions).
+
+```sql
+CREATE TABLE public.feedback (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES auth.users(id),
+  type text NOT NULL CHECK (type IN ('bug', 'feature', 'question', 'other')),
+  message text NOT NULL,
+  context jsonb, -- { url, courseCode, extensionVersion, browser, page }
+  screenshot_url text, -- Optional Supabase Storage link (future)
+  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'closed')),
+  admin_notes text, -- Internal notes (not shown to user)
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_feedback_user_id ON public.feedback(user_id, created_at DESC);
+CREATE INDEX idx_feedback_status ON public.feedback(status, created_at DESC);
+```
+
+**Fields:**
+
+- `id` - Unique feedback identifier
+- `user_id` - Submitting user (FK to `auth.users`)
+- `type` - Feedback type: `"bug"`, `"feature"`, `"question"`, `"other"`
+- `message` - User's feedback message
+- `context` - Auto-captured context (URL, course code, extension version, browser)
+- `screenshot_url` - Optional screenshot URL (future feature)
+- `status` - Admin status: `"open"`, `"in_progress"`, `"resolved"`, `"closed"`
+- `admin_notes` - Internal notes for admin (not shown to user)
+- `created_at` - Submission timestamp
+- `updated_at` - Last update timestamp
+
+**Usage:** Stores user-submitted feedback. Users can view their own feedback; admins can view all (via future admin dashboard).
+
+**RLS Policies:**
+
+- Users can view and insert their own feedback
+- Admin access will be added when admin dashboard is built
+
+---
+
 ### `transcripts`
 
 Per-user cached AI transcripts keyed by fingerprint.
@@ -398,6 +442,9 @@ See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
 - `NoteAssetType` - Union type: `'image' | 'document' | 'audio' | 'video' | 'other'`
 - `FolderRecord` - Matches `folders` table
 - `AIRequestRecord` - Matches `ai_requests` table
+- `FeedbackRecord` - Matches `feedback` table
+- `FeedbackType` - Union type: `'bug' | 'feature' | 'question' | 'other'`
+- `FeedbackStatus` - Union type: `'open' | 'in_progress' | 'resolved' | 'closed'`
 
 ---
 
@@ -411,6 +458,7 @@ auth.users (Supabase)
      -> note_assets (1:N)
   -> folders (1:N)
   -> ai_requests (1:N)
+  -> feedback (1:N)
   -> transcripts (1:N)
   -> transcript_jobs (1:N)
       -> transcript_job_chunks (1:N)
@@ -525,6 +573,7 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 | `006_transcripts.sql`                  | Dec 2025 | Transcript jobs + transcript cache tables            |
 | `007_transcripts_hardening.sql`        | Jan 2026 | Transcript job state + cache hardening               |
 | `008_transcript_privacy_hardening.sql` | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking |
+| `009_feedback.sql`                     | Jan 2026 | User feedback table for bug reports/feature requests |
 
 ---
 

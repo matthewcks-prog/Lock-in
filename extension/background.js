@@ -5,7 +5,29 @@
  * Uses the messaging system for typed communication.
  */
 
+// ============================================================================
 // Import shared libraries
+// ============================================================================
+
+// Config must be first (sets up LOCKIN_CONFIG)
+try {
+  importScripts('config.js');
+} catch (e) {
+  console.warn('Lock-in: Failed to import config.js:', e);
+}
+
+// Sentry error tracking (must be early, after config)
+try {
+  importScripts('dist/libs/sentry.js');
+  if (typeof self !== 'undefined' && self.LockInSentry) {
+    self.LockInSentry.initSentry('background');
+    self.LockInSentry.setupMv3Lifecycle();
+  }
+} catch (e) {
+  console.warn('Lock-in: Failed to import/init sentry.js:', e);
+}
+
+// Other shared libraries
 try {
   importScripts('dist/libs/webvttParser.js');
 } catch (e) {
@@ -15,11 +37,6 @@ try {
   importScripts('dist/libs/transcriptProviders.js');
 } catch (e) {
   console.warn('Lock-in: Failed to import transcriptProviders.js:', e);
-}
-try {
-  importScripts('config.js');
-} catch (e) {
-  console.warn('Lock-in: Failed to import config.js:', e);
 }
 try {
   importScripts('src/networkUtils.js');

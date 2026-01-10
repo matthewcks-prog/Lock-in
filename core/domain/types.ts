@@ -220,6 +220,43 @@ export interface AIRequestRecord {
 }
 
 /**
+ * Feedback type options
+ */
+export type FeedbackType = 'bug' | 'feature' | 'question' | 'other';
+
+/**
+ * Feedback status (admin use)
+ */
+export type FeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+/**
+ * Context auto-captured with feedback
+ */
+export interface FeedbackContext {
+  url?: string;
+  courseCode?: string;
+  extensionVersion?: string;
+  browser?: string;
+  page?: string;
+}
+
+/**
+ * Feedback database record
+ */
+export interface FeedbackRecord {
+  id: string;
+  user_id: string;
+  type: FeedbackType;
+  message: string;
+  context: FeedbackContext | null;
+  screenshot_url: string | null;
+  status: FeedbackStatus;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Note-related domain exports live in core/domain/Note.ts
  * and are re-exported here for convenience.
  */

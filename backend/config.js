@@ -90,76 +90,14 @@ const MIME_EXTENSION_MAP = {
 };
 
 function isOriginAllowed(origin) {
-  // #region agent log
-  const fs = require('fs');
-  const logPath = 'c:\\Users\\matth\\Lock-in\\.cursor\\debug.log';
-  try {
-    const logEntry =
-      JSON.stringify({
-        location: 'config.js:108',
-        message: 'isOriginAllowed called',
-        data: {
-          origin,
-          originType: typeof origin,
-          isNull: origin === null,
-          isUndefined: origin === undefined,
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'B1',
-      }) + '\n';
-    fs.appendFileSync(logPath, logEntry, 'utf8');
-  } catch (e) {}
-  // #endregion
   if (!origin) {
-    // #region agent log
-    try {
-      const logEntry =
-        JSON.stringify({
-          location: 'config.js:111',
-          message: 'isOriginAllowed: origin is null/undefined, allowing',
-          data: { origin },
-          timestamp: Date.now(),
-          sessionId: 'debug-session',
-          runId: 'run1',
-          hypothesisId: 'B1',
-        }) + '\n';
-      fs.appendFileSync(logPath, logEntry, 'utf8');
-    } catch (e) {}
-    // #endregion
     // Allow non-browser clients (health checks, local tools, etc.)
     return true;
   }
 
-  const result = ALLOWED_ORIGINS.some((pattern) =>
+  return ALLOWED_ORIGINS.some((pattern) =>
     typeof pattern === 'string' ? origin === pattern : pattern.test(origin),
   );
-  // #region agent log
-  try {
-    const logEntry =
-      JSON.stringify({
-        location: 'config.js:116',
-        message: 'isOriginAllowed result',
-        data: {
-          origin,
-          result,
-          patternsChecked: ALLOWED_ORIGINS.length,
-          matchedPattern: ALLOWED_ORIGINS.find((p) =>
-            typeof p === 'string' ? origin === p : p.test(origin),
-          )
-            ? 'found'
-            : 'none',
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'B1',
-      }) + '\n';
-    fs.appendFileSync(logPath, logEntry, 'utf8');
-  } catch (e) {}
-  // #endregion
-  return result;
 }
 
 module.exports = {

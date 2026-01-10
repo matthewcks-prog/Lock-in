@@ -7,8 +7,13 @@
  * and controllers/ folders to keep things testable and maintainable.
  */
 
+// IMPORTANT: Load environment variables first, then initialize Sentry
+// BEFORE any other imports. This ensures Sentry can instrument all modules.
 require('dotenv').config();
+const { initSentry } = require('./sentry');
+initSentry();
 
+// Now import everything else - Sentry will automatically instrument these
 const { createApp } = require('./app');
 const { PORT } = require('./config');
 const { startTranscriptJobReaper } = require('./services/transcriptsService');
