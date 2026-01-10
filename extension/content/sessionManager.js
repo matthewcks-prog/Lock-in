@@ -5,30 +5,29 @@
   function createSessionManager({ Messaging, Logger, stateStore, origin }) {
     const log = Logger || { debug: () => {}, error: console.error };
     let currentTabId = null;
-    const MESSAGE_TYPES =
-      (Messaging && Messaging.types) || {
-        GET_TAB_ID: "GET_TAB_ID",
-        GET_SESSION: "GET_SESSION",
-        CLEAR_SESSION: "CLEAR_SESSION",
-      };
+    const MESSAGE_TYPES = (Messaging && Messaging.types) || {
+      GET_TAB_ID: 'GET_TAB_ID',
+      GET_SESSION: 'GET_SESSION',
+      CLEAR_SESSION: 'CLEAR_SESSION',
+    };
 
     async function sendMessage(type, payload) {
       if (!Messaging || !chrome.runtime) return null;
 
       try {
-        if (typeof Messaging.send === "function") {
+        if (typeof Messaging.send === 'function') {
           return await Messaging.send(type, payload);
         }
 
-        if (typeof Messaging.sendToBackground === "function") {
+        if (typeof Messaging.sendToBackground === 'function') {
           return await Messaging.sendToBackground({ type, payload });
         }
 
-        if (typeof Messaging.sendMessage === "function") {
+        if (typeof Messaging.sendMessage === 'function') {
           return await Messaging.sendMessage({ type, payload });
         }
       } catch (error) {
-        log.error("Messaging failed:", error);
+        log.error('Messaging failed:', error);
       }
 
       return null;
@@ -40,13 +39,13 @@
       try {
         const response = await sendMessage(MESSAGE_TYPES.GET_TAB_ID);
         const tabId = response?.data?.tabId ?? response?.tabId;
-        if (typeof tabId === "number") {
+        if (typeof tabId === 'number') {
           currentTabId = tabId;
-          log.debug("Tab ID:", currentTabId);
+          log.debug('Tab ID:', currentTabId);
           return currentTabId;
         }
       } catch (error) {
-        log.error("Failed to get tab ID:", error);
+        log.error('Failed to get tab ID:', error);
       }
 
       return currentTabId;
@@ -67,20 +66,20 @@
         if (!session || !session.isActive) return;
 
         if (session.origin && origin && session.origin !== origin) {
-          log.debug("Origin changed, not restoring session");
+          log.debug('Origin changed, not restoring session');
           await clearSession();
           return;
         }
 
         if (session.isClosed) {
-          log.debug("Session was closed by user");
+          log.debug('Session was closed by user');
           return;
         }
 
-        stateStore.setSelection(session.selection || "");
-        stateStore.setMode(session.mode || "explain");
+        stateStore.setSelection(session.selection || '');
+        stateStore.setMode(session.mode || 'explain');
         stateStore.setPreferences({
-          difficultyLevel: session.difficultyLevel || "highschool",
+          difficultyLevel: session.difficultyLevel || 'highschool',
         });
 
         if (session.chatId) {
@@ -91,7 +90,7 @@
           await stateStore.setSidebarOpen(true);
         }
       } catch (error) {
-        log.error("Failed to load session:", error);
+        log.error('Failed to load session:', error);
       }
     }
 
@@ -101,7 +100,7 @@
       try {
         await sendMessage(MESSAGE_TYPES.CLEAR_SESSION);
       } catch (error) {
-        log.error("Failed to clear session:", error);
+        log.error('Failed to clear session:', error);
       }
     }
 

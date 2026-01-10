@@ -5,9 +5,15 @@
  * The actual sidebar implementation lives in `LockInSidebar.tsx`.
  */
 
-import { createRoot, Root } from "react-dom/client";
-import { LockInSidebar } from "./LockInSidebar";
-import type { LockInSidebarProps } from "./LockInSidebar";
+import { createRoot, Root } from 'react-dom/client';
+import { LockInSidebar } from './LockInSidebar';
+import type { LockInSidebarProps } from './LockInSidebar';
+import { initSentry } from '../../extension/src/sentry';
+
+// Initialize Sentry for error tracking (sidebar surface)
+// This runs early before the React app renders to catch all errors
+initSentry('sidebar');
+
 
 export interface SidebarInstance {
   root: Root;
@@ -15,13 +21,11 @@ export interface SidebarInstance {
   updateProps: (newProps: Partial<LockInSidebarProps>) => void;
 }
 
-export function createLockInSidebar(
-  props: LockInSidebarProps
-): SidebarInstance {
-  let container = document.getElementById("lockin-root");
+export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance {
+  let container = document.getElementById('lockin-root');
   if (!container) {
-    container = document.createElement("div");
-    container.id = "lockin-root";
+    container = document.createElement('div');
+    container.id = 'lockin-root';
     document.body.appendChild(container);
   }
 
@@ -52,7 +56,7 @@ export function createLockInSidebar(
   };
 }
 
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   (window as any).LockInUI = {
     createLockInSidebar,
     LockInSidebar,

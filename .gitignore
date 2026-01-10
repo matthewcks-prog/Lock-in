@@ -25,9 +25,18 @@ desktop.ini
 *.swo
 *~
 
+# Cursor IDE (user-specific MCP configs)
+.cursor/mcp.json
+
 # Build outputs
 dist/
 build/
+!build/
+build/*
+!build/viteShared.ts
+extension/dist/
+extension/ui/
+extension/libs/
 *.zip
 
 # Chrome Extension (packed)

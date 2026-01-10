@@ -1,19 +1,19 @@
 /**
  * Edstem Adapter
- * 
+ *
  * Extracts course context from Edstem pages.
  */
 
-import type { BaseAdapter } from "./baseAdapter";
-import type { CourseContext, PageContext } from "../../core/domain/types";
-import { extractCourseCodeFromText } from "../../core/utils/textUtils";
+import type { BaseAdapter } from './baseAdapter';
+import type { CourseContext, PageContext } from '../../core/domain/types';
+import { extractCourseCodeFromText } from '../../core/utils/textUtils';
 
 /**
  * Edstem-specific adapter
  */
 export class EdstemAdapter implements BaseAdapter {
   canHandle(url: string): boolean {
-    return url.includes("edstem.org");
+    return url.includes('edstem.org');
   }
 
   getCourseCode(dom: Document): string | null {
@@ -22,11 +22,11 @@ export class EdstemAdapter implements BaseAdapter {
     // - Breadcrumbs
     // - Course header
     const title = dom.title;
-    const heading = dom.querySelector("h1")?.textContent?.trim();
-    
+    const heading = dom.querySelector('h1')?.textContent?.trim();
+
     const candidates = [title, heading].filter(Boolean);
     for (const text of candidates) {
-      const code = extractCourseCodeFromText(text || "");
+      const code = extractCourseCodeFromText(text || '');
       if (code) return code;
     }
 
@@ -39,7 +39,7 @@ export class EdstemAdapter implements BaseAdapter {
   }
 
   getTopic(dom: Document): string | null {
-    const heading = dom.querySelector("h1, h2")?.textContent?.trim();
+    const heading = dom.querySelector('h1, h2')?.textContent?.trim();
     return heading || null;
   }
 
@@ -56,7 +56,7 @@ export class EdstemAdapter implements BaseAdapter {
   }
 
   getPageContext(dom: Document, url: string): PageContext {
-    const heading = dom.querySelector("h1, h2")?.textContent?.trim() || dom.title;
+    const heading = dom.querySelector('h1, h2')?.textContent?.trim() || dom.title;
     const courseContext = this.getCourseContext(dom, url);
 
     return {

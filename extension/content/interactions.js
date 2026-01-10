@@ -15,14 +15,11 @@
 
     const range = selection.getRangeAt(0);
     const container = range.commonAncestorContainer;
-    const element =
-      container.nodeType === 1 ? container : container.parentElement;
+    const element = container.nodeType === 1 ? container : container.parentElement;
 
     if (
       element &&
-      (element.tagName === "INPUT" ||
-        element.tagName === "TEXTAREA" ||
-        element.isContentEditable)
+      (element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.isContentEditable)
     ) {
       return { valid: false };
     }
@@ -43,7 +40,7 @@
     minSelectionLength = 3,
   }) {
     const log = logger || { debug: () => {} };
-    const isMac = navigator.platform.toUpperCase().includes("MAC");
+    const isMac = navigator.platform.toUpperCase().includes('MAC');
 
     function handleMouseUp(event) {
       const state = stateStore.getSnapshot();
@@ -63,12 +60,12 @@
     }
 
     function handleKeyPress(event) {
-      if (event.key === "Escape") {
+      if (event.key === 'Escape') {
         const target = event.target;
         if (
           target &&
-          typeof target.closest === "function" &&
-          (target.closest("#lockin-sidebar") || target.closest("#lockin-root"))
+          typeof target.closest === 'function' &&
+          (target.closest('#lockin-sidebar') || target.closest('#lockin-root'))
         ) {
           return;
         }
@@ -80,13 +77,13 @@
     }
 
     function bind() {
-      document.addEventListener("mouseup", handleMouseUp);
-      document.addEventListener("keydown", handleKeyPress);
-      log.debug("Interaction handlers bound");
+      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener('keydown', handleKeyPress);
+      log.debug('Interaction handlers bound');
 
       return () => {
-        document.removeEventListener("mouseup", handleMouseUp);
-        document.removeEventListener("keydown", handleKeyPress);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.removeEventListener('keydown', handleKeyPress);
       };
     }
 

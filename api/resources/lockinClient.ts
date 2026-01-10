@@ -1,10 +1,10 @@
-import type { ChatMessage, StudyResponse, ApiResponse } from "../../core/domain/types";
-import type { ApiRequest } from "../fetcher";
+import type { ChatMessage, StudyResponse, ApiResponse } from '../../core/domain/types';
+import type { ApiRequest } from '../fetcher';
 
 export interface ProcessTextParams {
   selection: string;
-  mode: "explain" | "general";
-  difficultyLevel?: "highschool" | "university";
+  mode: 'explain' | 'general';
+  difficultyLevel?: 'highschool' | 'university';
   chatHistory?: ChatMessage[];
   newUserMessage?: string;
   chatId?: string;
@@ -19,22 +19,20 @@ export function createLockinClient(apiRequest: ApiRequest) {
     const {
       selection,
       mode,
-      difficultyLevel = "highschool",
+      difficultyLevel = 'highschool',
       chatHistory = [],
       newUserMessage,
       chatId,
       pageContext,
       pageUrl,
       courseCode,
-      language = "en",
+      language = 'en',
     } = params;
 
     const normalizedHistory = (Array.isArray(chatHistory) ? chatHistory : [])
       .filter(
         (message) =>
-          message &&
-          typeof message.role === "string" &&
-          typeof message.content === "string",
+          message && typeof message.role === 'string' && typeof message.content === 'string',
       )
       .map((message) => ({
         role: message.role,
@@ -42,7 +40,7 @@ export function createLockinClient(apiRequest: ApiRequest) {
       }));
 
     const body: any = {
-      selection: selection || "",
+      selection: selection || '',
       mode,
       difficultyLevel,
       chatHistory: normalizedHistory,
@@ -55,8 +53,8 @@ export function createLockinClient(apiRequest: ApiRequest) {
     if (courseCode) body.courseCode = courseCode;
     if (language) body.language = language;
 
-    return apiRequest<ApiResponse<StudyResponse>>("/api/lockin", {
-      method: "POST",
+    return apiRequest<ApiResponse<StudyResponse>>('/api/lockin', {
+      method: 'POST',
       body: JSON.stringify(body),
     });
   }

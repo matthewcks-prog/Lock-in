@@ -1,38 +1,30 @@
-import { logger, type Logger } from "./logger";
-import { messaging, type Messaging } from "./messaging";
-import {
-  storage,
-  STORAGE_KEYS,
-  type Storage,
-  type StorageChange,
-} from "./storage";
-import { getAdapterForUrl, GenericAdapter } from "../../integrations";
-import type { BaseAdapter } from "../../integrations/adapters/baseAdapter";
-import type { PageContext } from "../../core/domain/types";
+import { logger, type Logger } from './logger';
+import { messaging, type Messaging } from './messaging';
+import { storage, STORAGE_KEYS, type Storage, type StorageChange } from './storage';
+import { getAdapterForUrl, GenericAdapter } from '../../integrations';
+import type { BaseAdapter } from '../../integrations/adapters/baseAdapter';
+import type { PageContext } from '../../core/domain/types';
 
 type MessageType = keyof typeof MESSAGE_TYPES;
 
 const MESSAGE_TYPES = {
-  GET_TAB_ID: "GET_TAB_ID",
-  GET_SESSION: "GET_SESSION",
-  SAVE_SESSION: "SAVE_SESSION",
-  CLEAR_SESSION: "CLEAR_SESSION",
-  GET_SETTINGS: "GET_SETTINGS",
-  UPDATE_SETTINGS: "UPDATE_SETTINGS",
+  GET_TAB_ID: 'GET_TAB_ID',
+  GET_SESSION: 'GET_SESSION',
+  SAVE_SESSION: 'SAVE_SESSION',
+  CLEAR_SESSION: 'CLEAR_SESSION',
+  GET_SETTINGS: 'GET_SETTINGS',
+  UPDATE_SETTINGS: 'UPDATE_SETTINGS',
 } as const;
 
 export type RuntimeStorage = Storage & {
-  getLocal: Storage["getLocal"];
-  setLocal: Storage["setLocal"];
-  removeLocal: Storage["removeLocal"];
+  getLocal: Storage['getLocal'];
+  setLocal: Storage['setLocal'];
+  removeLocal: Storage['removeLocal'];
 };
 
 export interface RuntimeMessaging extends Messaging {
   types: typeof MESSAGE_TYPES;
-  send: <T = unknown>(
-    type: (typeof MESSAGE_TYPES)[MessageType],
-    payload?: unknown
-  ) => Promise<T>;
+  send: <T = unknown>(type: (typeof MESSAGE_TYPES)[MessageType], payload?: unknown) => Promise<T>;
 }
 
 export interface RuntimeSession {
@@ -43,7 +35,7 @@ export interface RuntimeSession {
 }
 
 export type LockInContentRuntime = {
-  __version: "1.0";
+  __version: '1.0';
   logger: Logger;
   storage: RuntimeStorage;
   messaging: RuntimeMessaging;
@@ -63,7 +55,7 @@ function inferCourseCode(dom: Document, url: string): string | null {
     return urlMatch[1].toUpperCase();
   }
 
-  const bodyText = dom.body?.innerText || "";
+  const bodyText = dom.body?.innerText || '';
   const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
   return codeMatch ? codeMatch[1].toUpperCase() : null;
 }
@@ -108,7 +100,7 @@ export function resolveAdapterContext(loggerInstance?: LoggerInterface): {
       }
     }
   } catch (error) {
-    log.error("Failed to get page context:", error);
+    log.error('Failed to get page context:', error);
   }
 
   return { adapter, pageContext };
@@ -121,7 +113,7 @@ function createStorageApi(log: Logger): RuntimeStorage {
       try {
         return await storage.getLocal<T>(keys);
       } catch (error) {
-        log.warn("Storage.getLocal failed:", error);
+        log.warn('Storage.getLocal failed:', error);
         throw error;
       }
     },
@@ -129,7 +121,7 @@ function createStorageApi(log: Logger): RuntimeStorage {
       try {
         await storage.setLocal(key, value);
       } catch (error) {
-        log.warn("Storage.setLocal failed:", error);
+        log.warn('Storage.setLocal failed:', error);
         throw error;
       }
     },
@@ -137,12 +129,12 @@ function createStorageApi(log: Logger): RuntimeStorage {
       try {
         await storage.removeLocal(keys);
       } catch (error) {
-        log.warn("Storage.removeLocal failed:", error);
+        log.warn('Storage.removeLocal failed:', error);
         throw error;
       }
     },
     onChanged(
-      callback: (changes: Record<string, StorageChange>, areaName: string) => void
+      callback: (changes: Record<string, StorageChange>, areaName: string) => void,
     ): () => void {
       return storage.onChanged(callback);
     },
@@ -157,7 +149,7 @@ function createMessagingApi(log: Logger): RuntimeMessaging {
       try {
         return await messaging.sendToBackground<T>({ type, payload });
       } catch (error) {
-        log.error("[Lock-in] Messaging send failed:", error);
+        log.error('[Lock-in] Messaging send failed:', error);
         throw error;
       }
     },
@@ -167,7 +159,7 @@ function createMessagingApi(log: Logger): RuntimeMessaging {
 function createSessionApi(
   log: Logger,
   runtimeMessaging: RuntimeMessaging,
-  runtimeStorage: RuntimeStorage
+  runtimeStorage: RuntimeStorage,
 ): RuntimeSession {
   let cachedTabId: number | null = null;
 
@@ -175,13 +167,13 @@ function createSessionApi(
     try {
       const response: any = await runtimeMessaging.send(runtimeMessaging.types.GET_TAB_ID);
       const tabId = response?.data?.tabId ?? response?.tabId ?? null;
-      if (typeof tabId === "number") {
+      if (typeof tabId === 'number') {
         cachedTabId = tabId;
         return tabId;
       }
       return cachedTabId;
     } catch (error) {
-      log.error("[Lock-in] Failed to get tab ID:", error);
+      log.error('[Lock-in] Failed to get tab ID:', error);
       return cachedTabId;
     }
   }
@@ -191,7 +183,7 @@ function createSessionApi(
       const response: any = await runtimeMessaging.send(runtimeMessaging.types.GET_SESSION);
       return response?.data?.session ?? response?.session ?? null;
     } catch (error) {
-      log.error("[Lock-in] Failed to get session:", error);
+      log.error('[Lock-in] Failed to get session:', error);
       return null;
     }
   }
@@ -200,7 +192,7 @@ function createSessionApi(
     try {
       await runtimeMessaging.send(runtimeMessaging.types.CLEAR_SESSION);
     } catch (error) {
-      log.error("[Lock-in] Failed to clear session:", error);
+      log.error('[Lock-in] Failed to clear session:', error);
     }
   }
 
@@ -208,9 +200,9 @@ function createSessionApi(
     try {
       const data = await runtimeStorage.getLocal<string>(STORAGE_KEYS.CURRENT_CHAT_ID);
       const chatId = data[STORAGE_KEYS.CURRENT_CHAT_ID];
-      return typeof chatId === "string" ? chatId : null;
+      return typeof chatId === 'string' ? chatId : null;
     } catch (error) {
-      log.warn("Failed to load chat ID:", error);
+      log.warn('Failed to load chat ID:', error);
       return null;
     }
   }
@@ -230,7 +222,7 @@ export function createContentRuntime(): LockInContentRuntime {
   const runtimeSession = createSessionApi(runtimeLogger, runtimeMessaging, runtimeStorage);
 
   const runtime: LockInContentRuntime = {
-    __version: "1.0",
+    __version: '1.0',
     logger: runtimeLogger,
     storage: runtimeStorage,
     messaging: runtimeMessaging,

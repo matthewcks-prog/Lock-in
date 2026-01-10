@@ -10,28 +10,30 @@
  * - Optimistic locking support via updatedAt
  */
 
-import type { AuthClient } from "./auth";
-import {
-  createFetcher,
-  type ApiRequestOptions,
-} from "./fetcher";
-import {
-  createLockinClient,
-  type ProcessTextParams,
-} from "./resources/lockinClient";
-import { createChatsClient } from "./resources/chatsClient";
+import type { AuthClient } from './auth';
+import { createFetcher, type ApiRequestOptions } from './fetcher';
+import { createLockinClient, type ProcessTextParams } from './resources/lockinClient';
+import { createChatsClient } from './resources/chatsClient';
 import {
   createNotesClient,
   type ListNotesParams,
   type SearchNotesParams,
   type ChatWithNotesParams,
-} from "./resources/notesClient";
+} from './resources/notesClient';
 import {
   createAssetsClient,
   type UploadNoteAssetParams,
   type ListNoteAssetsParams,
   type DeleteNoteAssetParams,
-} from "./resources/assetsClient";
+} from './resources/assetsClient';
+import {
+  createFeedbackClient,
+  type SubmitFeedbackParams,
+  type FeedbackType,
+  type FeedbackStatus,
+  type FeedbackContext,
+  type FeedbackRecord,
+} from './resources/feedbackClient';
 
 export interface ApiClientConfig {
   backendUrl: string;
@@ -43,7 +45,8 @@ export function createApiClient(config: ApiClientConfig) {
   const { apiRequest, getBackendUrl } = fetcher;
 
   const { processText } = createLockinClient(apiRequest);
-  const { getRecentChats, getChatMessages, deleteChat } = createChatsClient(apiRequest);
+  const { getRecentChats, getChatMessages, deleteChat, generateChatTitle } =
+    createChatsClient(apiRequest);
   const {
     createNote,
     updateNote,
@@ -54,11 +57,8 @@ export function createApiClient(config: ApiClientConfig) {
     searchNotes,
     chatWithNotes,
   } = createNotesClient(apiRequest);
-  const {
-    uploadNoteAsset,
-    listNoteAssets,
-    deleteNoteAsset,
-  } = createAssetsClient(apiRequest);
+  const { uploadNoteAsset, listNoteAssets, deleteNoteAsset } = createAssetsClient(apiRequest);
+  const { submitFeedback, listFeedback, getFeedback } = createFeedbackClient(apiRequest);
 
   return {
     apiRequest,
@@ -67,6 +67,7 @@ export function createApiClient(config: ApiClientConfig) {
     getRecentChats,
     getChatMessages,
     deleteChat,
+    generateChatTitle,
     createNote,
     updateNote,
     deleteNote,
@@ -78,12 +79,15 @@ export function createApiClient(config: ApiClientConfig) {
     uploadNoteAsset,
     listNoteAssets,
     deleteNoteAsset,
+    submitFeedback,
+    listFeedback,
+    getFeedback,
   };
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-export { ConflictError } from "./fetcher";
+export { ConflictError } from './fetcher';
 export type {
   ApiRequestOptions,
   ProcessTextParams,
@@ -93,4 +97,9 @@ export type {
   UploadNoteAssetParams,
   ListNoteAssetsParams,
   DeleteNoteAssetParams,
+  SubmitFeedbackParams,
+  FeedbackType,
+  FeedbackStatus,
+  FeedbackContext,
+  FeedbackRecord,
 };

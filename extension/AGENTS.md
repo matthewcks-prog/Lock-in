@@ -11,10 +11,12 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - Chrome API wrappers (storage, messaging)
 
 **This folder SHOULD contain**:
-- Extension-specific UI components (`/extension/ui`) - the sidebar widget React components
+
+- Built extension bundles (`/extension/dist/ui`, `/extension/dist/libs`) used by manifest/background/popup
 - Chrome API wrappers and extension-specific utilities
 
 **This folder should NOT contain**:
+
 - Business logic (that's in `/core`)
 - Site-specific adapters (that's in `/integrations`)
 - API client logic (that's in `/api`)
@@ -31,51 +33,60 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 ## File Responsibilities
 
 ### `manifest.json`
+
 - Extension configuration
 - Content script declarations
 - Permissions
 - **DO NOT** add business logic here
 
 ### `background.js`
+
 - Service worker (Chrome extension lifecycle)
 - Context menu handlers
 - Session management (per-tab)
 - Message routing
 - **DO NOT** contain business logic - delegate to core/services
+- **Transcript extraction**: Uses `ExtensionFetcher` class (Chrome-specific CORS/credentials) and delegates to core providers via fetcher interface. No extraction algorithm logic here - that's in `/core/transcripts/providers/`.
 
 ### `contentScript-react.js`
+
 - **Active** content script (legacy `contentScript.js` removed)
-- Thin orchestrator only: detect site adapter, extract context, and mount React sidebar bundle from `/extension/ui`
+- Thin orchestrator only: detect site adapter, extract context, and mount React sidebar bundle from `/extension/dist/ui`
 - Delegates to helpers in `extension/content/` for page context, state store, sidebar host, session restore, and interactions
 - Handles Chrome-specific events (text selection, Ctrl/Cmd modifier, Escape close)
-- Applies body class `lockin-sidebar-open` so the page shrinks by the clamped sidebar width (35vw target, 320-390px) when open; mobile overlays instead of resizing
+- Applies body class `lockin-sidebar-open` so the injected `#lockin-page-wrapper` reserves space for the sidebar; a MutationObserver keeps new body nodes inside the wrapper; mobile overlays instead of resizing
 - **DO NOT** contain:
   - Business logic (use `/core/services`)
-  - UI rendering (use React components from `/extension/ui`)
+  - UI rendering (use React components from `/ui/extension`)
   - Site-specific detection (use adapters from `/integrations`)
 
 ### `content/`
+
 - `pageContext.js` (adapter + page context; bundled from `pageContext.ts` importing `/integrations`), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (selection + Escape).
 - Extend functionality by adding focused helpers here instead of inflating `contentScript-react.js`.
 - Rebuild `pageContext.js` when adapters/page context logic change: `node_modules/.bin/esbuild extension/content/pageContext.ts --bundle --format=iife --platform=browser --target=es2018 --global-name=LockInPageContext --outfile=extension/content/pageContext.js`.
 
-### `ui/`
-- Built bundle lives here (`extension/ui/index.js`), source lives under `/ui/extension`
+### `dist/ui/`
+
+- Built bundle lives here (`extension/dist/ui/index.js`), source lives under `/ui/extension`
 - Sidebar orchestrator: `ui/extension/LockInSidebar.tsx` (wraps chat + notes)
 - Notes UI: `ui/extension/notes/` (`NotesPanel`, Lexical `NoteEditor`, asset helpers)
 - Hooks: `useNoteEditor`, `useNoteAssets`, `useNotesList` in `/ui/hooks`
 - **These components are NOT shared with the web app** - they are specific to the extension sidebar
 
 ### `popup/`
+
 - Popup HTML, JS, CSS
 - Settings UI
 - Auth UI
 - **DO NOT** contain business logic - call API/client functions
 
-### `libs/`
-- `chromeStorage.js` - Wrapper around `chrome.storage` (calls shared storage interface)
-- `chromeMessaging.js` - Wrapper around `chrome.runtime.sendMessage`
-- **DO NOT** contain business logic - these are thin wrappers
+### `dist/libs/`
+
+- `initApi.js` - Bundled API/auth client (LockInAPI/LockInAuth)
+- `contentLibs.js` - Bundled content helpers (LockInContent/Logger/Messaging/Storage)
+- `webvttParser.js` - Bundled WebVTT parser for background usage
+- **DO NOT** hand-edit; rebuild via Vite configs
 
 ---
 
@@ -86,10 +97,10 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - Keep files small and focused
 - Delegate to `/core` for business logic
 - Use adapters from `/integrations` for site detection
-- Use React components from `/extension/ui` for rendering the sidebar
+- Use React components from `/ui/extension` for rendering the sidebar
 - Use API client from `/api` for backend calls
 - Wrap Chrome APIs in thin wrappers
-- Keep extension UI components in `/extension/ui` (they are extension-specific)
+- Keep extension UI components in `/ui/extension` (they are extension-specific)
 
 ### âŒ DON'T
 
@@ -111,16 +122,13 @@ const { adapter, pageContext } = window.LockInContent.resolveAdapterContext(Logg
 
 // 2. Mount React component from extension UI
 // Note: In practice, this is loaded via script tag and accessed via window.LockInUI
-// The built bundle is at extension/ui/index.js
+// The built bundle is at extension/dist/ui/index.js
 // const { LockInSidebar, createLockInSidebar } = window.LockInUI;
 const root = document.createElement('div');
 document.body.appendChild(root);
 ReactDOM.render(
-  <LockInSidebar 
-    courseContext={pageContext.courseContext}
-    siteAdapter={adapter}
-  />,
-  root
+  <LockInSidebar courseContext={pageContext.courseContext} siteAdapter={adapter} />,
+  root,
 );
 
 // 4. Handle Chrome-specific events
@@ -193,6 +201,7 @@ When adding new Chrome extension features:
 ## Common Mistakes
 
 ### âŒ Putting business logic in content script
+
 ```javascript
 // BAD
 function createNote(title, content) {
@@ -209,6 +218,7 @@ const note = await noteService.createNote({ title, content });
 ```
 
 ### âŒ Hardcoding site detection
+
 ```javascript
 // BAD
 if (url.includes('learning.monash.edu')) {
@@ -223,10 +233,11 @@ const context = pageContext.courseContext;
 ```
 
 ### âŒ Building HTML strings
+
 ```javascript
 // BAD
 function renderChat(messages) {
-  return messages.map(m => `<div>${m.content}</div>`).join('');
+  return messages.map((m) => `<div>${m.content}</div>`).join('');
 }
 ```
 
@@ -235,7 +246,7 @@ function renderChat(messages) {
 // Using built bundle (loaded via manifest):
 // const { ChatPanel } = window.LockInUI;
 // Or in source code:
-// import { ChatPanel } from './extension/ui/components/ChatPanel';
+// import { ChatPanel } from './ui/extension/components/ChatPanel';
 <ChatPanel messages={messages} />
 ```
 
@@ -248,7 +259,3 @@ function renderChat(messages) {
 - Keep it simple: extension code should be thin wrappers
 
 **Remember**: Extension code is Chrome-specific glue. Business logic lives in `/core`.
-
-
-
-

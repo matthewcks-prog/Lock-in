@@ -1,12 +1,12 @@
 /**
  * Moodle Adapter for Monash University Learning Management System
- * 
+ *
  * Extracts course codes and context from Moodle pages.
  */
 
-import type { BaseAdapter } from "./baseAdapter";
-import type { CourseContext, PageContext } from "../../core/domain/types";
-import { extractCourseCodeFromText } from "../../core/utils/textUtils";
+import type { BaseAdapter } from './baseAdapter';
+import type { CourseContext, PageContext } from '../../core/domain/types';
+import { extractCourseCodeFromText } from '../../core/utils/textUtils';
 
 /**
  * Moodle-specific adapter for learning.monash.edu
@@ -15,7 +15,7 @@ export class MoodleAdapter implements BaseAdapter {
   constructor() {}
 
   canHandle(url: string): boolean {
-    return url.includes("learning.monash.edu");
+    return url.includes('learning.monash.edu');
   }
 
   /**
@@ -32,18 +32,18 @@ export class MoodleAdapter implements BaseAdapter {
       'meta[name="title"]',
     ];
     metaSelectors.forEach((selector) => {
-      const content = dom.querySelector(selector)?.getAttribute("content");
+      const content = dom.querySelector(selector)?.getAttribute('content');
       if (content) candidateTexts.push(content);
     });
 
     // 2. Check headings
     const headingSelectors = [
-      "h1",
-      "h2",
-      ".page-header-headings",
-      ".page-header-headings h1",
-      ".course-title",
-      ".breadcrumb",
+      'h1',
+      'h2',
+      '.page-header-headings',
+      '.page-header-headings h1',
+      '.course-title',
+      '.breadcrumb',
       "[data-region='course-header']",
     ];
     headingSelectors.forEach((selector) => {
@@ -54,7 +54,7 @@ export class MoodleAdapter implements BaseAdapter {
     });
 
     // 3. Check body text (first 8000 chars)
-    const bodyText = dom.body?.innerText || "";
+    const bodyText = dom.body?.innerText || '';
     if (bodyText) {
       candidateTexts.push(bodyText.substring(0, 8000));
     }
@@ -83,18 +83,18 @@ export class MoodleAdapter implements BaseAdapter {
 
   /**
    * Extract week number from Moodle page
-   * 
+   *
    * Looks for the "Week X" label that appears above topic headings on Moodle learning pages.
    * Only returns a week if found in a specific, reliable location (not in general content).
    */
   getWeek(dom: Document): number | null {
     // Pattern: "Week 1", "Week 2", etc. (case insensitive)
     const weekPattern = /^\s*Week\s+(\d{1,2})\s*$/i;
-    
+
     // First strategy: Look for a standalone "Week X" text element
     // On Moodle, this appears as a separate element above the topic title
     // It's often in a <strong> or standalone text near the section header
-    
+
     // Check section info areas and headings - these should have ONLY "Week X"
     const preciseSelectors = [
       // Moodle section info region
@@ -106,7 +106,7 @@ export class MoodleAdapter implements BaseAdapter {
       // Breadcrumb might have it
       '.breadcrumb-item.active',
     ];
-    
+
     for (const selector of preciseSelectors) {
       const elements = dom.querySelectorAll(selector);
       for (const el of elements) {
@@ -120,11 +120,11 @@ export class MoodleAdapter implements BaseAdapter {
         }
       }
     }
-    
+
     // Second strategy: Look for "Week X" as a small heading or label
     // Check h2, h3, strong elements but only if they contain JUST "Week X"
     const headingSelectors = ['h2', 'h3', 'h4', 'strong', '.section-title'];
-    
+
     for (const selector of headingSelectors) {
       const elements = dom.querySelectorAll(selector);
       for (const el of elements) {
@@ -139,7 +139,7 @@ export class MoodleAdapter implements BaseAdapter {
         }
       }
     }
-    
+
     // Third strategy: Look for Week X at the very start of the main content
     // The week label on Moodle pages is typically in the first 300 chars of section content
     const sectionContent = dom.querySelector('.course-content .section, #region-main .content');
@@ -154,7 +154,7 @@ export class MoodleAdapter implements BaseAdapter {
         }
       }
     }
-    
+
     // No reliable week indicator found
     return null;
   }
@@ -163,7 +163,7 @@ export class MoodleAdapter implements BaseAdapter {
    * Extract topic/title from page
    */
   getTopic(dom: Document): string | null {
-    const heading = dom.querySelector("h1, h2")?.textContent?.trim();
+    const heading = dom.querySelector('h1, h2')?.textContent?.trim();
     return heading || null;
   }
 
@@ -172,7 +172,7 @@ export class MoodleAdapter implements BaseAdapter {
    */
   private getCourseId(dom: Document): string | null {
     const url = new URL(dom.location.href);
-    return url.searchParams.get("id");
+    return url.searchParams.get('id');
   }
 
   /**
@@ -180,11 +180,11 @@ export class MoodleAdapter implements BaseAdapter {
    */
   private getStoredCourseMapping(courseId: string): string | null {
     try {
-      const raw = localStorage.getItem("lockin:monashCourseCodes");
+      const raw = localStorage.getItem('lockin:monashCourseCodes');
       const mapping = raw ? JSON.parse(raw) : {};
       return mapping[courseId] || null;
     } catch (error) {
-      console.warn("Failed to read cached Monash course codes", error);
+      console.warn('Failed to read cached Monash course codes', error);
       return null;
     }
   }
@@ -197,15 +197,15 @@ export class MoodleAdapter implements BaseAdapter {
 
     try {
       const existing = this.getStoredCourseMapping(courseId)
-        ? JSON.parse(localStorage.getItem("lockin:monashCourseCodes") || "{}")
+        ? JSON.parse(localStorage.getItem('lockin:monashCourseCodes') || '{}')
         : {};
-      
+
       if (existing[courseId] === courseCode) return;
 
       const next = { ...existing, [courseId]: courseCode };
-      localStorage.setItem("lockin:monashCourseCodes", JSON.stringify(next));
+      localStorage.setItem('lockin:monashCourseCodes', JSON.stringify(next));
     } catch (error) {
-      console.warn("Failed to persist Monash course code", error);
+      console.warn('Failed to persist Monash course code', error);
     }
   }
 
@@ -223,7 +223,7 @@ export class MoodleAdapter implements BaseAdapter {
       week: week || undefined,
       topic: topic || undefined,
       sourceUrl: url,
-      sourceLabel: week ? `Week ${week}` : (topic || courseCode || undefined),
+      sourceLabel: week ? `Week ${week}` : topic || courseCode || undefined,
     };
   }
 
@@ -231,7 +231,7 @@ export class MoodleAdapter implements BaseAdapter {
    * Get full page context
    */
   getPageContext(dom: Document, url: string): PageContext {
-    const heading = dom.querySelector("h1, h2")?.textContent?.trim() || dom.title;
+    const heading = dom.querySelector('h1, h2')?.textContent?.trim() || dom.title;
     const courseContext = this.getCourseContext(dom, url);
 
     return {

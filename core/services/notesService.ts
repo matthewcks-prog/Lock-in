@@ -1,11 +1,7 @@
-import type { ApiClient } from "../../api/client";
-import type {
-  Note,
-  NoteAsset,
-  NoteContent,
-  NoteContentVersion,
-  NoteType,
-} from "../domain/Note.ts";
+import type { ApiClient } from '../../api/client';
+import type { Note, NoteAsset, NoteContent, NoteContentVersion, NoteType } from '../domain/Note.ts';
+import { AppError, ErrorCodes } from '../errors';
+import { createLogger } from '../utils/logger';
 
 export interface CreateNoteInput {
   title: string;
@@ -15,6 +11,7 @@ export interface CreateNoteInput {
   courseCode?: string | null;
   noteType?: NoteType;
   tags?: string[];
+  clientNoteId?: string;
 }
 
 export interface UpdateNoteInput {
@@ -27,6 +24,11 @@ export interface UpdateNoteInput {
   tags?: string[];
 }
 
+export interface NoteRequestOptions {
+  signal?: AbortSignal;
+  expectedUpdatedAt?: string | null;
+}
+
 export interface NotesService {
   listNotes(params?: {
     courseCode?: string | null;
@@ -34,8 +36,8 @@ export interface NotesService {
     limit?: number;
   }): Promise<Note[]>;
   getNote(noteId: string): Promise<Note>;
-  createNote(initial: CreateNoteInput): Promise<Note>;
-  updateNote(noteId: string, changes: UpdateNoteInput): Promise<Note>;
+  createNote(initial: CreateNoteInput, options?: NoteRequestOptions): Promise<Note>;
+  updateNote(noteId: string, changes: UpdateNoteInput, options?: NoteRequestOptions): Promise<Note>;
   deleteNote(noteId: string): Promise<void>;
   toggleStar(noteId: string): Promise<Note>;
   setStar(noteId: string, isStarred: boolean): Promise<Note>;
@@ -45,20 +47,22 @@ export interface NotesService {
 }
 
 const DEFAULT_CONTENT: NoteContent = {
-  version: "lexical_v1",
+  version: 'lexical_v1',
   editorState: null,
   legacyHtml: null,
-  plainText: "",
+  plainText: '',
 };
 
+const logger = createLogger('NotesService');
+
 function isJson(value: unknown): boolean {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null;
 }
 
 function safeParseJson(value: unknown): any | null {
   if (value == null) return null;
-  if (typeof value === "object") return value;
-  if (typeof value !== "string") return null;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
   try {
     return JSON.parse(value);
   } catch {
@@ -67,15 +71,18 @@ function safeParseJson(value: unknown): any | null {
 }
 
 function stripHtml(html: string): string {
-  if (typeof DOMParser !== "undefined") {
+  if (typeof DOMParser !== 'undefined') {
     try {
-      const doc = new DOMParser().parseFromString(html, "text/html");
-      return doc.body?.textContent || "";
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      return doc.body?.textContent || '';
     } catch {
       // fall through to regex fallback
     }
   }
-  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function createPlainTextEditorState(text: string): Record<string, any> {
@@ -85,28 +92,28 @@ function createPlainTextEditorState(text: string): Record<string, any> {
           {
             detail: 0,
             format: 0,
-            mode: "normal",
-            style: "",
+            mode: 'normal',
+            style: '',
             text,
-            type: "text",
+            type: 'text',
             version: 1,
           },
         ]
       : [],
-    direction: "ltr",
-    format: "",
+    direction: 'ltr',
+    format: '',
     indent: 0,
-    type: "paragraph",
+    type: 'paragraph',
     version: 1,
   };
 
   return {
     root: {
       children: [paragraph],
-      direction: "ltr",
-      format: "",
+      direction: 'ltr',
+      format: '',
       indent: 0,
-      type: "root",
+      type: 'root',
       version: 1,
     },
   };
@@ -115,7 +122,7 @@ function createPlainTextEditorState(text: string): Record<string, any> {
 function legacyHtmlToNoteContent(html: string): NoteContent {
   const plainText = stripHtml(html);
   return {
-    version: "lexical_v1",
+    version: 'lexical_v1',
     editorState: createPlainTextEditorState(plainText),
     legacyHtml: html,
     plainText,
@@ -124,40 +131,42 @@ function legacyHtmlToNoteContent(html: string): NoteContent {
 
 function extractPlainTextFromEditorState(editorState: unknown): string {
   try {
-    const state = typeof editorState === "string" ? JSON.parse(editorState) : editorState;
-    if (!isJson(state)) return "";
+    const state = typeof editorState === 'string' ? JSON.parse(editorState) : editorState;
+    if (!isJson(state)) return '';
 
     const collectText = (node: any): string => {
-      if (!node) return "";
-      if (typeof node.text === "string") return node.text;
+      if (!node) return '';
+      if (typeof node.text === 'string') return node.text;
       if (Array.isArray(node.children)) {
-        return node.children.map(collectText).join(" ");
+        return node.children.map(collectText).join(' ');
       }
-      return "";
+      return '';
     };
 
     const root = (state as any).root;
-    if (!root) return "";
+    if (!root) return '';
     const segments = Array.isArray(root.children)
       ? root.children.map(collectText).filter(Boolean)
       : [];
-    return segments.join(" ").trim();
+    return segments.join(' ').trim();
   } catch {
-    return "";
+    return '';
   }
 }
 
 function normalizeContent(raw: any): NoteContent {
-  const editorVersion = (raw?.editor_version || raw?.editorVersion) as NoteContentVersion | undefined;
+  const editorVersion = (raw?.editor_version || raw?.editorVersion) as
+    | NoteContentVersion
+    | undefined;
   const contentJson = safeParseJson(raw?.content_json ?? raw?.contentJson);
-  const legacyContent = typeof raw?.content === "string" ? raw.content : undefined;
+  const legacyContent = typeof raw?.content === 'string' ? raw.content : undefined;
 
   if (contentJson) {
     return {
-      version: editorVersion || "lexical_v1",
+      version: editorVersion || 'lexical_v1',
       editorState: contentJson,
       legacyHtml: legacyContent,
-      plainText: raw?.content_text || raw?.plain_text || stripHtml(legacyContent || ""),
+      plainText: raw?.content_text || raw?.plain_text || stripHtml(legacyContent || ''),
     };
   }
 
@@ -178,18 +187,18 @@ function toDomainNote(raw: any): Note {
 
   return {
     id: raw?.id ?? null,
-    title: raw?.title || "Untitled note",
+    title: raw?.title || 'Untitled note',
     content,
     sourceUrl: raw?.source_url ?? raw?.sourceUrl ?? null,
     sourceSelection: raw?.source_selection ?? raw?.sourceSelection ?? null,
     courseCode: raw?.course_code ?? raw?.courseCode ?? null,
-    noteType: (raw?.note_type as NoteType) || raw?.noteType || "manual",
+    noteType: (raw?.note_type as NoteType) || raw?.noteType || 'manual',
     tags: Array.isArray(raw?.tags) ? raw.tags : [],
     createdAt: raw?.created_at ?? raw?.createdAt ?? null,
     updatedAt: raw?.updated_at ?? raw?.updatedAt ?? null,
     linkedLabel: raw?.linked_label ?? raw?.course_code ?? raw?.courseCode ?? undefined,
     isStarred: Boolean(raw?.is_starred ?? raw?.isStarred),
-    previewText: preview || "",
+    previewText: preview || '',
   };
 }
 
@@ -197,25 +206,26 @@ function toBackendPayload(content: NoteContent | undefined) {
   if (!content) return {};
   const editorState =
     content.editorState ??
-    createPlainTextEditorState(content.plainText || extractPlainTextFromEditorState(content.editorState) || "");
-  const plainText =
-    content.plainText || extractPlainTextFromEditorState(editorState) || null;
+    createPlainTextEditorState(
+      content.plainText || extractPlainTextFromEditorState(content.editorState) || '',
+    );
+  const plainText = content.plainText || extractPlainTextFromEditorState(editorState) || null;
 
-  if (content.version === "lexical_v1") {
+  if (content.version === 'lexical_v1') {
     return {
       content_json: editorState,
-      editor_version: "lexical_v1",
+      editor_version: 'lexical_v1',
       // Keep legacy compatibility: send HTML/plain as a fallback field
-      content: content.legacyHtml ?? plainText ?? "",
-      content_text: plainText ?? "",
+      content: content.legacyHtml ?? plainText ?? '',
+      content_text: plainText ?? '',
     };
   }
 
   return {
     content_json: editorState,
     editor_version: content.version,
-    content: content.legacyHtml ?? plainText ?? "",
-    content_text: plainText ?? "",
+    content: content.legacyHtml ?? plainText ?? '',
+    content_text: plainText ?? '',
   };
 }
 
@@ -224,13 +234,13 @@ async function migrateLegacyNote(raw: any, apiClient: ApiClient): Promise<Note> 
     return toDomainNote(raw);
   }
 
-  if (typeof raw?.content !== "string") {
+  if (typeof raw?.content !== 'string') {
     return toDomainNote(raw);
   }
 
   const legacyContent = legacyHtmlToNoteContent(raw.content);
   const payload = {
-    title: raw.title ?? "Untitled note",
+    title: raw.title ?? 'Untitled note',
     ...toBackendPayload(legacyContent),
   };
 
@@ -249,16 +259,18 @@ async function migrateLegacyNote(raw: any, apiClient: ApiClient): Promise<Note> 
 
 function ensureService(apiClient: ApiClient | null | undefined): asserts apiClient is ApiClient {
   if (!apiClient) {
-    throw new Error("Notes service requires an ApiClient instance");
+    throw new Error('Notes service requires an ApiClient instance');
   }
 }
 
 export function createNotesService(apiClient: ApiClient | null | undefined): NotesService {
-  async function listNotes(params: {
-    courseCode?: string | null;
-    sourceUrl?: string | null;
-    limit?: number;
-  } = {}): Promise<Note[]> {
+  async function listNotes(
+    params: {
+      courseCode?: string | null;
+      sourceUrl?: string | null;
+      limit?: number;
+    } = {},
+  ): Promise<Note[]> {
     ensureService(apiClient);
     const rawNotes = await apiClient.listNotes({
       courseCode: params.courseCode || undefined,
@@ -268,8 +280,8 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
     if (!Array.isArray(rawNotes)) return [];
     const migrated = await Promise.all(
       rawNotes.map((raw) =>
-        raw?.content_json ? Promise.resolve(toDomainNote(raw)) : migrateLegacyNote(raw, apiClient)
-      )
+        raw?.content_json ? Promise.resolve(toDomainNote(raw)) : migrateLegacyNote(raw, apiClient),
+      ),
     );
     return migrated;
   }
@@ -277,7 +289,7 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
   async function getNote(noteId: string): Promise<Note> {
     ensureService(apiClient);
     const raw = await apiClient.apiRequest<any>(`/api/notes/${noteId}`, {
-      method: "GET",
+      method: 'GET',
     });
     if (!raw?.content_json && raw?.content) {
       return migrateLegacyNote(raw, apiClient);
@@ -285,7 +297,7 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
     return toDomainNote(raw);
   }
 
-  async function createNote(initial: CreateNoteInput): Promise<Note> {
+  async function createNote(initial: CreateNoteInput, options?: NoteRequestOptions): Promise<Note> {
     ensureService(apiClient);
     const payload = {
       title: initial.title,
@@ -295,17 +307,23 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
       source_selection: initial.sourceSelection ?? null,
       courseCode: initial.courseCode ?? null,
       course_code: initial.courseCode ?? null,
-      noteType: initial.noteType ?? "manual",
-      note_type: initial.noteType ?? "manual",
+      noteType: initial.noteType ?? 'manual',
+      note_type: initial.noteType ?? 'manual',
       tags: initial.tags ?? [],
+      clientNoteId: initial.clientNoteId ?? undefined,
       ...toBackendPayload(initial.content),
     };
 
-    const raw = await apiClient.createNote(payload, undefined);
+    const requestOptions = options?.signal ? { signal: options.signal } : undefined;
+    const raw = await apiClient.createNote(payload, requestOptions);
     return toDomainNote(raw);
   }
 
-  async function updateNote(noteId: string, changes: UpdateNoteInput): Promise<Note> {
+  async function updateNote(
+    noteId: string,
+    changes: UpdateNoteInput,
+    options?: NoteRequestOptions,
+  ): Promise<Note> {
     ensureService(apiClient);
     const payload = {
       ...(changes.title ? { title: changes.title } : {}),
@@ -321,7 +339,14 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
       ...toBackendPayload(changes.content),
     };
 
-    const raw = await apiClient.updateNote(noteId, payload, undefined);
+    const requestOptions =
+      options?.signal || options?.expectedUpdatedAt
+        ? {
+            signal: options?.signal,
+            ifUnmodifiedSince: options?.expectedUpdatedAt ?? undefined,
+          }
+        : undefined;
+    const raw = await apiClient.updateNote(noteId, payload, requestOptions);
     return toDomainNote(raw);
   }
 
@@ -333,26 +358,27 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
   async function toggleStar(noteId: string): Promise<Note> {
     ensureService(apiClient);
     if (!noteId) {
-      throw new Error("Note ID is required to toggle star");
+      throw new Error('Note ID is required to toggle star');
     }
-    
+
     // Validate that toggleNoteStar method exists on the API client
-    if (typeof apiClient.toggleNoteStar !== "function") {
-      const error = new Error(
-        "API client is missing toggleNoteStar method. Please rebuild initApi.js or check your API client initialization."
+    if (typeof apiClient.toggleNoteStar !== 'function') {
+      const availableMethods = Object.keys(apiClient);
+      const error = new AppError(
+        'API client is missing toggleNoteStar method. Please rebuild initApi.js or check your API client initialization.',
+        ErrorCodes.INTERNAL_ERROR,
+        { details: { reason: 'API_CLIENT_ERROR', availableMethods } },
       );
-      (error as any).code = "API_CLIENT_ERROR";
-      console.error("[NotesService] toggleStar failed:", error.message);
-      console.error("[NotesService] Available API client methods:", Object.keys(apiClient));
+      logger.error('toggleStar failed: missing toggleNoteStar', { availableMethods });
       throw error;
     }
-    
+
     try {
       const raw = await apiClient.toggleNoteStar(noteId);
       return toDomainNote(raw);
-    } catch (error: any) {
+    } catch (error) {
       // Re-throw with preserved error code for better error handling upstream
-      console.error("[NotesService] toggleStar failed:", error?.message || error);
+      logger.error('toggleStar failed', error);
       throw error;
     }
   }

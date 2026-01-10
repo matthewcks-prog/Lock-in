@@ -1,88 +1,174 @@
 # Refactor Plan
 
-## How to use this doc
+Tracks refactor-prep work (guardrails, documentation, tests, build scripts).
 
-This document outlines the phased approach to prepare the codebase for a Codex refactor while maintaining extension and backend functionality. Use this as a reference when planning refactoring work and tracking progress through each phase.
+## Current Phase
 
----
+**Phase B6: Test Hardening** (in progress)
 
-## Goal
+Focus: Adding critical-path unit tests, reducing lint noise, maintaining refactor gate.
 
-Prepare the codebase for Codex refactor without breaking extension/backend functionality.
+## Completed Phases
 
----
+### Phase 1: Build and Tooling Guardrails
 
-## Phases
+- [x] Bundle transcript providers for background usage (`vite.config.transcriptProviders.ts`)
+- [x] Document provider bundle usage in build docs
 
-### Phase B1: Persistent docs (plan + prompt log)
+### Phase 2: Import Hygiene (C1)
 
-- Create `docs/REFACTOR_PLAN.md` to track phased approach
-- Create `docs/PROMPT_LOG.md` to log all refactor-prep prompts
-- Establish documentation structure for tracking progress
+- [x] Normalize `@core/*` and `@shared/ui` path aliases
+- [x] Remove deep relative imports
 
-### Phase B2: Globals typing + alias parity
+### Phase 3: Documentation Scaffolds (C2)
 
-- Add TypeScript type definitions for all global variables and window properties
-- Ensure path aliases in `tsconfig.json` match those in `vite.config.ts` (and other build configs)
+- [x] Create `docs/ARCHITECTURE.md` - Stable architecture invariants
+- [x] Create `docs/REPO_MAP.md` - Repository structure map
+- [x] Create `docs/STATUS.md` - Living snapshot of current state
 
-### Phase B3: Verify-build script + npm script wiring
+### Phase 4: Shared Vite Config (C3)
 
-- Create `verify-build` script in `package.json`
-- Ensure script runs successfully and validates build output
-- Wire up npm scripts for build verification
+- [x] Deduplicate shared Vite configuration
+- [x] Centralize build settings
 
-### Phase B4: Smoke checklist ✅
+### Phase 5: API Client Layering (C4)
 
-- [x] Create smoke test checklist document (`docs/SMOKE_CHECKLIST.md`)
-- [x] Include manual verification steps for critical extension/backend functionality
-- [x] Add debug tips section for common issues
+- [x] Layer API client into fetcher + resource clients
+- [x] Add contract guardrails (surface keys/signature locked)
+- [x] Add retry/abort/conflict/asset mapping tests
+- [x] Update documentation
 
-### Phase B5: ESLint + boundary rules ✅
+### Phase 6: Content Runtime Versioning (C4C-1, C4C-2)
 
-- [x] **B5A**: Add ESLint baseline tooling with minimal noise (warnings-first)
-- [x] **B5B**: Add boundary rules to enforce architecture
-  - Examples: no Chrome APIs in `/core`, no direct DOM manipulation in services
-  - Configure rules to catch violations during development
+- [x] Version `window.LockInContent` runtime
+- [x] Migrate helpers to canonical API
+- [x] Add surface test + ESLint guard
+- [x] Remove compat shim (C4C-2)
+- [x] ESLint guard now errors on legacy identifiers
+- [x] Surface tests enforce canonical-only keys
 
-### Phase B6: Minimal unit test harness (optional but recommended) 🚧
+### Phase 7: Window Globals Contract Tests (C5A, C5B)
 
-- [x] **B6A**: Set up basic unit test infrastructure
-  - [x] Add vitest, @vitest/coverage-v8, jsdom dev dependencies
-  - [x] Add test scripts (test, test:watch, test:coverage)
-  - [x] Configure vitest with jsdom environment
-- [x] Add anchor tests: textUtils.test.ts, moodleAdapter.test.ts
-- [x] Add unit tests for critical paths: adapters, state management, core services
-- [x] Ensure tests can run in CI/CD pipeline
+- [x] Init API globals contract gate (`window.LockInAPI`/`window.LockInAuth`)
+- [x] UI globals contract gate (`window.LockInUI` sidebar factory)
+- [x] Surface tests covering keys + contracts
 
-## Codex Phase
+### Phase 8: Manifest and Init Order Guardrails (C5C, C5D)
 
-- **C1: Import hygiene + alias normalization** - Complete (deep relative imports in extension notes files replaced with path aliases; added @shared/ui tsconfig paths; docs clarified around extension UI output).
-- **C2: Doc scaffolds** - Complete (added ARCHITECTURE, REPO_MAP, STATUS; refreshed AGENTS hierarchy and refactor logs).
-- **C3: Shared Vite config** - Complete (centralized aliases/ascii plugin/IIFE defaults into `build/viteShared.ts`; initApi/contentLibs/UI configs now reuse helpers with identical outputs).
-- **C4B-1: API client contract guardrails** - Complete (added Vitest surface/invariant tests to lock `createApiClient` keys, signature, retry/abort/conflict/no-content behaviors ahead of the fetcher split).
-- **C4B-2: API client layering (fetcher + resources)** - Complete (split `api/client.ts` into `api/fetcher.ts` + resource clients under `api/resources/` while preserving identical public surface and semantics).
-- **C4B-3: API client regression traps + docs** - Complete (added targeted tests for asset mapping and If-Unmodified-Since/409 semantics; updated STATUS with invariants and smoke reminders).
-- **C4C-1: Content runtime contract** - Complete (added versioned `window.LockInContent` runtime with compat shims, migrated helpers to canonical API, added surface test + ESLint guard, ran lint/test/type-check/build/verify-build).
-- **C4C-2: Content runtime compat removal** - Complete (removed legacy `Storage`/`MessageTypes` aliases, tightened ESLint guard to error, added tests for canonical-only `window.LockInContent` surface, updated docs/logs).
-- **C5A: Init API global contract tests** - Complete (added Vitest surface test locking `window.LockInAPI`/`window.LockInAuth` method bags and compat aliases using shared API key fixture).
-- **C5B: UI global contract tests** - Complete (added Vitest surface test for `window.LockInUI` keys + factory contract to guard sidebar bootstrap surface).
-- **C5C: Manifest content_scripts order contract** - Complete (added manifest order guardrail test to lock script list and critical ordering constraints ahead of init sequence).
-- **C5D: Content bootstrap init-order guardrail** - Complete (Vitest suite covering late UI/runtime availability and idempotent bootstrap to prevent race regressions).
-- **C5E: Refactor gate (CI + local check)** - Complete (added GitHub Actions refactor gate running lint → test → type-check → build → verify-build plus backend npm ci/test, and a root `check` script mirroring the gate).
+- [x] Manifest content_scripts order guardrail
+- [x] Locks `content_scripts[0].js` sequence
+- [x] Critical ordering assertions
+- [x] Content bootstrap init-order guardrail
+- [x] Tests late UI/runtime availability
+- [x] Tests idempotent bootstrap
 
----
+### Phase 9: CI Refactor Gate (C5E)
 
-## Documentation Status
+- [x] GitHub Actions workflow: lint → test → type-check → build → verify-build
+- [x] Backend npm ci/test in CI
+- [x] Root `npm run check` mirrors the gate
 
-- **`AGENTS._LIVINGDOC.md`** is deprecated and will be removed after guardrails are in place. All guidance has been migrated to `/AGENTS.md` and `docs/*`.
+## Current Work (Phase B6)
 
-## Definition of Done for Guardrails
+### In Progress
 
-Before considering guardrails complete, verify all items below:
+- [ ] Add critical-path unit tests (adapters, services, hooks)
+- [ ] Keep vitest fast
+- [ ] Reduce `any` lint noise by typing globals/edges
+- [ ] Align with DoD guardrail (lint clean)
 
-- [ ] **Globals typed**: All global variables and window properties have TypeScript type definitions
-- [ ] **tsconfig/vite alias parity**: Path aliases in `tsconfig.json` match those in `vite.config.ts` (and any other build configs)
-- [x] **verify-build exists + passes**: A `verify-build` script exists in `package.json` and runs successfully (enforced via `npm run check` and CI refactor gate)
-- [x] **smoke checklist exists**: A smoke test checklist document exists (`docs/SMOKE_CHECKLIST.md`) with manual verification steps
-- [x] **eslint boundary rules exist**: ESLint rules enforce architectural boundaries (e.g., no Chrome APIs in `/core`, no direct DOM manipulation in services)
-- [x] **minimal unit tests exist** (optional but recommended): At least basic unit tests exist for critical paths (adapters, state management, core services)
+### Next Steps
+
+1. Finish B6 by adding critical-path unit tests
+2. Reduce `any` lint noise (126 warnings currently)
+3. Keep refactor gate green and extend coverage
+
+## Definition of Done
+
+### Build & Tooling
+
+- [x] Build outputs are reproducible and documented
+- [x] Provider bundles are captured in `CODE_OVERVIEW.md`
+- [x] Vite configs are deduplicated and maintainable
+
+### Contract Tests
+
+- [x] `window.LockInContent` surface test
+- [x] `window.LockInAPI`/`window.LockInAuth` surface tests
+- [x] `window.LockInUI` surface test
+- [x] Manifest script order test
+- [x] Init order dependency test
+
+### Code Quality
+
+- [ ] Lint clean (0 warnings) - **Current: 126 warnings (all `any` types)**
+- [x] Type-check clean (0 errors)
+- [x] All tests passing (143 tests)
+- [x] Build succeeds
+- [x] Verify-build passes
+
+### Documentation
+
+- [x] Architecture docs (`docs/ARCHITECTURE.md`)
+- [x] Repository map (`docs/REPO_MAP.md`)
+- [x] Status tracking (`docs/STATUS.md`)
+- [x] Code overview (`CODE_OVERVIEW.md`)
+- [x] Database schema (`DATABASE.MD`)
+- [x] Troubleshooting guide (`docs/TRANSCRIPT_TROUBLESHOOTING.md`)
+
+### CI/CD
+
+- [x] GitHub Actions refactor gate
+- [x] Local `npm run check` command
+- [x] Backend tests in CI
+
+## Lint Warning Reduction Plan
+
+### Quick Fixes (Low Risk, High ROI) - ~30 warnings
+
+- [ ] Error handling types (`api/fetcher.ts`, `core/errors/AppError.ts`)
+- [ ] Response types (`api/resources/*`)
+- [ ] Storage callbacks (`core/storage/storageInterface.ts`)
+- [ ] Test mocks (`core/services/__tests__/notesService.test.ts`)
+
+### Medium Refactors (Needs Care) - ~60 warnings
+
+- [ ] API client generics (`api/fetcher.ts`)
+- [ ] Storage interface types (`core/storage/storageInterface.ts`, `extension/src/chromeStorage.ts`)
+- [ ] Auth callbacks (`api/auth.ts`)
+- [ ] UI hooks (`ui/hooks/*`)
+
+### Danger Zones (Editor/Sidebar/Storage/Runtime) - ~36 warnings
+
+- [ ] Editor types (`ui/extension/notes/NoteEditor.tsx`)
+- [ ] Sidebar types (`ui/extension/LockInSidebar.tsx`)
+- [ ] Storage types (`extension/src/storage.ts`, `extension/src/chromeStorage.ts`)
+- [ ] Runtime types (`extension/src/contentRuntime.ts`)
+- [ ] Init API types (`extension/src/initApi.ts`)
+
+## Future Phases
+
+### Phase B7: Test Coverage Expansion
+
+- [ ] Unit tests for all adapters
+- [ ] Unit tests for all services
+- [ ] Integration tests for critical flows
+- [ ] E2E tests for UI flows
+
+### Phase B8: Performance Optimization
+
+- [ ] Bundle size optimization
+- [ ] Lazy loading for large modules
+- [ ] Code splitting improvements
+
+### Phase B9: Documentation Enhancement
+
+- [ ] API documentation (OpenAPI/Swagger)
+- [ ] Architecture diagrams
+- [ ] Developer onboarding guide
+
+## Notes
+
+- All codex steps (C1-C5E) are documented in `docs/PROMPT_LOG.md`
+- Current status tracked in `docs/STATUS.md`
+- Quality gates documented in `docs/QUALITY_AUDIT_2025-12-16.md`

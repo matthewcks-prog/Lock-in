@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { Star, Check, X, AlertCircle } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { Star, Check, X, AlertCircle } from 'lucide-react';
 
-export type ToastType = "success" | "error" | "info" | "star";
+export type ToastType = 'success' | 'error' | 'info' | 'star';
 
 export interface ToastProps {
   /** Toast message */
@@ -32,7 +32,7 @@ const ICON_MAP = {
  */
 export function Toast({
   message,
-  type = "info",
+  type = 'info',
   duration = 3000,
   onDismiss,
   isVisible,
@@ -62,9 +62,7 @@ export function Toast({
 
   return (
     <div
-      className={`lockin-toast lockin-toast-${type} ${
-        isLeaving ? "is-leaving" : ""
-      }`}
+      className={`lockin-toast lockin-toast-${type} ${isLeaving ? 'is-leaving' : ''}`}
       role="alert"
       aria-live="polite"
     >
@@ -94,7 +92,7 @@ export function useToast() {
     isVisible: boolean;
   } | null>(null);
 
-  const showToast = (message: string, type: ToastType = "info") => {
+  const showToast = (message: string, type: ToastType = 'info') => {
     setToast({ message, type, isVisible: true });
   };
 

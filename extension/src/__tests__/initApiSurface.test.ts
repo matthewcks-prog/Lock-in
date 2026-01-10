@@ -1,18 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { API_CLIENT_EXPECTED_KEYS } from "@api/__tests__/expectedApiClientKeys";
-import type { AuthClient } from "@api/auth";
-import type { ApiClient } from "@api/client";
+import { API_CLIENT_EXPECTED_KEYS } from '@api/__tests__/expectedApiClientKeys';
+import type { AuthClient } from '@api/auth';
+import type { ApiClient } from '@api/client';
 
 const AUTH_CLIENT_EXPECTED_KEYS = [
-  "signUpWithEmail",
-  "signInWithEmail",
-  "signOut",
-  "getSession",
-  "getCurrentUser",
-  "getValidAccessToken",
-  "getAccessToken",
-  "onSessionChanged",
+  'signUpWithEmail',
+  'signInWithEmail',
+  'signOut',
+  'getSession',
+  'getCurrentUser',
+  'getValidAccessToken',
+  'getAccessToken',
+  'onSessionChanged',
 ] as const;
 
 type InitApiTestWindow = typeof window & {
@@ -29,7 +29,7 @@ type InitApiTestWindow = typeof window & {
   authClient?: AuthClient;
 };
 
-describe("initApi global surface", () => {
+describe('initApi global surface', () => {
   let testWindow: InitApiTestWindow;
 
   beforeEach(() => {
@@ -54,7 +54,7 @@ describe("initApi global surface", () => {
       removeListener: vi.fn(),
     };
 
-    vi.stubGlobal("chrome", {
+    vi.stubGlobal('chrome', {
       storage: {
         sync: storageSync,
         local: storageLocal,
@@ -66,10 +66,10 @@ describe("initApi global surface", () => {
     });
 
     testWindow.LOCKIN_CONFIG = {
-      BACKEND_URL: "http://example.test",
-      SUPABASE_URL: "https://supabase.test",
-      SUPABASE_ANON_KEY: "anon-key",
-      SESSION_STORAGE_KEY: "lockinSupabaseSession",
+      BACKEND_URL: 'http://example.test',
+      SUPABASE_URL: 'https://supabase.test',
+      SUPABASE_ANON_KEY: 'anon-key',
+      SESSION_STORAGE_KEY: 'lockinSupabaseSession',
       TOKEN_EXPIRY_BUFFER_MS: 60000,
     };
 
@@ -79,8 +79,8 @@ describe("initApi global surface", () => {
     delete testWindow.authClient;
   });
 
-  it("initializes and exposes stable LockInAPI/LockInAuth globals with compat aliases", async () => {
-    const { initClients } = await import("../initApi");
+  it('initializes and exposes stable LockInAPI/LockInAuth globals with compat aliases', async () => {
+    const { initClients } = await import('../initApi');
     const lockInApi = testWindow.LockInAPI as ApiClient;
     const lockInAuth = testWindow.LockInAuth as AuthClient;
 
@@ -91,10 +91,10 @@ describe("initApi global surface", () => {
     expect(Object.keys(lockInAuth).sort()).toEqual([...AUTH_CLIENT_EXPECTED_KEYS].sort());
 
     API_CLIENT_EXPECTED_KEYS.forEach((key) => {
-      expect(typeof lockInApi[key as keyof ApiClient]).toBe("function");
+      expect(typeof lockInApi[key as keyof ApiClient]).toBe('function');
     });
     AUTH_CLIENT_EXPECTED_KEYS.forEach((key) => {
-      expect(typeof lockInAuth[key as keyof AuthClient]).toBe("function");
+      expect(typeof lockInAuth[key as keyof AuthClient]).toBe('function');
     });
 
     expect(testWindow.apiClient).toBe(lockInApi);

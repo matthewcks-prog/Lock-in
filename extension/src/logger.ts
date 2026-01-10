@@ -1,10 +1,10 @@
 /**
  * Logger for Extension Content Scripts
- * 
+ *
  * Provides structured logging with levels and consistent formatting.
  * Exposes window.LockInLogger for use by content scripts.
- * 
- * This is bundled by vite.config.contentLibs.ts into extension/libs/
+ *
+ * This is bundled by vite.config.contentLibs.ts into extension/dist/libs/
  */
 
 export interface Logger {
@@ -19,16 +19,16 @@ export interface Logger {
  * Can be controlled via window.LOCKIN_CONFIG.DEBUG
  */
 function isDebugEnabled(): boolean {
-  if (typeof window === "undefined") return false;
+  if (typeof window === 'undefined') return false;
   const config = (window as any).LOCKIN_CONFIG;
-  return config?.DEBUG === true || config?.DEBUG === "true";
+  return config?.DEBUG === true || config?.DEBUG === 'true';
 }
 
 /**
  * Create the logger instance
  */
 function createLogger(): Logger {
-  const PREFIX = "[Lock-in]";
+  const PREFIX = '[Lock-in]';
 
   return {
     debug(...args: unknown[]) {
@@ -55,7 +55,7 @@ function createLogger(): Logger {
 const logger = createLogger();
 
 // Expose globally for content scripts
-if (typeof window !== "undefined") {
+if (typeof window !== 'undefined') {
   (window as any).LockInLogger = logger;
 }
 

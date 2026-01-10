@@ -1,7 +1,7 @@
-import { DecoratorNode, LexicalNode, NodeKey } from "lexical";
+import { DecoratorNode, LexicalNode, NodeKey } from 'lexical';
 
 export type SerializedAttachmentNode = {
-  type: "attachment";
+  type: 'attachment';
   version: 1;
   href: string;
   fileName: string;
@@ -35,7 +35,7 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
   __assetId?: string | null;
 
   static getType(): string {
-    return "attachment";
+    return 'attachment';
   }
 
   static clone(node: AttachmentNode): AttachmentNode {
@@ -44,7 +44,7 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
       node.__fileName,
       node.__mimeType,
       node.__assetId,
-      node.getKey()
+      node.getKey(),
     );
   }
 
@@ -58,7 +58,7 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
     fileName: string,
     mimeType?: string | null,
     assetId?: string | null,
-    key?: NodeKey
+    key?: NodeKey,
   ) {
     super(key);
     this.__href = href;
@@ -73,7 +73,7 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
 
   exportJSON(): SerializedAttachmentNode {
     return {
-      type: "attachment",
+      type: 'attachment',
       version: 1,
       href: this.__href,
       fileName: this.__fileName,
@@ -83,8 +83,8 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
   }
 
   createDOM(): HTMLElement {
-    const container = document.createElement("span");
-    container.className = "lockin-note-attachment-wrapper";
+    const container = document.createElement('span');
+    container.className = 'lockin-note-attachment-wrapper';
     return container;
   }
 
@@ -103,7 +103,7 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
         <span className="lockin-note-attachment-chip-icon">
           <PaperclipIcon />
         </span>
-        <span className="lockin-note-attachment-name">{this.__fileName || "Attachment"}</span>
+        <span className="lockin-note-attachment-name">{this.__fileName || 'Attachment'}</span>
         {this.__mimeType ? (
           <span className="lockin-note-attachment-meta">{this.__mimeType}</span>
         ) : null}
@@ -121,8 +121,6 @@ export function $createAttachmentNode(params: {
   return new AttachmentNode(params.href, params.fileName, params.mimeType, params.assetId ?? null);
 }
 
-export function $isAttachmentNode(
-  node: LexicalNode | null | undefined
-): node is AttachmentNode {
+export function $isAttachmentNode(node: LexicalNode | null | undefined): node is AttachmentNode {
   return node instanceof AttachmentNode;
 }
