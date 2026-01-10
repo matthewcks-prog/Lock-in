@@ -16,7 +16,6 @@ import {
     LONG_DURATION_CONFIRM_MS,
     INITIAL_AI_TRANSCRIPTION_STATE,
     type AiTranscriptionState,
-    type AiTranscriptionStatus,
     type AiTranscriptionResponse,
     type AiTranscriptionProgressPayload,
     type PanoptoMediaUrlResponse,
@@ -108,20 +107,16 @@ export function useAiTranscription(
             // For Panopto videos, fetch the media URL first if not available
             let videoWithMediaUrl = video;
             if (video.provider === 'panopto' && !video.mediaUrl) {
-                setState((prev) => ({
-                    ...prev,
+                setState({
+                    status: 'starting',
+                    requestId: null,
+                    jobId: null,
+                    video,
+                    progressMessage:
+                        'Finding downloadable video URL... (checking if podcast download is enabled)',
+                    progressPercent: null,
                     error: null,
-                    aiTranscription: {
-                        status: 'starting' as AiTranscriptionStatus,
-                        requestId: null,
-                        jobId: null,
-                        video,
-                        progressMessage:
-                            'Finding downloadable video URL... (checking if podcast download is enabled)',
-                        progressPercent: null,
-                        error: null,
-                    },
-                }));
+                });
 
                 try {
                     const mediaUrlResponse = await sendToBackground<PanoptoMediaUrlResponse>({
