@@ -1,0 +1,385 @@
+/**
+ * useChat Hook
+ *
+ * Main orchestration hook that combines all chat functionality.
+ * Provides a unified API for the sidebar component.
+ */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import type {
+    ChatMessage,
+    ChatHistoryItem,
+    UseChatOptions,
+    HistoryTitleSource,
+} from '../types';
+import {
+    isValidUUID,
+    buildInitialChatTitle,
+    coerceChatTitle,
+    FALLBACK_CHAT_TITLE,
+    ACTIVE_CHAT_ID_KEY,
+} from '../types';
+import { useChatMessages, chatMessagesKeys } from './useChatMessages';
+import { useChatHistory } from './useChatHistory';
+import { useSendMessage } from './useSendMessage';
+
+interface UseChatReturn {
+    // Current chat state
+    activeChatId: string | null;
+    activeHistoryId: string | null;
+    messages: ChatMessage[];
+    isLoadingMessages: boolean;
+
+    // History
+    recentChats: ChatHistoryItem[];
+    isLoadingHistory: boolean;
+
+    // Actions
+    sendMessage: (message: string, source?: 'selection' | 'followup') => void;
+    startNewChat: (text: string, source?: 'selection' | 'followup') => void;
+    startBlankChat: () => void;
+    selectChat: (item: ChatHistoryItem) => Promise<void>;
+
+    // Status
+    isSending: boolean;
+    error: Error | null;
+    clearError: () => void;
+
+    // History panel
+    isHistoryOpen: boolean;
+    setIsHistoryOpen: React.Dispatch<React.SetStateAction<boolean>>;
+}
+
+/**
+ * Main chat hook that orchestrates all chat functionality.
+ *
+ * Features:
+ * - Manages active chat session state
+ * - Coordinates message sending with history updates
+ * - Handles storage persistence for active chat ID
+ * - Responds to selected text changes
+ */
+export function useChat(options: UseChatOptions): UseChatReturn {
+    const { apiClient, storage, mode, pageUrl, courseCode, selectedText } = options;
+    const queryClient = useQueryClient();
+
+    // Local state
+    const [activeChatId, setActiveChatId] = useState<string | null>(null);
+    const [activeHistoryId, setActiveHistoryId] = useState<string | null>(null);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    // Track previous selection to avoid re-processing
+    const previousSelectionRef = useRef<string | undefined>();
+
+    // Composed hooks
+    const {
+        messages,
+        isLoading: isLoadingMessages,
+        setMessages,
+    } = useChatMessages({
+        apiClient,
+        chatId: activeChatId,
+        mode,
+    });
+
+    const {
+        recentChats,
+        isLoading: isLoadingHistory,
+        upsertHistory,
+    } = useChatHistory({
+        apiClient,
+        limit: 8,
+    });
+
+    const { sendMessage: sendMessageMutation, isSending } = useSendMessage({
+        apiClient,
+        mode,
+        pageUrl,
+        courseCode,
+        onSuccess: (response, resolvedChatId) => {
+            const now = new Date().toISOString();
+            const fallbackTitle = buildInitialChatTitle(response.explanation.slice(0, 50));
+            const serverTitle = response.chatTitle;
+            const resolvedTitle = serverTitle
+                ? coerceChatTitle(serverTitle, fallbackTitle)
+                : fallbackTitle;
+            const titleSource: HistoryTitleSource = serverTitle ? 'server' : 'local';
+
+            setActiveChatId(resolvedChatId);
+            setActiveHistoryId(resolvedChatId);
+
+            upsertHistory(
+                {
+                    id: resolvedChatId,
+                    title: resolvedTitle,
+                    updatedAt: now,
+                    lastMessage: response.explanation,
+                },
+                activeHistoryId !== resolvedChatId ? activeHistoryId : undefined,
+                titleSource,
+            );
+        },
+        onError: (err) => {
+            setError(err);
+        },
+    });
+
+    // Load active chat from storage on mount
+    useEffect(() => {
+        if (!storage) return;
+
+        storage
+            .get(ACTIVE_CHAT_ID_KEY)
+            .then(async (storedChatId) => {
+                if (storedChatId && isValidUUID(storedChatId)) {
+                    setActiveChatId(storedChatId);
+                    setActiveHistoryId(storedChatId);
+                }
+            })
+            .catch(() => {
+                // Ignore storage errors
+            });
+    }, [storage]);
+
+    // Persist active chat ID when it changes
+    useEffect(() => {
+        if (!storage) return;
+        if (activeChatId && isValidUUID(activeChatId)) {
+            storage.set(ACTIVE_CHAT_ID_KEY, activeChatId).catch(() => {
+                /* ignore */
+            });
+        }
+    }, [activeChatId, storage]);
+
+    /**
+     * Start a new chat with initial message.
+     */
+    const startNewChat = useCallback(
+        (text: string, source: 'selection' | 'followup' = 'selection') => {
+            const trimmed = text.trim();
+            if (!trimmed) return;
+
+            const now = new Date().toISOString();
+            const provisionalChatId = `chat-${Date.now()}`;
+
+            const userMessage: ChatMessage = {
+                id: `${provisionalChatId}-user`,
+                role: 'user',
+                content: trimmed,
+                timestamp: now,
+                mode,
+                source,
+            };
+
+            // Reset state for new chat
+            setIsHistoryOpen(false);
+            setError(null);
+            setActiveChatId(null);
+            setActiveHistoryId(provisionalChatId);
+
+            // Set initial messages in cache
+            setMessages(provisionalChatId, [userMessage]);
+
+            // Add to history optimistically
+            upsertHistory(
+                {
+                    id: provisionalChatId,
+                    title: buildInitialChatTitle(trimmed),
+                    updatedAt: now,
+                    lastMessage: trimmed,
+                },
+                undefined,
+                'local',
+            );
+
+            // Temporarily set the provisional ID as active so the mutation can work
+            setActiveChatId(provisionalChatId);
+
+            // Send the message
+            sendMessageMutation({
+                message: trimmed,
+                mode,
+                source,
+                pageUrl,
+                courseCode: courseCode || undefined,
+                chatId: null,
+                currentMessages: [userMessage],
+                activeChatId: provisionalChatId,
+            });
+        },
+        [mode, pageUrl, courseCode, setMessages, upsertHistory, sendMessageMutation],
+    );
+
+    /**
+     * Send a message to the current chat (follow-up).
+     */
+    const sendMessage = useCallback(
+        (text: string, source: 'selection' | 'followup' = 'followup') => {
+            const trimmed = text.trim();
+            if (!trimmed) return;
+
+            // If no active chat, start a new one
+            if (messages.length === 0) {
+                startNewChat(trimmed, source);
+                return;
+            }
+
+            const now = new Date().toISOString();
+            const provisionalChatId = isValidUUID(activeChatId)
+                ? (activeChatId as string)
+                : activeHistoryId || `chat-${Date.now()}`;
+
+            const userMessage: ChatMessage = {
+                id: `user-${Date.now()}`,
+                role: 'user',
+                content: trimmed,
+                timestamp: now,
+                mode,
+                source,
+            };
+
+            setIsHistoryOpen(false);
+            setError(null);
+            setActiveHistoryId(provisionalChatId);
+
+            // Add user message to cache
+            const currentMessages = queryClient.getQueryData<ChatMessage[]>(
+                chatMessagesKeys.byId(activeChatId || provisionalChatId),
+            ) || messages;
+            const nextMessages = [...currentMessages, userMessage];
+
+            if (activeChatId) {
+                queryClient.setQueryData(chatMessagesKeys.byId(activeChatId), nextMessages);
+            }
+
+            // Update history
+            upsertHistory(
+                {
+                    id: provisionalChatId,
+                    title: buildInitialChatTitle(trimmed),
+                    updatedAt: now,
+                    lastMessage: trimmed,
+                },
+                undefined,
+                'local',
+            );
+
+            // Send the message
+            sendMessageMutation({
+                message: trimmed,
+                mode,
+                source,
+                pageUrl,
+                courseCode: courseCode || undefined,
+                chatId: activeChatId,
+                currentMessages: nextMessages,
+                activeChatId: activeChatId || provisionalChatId,
+            });
+        },
+        [
+            activeChatId,
+            activeHistoryId,
+            messages,
+            mode,
+            pageUrl,
+            courseCode,
+            queryClient,
+            startNewChat,
+            upsertHistory,
+            sendMessageMutation,
+        ],
+    );
+
+    /**
+     * Start a blank chat (no initial message).
+     */
+    const startBlankChat = useCallback(() => {
+        const now = new Date().toISOString();
+        const provisionalChatId = `chat-${Date.now()}`;
+
+        setIsHistoryOpen(false);
+        setError(null);
+        setActiveChatId(null);
+        setActiveHistoryId(provisionalChatId);
+
+        // Clear messages cache for new chat
+        setMessages(provisionalChatId, []);
+
+        // Add to history
+        upsertHistory(
+            {
+                id: provisionalChatId,
+                title: FALLBACK_CHAT_TITLE,
+                updatedAt: now,
+                lastMessage: '',
+            },
+            undefined,
+            'local',
+        );
+    }, [setMessages, upsertHistory]);
+
+    /**
+     * Select and load an existing chat from history.
+     */
+    const selectChat = useCallback(
+        async (item: ChatHistoryItem) => {
+            if (!apiClient?.getChatMessages) return;
+
+            setError(null);
+            setActiveHistoryId(item.id);
+            setActiveChatId(item.id);
+
+            try {
+                const response = await apiClient.getChatMessages(item.id);
+                if (Array.isArray(response)) {
+                    const normalized: ChatMessage[] = response.map((msg: any) => ({
+                        id: msg.id || `msg-${Math.random().toString(16).slice(2)}`,
+                        role: msg.role === 'assistant' ? 'assistant' : 'user',
+                        content: msg.content || msg.output_text || msg.input_text || 'Message',
+                        timestamp: msg.created_at || new Date().toISOString(),
+                        mode: msg.mode || mode,
+                    }));
+                    setMessages(item.id, normalized);
+                }
+            } catch (err: any) {
+                setError(err);
+            }
+        },
+        [apiClient, mode, setMessages],
+    );
+
+    // Handle selected text changes
+    useEffect(() => {
+        if (!selectedText || selectedText.trim().length === 0) return;
+        if (previousSelectionRef.current === selectedText) return;
+        previousSelectionRef.current = selectedText;
+
+        if (messages.length === 0) {
+            startNewChat(selectedText, 'selection');
+        } else {
+            sendMessage(selectedText, 'selection');
+        }
+    }, [selectedText, messages.length, startNewChat, sendMessage]);
+
+    const clearError = useCallback(() => setError(null), []);
+
+    return {
+        activeChatId,
+        activeHistoryId,
+        messages,
+        isLoadingMessages,
+        recentChats,
+        isLoadingHistory,
+        sendMessage,
+        startNewChat,
+        startBlankChat,
+        selectChat,
+        isSending,
+        error,
+        clearError,
+        isHistoryOpen,
+        setIsHistoryOpen,
+    };
+}

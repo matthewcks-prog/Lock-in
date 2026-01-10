@@ -10,7 +10,7 @@
  * - Support for known error types
  */
 
-const isDev = process.env.NODE_ENV !== "production";
+const isDev = process.env.NODE_ENV !== 'production';
 
 /**
  * Standard error response format
@@ -46,14 +46,9 @@ const ERROR_STATUS_MAP = {
  * Custom application error class
  */
 class AppError extends Error {
-  constructor(
-    message,
-    code = "INTERNAL_ERROR",
-    statusCode = null,
-    details = null
-  ) {
+  constructor(message, code = 'INTERNAL_ERROR', statusCode = null, details = null) {
     super(message);
-    this.name = "AppError";
+    this.name = 'AppError';
     this.code = code;
     this.statusCode = statusCode || ERROR_STATUS_MAP[code] || 500;
     this.details = details;
@@ -66,11 +61,9 @@ class AppError extends Error {
  * Not found error
  */
 class NotFoundError extends AppError {
-  constructor(resource = "Resource", id = null) {
-    const message = id
-      ? `${resource} with ID ${id} not found`
-      : `${resource} not found`;
-    super(message, "NOT_FOUND", 404);
+  constructor(resource = 'Resource', id = null) {
+    const message = id ? `${resource} with ID ${id} not found` : `${resource} not found`;
+    super(message, 'NOT_FOUND', 404);
   }
 }
 
@@ -79,7 +72,7 @@ class NotFoundError extends AppError {
  */
 class ValidationError extends AppError {
   constructor(message, field = null) {
-    super(message, "VALIDATION_ERROR", 400, field ? { field } : null);
+    super(message, 'VALIDATION_ERROR', 400, field ? { field } : null);
   }
 }
 
@@ -87,11 +80,8 @@ class ValidationError extends AppError {
  * Conflict error (for optimistic locking)
  */
 class ConflictError extends AppError {
-  constructor(
-    message = "Resource was modified by another session",
-    updatedAt = null
-  ) {
-    super(message, "CONFLICT", 409, updatedAt ? { updatedAt } : null);
+  constructor(message = 'Resource was modified by another session', updatedAt = null) {
+    super(message, 'CONFLICT', 409, updatedAt ? { updatedAt } : null);
     this.updatedAt = updatedAt;
   }
 }
@@ -100,13 +90,8 @@ class ConflictError extends AppError {
  * Rate limit error
  */
 class RateLimitError extends AppError {
-  constructor(message = "Too many requests", retryAfterSeconds = null) {
-    super(
-      message,
-      "RATE_LIMIT",
-      429,
-      retryAfterSeconds ? { retryAfterSeconds } : null
-    );
+  constructor(message = 'Too many requests', retryAfterSeconds = null) {
+    super(message, 'RATE_LIMIT', 429, retryAfterSeconds ? { retryAfterSeconds } : null);
     this.retryAfterSeconds = retryAfterSeconds;
   }
 }
@@ -118,8 +103,8 @@ function formatErrorResponse(err, includeStack = false) {
   const response = {
     success: false,
     error: {
-      code: err.code || "INTERNAL_ERROR",
-      message: err.message || "An unexpected error occurred",
+      code: err.code || 'INTERNAL_ERROR',
+      message: err.message || 'An unexpected error occurred',
     },
   };
 
@@ -144,8 +129,8 @@ function logError(err, req) {
     timestamp: new Date().toISOString(),
     method: req.method,
     path: req.path,
-    userId: req.user?.id || "anonymous",
-    errorCode: err.code || "UNKNOWN",
+    userId: req.user?.id || 'anonymous',
+    errorCode: err.code || 'UNKNOWN',
     errorMessage: err.message,
     statusCode: err.statusCode || 500,
   };
@@ -154,13 +139,13 @@ function logError(err, req) {
   // Log programming errors at error level
   if (err.isOperational) {
     if (err.statusCode >= 500) {
-      console.error("[API Error]", JSON.stringify(logData));
+      console.error('[API Error]', JSON.stringify(logData));
     } else {
-      console.warn("[API Warning]", JSON.stringify(logData));
+      console.warn('[API Warning]', JSON.stringify(logData));
     }
   } else {
     // Programming error - log with stack trace
-    console.error("[API Critical Error]", JSON.stringify(logData), err.stack);
+    console.error('[API Critical Error]', JSON.stringify(logData), err.stack);
   }
 }
 
@@ -176,23 +161,26 @@ function errorHandler(err, req, res, next) {
   let statusCode = err.statusCode || err.status || 500;
 
   // Handle specific error types
-  if (err.name === "ValidationError" || err.code === "VALIDATION_ERROR") {
+  if (err.name === 'ValidationError' || err.code === 'VALIDATION_ERROR') {
     statusCode = 400;
-  } else if (err.name === "UnauthorizedError" || err.code === "AUTH_REQUIRED") {
+  } else if (err.name === 'UnauthorizedError' || err.code === 'AUTH_REQUIRED') {
     statusCode = 401;
-  } else if (err.code === "PGRST116") {
+  } else if (err.code === 'PGRST116') {
     // Supabase "no rows found" error
     statusCode = 404;
-    err.code = "NOT_FOUND";
-    err.message = err.message || "Resource not found";
+    err.code = 'NOT_FOUND';
+    err.message = err.message || 'Resource not found';
   }
 
   // Don't expose internal error details in production
   const errorResponse = formatErrorResponse(err, isDev);
 
-  // Set appropriate headers
-  if (err.code === "RATE_LIMIT" && err.retryAfterSeconds) {
-    res.set("Retry-After", String(err.retryAfterSeconds));
+  // Set appropriate headers for rate limit errors
+  // Support both RATE_LIMIT and TRANSCRIPT_RATE_LIMIT error codes
+  const isRateLimitError = err.code === 'RATE_LIMIT' || err.code === 'TRANSCRIPT_RATE_LIMIT';
+  const retryAfter = err.retryAfterSeconds || err.details?.retryAfterSeconds;
+  if (isRateLimitError && retryAfter) {
+    res.set('Retry-After', String(retryAfter));
   }
 
   res.status(statusCode).json(errorResponse);
@@ -205,7 +193,7 @@ function notFoundHandler(req, res) {
   res.status(404).json({
     success: false,
     error: {
-      code: "NOT_FOUND",
+      code: 'NOT_FOUND',
       message: `Endpoint ${req.method} ${req.path} not found`,
     },
   });

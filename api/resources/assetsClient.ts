@@ -1,5 +1,5 @@
-import type { NoteAsset } from "../../core/domain/types";
-import type { ApiRequest } from "../fetcher";
+import type { NoteAsset } from '../../core/domain/types';
+import type { ApiRequest } from '../fetcher';
 
 export interface UploadNoteAssetParams {
   noteId: string;
@@ -32,17 +32,17 @@ export function createAssetsClient(apiRequest: ApiRequest) {
   async function uploadNoteAsset(params: UploadNoteAssetParams): Promise<NoteAsset> {
     const { noteId, file } = params;
     if (!noteId) {
-      throw new Error("noteId is required to upload an asset");
+      throw new Error('noteId is required to upload an asset');
     }
     if (!file) {
-      throw new Error("file is required to upload an asset");
+      throw new Error('file is required to upload an asset');
     }
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append('file', file);
 
     const raw = await apiRequest<any>(`/api/notes/${noteId}/assets`, {
-      method: "POST",
+      method: 'POST',
       body: formData,
     });
 
@@ -52,11 +52,11 @@ export function createAssetsClient(apiRequest: ApiRequest) {
   async function listNoteAssets(params: ListNoteAssetsParams): Promise<NoteAsset[]> {
     const { noteId } = params;
     if (!noteId) {
-      throw new Error("noteId is required to list assets");
+      throw new Error('noteId is required to list assets');
     }
 
     const raw = await apiRequest<any[]>(`/api/notes/${noteId}/assets`, {
-      method: "GET",
+      method: 'GET',
     });
 
     return raw.map(mapNoteAsset);
@@ -65,11 +65,11 @@ export function createAssetsClient(apiRequest: ApiRequest) {
   async function deleteNoteAsset(params: DeleteNoteAssetParams): Promise<void> {
     const { assetId } = params;
     if (!assetId) {
-      throw new Error("assetId is required to delete an asset");
+      throw new Error('assetId is required to delete an asset');
     }
 
     return apiRequest<void>(`/api/note-assets/${assetId}`, {
-      method: "DELETE",
+      method: 'DELETE',
     });
   }
 

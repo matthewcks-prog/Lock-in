@@ -1,6 +1,6 @@
 /**
  * Core Domain Types for Lock-in
- * 
+ *
  * Shared types and interfaces used across extension and web app.
  * No Chrome dependencies - pure TypeScript/JavaScript.
  */
@@ -8,22 +8,22 @@
 /**
  * Study mode types
  */
-export type StudyMode = "explain" | "general";
+export type StudyMode = 'explain' | 'general';
 
 /**
  * Difficulty level
  */
-export type DifficultyLevel = "highschool" | "university";
+export type DifficultyLevel = 'highschool' | 'university';
 
 /**
  * Theme preference
  */
-export type Theme = "light" | "dark" | "system";
+export type Theme = 'light' | 'dark' | 'system';
 
 /**
  * Chat message role
  */
-export type ChatRole = "user" | "assistant" | "system";
+export type ChatRole = 'user' | 'assistant' | 'system';
 
 /**
  * Chat message
@@ -73,7 +73,7 @@ export interface StudyResponse {
     description: string;
   }>;
   tags?: string[];
-  difficulty?: "easy" | "medium" | "hard";
+  difficulty?: 'easy' | 'medium' | 'hard';
 }
 
 /**
@@ -87,6 +87,7 @@ export interface ApiResponse<T = StudyResponse> {
     code?: string;
   };
   chatId?: string;
+  chatTitle?: string;
 }
 
 /**
@@ -124,7 +125,7 @@ export interface UserPreferences {
   theme: Theme;
   accentColor: string;
   defaultMode: StudyMode;
-  modePreference: "fixed" | "lastUsed";
+  modePreference: 'fixed' | 'lastUsed';
 }
 
 /**
@@ -133,7 +134,7 @@ export interface UserPreferences {
 export interface AuthUser {
   id: string;
   email?: string;
-  [key: string]: any; // Supabase user object may have additional fields
+  [key: string]: unknown; // Supabase user object may have additional fields
 }
 
 /**
@@ -219,6 +220,43 @@ export interface AIRequestRecord {
 }
 
 /**
+ * Feedback type options
+ */
+export type FeedbackType = 'bug' | 'feature' | 'question' | 'other';
+
+/**
+ * Feedback status (admin use)
+ */
+export type FeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+/**
+ * Context auto-captured with feedback
+ */
+export interface FeedbackContext {
+  url?: string;
+  courseCode?: string;
+  extensionVersion?: string;
+  browser?: string;
+  page?: string;
+}
+
+/**
+ * Feedback database record
+ */
+export interface FeedbackRecord {
+  id: string;
+  user_id: string;
+  type: FeedbackType;
+  message: string;
+  context: FeedbackContext | null;
+  screenshot_url: string | null;
+  status: FeedbackStatus;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Note-related domain exports live in core/domain/Note.ts
  * and are re-exported here for convenience.
  */
@@ -230,4 +268,4 @@ export type {
   NoteContentVersion,
   NoteStatus,
   NoteType,
-} from "./Note.ts";
+} from './Note.ts';

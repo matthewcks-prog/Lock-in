@@ -8,9 +8,19 @@
  * - Bind user interactions (selection + Escape close)
  */
 
+// ============================================================================
+// Sentry Initialization (must be first)
+// ============================================================================
+
+// Initialize Sentry for error tracking (content script surface)
+// LockInSentry is loaded via dist/libs/sentry.js before this script (see manifest.json)
+if (typeof window !== 'undefined' && window.LockInSentry) {
+  window.LockInSentry.initSentry('content');
+}
+
+
 const Runtime = window.LockInContent || {};
-const Logger =
-  Runtime.logger ||
+const Logger = Runtime.logger ||
   window.LockInLogger || {
     debug: () => {},
     info: () => {},
@@ -28,7 +38,7 @@ let hasBootstrapped = false;
 async function waitForUIBundle(attempt = 0) {
   if (window.LockInUI && window.LockInUI.createLockInSidebar) return true;
   if (attempt > 50) {
-    Logger.error("LockInUI not available after waiting");
+    Logger.error('LockInUI not available after waiting');
     return false;
   }
   await new Promise((resolve) => setTimeout(resolve, 100));
@@ -37,7 +47,7 @@ async function waitForUIBundle(attempt = 0) {
 
 async function bootstrap() {
   if (hasBootstrapped) {
-    Logger.debug("Skipping bootstrap: already initialized");
+    Logger.debug('Skipping bootstrap: already initialized');
     return;
   }
 
@@ -45,7 +55,7 @@ async function bootstrap() {
     return bootstrapPromise;
   }
 
-  Logger.debug("Starting content script bootstrap");
+  Logger.debug('Starting content script bootstrap');
 
   const {
     resolveAdapterContext,
@@ -62,7 +72,7 @@ async function bootstrap() {
     !createSessionManager ||
     !createInteractionController
   ) {
-    Logger.error("Content helpers missing on window.LockInContent");
+    Logger.error('Content helpers missing on window.LockInContent');
     bootstrapPromise = null;
     return;
   }
@@ -72,15 +82,15 @@ async function bootstrap() {
 
     const apiClient = window.LockInAPI;
     if (!apiClient) {
-      Logger.error("API client not available");
+      Logger.error('API client not available');
       return;
     }
 
     // Validate API client has required methods
-    if (typeof apiClient.toggleNoteStar !== "function") {
+    if (typeof apiClient.toggleNoteStar !== 'function') {
       Logger.error(
-        "API client is missing toggleNoteStar method. Available methods:",
-        Object.keys(apiClient)
+        'API client is missing toggleNoteStar method. Available methods:',
+        Object.keys(apiClient),
       );
       // Continue anyway - the error will be caught by the notes service
     }
@@ -146,6 +156,10 @@ async function bootstrap() {
     });
 
     interactionController.bind();
+
+    // Set up message handler for media fetch requests (for AI transcription)
+    setupMediaFetchHandler();
+
     hasBootstrapped = true;
   })();
 
@@ -156,16 +170,69 @@ async function bootstrap() {
   }
 }
 
+/**
+ * Set up handler for FETCH_MEDIA_FOR_TRANSCRIPTION requests from background script.
+ * This enables the content script to fetch authenticated media that may be blocked
+ * by CORS when fetched from the background script.
+ */
+function setupMediaFetchHandler() {
+  if (!Messaging || typeof Messaging.onMessage !== 'function') {
+    Logger.warn('[Lock-in] Messaging not available for media fetch handler');
+    return;
+  }
+
+  const MediaFetcher = window.LockInMediaFetcher;
+  if (!MediaFetcher) {
+    Logger.warn('[Lock-in] MediaFetcher not available');
+    return;
+  }
+
+  Messaging.onMessage(async (message, sender) => {
+    if (!message || typeof message !== 'object') return;
+
+    if (message.type === 'FETCH_MEDIA_FOR_TRANSCRIPTION') {
+      Logger.debug('[Lock-in] Received FETCH_MEDIA_FOR_TRANSCRIPTION request');
+      const { mediaUrl, jobId, requestId } = message.payload || {};
+
+      if (!mediaUrl || !jobId || !requestId) {
+        return { success: false, error: 'Missing required parameters' };
+      }
+
+      try {
+        const result = await MediaFetcher.handleMediaFetchRequest(
+          { mediaUrl, jobId, requestId },
+          async (chunkMessage) => {
+            // Send each chunk to the background script
+            await Messaging.sendToBackground(chunkMessage);
+          },
+        );
+        return result;
+      } catch (error) {
+        Logger.error('[Lock-in] Media fetch error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    }
+
+    // Return undefined for unhandled messages
+    return undefined;
+  });
+
+  Logger.debug('[Lock-in] Media fetch handler registered');
+}
+
 function safeInit() {
-  if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
+  if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id) {
     bootstrap();
   } else {
-    Logger.warn("Chrome extension API not available");
+    Logger.warn('Chrome extension API not available');
   }
 }
 
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", safeInit);
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', safeInit);
 } else {
   safeInit();
 }

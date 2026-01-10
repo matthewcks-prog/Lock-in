@@ -45,13 +45,13 @@ Run this checklist:
 
 ### Expected Results
 
-| Step          | Expected                                                                        |
-| ------------- | ------------------------------------------------------------------------------- |
-| type-check    | Exits with code 0, no type errors                                               |
-| build         | Exits with code 0, files generated in `extension/libs/`                         |
-| verify-build  | Exits with code 0, all expected files present                                   |
-| Load unpacked | Extension loads without errors, icon visible in toolbar                         |
-| New tab       | No console errors related to Lock-in; content scripts loaded on supported sites |
+| Step          | Expected                                                                              |
+| ------------- | ------------------------------------------------------------------------------------- |
+| type-check    | Exits with code 0, no type errors                                                     |
+| build         | Exits with code 0, files generated in `extension/dist/libs/` and `extension/dist/ui/` |
+| verify-build  | Exits with code 0, all expected files present                                         |
+| Load unpacked | Extension loads without errors, icon visible in toolbar                               |
+| New tab       | No console errors related to Lock-in; content scripts loaded on supported sites       |
 
 ### How to Verify Console
 
@@ -191,7 +191,7 @@ Run this checklist:
 | Content script not loading          | Manifest `content_scripts` misconfigured, URL pattern mismatch    | Check `manifest.json` matches patterns                |
 | `undefined` globals                 | Build didn't run, or `contentLibs.js` not injected before sidebar | Run `npm run build`, check injection order            |
 | API calls failing                   | Backend URL wrong, CORS issue, auth token missing                 | Check `config.js`, backend logs, network tab          |
-| Sidebar blank                       | React/Preact not bundled, missing entry point                     | Check `extension/libs/` has built files               |
+| Sidebar blank                       | React/Preact not bundled, missing entry point                     | Check `extension/dist/ui/` has built files            |
 | "Cannot read property of undefined" | Missing dependency injection, adapter not registered              | Check adapter registration in `integrations/index.ts` |
 | State not persisting                | `chrome.storage` permissions missing, storage key mismatch        | Check `manifest.json` permissions, storage keys       |
 
@@ -202,7 +202,7 @@ Run this checklist:
 console.log(window.__LOCKIN_LOADED__);
 
 // In background console - check service worker active
-console.log("Background active");
+console.log('Background active');
 
 // Check storage state
 chrome.storage.local.get(null, (data) => console.log(data));

@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type BootstrapTestWindow = Omit<
   typeof window,
-  "LockInContent" | "LockInUI" | "LockInAPI" | "LockInLogger"
+  'LockInContent' | 'LockInUI' | 'LockInAPI' | 'LockInLogger'
 > & {
   LockInContent?: unknown;
   LockInUI?: unknown;
@@ -10,10 +10,10 @@ type BootstrapTestWindow = Omit<
   LockInLogger?: unknown;
 };
 
-const originalReadyState = Object.getOwnPropertyDescriptor(document, "readyState");
+const originalReadyState = Object.getOwnPropertyDescriptor(document, 'readyState');
 
 function setReadyState(value: DocumentReadyState) {
-  Object.defineProperty(document, "readyState", {
+  Object.defineProperty(document, 'readyState', {
     configurable: true,
     get: () => value,
   });
@@ -21,7 +21,7 @@ function setReadyState(value: DocumentReadyState) {
 
 function resetReadyState() {
   if (originalReadyState) {
-    Object.defineProperty(document, "readyState", originalReadyState);
+    Object.defineProperty(document, 'readyState', originalReadyState);
   } else {
     const mutableDocument = document as unknown as { readyState?: DocumentReadyState };
     delete mutableDocument.readyState;
@@ -41,8 +41,8 @@ function setupChromeRuntime() {
     remove: vi.fn((_keys: string | string[], cb: () => void = () => {}) => cb()),
   };
 
-  vi.stubGlobal("chrome", {
-    runtime: { id: "test-runtime-id", lastError: null, sendMessage: vi.fn() },
+  vi.stubGlobal('chrome', {
+    runtime: { id: 'test-runtime-id', lastError: null, sendMessage: vi.fn() },
     storage: {
       sync: storageSync,
       local: storageLocal,
@@ -62,9 +62,9 @@ function createContentHelpers() {
 
   const state = {
     isSidebarOpen: false,
-    currentMode: "explain",
-    cachedSelection: "",
-    currentActiveTab: "chat",
+    currentMode: 'explain',
+    cachedSelection: '',
+    currentActiveTab: 'chat',
   };
 
   const subscribers = new Set<(snapshot: typeof state) => void>();
@@ -116,9 +116,9 @@ function createContentHelpers() {
   const lockInContent = {
     logger,
     resolveAdapterContext: vi.fn(() => ({
-      adapter: { id: "adapter" },
+      adapter: { id: 'adapter' },
       pageContext: {
-        courseContext: { courseCode: "ABC123", sourceUrl: "https://example.test" },
+        courseContext: { courseCode: 'ABC123', sourceUrl: 'https://example.test' },
       },
     })),
     createStateStore: vi.fn(() => stateStore),
@@ -147,10 +147,10 @@ function createContentHelpers() {
 
 async function loadContentScript() {
   // @ts-expect-error - content script bundle is JS without types
-  return import("../../contentScript-react.js");
+  return import('../../contentScript-react.js');
 }
 
-describe("contentScript-react bootstrap init order", () => {
+describe('contentScript-react bootstrap init order', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
@@ -162,19 +162,13 @@ describe("contentScript-react bootstrap init order", () => {
     vi.useRealTimers();
   });
 
-  it("waits for a late LockInUI and still bootstraps without throwing", async () => {
+  it('waits for a late LockInUI and still bootstraps without throwing', async () => {
     const testWindow = window as BootstrapTestWindow;
-    const {
-      logger,
-      lockInContent,
-      lockInUIFactory,
-      apiClient,
-      stateStore,
-      interactionController,
-    } = createContentHelpers();
+    const { logger, lockInContent, lockInUIFactory, apiClient, stateStore, interactionController } =
+      createContentHelpers();
 
     setupChromeRuntime();
-    setReadyState("complete");
+    setReadyState('complete');
 
     testWindow.LockInContent = lockInContent;
     testWindow.LockInAPI = apiClient;
@@ -187,9 +181,7 @@ describe("contentScript-react bootstrap init order", () => {
     await vi.runAllTimersAsync();
     await Promise.resolve();
 
-    expect(logger.error).not.toHaveBeenCalledWith(
-      "LockInUI not available after waiting"
-    );
+    expect(logger.error).not.toHaveBeenCalledWith('LockInUI not available after waiting');
     expect(lockInContent.resolveAdapterContext).toHaveBeenCalledTimes(1);
     expect(lockInContent.createSidebarHost).toHaveBeenCalledTimes(1);
     expect(lockInContent.createStateStore).toHaveBeenCalledTimes(1);
@@ -198,18 +190,13 @@ describe("contentScript-react bootstrap init order", () => {
     expect(interactionController.bind).toHaveBeenCalledTimes(1);
   });
 
-  it("guards missing content runtime and succeeds once helpers appear", async () => {
+  it('guards missing content runtime and succeeds once helpers appear', async () => {
     const testWindow = window as BootstrapTestWindow;
-    const {
-      logger,
-      lockInContent,
-      lockInUIFactory,
-      apiClient,
-      interactionController,
-    } = createContentHelpers();
+    const { logger, lockInContent, lockInUIFactory, apiClient, interactionController } =
+      createContentHelpers();
 
     setupChromeRuntime();
-    setReadyState("complete");
+    setReadyState('complete');
 
     testWindow.LockInLogger = logger;
     delete testWindow.LockInContent;
@@ -218,9 +205,7 @@ describe("contentScript-react bootstrap init order", () => {
     await loadContentScript();
     await vi.runAllTimersAsync();
 
-    expect(logger.error).toHaveBeenCalledWith(
-      "Content helpers missing on window.LockInContent"
-    );
+    expect(logger.error).toHaveBeenCalledWith('Content helpers missing on window.LockInContent');
 
     testWindow.LockInContent = lockInContent;
     testWindow.LockInAPI = apiClient;
@@ -236,18 +221,13 @@ describe("contentScript-react bootstrap init order", () => {
     expect(interactionController.bind).toHaveBeenCalledTimes(1);
   });
 
-  it("is idempotent if bootstrap is triggered twice", async () => {
+  it('is idempotent if bootstrap is triggered twice', async () => {
     const testWindow = window as BootstrapTestWindow;
-    const {
-      lockInContent,
-      lockInUIFactory,
-      apiClient,
-      stateStore,
-      interactionController,
-    } = createContentHelpers();
+    const { lockInContent, lockInUIFactory, apiClient, stateStore, interactionController } =
+      createContentHelpers();
 
     setupChromeRuntime();
-    setReadyState("loading");
+    setReadyState('loading');
 
     testWindow.LockInContent = lockInContent;
     testWindow.LockInAPI = apiClient;
@@ -255,13 +235,13 @@ describe("contentScript-react bootstrap init order", () => {
 
     const domReadyHandlers: Array<() => void> = [];
     const originalAddEventListener = document.addEventListener;
-    vi.spyOn(document, "addEventListener").mockImplementation(function (
+    vi.spyOn(document, 'addEventListener').mockImplementation(function (
       this: Document,
       type: string,
       listener: EventListenerOrEventListenerObject,
-      options?: boolean | AddEventListenerOptions
+      options?: boolean | AddEventListenerOptions,
     ) {
-      if (type === "DOMContentLoaded" && typeof listener === "function") {
+      if (type === 'DOMContentLoaded' && typeof listener === 'function') {
         domReadyHandlers.push(listener as () => void);
       }
       return originalAddEventListener.call(this, type, listener, options);

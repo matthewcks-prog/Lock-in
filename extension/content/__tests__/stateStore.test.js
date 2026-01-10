@@ -1,40 +1,39 @@
 /**
  * Unit tests for stateStore
- * 
+ *
  * Tests state management, persistence, and subscription functionality.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the stateStore module by creating a testable version
 // Since stateStore is an IIFE, we'll test the factory function directly
 function createStateStore({ Storage, Logger }) {
   const storage = Storage;
-  const DEFAULT_MODE = "explain";
+  const DEFAULT_MODE = 'explain';
   const DEFAULT_PREFS = {
-    preferredLanguage: "en",
-    difficultyLevel: "highschool",
+    preferredLanguage: 'en',
+    difficultyLevel: 'highschool',
   };
 
   const log = Logger || { warn: console.warn };
   const keys = (storage && storage.STORAGE_KEYS) || {};
-  const SIDEBAR_OPEN_KEY = keys.SIDEBAR_IS_OPEN || "lockin_sidebar_isOpen";
-  const SIDEBAR_ACTIVE_TAB_KEY =
-    keys.SIDEBAR_ACTIVE_TAB || "lockin_sidebar_activeTab";
-  const CHAT_ID_STORAGE_KEY = keys.CURRENT_CHAT_ID || "lockinCurrentChatId";
-  const MODE_KEY = keys.ACTIVE_MODE || "lockinActiveMode";
-  const MODE_PREF_KEY = keys.MODE_PREFERENCE || "modePreference";
-  const DEFAULT_MODE_KEY = keys.DEFAULT_MODE || "defaultMode";
-  const LAST_USED_MODE_KEY = keys.LAST_USED_MODE || "lastUsedMode";
-  const HIGHLIGHTING_KEY = keys.HIGHLIGHTING_ENABLED || "highlightingEnabled";
+  const SIDEBAR_OPEN_KEY = keys.SIDEBAR_IS_OPEN || 'lockin_sidebar_isOpen';
+  const SIDEBAR_ACTIVE_TAB_KEY = keys.SIDEBAR_ACTIVE_TAB || 'lockin_sidebar_activeTab';
+  const CHAT_ID_STORAGE_KEY = keys.CURRENT_CHAT_ID || 'lockinCurrentChatId';
+  const MODE_KEY = keys.ACTIVE_MODE || 'lockinActiveMode';
+  const MODE_PREF_KEY = keys.MODE_PREFERENCE || 'modePreference';
+  const DEFAULT_MODE_KEY = keys.DEFAULT_MODE || 'defaultMode';
+  const LAST_USED_MODE_KEY = keys.LAST_USED_MODE || 'lastUsedMode';
+  const HIGHLIGHTING_KEY = keys.HIGHLIGHTING_ENABLED || 'highlightingEnabled';
 
   const state = {
     highlightingEnabled: true,
     currentMode: DEFAULT_MODE,
     isSidebarOpen: false,
-    cachedSelection: "",
+    cachedSelection: '',
     currentChatId: null,
-    currentActiveTab: "chat",
+    currentActiveTab: 'chat',
     sessionPreferences: { ...DEFAULT_PREFS },
   };
 
@@ -64,14 +63,14 @@ function createStateStore({ Storage, Logger }) {
           SIDEBAR_ACTIVE_TAB_KEY,
         ]);
         state.highlightingEnabled = data[HIGHLIGHTING_KEY] !== false;
-        if (typeof data[SIDEBAR_OPEN_KEY] === "boolean") {
+        if (typeof data[SIDEBAR_OPEN_KEY] === 'boolean') {
           state.isSidebarOpen = data[SIDEBAR_OPEN_KEY];
         }
-        if (typeof data[SIDEBAR_ACTIVE_TAB_KEY] === "string") {
+        if (typeof data[SIDEBAR_ACTIVE_TAB_KEY] === 'string') {
           state.currentActiveTab = data[SIDEBAR_ACTIVE_TAB_KEY];
         }
       } catch (error) {
-        log.warn("Failed to load toggle state:", error);
+        log.warn('Failed to load toggle state:', error);
       }
 
       await loadMode();
@@ -90,7 +89,7 @@ function createStateStore({ Storage, Logger }) {
         state.currentMode = data[MODE_KEY];
       }
     } catch (error) {
-      log.warn("Failed to load mode:", error);
+      log.warn('Failed to load mode:', error);
     }
     return state.currentMode;
   }
@@ -113,15 +112,15 @@ function createStateStore({ Storage, Logger }) {
       if (data[MODE_KEY]) {
         state.currentMode = data[MODE_KEY];
       } else {
-        const modePref = data[MODE_PREF_KEY] || "fixed";
-        if (modePref === "lastUsed" && data[LAST_USED_MODE_KEY]) {
+        const modePref = data[MODE_PREF_KEY] || 'fixed';
+        if (modePref === 'lastUsed' && data[LAST_USED_MODE_KEY]) {
           state.currentMode = data[LAST_USED_MODE_KEY];
         } else {
           state.currentMode = data[DEFAULT_MODE_KEY] || DEFAULT_MODE;
         }
       }
     } catch (error) {
-      log.warn("Mode determination error:", error);
+      log.warn('Mode determination error:', error);
       state.currentMode = DEFAULT_MODE;
     }
 
@@ -143,12 +142,12 @@ function createStateStore({ Storage, Logger }) {
 
     try {
       const data = await storage.get(MODE_PREF_KEY);
-      if (data[MODE_PREF_KEY] === "lastUsed") {
+      if (data[MODE_PREF_KEY] === 'lastUsed') {
         await storage.set({ [LAST_USED_MODE_KEY]: state.currentMode });
       }
       await storage.set({ [MODE_KEY]: state.currentMode });
     } catch (error) {
-      log.warn("Storage access error:", error);
+      log.warn('Storage access error:', error);
     }
 
     notify();
@@ -164,7 +163,7 @@ function createStateStore({ Storage, Logger }) {
       const data = await storage.getLocal(CHAT_ID_STORAGE_KEY);
       state.currentChatId = data[CHAT_ID_STORAGE_KEY] || null;
     } catch (error) {
-      log.warn("Failed to load chat ID:", error);
+      log.warn('Failed to load chat ID:', error);
       state.currentChatId = null;
     }
     return state.currentChatId;
@@ -184,7 +183,7 @@ function createStateStore({ Storage, Logger }) {
         await storage.setLocal(CHAT_ID_STORAGE_KEY, chatId);
       }
     } catch (error) {
-      log.warn("Failed to save chat ID:", error);
+      log.warn('Failed to save chat ID:', error);
     }
 
     notify();
@@ -196,24 +195,24 @@ function createStateStore({ Storage, Logger }) {
       try {
         await storage.set({ [SIDEBAR_OPEN_KEY]: state.isSidebarOpen });
       } catch (error) {
-        log.warn("Failed to save sidebar state:", error);
+        log.warn('Failed to save sidebar state:', error);
       }
     }
     notify();
   }
 
   function setSelection(text) {
-    state.cachedSelection = text || "";
+    state.cachedSelection = text || '';
     notify();
   }
 
   function setActiveTab(tabId) {
-    if (typeof tabId === "string") {
+    if (typeof tabId === 'string') {
       state.currentActiveTab = tabId;
       if (storage) {
-        storage.set({ [SIDEBAR_ACTIVE_TAB_KEY]: state.currentActiveTab }).catch(
-          (error) => log.warn("Failed to save active tab:", error)
-        );
+        storage
+          .set({ [SIDEBAR_ACTIVE_TAB_KEY]: state.currentActiveTab })
+          .catch((error) => log.warn('Failed to save active tab:', error));
       }
       notify();
     }
@@ -228,25 +227,25 @@ function createStateStore({ Storage, Logger }) {
   }
 
   function handleStorageChanges(changes, areaName) {
-    if (areaName === "sync" && changes[HIGHLIGHTING_KEY]) {
+    if (areaName === 'sync' && changes[HIGHLIGHTING_KEY]) {
       state.highlightingEnabled = changes[HIGHLIGHTING_KEY].newValue !== false;
     }
 
-    if (areaName === "sync" && changes[MODE_KEY]) {
+    if (areaName === 'sync' && changes[MODE_KEY]) {
       state.currentMode = changes[MODE_KEY].newValue;
     }
 
-    if (areaName === "sync" && changes[SIDEBAR_OPEN_KEY]) {
+    if (areaName === 'sync' && changes[SIDEBAR_OPEN_KEY]) {
       state.isSidebarOpen = changes[SIDEBAR_OPEN_KEY].newValue === true;
     }
 
-    if (areaName === "sync" && changes[SIDEBAR_ACTIVE_TAB_KEY]) {
-      if (typeof changes[SIDEBAR_ACTIVE_TAB_KEY].newValue === "string") {
+    if (areaName === 'sync' && changes[SIDEBAR_ACTIVE_TAB_KEY]) {
+      if (typeof changes[SIDEBAR_ACTIVE_TAB_KEY].newValue === 'string') {
         state.currentActiveTab = changes[SIDEBAR_ACTIVE_TAB_KEY].newValue;
       }
     }
 
-    if (areaName === "local" && changes[CHAT_ID_STORAGE_KEY]) {
+    if (areaName === 'local' && changes[CHAT_ID_STORAGE_KEY]) {
       state.currentChatId = changes[CHAT_ID_STORAGE_KEY].newValue || null;
     }
 
@@ -284,7 +283,7 @@ function createStateStore({ Storage, Logger }) {
   };
 }
 
-describe("StateStore", () => {
+describe('StateStore', () => {
   let mockStorage;
   let mockLogger;
   let stateStore;
@@ -310,19 +309,19 @@ describe("StateStore", () => {
     stateStore = createStateStore({ Storage: mockStorage, Logger: mockLogger });
   });
 
-  describe("getSnapshot", () => {
-    it("should return current state snapshot", () => {
+  describe('getSnapshot', () => {
+    it('should return current state snapshot', () => {
       const snapshot = stateStore.getSnapshot();
-      expect(snapshot).toHaveProperty("currentMode");
-      expect(snapshot).toHaveProperty("isSidebarOpen");
-      expect(snapshot).toHaveProperty("currentChatId");
-      expect(snapshot.currentMode).toBe("explain");
+      expect(snapshot).toHaveProperty('currentMode');
+      expect(snapshot).toHaveProperty('isSidebarOpen');
+      expect(snapshot).toHaveProperty('currentChatId');
+      expect(snapshot.currentMode).toBe('explain');
       expect(snapshot.isSidebarOpen).toBe(false);
     });
   });
 
-  describe("subscribe", () => {
-    it("should notify subscribers on state changes", async () => {
+  describe('subscribe', () => {
+    it('should notify subscribers on state changes', async () => {
       const callback = vi.fn();
       const unsubscribe = stateStore.subscribe(callback);
 
@@ -335,7 +334,7 @@ describe("StateStore", () => {
       unsubscribe();
     });
 
-    it("should allow unsubscribing", async () => {
+    it('should allow unsubscribing', async () => {
       const callback = vi.fn();
       const unsubscribe = stateStore.subscribe(callback);
       unsubscribe();
@@ -347,8 +346,8 @@ describe("StateStore", () => {
     });
   });
 
-  describe("setSidebarOpen", () => {
-    it("should update sidebar state and persist", async () => {
+  describe('setSidebarOpen', () => {
+    it('should update sidebar state and persist', async () => {
       await stateStore.setSidebarOpen(true);
 
       expect(stateStore.getSnapshot().isSidebarOpen).toBe(true);
@@ -357,7 +356,7 @@ describe("StateStore", () => {
       });
     });
 
-    it("should work without storage", async () => {
+    it('should work without storage', async () => {
       const storeWithoutStorage = createStateStore({ Storage: null, Logger: mockLogger });
       await storeWithoutStorage.setSidebarOpen(true);
 
@@ -365,123 +364,123 @@ describe("StateStore", () => {
     });
   });
 
-  describe("setMode", () => {
-    it("should update mode without persisting", () => {
-      stateStore.setMode("general");
+  describe('setMode', () => {
+    it('should update mode without persisting', () => {
+      stateStore.setMode('general');
 
-      expect(stateStore.getSnapshot().currentMode).toBe("general");
+      expect(stateStore.getSnapshot().currentMode).toBe('general');
       expect(mockStorage.set).not.toHaveBeenCalled();
     });
 
-    it("should use default mode when mode is null", () => {
+    it('should use default mode when mode is null', () => {
       stateStore.setMode(null);
-      expect(stateStore.getSnapshot().currentMode).toBe("explain");
+      expect(stateStore.getSnapshot().currentMode).toBe('explain');
     });
   });
 
-  describe("persistMode", () => {
-    it("should update mode and persist to storage", async () => {
-      await stateStore.persistMode("general");
+  describe('persistMode', () => {
+    it('should update mode and persist to storage', async () => {
+      await stateStore.persistMode('general');
 
-      expect(stateStore.getSnapshot().currentMode).toBe("general");
+      expect(stateStore.getSnapshot().currentMode).toBe('general');
       expect(mockStorage.set).toHaveBeenCalledWith({
-        lockinActiveMode: "general",
+        lockinActiveMode: 'general',
       });
     });
 
     it("should save to lastUsed when mode preference is 'lastUsed'", async () => {
       mockStorage.get.mockResolvedValue({
-        modePreference: "lastUsed",
+        modePreference: 'lastUsed',
       });
 
-      await stateStore.persistMode("general");
+      await stateStore.persistMode('general');
 
       // Storage.set is called twice: once for lastUsedMode, once for lockinActiveMode
       expect(mockStorage.set).toHaveBeenCalledTimes(2);
       expect(mockStorage.set).toHaveBeenNthCalledWith(1, {
-        lastUsedMode: "general",
+        lastUsedMode: 'general',
       });
       expect(mockStorage.set).toHaveBeenNthCalledWith(2, {
-        lockinActiveMode: "general",
+        lockinActiveMode: 'general',
       });
     });
   });
 
-  describe("setSelection", () => {
-    it("should update cached selection", () => {
-      stateStore.setSelection("Selected text");
+  describe('setSelection', () => {
+    it('should update cached selection', () => {
+      stateStore.setSelection('Selected text');
 
-      expect(stateStore.getSnapshot().cachedSelection).toBe("Selected text");
+      expect(stateStore.getSnapshot().cachedSelection).toBe('Selected text');
     });
 
-    it("should handle empty string", () => {
-      stateStore.setSelection("");
+    it('should handle empty string', () => {
+      stateStore.setSelection('');
 
-      expect(stateStore.getSnapshot().cachedSelection).toBe("");
+      expect(stateStore.getSnapshot().cachedSelection).toBe('');
     });
   });
 
-  describe("setActiveTab", () => {
-    it("should update active tab and persist", async () => {
-      stateStore.setActiveTab("notes");
+  describe('setActiveTab', () => {
+    it('should update active tab and persist', async () => {
+      stateStore.setActiveTab('notes');
 
-      expect(stateStore.getSnapshot().currentActiveTab).toBe("notes");
+      expect(stateStore.getSnapshot().currentActiveTab).toBe('notes');
       // setActiveTab uses async storage.set, wait a bit
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(mockStorage.set).toHaveBeenCalled();
     });
 
-    it("should not update for non-string values", () => {
+    it('should not update for non-string values', () => {
       const before = stateStore.getSnapshot().currentActiveTab;
       stateStore.setActiveTab(123);
       expect(stateStore.getSnapshot().currentActiveTab).toBe(before);
     });
   });
 
-  describe("setChatId", () => {
-    it("should update chat ID and persist to local storage", async () => {
-      await stateStore.setChatId("chat-123");
+  describe('setChatId', () => {
+    it('should update chat ID and persist to local storage', async () => {
+      await stateStore.setChatId('chat-123');
 
-      expect(stateStore.getSnapshot().currentChatId).toBe("chat-123");
-      expect(mockStorage.setLocal).toHaveBeenCalledWith("lockinCurrentChatId", "chat-123");
+      expect(stateStore.getSnapshot().currentChatId).toBe('chat-123');
+      expect(mockStorage.setLocal).toHaveBeenCalledWith('lockinCurrentChatId', 'chat-123');
     });
 
-    it("should remove chat ID when set to null", async () => {
-      await stateStore.setChatId("chat-123");
+    it('should remove chat ID when set to null', async () => {
+      await stateStore.setChatId('chat-123');
       await stateStore.setChatId(null);
 
       expect(stateStore.getSnapshot().currentChatId).toBe(null);
-      expect(mockStorage.removeLocal).toHaveBeenCalledWith("lockinCurrentChatId");
+      expect(mockStorage.removeLocal).toHaveBeenCalledWith('lockinCurrentChatId');
     });
   });
 
-  describe("setPreferences", () => {
-    it("should update session preferences", () => {
-      stateStore.setPreferences({ preferredLanguage: "es" });
+  describe('setPreferences', () => {
+    it('should update session preferences', () => {
+      stateStore.setPreferences({ preferredLanguage: 'es' });
 
       const snapshot = stateStore.getSnapshot();
-      expect(snapshot.sessionPreferences.preferredLanguage).toBe("es");
-      expect(snapshot.sessionPreferences.difficultyLevel).toBe("highschool"); // Should preserve other prefs
+      expect(snapshot.sessionPreferences.preferredLanguage).toBe('es');
+      expect(snapshot.sessionPreferences.difficultyLevel).toBe('highschool'); // Should preserve other prefs
     });
   });
 
-  describe("loadInitial", () => {
-    it("should load initial state from storage", async () => {
+  describe('loadInitial', () => {
+    it('should load initial state from storage', async () => {
       mockStorage.get.mockResolvedValue({
         lockin_sidebar_isOpen: true,
-        lockin_sidebar_activeTab: "notes",
+        lockin_sidebar_activeTab: 'notes',
         highlightingEnabled: false,
       });
 
       const snapshot = await stateStore.loadInitial();
 
       expect(snapshot.isSidebarOpen).toBe(true);
-      expect(snapshot.currentActiveTab).toBe("notes");
+      expect(snapshot.currentActiveTab).toBe('notes');
       expect(snapshot.highlightingEnabled).toBe(false);
     });
 
-    it("should handle storage errors gracefully", async () => {
-      mockStorage.get.mockRejectedValue(new Error("Storage error"));
+    it('should handle storage errors gracefully', async () => {
+      mockStorage.get.mockRejectedValue(new Error('Storage error'));
 
       const snapshot = await stateStore.loadInitial();
 
@@ -490,46 +489,46 @@ describe("StateStore", () => {
       expect(mockLogger.warn).toHaveBeenCalled();
     });
 
-    it("should work without storage", async () => {
+    it('should work without storage', async () => {
       const storeWithoutStorage = createStateStore({ Storage: null, Logger: mockLogger });
       const snapshot = await storeWithoutStorage.loadInitial();
 
       expect(snapshot).toBeDefined();
-      expect(snapshot.currentMode).toBe("explain");
+      expect(snapshot.currentMode).toBe('explain');
     });
   });
 
-  describe("determineDefaultMode", () => {
-    it("should use stored mode if available", async () => {
+  describe('determineDefaultMode', () => {
+    it('should use stored mode if available', async () => {
       mockStorage.get.mockResolvedValue({
-        lockinActiveMode: "general",
+        lockinActiveMode: 'general',
       });
 
       const mode = await stateStore.determineDefaultMode();
 
-      expect(mode).toBe("general");
+      expect(mode).toBe('general');
     });
 
     it("should use lastUsed mode when preference is 'lastUsed'", async () => {
       mockStorage.get.mockResolvedValue({
-        modePreference: "lastUsed",
-        lastUsedMode: "general",
+        modePreference: 'lastUsed',
+        lastUsedMode: 'general',
       });
 
       const mode = await stateStore.determineDefaultMode();
 
-      expect(mode).toBe("general");
+      expect(mode).toBe('general');
     });
 
     it("should use default mode when preference is 'fixed'", async () => {
       mockStorage.get.mockResolvedValue({
-        modePreference: "fixed",
-        defaultMode: "general",
+        modePreference: 'fixed',
+        defaultMode: 'general',
       });
 
       const mode = await stateStore.determineDefaultMode();
 
-      expect(mode).toBe("general");
+      expect(mode).toBe('general');
     });
 
     it("should fallback to 'explain' when no preferences found", async () => {
@@ -537,19 +536,19 @@ describe("StateStore", () => {
 
       const mode = await stateStore.determineDefaultMode();
 
-      expect(mode).toBe("explain");
+      expect(mode).toBe('explain');
     });
   });
 
-  describe("startSync and stopSync", () => {
-    it("should start storage sync", () => {
+  describe('startSync and stopSync', () => {
+    it('should start storage sync', () => {
       const unsubscribe = stateStore.startSync();
 
       expect(mockStorage.onChanged).toHaveBeenCalled();
-      expect(typeof unsubscribe).toBe("function");
+      expect(typeof unsubscribe).toBe('function');
     });
 
-    it("should stop storage sync", () => {
+    it('should stop storage sync', () => {
       stateStore.startSync();
       stateStore.stopSync();
 
@@ -557,7 +556,7 @@ describe("StateStore", () => {
       expect(mockStorage.onChanged).toHaveBeenCalled();
     });
 
-    it("should handle storage changes", () => {
+    it('should handle storage changes', () => {
       const callback = vi.fn();
       stateStore.subscribe(callback);
 
@@ -570,13 +569,13 @@ describe("StateStore", () => {
 
       changeHandler(
         {
-          lockinActiveMode: { newValue: "general" },
+          lockinActiveMode: { newValue: 'general' },
         },
-        "sync"
+        'sync',
       );
 
       expect(callback).toHaveBeenCalled();
-      expect(stateStore.getSnapshot().currentMode).toBe("general");
+      expect(stateStore.getSnapshot().currentMode).toBe('general');
     });
   });
 });

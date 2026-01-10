@@ -1,24 +1,24 @@
 /**
  * Shared UI Components
- * 
+ *
  * Basic reusable components that can be used by both extension and web app.
  * These are low-level UI primitives (Button, Card, TextInput, Tabs).
  */
 
-export { Button } from "./Button";
-export type { ButtonProps } from "./Button";
+export { Button } from './Button';
+export type { ButtonProps } from './Button';
 
-export { Card } from "./Card";
-export type { CardProps } from "./Card";
+export { Card } from './Card';
+export type { CardProps } from './Card';
 
-export { TextInput } from "./TextInput";
-export type { TextInputProps } from "./TextInput";
+export { TextInput } from './TextInput';
+export type { TextInputProps } from './TextInput';
 
-export { Tabs } from "./Tabs";
-export type { TabsProps, Tab } from "./Tabs";
+export { Tabs } from './Tabs';
+export type { TabsProps, Tab } from './Tabs';
 
-export { ConfirmDialog } from "./ConfirmDialog";
-export type { ConfirmDialogProps } from "./ConfirmDialog";
+export { ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps } from './ConfirmDialog';
 
-export { Toast, useToast } from "./Toast";
-export type { ToastProps, ToastType } from "./Toast";
+export { Toast, useToast } from './Toast';
+export type { ToastProps, ToastType } from './Toast';

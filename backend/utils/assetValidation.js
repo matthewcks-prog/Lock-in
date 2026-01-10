@@ -3,13 +3,13 @@ const {
   ALLOWED_ASSET_MIME_TYPES,
   NOTE_ASSET_MIME_GROUPS,
   MIME_EXTENSION_MAP,
-} = require("../config");
+} = require('../config');
 
 function inferAssetType(mimeType) {
   const match = Object.entries(NOTE_ASSET_MIME_GROUPS).find(([, mimes]) =>
-    mimes.includes(mimeType)
+    mimes.includes(mimeType),
   );
-  return match ? match[0] : "other";
+  return match ? match[0] : 'other';
 }
 
 function getExtensionForMime(mimeType) {
@@ -17,16 +17,16 @@ function getExtensionForMime(mimeType) {
     return MIME_EXTENSION_MAP[mimeType];
   }
 
-  const subtype = mimeType?.split("/")?.[1];
-  if (!subtype) return "bin";
+  const subtype = mimeType?.split('/')?.[1];
+  if (!subtype) return 'bin';
 
   // Strip any parameters (e.g., "text/plain; charset=utf-8")
-  return subtype.split(";")[0];
+  return subtype.split(';')[0];
 }
 
 function validateAssetFile(file) {
   if (!file) {
-    return { valid: false, reason: "File is required" };
+    return { valid: false, reason: 'File is required' };
   }
 
   if (file.size > NOTE_ASSETS_MAX_BYTES) {
@@ -37,7 +37,7 @@ function validateAssetFile(file) {
   }
 
   if (!ALLOWED_ASSET_MIME_TYPES.includes(file.mimetype)) {
-    return { valid: false, reason: "File type not allowed" };
+    return { valid: false, reason: 'File type not allowed' };
   }
 
   const type = inferAssetType(file.mimetype);

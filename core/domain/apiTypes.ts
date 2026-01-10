@@ -1,12 +1,12 @@
 /**
  * API Response Types
- * 
+ *
  * Standardized response types for all API endpoints.
  * These types ensure type safety between frontend and backend.
  */
 
-import type { Note, NoteAsset } from "../domain/Note";
-import type { ChatMessage, StudyResponse, ChatSession } from "../domain/types";
+import type { Note, NoteAsset } from '../domain/Note';
+import type { ChatMessage, StudyResponse, ChatSession } from '../domain/types';
 
 /**
  * Base API response wrapper
@@ -97,6 +97,7 @@ export interface ProcessTextResponse {
   success: boolean;
   data?: StudyResponse;
   chatId?: string;
+  chatTitle?: string;
   error?: ApiError;
 }
 
@@ -135,7 +136,7 @@ export interface AuthResponse {
  * Health check response
  */
 export interface HealthResponse {
-  status: "ok" | "degraded" | "error";
+  status: 'ok' | 'degraded' | 'error';
   message: string;
   limits?: {
     maxSelectionLength: number;

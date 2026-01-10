@@ -1,37 +1,37 @@
 /**
  * Vite config for building initApi.js bundle
- * 
+ *
  * Bundles extension/src/initApi.ts and its dependencies (api/client.ts, api/auth.ts)
- * into a single IIFE file at extension/libs/initApi.js that can be loaded by
+ * into a single IIFE file at extension/dist/libs/initApi.js that can be loaded by
  * Chrome extension content scripts.
  */
 
-import { defineConfig } from "vite";
-import { resolve } from "path";
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
 import {
   createAliases,
   createIifeBuildConfig,
   ensureAsciiSafeOutput,
   sharedDefines,
-} from "./build/viteShared";
+} from './build/viteShared';
 
 export default defineConfig({
   define: sharedDefines,
   plugins: [
     ensureAsciiSafeOutput(
-      resolve(process.cwd(), "extension/libs/initApi.js"),
-      "Processed initApi.js for ASCII compatibility"
+      resolve(process.cwd(), 'extension/dist/libs/initApi.js'),
+      'Processed initApi.js for ASCII compatibility',
     ),
   ],
   build: createIifeBuildConfig({
-    outDir: "extension/libs",
-    emptyOutDir: false, // Don't delete other files in libs/
-    entry: "./extension/src/initApi.ts",
-    name: "LockInInit",
-    fileName: "initApi.js",
+    outDir: 'extension/dist/libs',
+    emptyOutDir: false, // Don't delete other files in dist/libs/
+    entry: './extension/src/initApi.ts',
+    name: 'LockInInit',
+    fileName: 'initApi.js',
   }),
   resolve: {
     alias: createAliases({ includeApi: true }),
-    extensions: [".ts", ".js"],
+    extensions: ['.ts', '.js'],
   },
 });

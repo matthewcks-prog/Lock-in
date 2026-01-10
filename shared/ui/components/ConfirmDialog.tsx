@@ -1,5 +1,5 @@
-import { useEffect, useRef, useCallback } from "react";
-import { AlertTriangle, X } from "lucide-react";
+import { useEffect, useRef, useCallback } from 'react';
+import { AlertTriangle, X } from 'lucide-react';
 
 export interface ConfirmDialogProps {
   /** Whether the dialog is open */
@@ -17,7 +17,7 @@ export interface ConfirmDialogProps {
   /** Text for cancel button */
   cancelLabel?: string;
   /** Variant affects styling - 'danger' for destructive actions */
-  variant?: "default" | "danger";
+  variant?: 'default' | 'danger';
   /** Whether confirm action is in progress */
   isLoading?: boolean;
 }
@@ -36,9 +36,9 @@ export function ConfirmDialog({
   onConfirm,
   title,
   description,
-  confirmLabel = "Confirm",
-  cancelLabel = "Cancel",
-  variant = "default",
+  confirmLabel = 'Confirm',
+  cancelLabel = 'Cancel',
+  variant = 'default',
   isLoading = false,
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -60,20 +60,20 @@ export function ConfirmDialog({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isLoading) {
+      if (e.key === 'Escape' && !isLoading) {
         onClose();
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isLoading, onClose]);
 
   // Prevent body scroll when dialog is open
   useEffect(() => {
     if (isOpen) {
       const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
+      document.body.style.overflow = 'hidden';
       return () => {
         document.body.style.overflow = originalOverflow;
       };
@@ -86,7 +86,7 @@ export function ConfirmDialog({
         onClose();
       }
     },
-    [isLoading, onClose]
+    [isLoading, onClose],
   );
 
   const handleConfirm = useCallback(() => {
@@ -97,14 +97,10 @@ export function ConfirmDialog({
 
   if (!isOpen) return null;
 
-  const isDanger = variant === "danger";
+  const isDanger = variant === 'danger';
 
   return (
-    <div
-      className="lockin-confirm-backdrop"
-      onClick={handleBackdropClick}
-      role="presentation"
-    >
+    <div className="lockin-confirm-backdrop" onClick={handleBackdropClick} role="presentation">
       <div
         ref={dialogRef}
         className="lockin-confirm-dialog"
@@ -114,7 +110,7 @@ export function ConfirmDialog({
         aria-describedby="confirm-dialog-description"
       >
         <div className="lockin-confirm-header">
-          <div className={`lockin-confirm-icon ${isDanger ? "is-danger" : ""}`}>
+          <div className={`lockin-confirm-icon ${isDanger ? 'is-danger' : ''}`}>
             <AlertTriangle size={24} strokeWidth={2} />
           </div>
           <button
@@ -132,10 +128,7 @@ export function ConfirmDialog({
           <h3 id="confirm-dialog-title" className="lockin-confirm-title">
             {title}
           </h3>
-          <p
-            id="confirm-dialog-description"
-            className="lockin-confirm-description"
-          >
+          <p id="confirm-dialog-description" className="lockin-confirm-description">
             {description}
           </p>
         </div>
@@ -153,9 +146,7 @@ export function ConfirmDialog({
           <button
             type="button"
             className={`lockin-confirm-btn ${
-              isDanger
-                ? "lockin-confirm-btn-danger"
-                : "lockin-confirm-btn-primary"
+              isDanger ? 'lockin-confirm-btn-danger' : 'lockin-confirm-btn-primary'
             }`}
             onClick={handleConfirm}
             disabled={isLoading}

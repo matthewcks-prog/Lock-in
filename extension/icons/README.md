@@ -11,7 +11,6 @@ Placeholder icons for the Lock-in Chrome extension.
 ## How to Replace These Placeholders
 
 1. Create your icon designs with the following specs:
-
    - Simple, recognizable design
    - Works well at small sizes
    - Suggested theme: Lock/Padlock + Book/Learning symbol

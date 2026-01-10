@@ -2,9 +2,12 @@
  * OpenAI Client Module - Chat based orchestration for Lock-in conversations
  */
 
-const OpenAI = require("openai");
+const fs = require('fs');
+const OpenAI = require('openai');
+const { buildInitialChatTitle, coerceGeneratedTitle } = require('./utils/chatTitle');
+const { TRANSCRIPTION_MODEL } = require('./config');
 
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_HISTORY_MESSAGES = 30;
 
 // Initialize OpenAI client with API key from environment
@@ -13,25 +16,25 @@ const openai = new OpenAI({
 });
 
 const LANGUAGE_LABELS = {
-  en: "English",
-  es: "Spanish",
-  zh: "Chinese",
-  fr: "French",
-  de: "German",
-  ja: "Japanese",
-  ko: "Korean",
-  pt: "Portuguese",
-  it: "Italian",
-  ru: "Russian",
+  en: 'English',
+  es: 'Spanish',
+  zh: 'Chinese',
+  fr: 'French',
+  de: 'German',
+  ja: 'Japanese',
+  ko: 'Korean',
+  pt: 'Portuguese',
+  it: 'Italian',
+  ru: 'Russian',
 };
 
-function toLanguageName(code = "en") {
+function toLanguageName(code = 'en') {
   return LANGUAGE_LABELS[code.toLowerCase()] || code;
 }
 
 function buildModeDirective(mode) {
   switch (mode) {
-    case "explain":
+    case 'explain':
     default:
       return "Explain the passage clearly, connect the main idea to the reader's studies, and provide at most one short example when helpful.";
   }
@@ -40,20 +43,16 @@ function buildModeDirective(mode) {
 function buildSystemMessage({ mode, difficultyLevel }) {
   const directive = buildModeDirective(mode);
   const content = [
-    "You are Lock-in, an AI study helper that replies as a concise, friendly tutor.",
+    'You are Lock-in, an AI study helper that replies as a concise, friendly tutor.',
     `Match the student's ${difficultyLevel} level and keep answers grounded in the provided conversation and original text.`,
     directive,
-    "Maintain academic integrity, cite the source text implicitly, and never introduce unrelated facts.",
-  ].join(" ");
+    'Maintain academic integrity, cite the source text implicitly, and never introduce unrelated facts.',
+  ].join(' ');
 
-  return { role: "system", content };
+  return { role: 'system', content };
 }
 
-function buildInitialHistory({
-  selection,
-  mode,
-  difficultyLevel,
-}) {
+function buildInitialHistory({ selection, mode, difficultyLevel }) {
   const systemMessage = buildSystemMessage({
     mode,
     difficultyLevel,
@@ -63,7 +62,7 @@ function buildInitialHistory({
   // This provides context for the system message
   const userMessage = selection
     ? {
-        role: "user",
+        role: 'user',
         content: `Original text:\n${selection}`,
       }
     : null;
@@ -77,9 +76,9 @@ function sanitizeHistory(history = []) {
     .filter(
       (message) =>
         message &&
-        typeof message.role === "string" &&
-        typeof message.content === "string" &&
-        message.content.trim().length > 0
+        typeof message.role === 'string' &&
+        typeof message.content === 'string' &&
+        message.content.trim().length > 0,
     )
     .map((message) => ({
       role: message.role,
@@ -92,8 +91,8 @@ function clampHistory(messages) {
     return messages;
   }
 
-  const systemMessage = messages.find((msg) => msg.role === "system");
-  const withoutSystem = messages.filter((msg) => msg.role !== "system");
+  const systemMessage = messages.find((msg) => msg.role === 'system');
+  const withoutSystem = messages.filter((msg) => msg.role !== 'system');
   const recent = withoutSystem.slice(-1 * (MAX_HISTORY_MESSAGES - 1));
   return systemMessage ? [systemMessage, ...recent] : recent;
 }
@@ -108,8 +107,8 @@ async function requestCompletion(messages) {
 
   const choice = completion.choices[0]?.message;
   const assistantMessage = {
-    role: choice?.role || "assistant",
-    content: (choice?.content || "").trim(),
+    role: choice?.role || 'assistant',
+    content: (choice?.content || '').trim(),
   };
 
   return {
@@ -119,13 +118,7 @@ async function requestCompletion(messages) {
 }
 
 async function generateLockInResponse(options) {
-  const {
-    selection,
-    mode,
-    difficultyLevel,
-    chatHistory = [],
-    newUserMessage,
-  } = options;
+  const { selection, mode, difficultyLevel, chatHistory = [], newUserMessage } = options;
 
   const baseHistory = sanitizeHistory(chatHistory);
   let messages = baseHistory.length
@@ -137,16 +130,13 @@ async function generateLockInResponse(options) {
     mode,
     difficultyLevel,
   });
-  const messagesWithoutSystem = messages.filter((msg) => msg.role !== "system");
+  const messagesWithoutSystem = messages.filter((msg) => msg.role !== 'system');
   messages = [systemMessage, ...messagesWithoutSystem];
 
   let workingHistory = messages;
 
   if (newUserMessage && newUserMessage.trim().length) {
-    workingHistory = [
-      ...messages,
-      { role: "user", content: newUserMessage.trim() },
-    ];
+    workingHistory = [...messages, { role: 'user', content: newUserMessage.trim() }];
   }
 
   workingHistory = clampHistory(workingHistory);
@@ -187,29 +177,29 @@ async function generateLockInResponse(options) {
  */
 async function generateStructuredStudyResponse(options) {
   const {
-    mode = "explain",
+    mode = 'explain',
     selection,
     pageContext,
     pageUrl,
     courseCode,
-    language = "en",
-    difficultyLevel = "university",
+    language = 'en',
+    difficultyLevel = 'university',
     chatHistory = [],
     newUserMessage,
   } = options;
 
-  if (!selection || typeof selection !== "string" || selection.trim().length === 0) {
-    throw new Error("Selection is required and must be a non-empty string");
+  if (!selection || typeof selection !== 'string' || selection.trim().length === 0) {
+    throw new Error('Selection is required and must be a non-empty string');
   }
 
   // Build system prompt that adapts by mode
-  let modeInstruction = "";
+  let modeInstruction = '';
   switch (mode) {
-    case "explain":
+    case 'explain':
       modeInstruction =
         "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
       break;
-    case "general":
+    case 'general':
       modeInstruction =
         "Treat this as general Q&A about the selection/context. Provide a helpful explanation in the 'explanation' field.";
       break;
@@ -228,17 +218,17 @@ async function generateStructuredStudyResponse(options) {
   if (courseCode) {
     contextParts.push(`Course code: ${courseCode}`);
   }
-  const contextInfo = contextParts.length > 0 ? `\n\n${contextParts.join("\n")}` : "";
+  const contextInfo = contextParts.length > 0 ? `\n\n${contextParts.join('\n')}` : '';
 
   // Build difficulty instruction
-  const difficultyInstruction = difficultyLevel 
+  const difficultyInstruction = difficultyLevel
     ? `Match the student's ${difficultyLevel} level in your explanation.`
-    : "";
+    : '';
 
   const systemPrompt = `You are Lock-in, a helpful AI study assistant. Your task is to analyze the selected text and return a structured JSON response.
 
 ${modeInstruction}
-${difficultyInstruction ? `\n${difficultyInstruction}` : ""}
+${difficultyInstruction ? `\n${difficultyInstruction}` : ''}
 
 Use the provided context (page context, course code, page URL) to improve the quality of tags and notes.
 
@@ -264,7 +254,7 @@ Selected text:
 ${selection}${contextInfo}`;
 
   // Build messages array starting with system prompt
-  const messages = [{ role: "system", content: systemPrompt }];
+  const messages = [{ role: 'system', content: systemPrompt }];
 
   // Append sanitized chat history if available
   if (Array.isArray(chatHistory) && chatHistory.length > 0) {
@@ -281,10 +271,11 @@ ${selection}${contextInfo}`;
 
 Using the selected text, the previous conversation, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
   } else {
-    userContent = "Analyze the selected text and return the structured JSON response described in the system message.";
+    userContent =
+      'Analyze the selected text and return the structured JSON response described in the system message.';
   }
 
-  messages.push({ role: "user", content: userContent });
+  messages.push({ role: 'user', content: userContent });
 
   // Clamp history before sending to OpenAI
   const finalMessages = clampHistory(messages);
@@ -295,12 +286,12 @@ Using the selected text, the previous conversation, and the mode instructions, a
       messages: finalMessages,
       temperature: 0.4,
       max_tokens: 1500,
-      response_format: { type: "json_object" },
+      response_format: { type: 'json_object' },
     });
 
     const content = completion.choices[0]?.message?.content;
     if (!content) {
-      throw new Error("No response content from OpenAI");
+      throw new Error('No response content from OpenAI');
     }
 
     // Parse JSON response
@@ -309,12 +300,14 @@ Using the selected text, the previous conversation, and the mode instructions, a
       parsed = JSON.parse(content);
     } catch (parseError) {
       throw new Error(
-        `Failed to parse JSON response: ${parseError.message}. Response: ${content.substring(0, 200)}`
+        `Failed to parse JSON response: ${
+          parseError.message
+        }. Response: ${content.substring(0, 200)}`,
       );
     }
 
     // Validate required fields
-    if (typeof parsed.explanation !== "string") {
+    if (typeof parsed.explanation !== 'string') {
       throw new Error("Response missing or invalid 'explanation' field");
     }
     if (!Array.isArray(parsed.notes)) {
@@ -326,23 +319,23 @@ Using the selected text, the previous conversation, and the mode instructions, a
     if (!Array.isArray(parsed.tags)) {
       parsed.tags = [];
     }
-    if (!["easy", "medium", "hard"].includes(parsed.difficulty)) {
-      parsed.difficulty = "medium";
+    if (!['easy', 'medium', 'hard'].includes(parsed.difficulty)) {
+      parsed.difficulty = 'medium';
     }
 
     // Validate notes structure
     parsed.notes = parsed.notes
-      .filter((note) => note && typeof note.title === "string" && typeof note.content === "string")
+      .filter((note) => note && typeof note.title === 'string' && typeof note.content === 'string')
       .map((note) => ({
         title: note.title,
         content: note.content,
-        type: typeof note.type === "string" ? note.type : "general",
+        type: typeof note.type === 'string' ? note.type : 'general',
       }));
 
     // Validate todos structure
     parsed.todos = parsed.todos
       .filter(
-        (todo) => todo && typeof todo.title === "string" && typeof todo.description === "string"
+        (todo) => todo && typeof todo.title === 'string' && typeof todo.description === 'string',
       )
       .map((todo) => ({
         title: todo.title,
@@ -350,7 +343,7 @@ Using the selected text, the previous conversation, and the mode instructions, a
       }));
 
     // Validate tags
-    parsed.tags = parsed.tags.filter((tag) => typeof tag === "string" && tag.trim().length > 0);
+    parsed.tags = parsed.tags.filter((tag) => typeof tag === 'string' && tag.trim().length > 0);
 
     // Add mode to response
     return {
@@ -362,10 +355,67 @@ Using the selected text, the previous conversation, and the mode instructions, a
       difficulty: parsed.difficulty,
     };
   } catch (error) {
-    if (error.message && error.message.includes("JSON")) {
+    if (error.message && error.message.includes('JSON')) {
       throw error;
     }
     throw new Error(`Failed to generate structured study response: ${error.message}`);
+  }
+}
+
+/**
+ * Generate a concise chat title (5-6 words) from the chat history.
+ * @param {Object} options
+ * @param {Array<{role: string, content: string}>} options.history - Sanitized chat history
+ * @param {string} [options.fallbackTitle] - Title to use if generation fails
+ * @returns {Promise<string>}
+ */
+async function generateChatTitleFromHistory({ history = [], fallbackTitle = '' }) {
+  const sanitizedHistory = sanitizeHistory(history)
+    .map((message) => ({
+      ...message,
+      content: message.content.slice(0, 220),
+    }))
+    .slice(-12); // keep the last messages for context
+
+  const fallback = buildInitialChatTitle(fallbackTitle);
+
+  if (sanitizedHistory.length === 0) {
+    return fallback;
+  }
+
+  const conversation = sanitizedHistory
+    .map((message) => {
+      const speaker = message.role === 'assistant' ? 'Tutor' : 'Student';
+      return `${speaker}: ${message.content}`;
+    })
+    .join('\n');
+
+  const messages = [
+    {
+      role: 'system',
+      content:
+        'You are summarizing a study conversation into a short, descriptive title. Reply with a single line of 5-6 words in sentence case. No quotes, no punctuation at the end.',
+    },
+    {
+      role: 'user',
+      content: `Conversation transcript:\n${conversation}\n\nReturn only the short title.`,
+    },
+  ];
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: DEFAULT_MODEL,
+      messages,
+      temperature: 0.2,
+      max_tokens: 24,
+    });
+
+    const candidate = (completion.choices[0]?.message?.content || '').split('\n')[0].trim();
+
+    return coerceGeneratedTitle(candidate, fallback);
+  } catch (error) {
+    console.error('Failed to generate chat title:', error);
+    return fallback;
   }
 }
 
@@ -404,9 +454,125 @@ async function chatWithModel({ messages }) {
   return (choice?.content || '').trim();
 }
 
+/**
+ * Transcribe an audio file using OpenAI Speech-to-Text.
+ * Includes retry logic and timeout handling for large files.
+ *
+ * Best practices implemented:
+ * - Exponential backoff with jitter for retries
+ * - Detailed error logging for debugging
+ * - File size validation before upload
+ * - Appropriate timeouts for file size
+ */
+async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
+  if (!filePath) {
+    throw new Error('Audio file path is required');
+  }
+
+  // Check file size before attempting upload
+  const stats = fs.statSync(filePath);
+  const fileSizeMB = stats.size / (1024 * 1024);
+
+  // OpenAI Whisper has a 25MB limit
+  if (stats.size > 25 * 1024 * 1024) {
+    throw new Error(
+      `Audio file too large: ${fileSizeMB.toFixed(
+        1,
+      )}MB (max 25MB). File should be split into smaller segments.`,
+    );
+  }
+
+  console.log(
+    `[OpenAI] Transcribing ${fileSizeMB.toFixed(
+      1,
+    )}MB audio file: ${require('path').basename(filePath)}`,
+  );
+
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const startTime = Date.now();
+      const response = await openai.audio.transcriptions.create(
+        {
+          file: fs.createReadStream(filePath),
+          model: TRANSCRIPTION_MODEL,
+          response_format: 'verbose_json',
+          language: language || undefined,
+          temperature: 0,
+          timestamp_granularities: ['segment'],
+        },
+        {
+          // Timeout scales with file size: 30s base + 20s per MB
+          timeout: Math.max(30000, 30000 + Math.ceil(fileSizeMB) * 20000),
+        },
+      );
+
+      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.log(`[OpenAI] Transcription completed in ${duration}s`);
+      return response;
+    } catch (error) {
+      lastError = error;
+
+      // Determine if error is retryable
+      const isRetryable =
+        error?.code === 'ECONNRESET' ||
+        error?.code === 'ETIMEDOUT' ||
+        error?.code === 'ENOTFOUND' ||
+        error?.code === 'ECONNREFUSED' ||
+        error?.message?.includes('Connection error') ||
+        error?.message?.includes('timeout') ||
+        error?.message?.includes('network') ||
+        error?.message?.includes('socket') ||
+        error?.status === 429 || // Rate limited
+        error?.status === 500 || // Internal server error
+        error?.status === 502 || // Bad gateway
+        error?.status === 503 || // Service unavailable
+        error?.status === 504; // Gateway timeout
+
+      const errorType = error?.code || error?.status || 'unknown';
+      console.warn(
+        `[OpenAI] Transcription attempt ${attempt}/${maxRetries} failed (${errorType}):`,
+        error?.message || error,
+      );
+
+      if (!isRetryable || attempt === maxRetries) {
+        // Format error message for user
+        let message = 'Transcription failed';
+        if (error?.message) {
+          message = error.message;
+        } else if (error?.error?.message) {
+          message = error.error.message;
+        }
+
+        // Add helpful context for common errors
+        if (error?.message?.includes('Connection error')) {
+          message += '. This may be a temporary network issue - please try again.';
+        }
+
+        console.error(`[OpenAI] Transcription failed after ${attempt} attempts:`, message);
+        const wrappedError = new Error(message);
+        wrappedError.originalError = error;
+        throw wrappedError;
+      }
+
+      // Exponential backoff with jitter: 2-3s, 4-6s, 8-12s
+      const baseBackoff = 2000 * Math.pow(2, attempt - 1);
+      const jitter = Math.random() * baseBackoff * 0.5;
+      const backoffMs = Math.min(baseBackoff + jitter, 12000);
+      console.log(`[OpenAI] Retrying in ${(backoffMs / 1000).toFixed(1)}s...`);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  throw lastError || new Error('Transcription failed after retries');
+}
+
 module.exports = {
   generateLockInResponse,
   generateStructuredStudyResponse,
+  generateChatTitleFromHistory,
   embedText,
   chatWithModel,
+  transcribeAudioFile,
 };

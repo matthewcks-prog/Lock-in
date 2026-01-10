@@ -25,22 +25,26 @@ These are low-level UI primitives (Button, Card, TextInput, Tabs) that provide c
 ## Components
 
 ### `Button.tsx`
+
 - Reusable button with variants (primary, secondary, ghost, danger)
 - Sizes: sm, md, lg
 - Loading state support
 - Accessible and keyboard-friendly
 
 ### `Card.tsx`
+
 - Container component for content
 - Optional active state
 - Clickable variant
 
 ### `TextInput.tsx`
+
 - Text input with optional label
 - Error and helper text support
 - Accessible form input
 
 ### `Tabs.tsx`
+
 - Tabbed interface component
 - Variants: line, pill
 - Accessible tab navigation
@@ -66,7 +70,7 @@ function MyComponent() {
 ### In Web App (future)
 
 ```typescript
-import { Button, Card, TextInput } from "@shared/ui/components";
+import { Button, Card, TextInput } from '@shared/ui/components';
 // Same API, consistent styling
 ```
 
@@ -89,7 +93,7 @@ import { Button, Card, TextInput } from "@shared/ui/components";
 - Add business logic to these components
 - Make components specific to extension or web app
 - Use Chrome APIs or Next.js-specific features
-- Create high-level components (those go in extension/ui or web/)
+- Create high-level components (those go in ui/extension or web/)
 - Mix styling approaches (use Tailwind consistently)
 
 ---
@@ -108,4 +112,4 @@ import { Button, Card, TextInput } from "@shared/ui/components";
 ## Questions?
 
 - Check `/AGENTS.md` for project-level rules
-- These are basic UI primitives only - complex components belong in extension/ui or web/
+- These are basic UI primitives only - complex components belong in ui/extension or web/
