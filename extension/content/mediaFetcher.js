@@ -198,6 +198,14 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
             buffer.length,
           );
           await onChunk(buffer, chunkIndex, true);
+        } else {
+          // Edge case: media size was exactly a multiple of CHUNK_SIZE
+          // Buffer is empty but we still need to emit completion signal
+          // Send an empty final chunk to signal completion
+          console.log(
+            '[Lock-in MediaFetcher] Buffer empty at end (exact chunk boundary), sending completion signal',
+          );
+          await onChunk(new Uint8Array(0), chunkIndex, true);
         }
         break;
       }
