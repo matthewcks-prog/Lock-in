@@ -8,6 +8,12 @@
 import { createRoot, Root } from 'react-dom/client';
 import { LockInSidebar } from './LockInSidebar';
 import type { LockInSidebarProps } from './LockInSidebar';
+import { initSentry } from '../../extension/src/sentry';
+
+// Initialize Sentry for error tracking (sidebar surface)
+// This runs early before the React app renders to catch all errors
+initSentry('sidebar');
+
 
 export interface SidebarInstance {
   root: Root;

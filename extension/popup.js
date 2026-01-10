@@ -1,13 +1,19 @@
 /**
  * Lock-in Popup Script
- * Handles settings management including mode preferences, difficulty, and language
+ * Handles settings management including authentication, privacy, and help/support
  */
 
+// ============================================================================
+// Sentry Initialization (must be first)
+// ============================================================================
+
+// Initialize Sentry immediately for error tracking (popup surface)
+// LockInSentry is loaded via dist/libs/sentry.js before this script
+if (typeof window !== 'undefined' && window.LockInSentry) {
+  window.LockInSentry.initSentry('popup');
+}
+
 // DOM elements
-const highlightingToggle = document.getElementById('highlighting-toggle');
-const difficultyRadios = document.getElementsByName('difficulty');
-const modePrefRadios = document.getElementsByName('modePreference');
-const defaultModeControl = document.getElementById('default-mode-control');
 const statusMessage = document.getElementById('status-message');
 const authForm = document.getElementById('auth-form');
 const authEmailInput = document.getElementById('auth-email');
@@ -20,117 +26,14 @@ const logoutButton = document.getElementById('logout-button');
 const authTabs = document.querySelectorAll('.auth-tab');
 const authSubmitButton = document.getElementById('auth-submit-button');
 const authModeHint = document.getElementById('auth-mode-hint');
+const passwordToggle = document.getElementById('password-toggle');
+const passwordWrapper = document.getElementById('password-wrapper');
+const forgotPasswordLink = document.getElementById('forgot-password-link');
+const accountStatus = document.getElementById('account-status');
+const accordionHeaders = document.querySelectorAll('.accordion-header');
 const SUPABASE_CONFIG = window.LOCKIN_CONFIG || {};
 
 let currentAuthMode = 'login';
-
-/**
- * Load saved settings from chrome.storage.sync when popup opens
- */
-function loadSettings() {
-  chrome.storage.sync.get(
-    [
-      'highlightingEnabled',
-      'preferredLanguage',
-      'difficultyLevel',
-      'defaultMode',
-      'modePreference',
-      'lastUsedMode',
-    ],
-    (data) => {
-      // Set highlighting toggle (default to true)
-      if (highlightingToggle) {
-        highlightingToggle.checked = data.highlightingEnabled !== false;
-      }
-
-      // Set difficulty level
-      const difficulty = data.difficultyLevel || 'highschool';
-      difficultyRadios.forEach((radio) => {
-        if (radio.value === difficulty) {
-          radio.checked = true;
-        }
-      });
-
-      // Set mode preference (fixed or lastUsed)
-      const modePref = data.modePreference || 'fixed';
-      modePrefRadios.forEach((radio) => {
-        if (radio.value === modePref) {
-          radio.checked = true;
-        }
-      });
-
-      // Set default mode (explain)
-      const defaultMode = data.defaultMode || 'explain';
-      setActiveMode(defaultMode);
-
-      // Toggle segmented control enabled state based on mode preference
-      toggleModeControlState(modePref === 'fixed');
-    },
-  );
-}
-
-/**
- * Set the active mode button in the segmented control
- */
-function setActiveMode(mode) {
-  const buttons = defaultModeControl.querySelectorAll('.segment-btn');
-  buttons.forEach((btn) => {
-    if (btn.dataset.mode === mode) {
-      btn.classList.add('active');
-    } else {
-      btn.classList.remove('active');
-    }
-  });
-}
-
-/**
- * Toggle whether the mode control is enabled/disabled
- */
-function toggleModeControlState(enabled) {
-  const buttons = defaultModeControl.querySelectorAll('.segment-btn');
-  buttons.forEach((btn) => {
-    btn.style.opacity = enabled ? '1' : '0.5';
-    btn.style.pointerEvents = enabled ? 'auto' : 'none';
-  });
-}
-
-/**
- * Save settings to chrome.storage.sync
- * Automatically saves whenever any setting changes
- */
-function saveSettings() {
-  const highlightingEnabled = highlightingToggle ? highlightingToggle.checked : true;
-
-  let difficultyLevel = 'highschool';
-  difficultyRadios.forEach((radio) => {
-    if (radio.checked) {
-      difficultyLevel = radio.value;
-    }
-  });
-
-  let modePreference = 'fixed';
-  modePrefRadios.forEach((radio) => {
-    if (radio.checked) {
-      modePreference = radio.value;
-    }
-  });
-
-  // Get active default mode
-  const activeBtn = defaultModeControl.querySelector('.segment-btn.active');
-  const defaultMode = activeBtn ? activeBtn.dataset.mode : 'explain';
-
-  chrome.storage.sync.set(
-    {
-      highlightingEnabled,
-      difficultyLevel,
-      modePreference,
-      defaultMode,
-    },
-    () => {
-      showStatus('Saved &check;', 'success');
-    },
-  );
-}
 
 /**
  * Show status message
@@ -144,36 +47,6 @@ function showStatus(message, type = 'success') {
     statusMessage.className = 'status-message';
   }, 2000);
 }
-
-// Event listeners
-
-// Highlighting toggle
-if (highlightingToggle) {
-  highlightingToggle.addEventListener('change', saveSettings);
-}
-
-// Mode preference radio change
-modePrefRadios.forEach((radio) => {
-  radio.addEventListener('change', (e) => {
-    const isFixed = e.target.value === 'fixed';
-    toggleModeControlState(isFixed);
-    saveSettings();
-  });
-});
-
-// Default mode segmented control clicks
-defaultModeControl.addEventListener('click', (e) => {
-  const btn = e.target.closest('.segment-btn');
-  if (!btn) return;
-
-  setActiveMode(btn.dataset.mode);
-  saveSettings();
-});
-
-// Difficulty changes
-difficultyRadios.forEach((radio) => {
-  radio.addEventListener('change', saveSettings);
-});
 
 function isSupabaseConfigured() {
   if (!SUPABASE_CONFIG) {
@@ -227,12 +100,39 @@ function updateAuthModeUI() {
     return;
   }
 
+  const btnText = authSubmitButton.querySelector('.btn-text');
+  
+
+  // Show/hide forgot password link
+  if (forgotPasswordLink) {
+    forgotPasswordLink.style.display = currentAuthMode === 'login' ? 'inline' : 'none';
+  }
+
   if (currentAuthMode === 'login') {
-    authSubmitButton.textContent = 'Log in';
+    if (btnText) btnText.textContent = 'Log in';
     authModeHint.textContent = 'Use your Lock-in account email and password.';
-  } else {
-    authSubmitButton.textContent = 'Create account';
+  } else if (currentAuthMode === 'signup') {
+    if (btnText) btnText.textContent = 'Create account';
     authModeHint.textContent = 'Choose a password you will remember.';
+  }
+}
+
+function setAuthLoading(isLoading) {
+  if (!authSubmitButton) return;
+  
+  const btnText = authSubmitButton.querySelector('.btn-text');
+  const btnSpinner = authSubmitButton.querySelector('.btn-spinner');
+  
+  if (isLoading) {
+    authSubmitButton.disabled = true;
+    authSubmitButton.classList.add('loading');
+    if (btnText) btnText.style.opacity = '0';
+    if (btnSpinner) btnSpinner.style.display = 'flex';
+  } else {
+    authSubmitButton.disabled = false;
+    authSubmitButton.classList.remove('loading');
+    if (btnText) btnText.style.opacity = '1';
+    if (btnSpinner) btnSpinner.style.display = 'none';
   }
 }
 
@@ -249,11 +149,19 @@ async function refreshAuthView() {
     if (authUserEmail) {
       authUserEmail.textContent = email;
     }
+    if (accountStatus) {
+      accountStatus.textContent = email;
+      accountStatus.classList.add('signed-in');
+    }
     setAuthMessage('Signed in', 'success');
   } else {
     loggedOutView.classList.remove('hidden');
     loggedInView.classList.add('hidden');
-    setAuthMessage('Sign in to use Lock-in and keep your chat history.', '');
+    if (accountStatus) {
+      accountStatus.textContent = 'Not signed in';
+      accountStatus.classList.remove('signed-in');
+    }
+    setAuthMessage('', '');
   }
 }
 
@@ -277,6 +185,73 @@ function enableAuthInputs() {
   if (logoutButton) {
     logoutButton.disabled = false;
   }
+}
+
+function initAccordions() {
+  accordionHeaders.forEach((header) => {
+    header.addEventListener('click', () => {
+      const section = header.getAttribute('data-section');
+      const content = document.getElementById(`${section}-content`);
+      const isExpanded = header.getAttribute('aria-expanded') === 'true';
+      
+      // Toggle current section
+      header.setAttribute('aria-expanded', !isExpanded);
+      if (content) {
+        content.classList.toggle('collapsed', isExpanded);
+      }
+    });
+  });
+}
+
+function initPasswordToggle() {
+  if (!passwordToggle || !authPasswordInput) return;
+  
+  const eyeOpen = passwordToggle.querySelector('.eye-open');
+  const eyeClosed = passwordToggle.querySelector('.eye-closed');
+  
+  passwordToggle.addEventListener('click', () => {
+    const isPassword = authPasswordInput.type === 'password';
+    authPasswordInput.type = isPassword ? 'text' : 'password';
+    
+    if (eyeOpen && eyeClosed) {
+      eyeOpen.style.display = isPassword ? 'none' : 'block';
+      eyeClosed.style.display = isPassword ? 'block' : 'none';
+    }
+    
+    passwordToggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+  });
+}
+
+function initForgotPassword() {
+  if (!forgotPasswordLink) return;
+  
+  forgotPasswordLink.addEventListener('click', async () => {
+    const email = authEmailInput?.value?.trim();
+    
+    if (!email) {
+      setAuthMessage('Enter your email address first', 'error');
+      authEmailInput?.focus();
+      return;
+    }
+    
+    if (!window.LockInAuth?.resetPassword) {
+      setAuthMessage('Password reset is not available. Contact support.', 'error');
+      return;
+    }
+    
+    disableAuthInputs();
+    setAuthMessage('Sending reset email...', 'success');
+    
+    try {
+      await window.LockInAuth.resetPassword(email);
+      setAuthMessage('Check your email for a password reset link.', 'success');
+    } catch (error) {
+      console.error('Password reset error:', error);
+      setAuthMessage(error?.message || 'Failed to send reset email. Try again.', 'error');
+    } finally {
+      enableAuthInputs();
+    }
+  });
 }
 
 function initAuthSection() {
@@ -303,32 +278,40 @@ function initAuthSection() {
     const email = authEmailInput?.value?.trim();
     const password = authPasswordInput?.value || '';
 
-    if (!email || !password) {
-      setAuthMessage('Email and password are required', 'error');
+    if (!email) {
+      setAuthMessage('Email is required', 'error');
+      return;
+    }
+
+    if (!password) {
+      setAuthMessage('Password is required', 'error');
       return;
     }
 
     disableAuthInputs();
-    setAuthMessage(
-      currentAuthMode === 'login' ? 'Signing you in...' : 'Creating account...',
-      'success',
-    );
+    setAuthLoading(true);
+    
+    const statusMsg = currentAuthMode === 'signup' ? 'Creating account...' : 'Signing you in...';
+    setAuthMessage(statusMsg, 'success');
+    
     try {
       if (currentAuthMode === 'login') {
         await window.LockInAuth.signInWithEmail(email, password);
       } else {
         await window.LockInAuth.signUpWithEmail(email, password);
       }
+      setAuthMessage("You're signed in. Highlight text to start!", 'success');
+      
       if (authPasswordInput) {
         authPasswordInput.value = '';
       }
-      setAuthMessage("You're signed in. Highlight text to start!", 'success');
       refreshAuthView();
     } catch (error) {
       console.error('Lock-in auth sign-in error:', error);
       setAuthMessage(getFriendlyAuthError(error), 'error');
     } finally {
       enableAuthInputs();
+      setAuthLoading(false);
     }
   });
 
@@ -355,8 +338,75 @@ function initAuthSection() {
   refreshAuthView();
 }
 
-// Load settings when popup opens
+// ============================================================================
+// Privacy Section
+// ============================================================================
+
+const TELEMETRY_OPT_OUT_KEY = 'lockin_telemetry_disabled';
+
+/**
+ * Check if this is an unpacked/development extension
+ */
+function isDevelopmentExtension() {
+  try {
+    const manifest = chrome.runtime.getManifest();
+    // Unpacked extensions don't have update_url
+    return !manifest.update_url;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Initialize the privacy section with telemetry toggle and dev-only test button
+ */
+async function initPrivacySection() {
+  const toggle = document.getElementById('telemetry-toggle');
+  const testBtn = document.getElementById('sentry-test-button');
+
+  if (!toggle) return;
+
+  // Load current telemetry state
+  try {
+    const result = await chrome.storage.sync.get([TELEMETRY_OPT_OUT_KEY]);
+    toggle.checked = result[TELEMETRY_OPT_OUT_KEY] !== true;
+  } catch {
+    toggle.checked = true; // Default to enabled
+  }
+
+  // Save on change
+  toggle.addEventListener('change', async () => {
+    try {
+      await chrome.storage.sync.set({ [TELEMETRY_OPT_OUT_KEY]: !toggle.checked });
+      showStatus(
+        toggle.checked ? 'Error reporting enabled' : 'Error reporting disabled',
+        'success'
+      );
+    } catch (error) {
+      console.error('Failed to save telemetry preference:', error);
+      showStatus('Failed to save preference', 'error');
+    }
+  });
+
+  // Dev-only: show test button for unpacked extensions
+  if (testBtn && isDevelopmentExtension()) {
+    testBtn.style.display = 'block';
+    testBtn.addEventListener('click', () => {
+      if (window.LockInSentry && window.LockInSentry.isSentryInitialized()) {
+        const result = window.LockInSentry.sendTestEvents();
+        showStatus(result.message, result.success ? 'success' : 'error');
+      } else {
+        showStatus('Sentry not initialized - check DSN config', 'error');
+      }
+    });
+  }
+}
+
+// Initialize when popup opens
 document.addEventListener('DOMContentLoaded', () => {
-  loadSettings();
+  initAccordions();
+  initPasswordToggle();
+  initForgotPassword();
   initAuthSection();
+  initPrivacySection();
 });

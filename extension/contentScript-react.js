@@ -8,6 +8,17 @@
  * - Bind user interactions (selection + Escape close)
  */
 
+// ============================================================================
+// Sentry Initialization (must be first)
+// ============================================================================
+
+// Initialize Sentry for error tracking (content script surface)
+// LockInSentry is loaded via dist/libs/sentry.js before this script (see manifest.json)
+if (typeof window !== 'undefined' && window.LockInSentry) {
+  window.LockInSentry.initSentry('content');
+}
+
+
 const Runtime = window.LockInContent || {};
 const Logger = Runtime.logger ||
   window.LockInLogger || {

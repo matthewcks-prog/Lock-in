@@ -12,5 +12,7 @@
     SESSION_STORAGE_KEY: 'lockinSupabaseSession',
     TOKEN_EXPIRY_BUFFER_MS: 60000,
     DEBUG_PANOPTO_RESOLVER: false,
+    // SENTRY_DSN: Injected at build time via VITE_SENTRY_DSN environment variable
+    // For local development, add VITE_SENTRY_DSN to .env in project root
   };
 })();

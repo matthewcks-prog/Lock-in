@@ -92,6 +92,17 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 - Set difficulty level
 - Settings sync across devices (Chrome Sync)
 
+### Feedback System
+
+Users can report bugs, request features, or ask questions directly from the sidebar:
+
+- Click the chat/feedback icon in the sidebar header
+- Select feedback type: Bug Report, Feature Request, Question, Other
+- Describe the issue/request
+- Context is auto-captured: current URL, course code, extension version, browser
+
+Feedback is stored in the database for review via Supabase Studio or a future admin dashboard.
+
 ## Configuration
 
 ### `config.js`
@@ -103,10 +114,37 @@ window.LOCKIN_CONFIG = {
   BACKEND_URL: 'http://localhost:3000',
   SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
   SUPABASE_ANON_KEY: 'your-anon-key',
+  // SENTRY_DSN is injected at build time via VITE_SENTRY_DSN
 };
 ```
 
 Update these values before loading the extension.
+
+### Error Tracking (Sentry)
+
+The extension includes optional Sentry integration for anonymous error tracking.
+
+**To enable:**
+
+1. Create a Sentry project at https://sentry.io (select "Browser JavaScript")
+2. Get your DSN from the project settings
+3. Add `VITE_SENTRY_DSN=your-dsn` to `.env` in the project root
+4. Rebuild the extension (`npm run build:ext`)
+
+**Privacy:**
+
+- **No user IDs** are sent to Sentry
+- IP addresses are anonymized
+- Only error details, stack traces, and breadcrumbs are collected
+- URLs are redacted to remove auth tokens
+- Disabled in development by default
+
+**What's captured:**
+
+- Unhandled JavaScript errors
+- Stack traces (with source maps)
+- Last 20 actions before the error (breadcrumbs)
+- Extension version, browser info, context (sidebar/content)
 
 ### Authentication Flow
 
