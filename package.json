@@ -22,9 +22,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "mcp:docs:draft": "powershell -ExecutionPolicy Bypass -File tools/mcp/scripts/update-mcp-docs.ps1 -Draft",
-    "mcp:docs:publish": "powershell -ExecutionPolicy Bypass -File tools/mcp/scripts/update-mcp-docs.ps1 -Publish"
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@lexical/code": "^0.17.0",

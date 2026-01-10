@@ -191,16 +191,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
    - Update folder `AGENTS.md` if folder-specific conventions change
    - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
 
-5. **Update MCP documentation (if applicable)**
-   - **When to update**: New database tables, new npm scripts, new file types/folders
-   - **How to update**:
-     1. Run `npm run mcp:docs:draft` (or `tools/mcp/scripts/update-mcp-docs.ps1 -Draft`) to preview changes
-     2. Review generated configs in `tools/mcp/config/`
-     3. Run `npm run mcp:docs:publish` (or `tools/mcp/scripts/update-mcp-docs.ps1 -Publish`) to stage for commit
-   - **Detailed workflow**: See `tools/mcp/docs/FEATURE_WORKFLOW.md`
-   - **Note**: MCP configs are auto-generated from `DATABASE.MD`, `package.json`, and repository structure
-
-6. **Summarize what changed**
+5. **Summarize what changed**
    - List code changes (files + purpose)
    - List doc changes (`.md` files updated and what changed)
    - Note any TODOs or follow-ups
@@ -229,9 +220,8 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - [ ] Are types defined in `/core/domain/types.ts`?
 - [ ] Is state managed properly (React hooks or TanStack Query)?
 - [ ] Are components small and focused?
-- [ ] If adding new database tables → Updated `DATABASE.MD` → Ran `npm run mcp:docs:draft` → Reviewed → `npm run mcp:docs:publish`?
-- [ ] If adding new npm scripts → Ran `npm run mcp:docs:draft` → Reviewed → `npm run mcp:docs:publish`?
-- [ ] If adding new file types/folders → Ran `npm run mcp:docs:draft` → Reviewed → `npm run mcp:docs:publish`?
+- [ ] If adding new database tables → Updated `DATABASE.MD`?
+- [ ] If changing file structure → Updated `CODE_OVERVIEW.md`?
 
 ---
 
