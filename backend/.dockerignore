@@ -1,0 +1,52 @@
+# =============================================================================
+# Lock-in Backend - Docker Ignore
+# Excludes files not needed in production container
+# =============================================================================
+
+# Dependencies (will be installed fresh in container)
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Environment files (secrets should come from Azure Key Vault)
+.env
+.env.*
+!.env.example
+
+# Development files
+nodemon.json
+.vscode/
+.idea/
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Tests
+*.test.js
+__tests__/
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+*.tmp
+*.temp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+
+# Local development
+docker-compose*.yml
+Dockerfile.dev
