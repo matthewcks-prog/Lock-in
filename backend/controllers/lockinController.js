@@ -24,12 +24,12 @@ const {
   MAX_USER_MESSAGE_LENGTH,
   DAILY_REQUEST_LIMIT,
   DEFAULT_CHAT_LIST_LIMIT,
+  MAX_CHAT_LIST_LIMIT,
 } = require('../config');
 const { checkDailyLimit } = require('../rateLimiter');
 const {
   validateMode,
   validateLanguageCode,
-  validateDifficultyLevel,
   validateUUID,
   validateChatHistory,
   validateText,
@@ -39,6 +39,38 @@ const {
   extractFirstUserMessage,
   FALLBACK_TITLE,
 } = require('../utils/chatTitle');
+const {
+  getAssetForVision,
+  getAssetTextContent,
+  createSignedAssetUrl,
+} = require('./chatAssetsController');
+const { isVisionCompatibleImage } = require('../utils/chatAssetValidation');
+const chatAssetsRepository = require('../repositories/chatAssetsRepository');
+const { createIdempotencyStore } = require('../utils/idempotency');
+
+const ATTACHMENT_ONLY_TITLE_SEED = 'Attachment-based question';
+const idempotencyStore = createIdempotencyStore();
+
+function extractIdempotencyKey(req) {
+  const headerValue =
+    (typeof req.get === 'function' && req.get('Idempotency-Key')) ||
+    req.headers?.['idempotency-key'];
+  const bodyValue = req.body?.idempotencyKey;
+  const candidate =
+    (typeof headerValue === 'string' && headerValue.trim()) ||
+    (typeof bodyValue === 'string' && bodyValue.trim());
+  return candidate || null;
+}
+
+function createRequestError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  error.payload = {
+    success: false,
+    error: { message },
+  };
+  return error;
+}
 
 /**
  * POST /api/lockin
@@ -82,7 +114,6 @@ async function handleLockinRequest(req, res) {
       selection: selectionFromBody,
       text: legacyText,
       mode,
-      difficultyLevel = 'highschool',
       chatHistory = [],
       newUserMessage,
       chatId: incomingChatId,
@@ -90,6 +121,7 @@ async function handleLockinRequest(req, res) {
       pageUrl,
       courseCode,
       language = 'en',
+      attachments = [], // Array of asset IDs to include in the message
     } = req.body || {};
 
     // Validate mode
@@ -100,16 +132,6 @@ async function handleLockinRequest(req, res) {
         error: { message: modeValidation.error },
       });
     }
-
-    // Validate difficulty level
-    const difficultyValidation = validateDifficultyLevel(difficultyLevel);
-    if (!difficultyValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: { message: difficultyValidation.error },
-      });
-    }
-    const normalizedDifficulty = difficultyValidation.normalized;
 
     // Validate and sanitize chat history
     const historyValidation = validateChatHistory(chatHistory);
@@ -127,21 +149,25 @@ async function handleLockinRequest(req, res) {
 
     // Validate selection (required for initial request)
     const selection = selectionFromBody || legacyText || '';
+    const trimmedSelection = typeof selection === 'string' ? selection.trim() : '';
+    const hasAttachmentIds = Array.isArray(attachments) && attachments.length > 0;
     if (isInitialRequest) {
-      if (!selection || selection.trim().length === 0) {
+      if (!trimmedSelection && !hasAttachmentIds) {
         return res.status(400).json({
           success: false,
-          error: { message: 'Selection is required for initial requests' },
+          error: { message: 'Selection or attachments are required for initial requests' },
         });
       }
-      const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, 'Selection');
-      if (!selectionValidation.valid) {
-        return res.status(400).json({
-          success: false,
-          error: { message: selectionValidation.error },
-        });
+      if (trimmedSelection) {
+        const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, 'Selection');
+        if (!selectionValidation.valid) {
+          return res.status(400).json({
+            success: false,
+            error: { message: selectionValidation.error },
+          });
+        }
       }
-    } else if (selection) {
+    } else if (trimmedSelection) {
       // Optional for follow-up messages, but validate if provided
       const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, 'Selection');
       if (!selectionValidation.valid) {
@@ -189,7 +215,8 @@ async function handleLockinRequest(req, res) {
     }
 
     const userId = req.user?.id;
-    const userInputText = trimmedUserMessage || selection;
+    const userInputText =
+      trimmedUserMessage || trimmedSelection || (hasAttachmentIds ? ATTACHMENT_ONLY_TITLE_SEED : '');
     const initialTitle = buildInitialChatTitle(userInputText || '');
     const firstUserMessage = extractFirstUserMessage(sanitizedHistory);
     const initialTitleFromHistory = buildInitialChatTitle(firstUserMessage || userInputText || '');
@@ -211,111 +238,152 @@ async function handleLockinRequest(req, res) {
       });
     }
 
-    let chatRecord;
-    if (incomingChatId) {
-      chatRecord = await getChatById(userId, incomingChatId);
-      if (!chatRecord) {
-        return res.status(404).json({
-          success: false,
-          error: { message: 'The requested chat does not exist for this user.' },
+    const idempotencyKey = extractIdempotencyKey(req);
+
+    const runLockinFlow = async () => {
+      let chatRecord;
+      if (incomingChatId) {
+        chatRecord = await getChatById(userId, incomingChatId);
+        if (!chatRecord) {
+          throw createRequestError(404, 'The requested chat does not exist for this user.');
+        }
+      } else {
+        chatRecord = await createChat(userId, initialTitle);
+      }
+
+      const chatId = chatRecord.id;
+
+      const userMessage = await insertChatMessage({
+        chat_id: chatId,
+        user_id: userId,
+        role: 'user',
+        mode: effectiveMode,
+        source: 'highlight',
+        input_text: userInputText,
+        output_text: null,
+      });
+
+      // Process attachments for vision/text extraction
+      const processedAttachments = [];
+      const linkedAssetIds = [];
+      if (Array.isArray(attachments) && attachments.length > 0) {
+        for (const assetId of attachments.slice(0, 5)) { // Limit to 5 attachments
+          // Validate asset ID format
+          const assetIdValidation = validateUUID(assetId);
+          if (!assetIdValidation.valid) continue;
+
+          // Get asset metadata
+          const asset = await chatAssetsRepository.getAssetById(assetId, userId);
+          if (!asset) continue;
+          linkedAssetIds.push(asset.id);
+
+          if (isVisionCompatibleImage(asset.mime_type)) {
+            // Get base64 data for vision
+            const visionData = await getAssetForVision(assetId, userId);
+            if (visionData) {
+              processedAttachments.push({
+                type: 'image',
+                mimeType: visionData.mimeType,
+                base64: visionData.base64,
+                fileName: visionData.fileName,
+              });
+            }
+          } else {
+            // Get text content for documents/code
+            const textData = await getAssetTextContent(assetId, userId);
+            if (textData && textData.textContent) {
+              processedAttachments.push({
+                type: asset.type,
+                mimeType: textData.mimeType,
+                textContent: textData.textContent,
+                fileName: textData.fileName,
+              });
+            }
+          }
+        }
+      }
+
+      let structuredResponse;
+      try {
+        structuredResponse = await generateStructuredStudyResponse({
+          mode: effectiveMode,
+          selection: trimmedSelection,
+          pageContext,
+          pageUrl,
+          courseCode,
+          language,
+          chatHistory: sanitizedHistory,
+          newUserMessage: trimmedUserMessage || undefined,
+          attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
+        });
+      } catch (error) {
+        console.error('Error generating structured study response:', error);
+        throw createRequestError(
+          500,
+          error.message || 'Failed to generate study response. Please try again.',
+        );
+      }
+
+      // Link attachments to the user message if we have a chat
+      if (linkedAssetIds.length > 0 && userMessage?.id) {
+        await chatAssetsRepository.linkAssetsToMessage(linkedAssetIds, userMessage.id, userId);
+      }
+
+      // Store the explanation as the output text (for now, we don't persist notes/todos yet)
+      await insertChatMessage({
+        chat_id: chatId,
+        user_id: userId,
+        role: 'assistant',
+        mode: effectiveMode,
+        source: 'highlight',
+        input_text: null,
+        output_text: structuredResponse.explanation,
+      });
+
+      await touchChat(chatId);
+
+      // Automatically generate AI title if chat doesn't have one yet (or has fallback)
+      // Do this asynchronously to avoid blocking the response
+      const existingTitle = typeof chatRecord.title === 'string' ? chatRecord.title.trim() : '';
+      const shouldGenerateTitle =
+        !existingTitle ||
+        existingTitle === FALLBACK_TITLE ||
+        existingTitle === initialTitleFromHistory;
+
+      if (shouldGenerateTitle) {
+        // Generate title asynchronously (fire and forget)
+        generateChatTitleAsync(userId, chatId, firstUserMessage || userInputText).catch((error) => {
+          console.error('Failed to auto-generate chat title:', error);
+          // Non-critical error, don't throw
         });
       }
-    } else {
-      chatRecord = await createChat(userId, initialTitle);
-    }
 
-    const chatId = chatRecord.id;
+      return {
+        success: true,
+        data: {
+          mode: structuredResponse.mode,
+          explanation: structuredResponse.explanation,
+          notes: structuredResponse.notes,
+          todos: structuredResponse.todos,
+          tags: structuredResponse.tags,
+          difficulty: structuredResponse.difficulty,
+        },
+        chatId,
+        chatTitle: existingTitle || initialTitle,
+      };
+    };
 
-    await insertChatMessage({
-      chat_id: chatId,
-      user_id: userId,
-      role: 'user',
-      mode: effectiveMode,
-      source: 'highlight',
-      input_text: userInputText,
-      output_text: null,
-    });
+    const responsePayload = idempotencyKey
+      ? await idempotencyStore.run(idempotencyKey, runLockinFlow)
+      : await runLockinFlow();
 
-    // Use structured response for initial requests (no chat history or new selection)
-    // For follow-up messages with existing chat history, we still use the structured response
-    // but the model will generate based on the selection and context
-    // Selection is required for generateStructuredStudyResponse (even for follow-ups, it's the original selection)
-    const trimmedSelection = selection.trim();
-    if (!trimmedSelection) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'Selection is required. Please provide the original selected text.' },
-      });
-    }
-
-    let structuredResponse;
-    try {
-      structuredResponse = await generateStructuredStudyResponse({
-        mode: effectiveMode,
-        selection: trimmedSelection,
-        pageContext,
-        pageUrl,
-        courseCode,
-        language,
-        difficultyLevel: normalizedDifficulty,
-        chatHistory: sanitizedHistory,
-        newUserMessage: trimmedUserMessage || undefined,
-      });
-    } catch (error) {
-      console.error('Error generating structured study response:', error);
-      return res.status(500).json({
-        success: false,
-        error: { message: error.message || 'Failed to generate study response. Please try again.' },
-      });
-    }
-
-    // Store the explanation as the output text (for now, we don't persist notes/todos yet)
-    await insertChatMessage({
-      chat_id: chatId,
-      user_id: userId,
-      role: 'assistant',
-      mode: effectiveMode,
-      source: 'highlight',
-      input_text: null,
-      output_text: structuredResponse.explanation,
-    });
-
-    await touchChat(chatId);
-
-    // Automatically generate AI title if chat doesn't have one yet (or has fallback)
-    // Do this asynchronously to avoid blocking the response
-    const existingTitle = typeof chatRecord.title === 'string' ? chatRecord.title.trim() : '';
-    const shouldGenerateTitle =
-      !existingTitle ||
-      existingTitle === FALLBACK_TITLE ||
-      existingTitle === initialTitleFromHistory;
-
-    if (shouldGenerateTitle) {
-      // Generate title asynchronously (fire and forget)
-      generateChatTitleAsync(userId, chatId, firstUserMessage || userInputText).catch((error) => {
-        console.error('Failed to auto-generate chat title:', error);
-        // Non-critical error, don't throw
-      });
-    }
-
-    // For now, we don't log token usage from structured responses
-    // This can be added later if needed
-
-    return res.json({
-      success: true,
-      data: {
-        mode: structuredResponse.mode,
-        explanation: structuredResponse.explanation,
-        notes: structuredResponse.notes,
-        todos: structuredResponse.todos,
-        tags: structuredResponse.tags,
-        difficulty: structuredResponse.difficulty,
-      },
-      chatId,
-      chatTitle: existingTitle || initialTitle,
-    });
+    return res.json(responsePayload);
   } catch (error) {
     console.error('Error processing /api/lockin request:', error);
+
+    if (error?.status && error?.payload) {
+      return res.status(error.status).json(error.payload);
+    }
 
     // Don't expose internal errors to client
     return res.status(500).json({
@@ -323,6 +391,23 @@ async function handleLockinRequest(req, res) {
       error: { message: 'Failed to process your request. Please try again.' },
     });
   }
+}
+
+function parseChatCursor(rawCursor) {
+  if (typeof rawCursor !== 'string') return null;
+  const trimmed = rawCursor.trim();
+  if (!trimmed) return null;
+
+  const numeric = Number(trimmed);
+  if (!Number.isNaN(numeric)) {
+    const ms = trimmed.length <= 10 ? numeric * 1000 : numeric;
+    const date = new Date(ms);
+    return Number.isNaN(date.getTime()) ? null : date.toISOString();
+  }
+
+  const parsed = Date.parse(trimmed);
+  if (Number.isNaN(parsed)) return null;
+  return new Date(parsed).toISOString();
 }
 
 /**
@@ -333,14 +418,20 @@ async function listChats(req, res) {
   try {
     const userId = req.user?.id;
     const requestedLimit = parseInt(req.query.limit, 10);
+    const cursorParam = typeof req.query.cursor === 'string' ? req.query.cursor : '';
+    const cursor = parseChatCursor(cursorParam);
+
+    if (cursorParam && !cursor) {
+      return res.status(400).json({ error: 'Invalid cursor parameter' });
+    }
 
     // Validate and constrain limit
     let limit =
       Number.isFinite(requestedLimit) && requestedLimit > 0
-        ? Math.min(requestedLimit, 100) // Cap at 100
+        ? Math.min(requestedLimit, MAX_CHAT_LIST_LIMIT)
         : DEFAULT_CHAT_LIST_LIMIT;
 
-    const chats = await getRecentChats(userId, limit);
+    const { chats, pagination } = await getRecentChats(userId, { limit, cursor });
 
     const response = chats.map((chat) => ({
       ...chat,
@@ -348,10 +439,48 @@ async function listChats(req, res) {
       title: chat.title && chat.title.trim() ? chat.title : null,
     }));
 
-    return res.json(response);
+    return res.json({
+      chats: response,
+      pagination,
+    });
   } catch (error) {
     console.error('Error fetching chats:', error);
     return res.status(500).json({ error: 'Failed to load chats' });
+  }
+}
+
+/**
+ * POST /api/chats
+ * Create a new chat session for the authenticated user.
+ */
+async function createChatSession(req, res) {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(500).json({ error: 'User context missing.' });
+    }
+
+    const { title, initialMessage } = req.body || {};
+    const seed =
+      typeof title === 'string' && title.trim().length > 0
+        ? title
+        : typeof initialMessage === 'string'
+          ? initialMessage
+          : '';
+    const chatTitle = buildInitialChatTitle(seed);
+
+    const chat = await createChat(userId, chatTitle);
+
+    return res.status(201).json({
+      id: chat.id,
+      title: chat.title,
+      createdAt: chat.created_at,
+      updatedAt: chat.updated_at,
+      lastMessageAt: chat.last_message_at,
+    });
+  } catch (error) {
+    console.error('Error creating chat:', error);
+    return res.status(500).json({ error: 'Failed to create chat' });
   }
 }
 
@@ -444,7 +573,39 @@ async function listChatMessages(req, res) {
     }
 
     const messages = await getChatMessages(userId, chatId);
-    return res.json(messages);
+    const assets = await chatAssetsRepository.listAssetsForChat(chatId, userId);
+    const assetsByMessage = new Map();
+
+    if (assets.length > 0) {
+      const assetsWithUrls = await Promise.all(
+        assets.map(async (asset) => ({
+          id: asset.id,
+          messageId: asset.message_id,
+          kind: asset.type,
+          mime: asset.mime_type,
+          name: asset.file_name || 'Attachment',
+          url: await createSignedAssetUrl(asset.storage_path),
+        })),
+      );
+
+      for (const asset of assetsWithUrls) {
+        if (!asset.messageId) continue;
+        if (!assetsByMessage.has(asset.messageId)) {
+          assetsByMessage.set(asset.messageId, []);
+        }
+        assetsByMessage.get(asset.messageId).push(asset);
+      }
+    }
+
+    const response = messages.map((message) => {
+      const attachments = assetsByMessage.get(message.id);
+      if (!attachments || attachments.length === 0) {
+        return message;
+      }
+      return { ...message, attachments };
+    });
+
+    return res.json(response);
   } catch (error) {
     console.error('Error fetching chat messages:', error);
     return res.status(500).json({ error: 'Failed to load chat messages' });
@@ -577,6 +738,7 @@ async function generateChatTitle(req, res) {
 
 module.exports = {
   handleLockinRequest,
+  createChatSession,
   listChats,
   deleteChat,
   listChatMessages,

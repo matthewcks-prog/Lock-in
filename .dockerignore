@@ -1,0 +1,22 @@
+# =============================================================================
+# Lock-in Project - Docker Ignore (Project Root)
+# Excludes files not needed in production container
+# =============================================================================
+
+# Ignore everything by default
+*
+
+# Include only what's needed for backend
+!backend/
+!core/config/chatLimits.json
+
+# Exclude from backend
+backend/node_modules
+backend/.env
+backend/.env.*
+backend/*.test.js
+backend/__tests__
+backend/tmp/
+backend/*.md
+!backend/package.json
+!backend/package-lock.json

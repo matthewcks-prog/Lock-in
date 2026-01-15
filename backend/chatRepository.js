@@ -1,4 +1,5 @@
 const { supabase } = require('./supabaseClient');
+const { DEFAULT_CHAT_LIST_LIMIT } = require('./config');
 
 /**
  * Create a new chat row for the given user.
@@ -85,23 +86,42 @@ async function touchChat(chatId) {
 /**
  * Fetch recent chats for the user ordered by last activity.
  * @param {string} userId
- * @param {number} limit
- * @returns {Promise<object[]>}
+ * @param {{ limit?: number, cursor?: string | null }} options
+ * @returns {Promise<{chats: object[], pagination: {hasMore: boolean, nextCursor: string | null}}>}
  */
-async function getRecentChats(userId, limit = 5) {
-  const cappedLimit = Number.isFinite(limit) && limit > 0 ? limit : 5;
-  const { data, error } = await supabase
+async function getRecentChats(userId, options = {}) {
+  const { limit = DEFAULT_CHAT_LIST_LIMIT, cursor } = options;
+  const cappedLimit = Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_CHAT_LIST_LIMIT;
+  let query = supabase
     .from('chats')
     .select('id,title,created_at,updated_at,last_message_at')
     .eq('user_id', userId)
-    .order('last_message_at', { ascending: false, nullsFirst: false })
-    .limit(cappedLimit);
+    .order('last_message_at', { ascending: false, nullsFirst: false });
+
+  if (cursor) {
+    query = query.or(`last_message_at.lt.${cursor},last_message_at.is.null`);
+  }
+
+  const { data, error } = await query.limit(cappedLimit + 1);
 
   if (error) {
     throw new Error(`Failed to fetch chats: ${error.message}`);
   }
 
-  return data || [];
+  const rows = data || [];
+  const hasMore = rows.length > cappedLimit;
+  const chats = hasMore ? rows.slice(0, cappedLimit) : rows;
+  const lastItem = chats[chats.length - 1];
+  const nextCursor = lastItem?.last_message_at || null;
+  const canPageMore = hasMore && Boolean(nextCursor);
+
+  return {
+    chats,
+    pagination: {
+      hasMore: canPageMore,
+      nextCursor: canPageMore ? nextCursor : null,
+    },
+  };
 }
 
 /**

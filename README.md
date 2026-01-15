@@ -4,10 +4,29 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 ## Features
 
+### AI-Powered Learning
 - **Explain**: Get clear, plain-English explanations with concrete examples
 - **Sidebar Interface**: Modern right-hand sidebar with chat history and persistent conversations
-- **Split Layout**: Floating toggle pill, Ctrl/Cmd + select to open, 65/35 split (max ~390px) with mobile overlay
+- **Split Layout**: Ctrl/Cmd + select to open, 65/35 split with mobile overlay
 - **Chat History**: Persistent chat sessions saved to Supabase
+
+### Notes
+- **Rich Text Notes**: Full-featured note editor with formatting (bold, lists, headings)
+- **Autosave**: Notes save automatically as you type
+- **Asset Attachments**: Upload images and files directly into notes
+- **Course Organization**: Notes auto-linked to course and week based on context
+- **Starred Notes**: Mark important notes for quick access
+
+### Transcripts
+- **Video Transcripts**: Extract transcripts from lecture videos (Panopto, Echo360, HTML5)
+- **AI Transcription**: Transcribe videos without captions using AI
+- **Multi-provider Support**: Works with Monash Panopto, Echo360, and standard HTML5 video
+
+### Feedback
+- **In-app Feedback**: Submit bug reports, feature requests, and questions
+- **Auto-captured Context**: Includes page URL, course code, extension version
+
+### Other
 - **Authentication**: Secure user authentication via Supabase
 
 ## Architecture
@@ -65,7 +84,8 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
    OPENAI_API_KEY=your_openai_api_key_here
    PORT=3000
    DAILY_REQUEST_LIMIT=100
-   CHAT_LIST_LIMIT=5
+   CHAT_LIST_LIMIT=20
+   MAX_CHAT_LIST_LIMIT=100
    ```
 
 4. Start the development server:
@@ -117,7 +137,6 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 1. Click the Lock-in extension icon in Chrome's toolbar
 2. Adjust your preferred language for translations
-3. Set your difficulty level (High School or First-Year University)
 4. Settings are automatically saved
 
 ## API Endpoints
@@ -132,7 +151,6 @@ Main endpoint for processing text.
 {
   "selection": "The text to process",
   "mode": "explain | general",
-  "difficultyLevel": "highschool | university",
   "chatHistory": [],
   "newUserMessage": "Optional follow-up question",
   "chatId": "optional-existing-chat-id"

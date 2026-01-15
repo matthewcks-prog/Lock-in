@@ -9,11 +9,13 @@ import { useCallback, useRef, useState, useLayoutEffect } from 'react';
 
 interface UseChatInputOptions {
     /** Called when user submits input (Enter key or send button) */
-    onSend?: (value: string) => void;
+    onSend?: (value: string) => boolean | void | Promise<boolean | void>;
     /** Whether sending is in progress (disables input) */
     isSending?: boolean;
     /** Whether the input should be focused */
     shouldFocus?: boolean;
+    /** Whether sending is allowed even with empty input */
+    canSend?: boolean;
 }
 
 interface UseChatInputReturn {
@@ -45,7 +47,7 @@ interface UseChatInputReturn {
  * - Focus management
  */
 export function useChatInput(options: UseChatInputOptions = {}): UseChatInputReturn {
-    const { onSend, isSending = false, shouldFocus = false } = options;
+    const { onSend, isSending = false, shouldFocus = false, canSend = false } = options;
     const [value, setValue] = useState('');
     const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -88,30 +90,36 @@ export function useChatInput(options: UseChatInputOptions = {}): UseChatInputRet
      * Handle keyboard events.
      * Enter to send, Shift+Enter for newline.
      */
+    const triggerSend = useCallback(async () => {
+        const trimmed = value.trim();
+        const shouldSend = trimmed.length > 0 || canSend;
+        if (!shouldSend || isSending) return;
+        try {
+            const shouldClear = await onSend?.(trimmed);
+            if (shouldClear === false) return;
+            setValue('');
+            requestAnimationFrame(() => syncHeight());
+        } catch {
+            // Swallow errors so the UI stays responsive
+        }
+    }, [value, isSending, canSend, onSend, syncHeight]);
+
     const handleKeyDown = useCallback(
         (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
-                if (value.trim() && !isSending) {
-                    onSend?.(value.trim());
-                    setValue('');
-                    // Reset height after clearing
-                    requestAnimationFrame(() => syncHeight());
-                }
+                void triggerSend();
             }
         },
-        [value, isSending, onSend, syncHeight],
+        [triggerSend],
     );
 
     /**
      * Trigger send action programmatically.
      */
     const handleSend = useCallback(() => {
-        if (!value.trim() || isSending) return;
-        onSend?.(value.trim());
-        setValue('');
-        requestAnimationFrame(() => syncHeight());
-    }, [value, isSending, onSend, syncHeight]);
+        void triggerSend();
+    }, [triggerSend]);
 
     /**
      * Clear input value.

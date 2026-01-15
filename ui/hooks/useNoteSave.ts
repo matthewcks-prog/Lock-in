@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { Note, NoteContent, NoteType } from '@core/domain/Note';
 import type { NotesService } from '@core/services/notesService';
 import { createNoteContentFromPlainText } from '../extension/notes/content';
+import type { SidebarTabId } from '../extension/sidebar/types';
 
 /**
  * Options for saving a note
@@ -36,7 +37,7 @@ export interface UseNoteSaveOptions {
     courseCode: string | null;
     upsertNote: (note: Note) => void;
     setSelectedNoteId: (id: string | null) => void;
-    setActiveTab: (tab: string) => void;
+    setActiveTab: (tab: SidebarTabId) => void;
 }
 
 /**

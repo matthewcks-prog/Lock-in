@@ -45,7 +45,15 @@ This is a living overview of the current codebase. Update it whenever files move
   - Toolbar popup UI logic, settings, and auth UI.
 
 - **`dist/ui/index.js`**
-  - Built React sidebar bundle consumed by the content script (source entry in `ui/extension/index.tsx`, sidebar orchestration in `ui/extension/LockInSidebar.tsx`, Lexical note editor in `ui/extension/notes/`).
+  - Built React sidebar bundle consumed by the content script (source entry in `ui/extension/index.tsx`, orchestrator in `ui/extension/LockInSidebar.tsx`, sidebar shell pieces in `ui/extension/sidebar/`, Lexical note editor in `ui/extension/notes/`).
+
+- **`ui/extension/chat/`**
+  - Chat module with modular hooks (`useChat`, `useChatMessages`, `useSendMessage`, `useChatAttachments`).
+  - Chat history uses cursor-based pagination via `useChatHistory` (useInfiniteQuery) with limits shared in `core/config/chatLimits.json`.
+  - Components include `AttachmentButton`, `AttachmentPreview`, `ChatMessage`, and `MarkdownRenderer` for rich message display with syntax highlighting.
+  - Types defined in `chat/types.ts`.
+- **`ui/extension/sidebar/`**
+  - Sidebar shell components (`SidebarLayout`, `SidebarTabs`, `ChatSection`, `SidebarHeaderActions`, `ToolSection`) plus sizing/state hooks (`useResize`, `useSidebarState`).
 
 ### Shared Modules
 
@@ -60,7 +68,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`dist/libs/initApi.js` + `/api` (TS)**
   - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/src/initApi.ts`).
-  - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets), and `api/client.ts` composes them to keep the same public method bag.
+  - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets/chatAssets/feedback), and `api/client.ts` composes them to keep the same public method bag.
 
 - **`src/` (TypeScript source)**
   - `initApi.ts` - Entry point for bundled API/auth clients
@@ -133,7 +141,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`config.js`**
   - Centralized configuration (env vars, rate limits, CORS origins).
-  - Asset upload settings: bucket name (`NOTE_ASSETS_BUCKET`), max size, and MIME allow-list.
+  - Asset upload settings: bucket names, max size, MIME allow-lists, and chat asset signed URL TTL.
 
 ### Routes & Controllers
 
@@ -160,6 +168,12 @@ This is a living overview of the current codebase. Update it whenever files move
   - Handles note asset upload/list/delete via Supabase Storage with validation.
   - Returns assets with snake_case fields (note_id, mime_type, storage_path, created_at) that are mapped to camelCase in the API client.
 
+- **`controllers/chatAssetsController.js`**
+  - Handles chat message attachment upload/list/delete via Supabase Storage.
+  - Supports images (for GPT-4o-mini vision analysis), documents, and code files.
+  - Enforces upload limits, validates magic bytes, and returns signed URLs for private assets.
+  - Provides `getAssetForVision()` to fetch base64-encoded images for AI processing.
+
 - **`controllers/transcriptsController.js`**
   - Transcript job lifecycle handlers (create, upload chunks, finalize, cancel, status) with quota enforcement and chunk integrity checks.
 
@@ -173,6 +187,9 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`noteAssetsRepository.js`**
   - Data access for the `note_assets` table (create/list/get/delete).
+
+- **`chatAssetsRepository.js`**
+  - Data access for the `chat_message_assets` table (create/list/get/delete/link).
 
 - **`transcriptsRepository.js`**
   - Data access for per-user transcript cache, transcript job records, and chunk tracking.
@@ -196,7 +213,7 @@ This is a living overview of the current codebase. Update it whenever files move
   - Validates Supabase JWT tokens and attaches user context.
 
 - **`rateLimiter.js`**
-  - Per-user rate limiting backed by Supabase.
+  - Per-user rate limiting backed by Supabase (AI requests + chat asset uploads).
 
 - **`middleware/uploadMiddleware.js`**
   - Multer-based in-memory upload handler with size and MIME validation for note assets.
@@ -214,7 +231,7 @@ This is a living overview of the current codebase. Update it whenever files move
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
 8. **Transcript extraction**: Captions-first flow for Panopto/Echo360/HTML5. Panopto caption URLs are extracted from embed HTML; Echo360 uses JSON transcript endpoint (primary) with VTT/TXT fallback, and integrates with syllabus API for section pages. If captions are missing, `PanoptoMediaResolver` resolves podcast/download URLs (viewer/embed HTML + MAIN-world probe + range validation) and the background AI pipeline uploads media to the backend. UI shows the video list and exposes AI fallback when captions are unavailable.
 9. **Cross-tab sync**: `useCrossTabSync` uses `chrome.storage.local` as a lightweight event bus to refresh notes/chat state across tabs without duplicating feature-specific wiring.
-10. **Error Tracking (Sentry)**: Uses browser extension pattern with isolated `BrowserClient` + `Scope` (not `Sentry.init()`) per [Sentry best practices](https://docs.sentry.io/platforms/javascript/best-practices/browser-extensions/). Located in `extension/src/sentry.ts`, initialized in sidebar bundle. Captures errors via `scope.captureException()`. No user IDs collected. DSN configured in `extension/config.js`.
+10. **Error Tracking (Sentry)**: Uses browser extension pattern with isolated `BrowserClient` + `Scope` (not `Sentry.init()`) per [Sentry best practices](https://docs.sentry.io/platforms/javascript/best-practices/browser-extensions/). Located in `extension/src/sentry.ts`, initialized in sidebar bundle. Captures errors via `scope.captureException()`. Privacy-focused: request bodies, auth headers, and query params are stripped; user context is not attached to error events. DSN configured in `extension/config.js`.
 11. **Feedback System**: Structured user feedback via `FeedbackModal` in sidebar. Backend at `POST /api/feedback`, types in `core/domain/types.ts` and `api/resources/feedbackClient.ts`, stored in `feedback` table with RLS.
 
 ### Backend

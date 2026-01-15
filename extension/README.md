@@ -89,7 +89,6 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 - Click extension icon to open settings popup
 - Sign in / Sign out via Supabase
 - Choose preferred translation language
-- Set difficulty level
 - Settings sync across devices (Chrome Sync)
 
 ### Feedback System

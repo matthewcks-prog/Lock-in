@@ -78,9 +78,6 @@
 
         stateStore.setSelection(session.selection || '');
         stateStore.setMode(session.mode || 'explain');
-        stateStore.setPreferences({
-          difficultyLevel: session.difficultyLevel || 'highschool',
-        });
 
         if (session.chatId) {
           await stateStore.setChatId(session.chatId);

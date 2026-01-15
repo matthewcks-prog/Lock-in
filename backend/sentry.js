@@ -204,21 +204,6 @@ function captureMessage(message, level = 'info') {
 }
 
 /**
- * Set user context (anonymized - ID only)
- */
-function setUser(userId) {
-  // Only set user ID, no email or name for privacy
-  Sentry.setUser({ id: userId });
-}
-
-/**
- * Clear user context (on logout)
- */
-function clearUser() {
-  Sentry.setUser(null);
-}
-
-/**
  * Flush pending events (call before process exit)
  */
 async function flush(timeout = 2000) {
@@ -234,8 +219,6 @@ module.exports = {
   setupSentryErrorHandler,
   captureError,
   captureMessage,
-  setUser,
-  clearUser,
   flush,
   Sentry,
 };

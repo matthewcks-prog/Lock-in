@@ -658,6 +658,224 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   color: #4b5563;
 }
 
+/* Chat thinking indicator */
+.lockin-chat-thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.lockin-chat-thinking-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.lockin-chat-thinking-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #9ca3af;
+  animation: lockin-bounce 0.8s ease-in-out infinite;
+}
+
+@keyframes lockin-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+/* Chat attachments in messages */
+.lockin-chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 85%;
+}
+
+.lockin-chat-attachment {
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.lockin-chat-attachment .lockin-chat-attachment-thumb {
+  width: 120px;
+  height: 90px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockin-chat-attachment-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lockin-chat-attachment-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #374151;
+  max-width: 180px;
+}
+
+.lockin-chat-attachment-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Attachment composer preview */
+.lockin-chat-attachment-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.lockin-chat-attachment-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f3f4f6;
+}
+
+.lockin-chat-attachment-item.is-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.lockin-chat-attachment-item.is-uploading {
+  opacity: 0.7;
+}
+
+.lockin-chat-attachment-item .lockin-chat-attachment-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lockin-chat-attachment-doc-icon {
+  color: #ef4444;
+}
+
+.lockin-chat-attachment-extension {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.lockin-chat-attachment-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.lockin-chat-attachment-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lockin-chat-attachment-size {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 2px 0 0;
+}
+
+.lockin-chat-attachment-error {
+  color: #dc2626;
+}
+
+.lockin-chat-attachment-remove {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.lockin-chat-attachment-remove:hover {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.lockin-chat-attachment-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lockin-chat-attachment-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.65);
+  border-radius: 10px;
+}
+
+/* Attachment button */
+.lockin-chat-attach-btn {
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.lockin-chat-attach-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.lockin-chat-attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Save note action for assistant messages */
 .lockin-chat-save-note-action {
   padding: 4px 0;

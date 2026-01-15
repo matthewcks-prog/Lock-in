@@ -19,7 +19,8 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
    SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
    PORT=3000
    DAILY_REQUEST_LIMIT=100
-   CHAT_LIST_LIMIT=5
+   CHAT_LIST_LIMIT=20
+   MAX_CHAT_LIST_LIMIT=100
    ```
 
 3. **Run development server:**
@@ -98,7 +99,6 @@ Process text with AI assistance (Explain, General).
 {
   "selection": "The text to process",
   "mode": "explain",
-  "difficultyLevel": "highschool",
   "chatHistory": [],
   "newUserMessage": "Optional follow-up question",
   "chatId": "optional-existing-chat-id"
@@ -129,10 +129,30 @@ Process text with AI assistance (Explain, General).
 #### List Chats
 
 ```
-GET /api/chats?limit=10
+GET /api/chats?limit=20&cursor=2026-01-12T00:00:00.000Z
 ```
 
 Get recent chats for authenticated user.
+
+**Response:**
+
+```json
+{
+  "chats": [
+    {
+      "id": "uuid",
+      "title": "Chat title",
+      "created_at": "2026-01-12T00:00:00.000Z",
+      "updated_at": "2026-01-12T00:00:00.000Z",
+      "last_message_at": "2026-01-12T00:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "hasMore": true,
+    "nextCursor": "2026-01-11T23:59:00.000Z"
+  }
+}
+```
 
 #### Delete Chat
 
@@ -256,7 +276,8 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (required) | -       |
 | `PORT`                      | Server port                          | 3000    |
 | `DAILY_REQUEST_LIMIT`       | Requests per user per day            | 100     |
-| `CHAT_LIST_LIMIT`           | Default chat list size               | 5       |
+| `CHAT_LIST_LIMIT`           | Default chat list size               | 20      |
+| `MAX_CHAT_LIST_LIMIT`       | Maximum chat list size               | 100     |
 
 ## Database Schema
 

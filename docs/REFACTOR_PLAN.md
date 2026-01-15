@@ -1,174 +1,329 @@
-# Refactor Plan
+# Refactor Plan v2.0 (Post-Audit)
 
-Tracks refactor-prep work (guardrails, documentation, tests, build scripts).
+Comprehensive refactor plan based on consolidated audit findings (Batch 1 + Batch 2).
 
-## Current Phase
+**Audit Date:** January 2026  
+**Overall Health Score:** 7.5/10  
+**Safe to Continue Development:** YES, with conditions
 
-**Phase B6: Test Hardening** (in progress)
+---
 
-Focus: Adding critical-path unit tests, reducing lint noise, maintaining refactor gate.
+## Phase B: File Size Reduction
 
-## Completed Phases
+**Priority:** 🟠 HIGH — Critical for maintainability  
+**Timeline:** Sprint 1-2 (1-2 weeks)
 
-### Phase 1: Build and Tooling Guardrails
+### B1. NoteEditor.tsx Decomposition (1039 lines → <200)
+Current: `ui/extension/notes/NoteEditor.tsx` — 5x over limit
 
-- [x] Bundle transcript providers for background usage (`vite.config.transcriptProviders.ts`)
-- [x] Document provider bundle usage in build docs
+- [ ] Extract `LexicalConfig.ts` — theme, node registration
+- [ ] Extract `EditorToolbar.tsx` — toolbar UI and format handlers
+- [ ] Extract `EditorPlugins.tsx` — plugin composition
+- [ ] Extract `ColorPicker.tsx` — color selection UI
+- [ ] Refactor `NoteEditor.tsx` to orchestrator only (<200 lines)
 
-### Phase 2: Import Hygiene (C1)
+### B2. echo360Provider.ts Decomposition (939 lines → <200)
+Current: `core/transcripts/providers/echo360Provider.ts` — 5x over limit
 
-- [x] Normalize `@core/*` and `@shared/ui` path aliases
-- [x] Remove deep relative imports
+- [ ] Extract `echo360Detection.ts` — detection logic
+- [ ] Extract `echo360Extraction.ts` — extraction logic
+- [ ] Extract `echo360Types.ts` — shared types
+- [ ] Refactor provider as composition layer (<200 lines)
 
-### Phase 3: Documentation Scaffolds (C2)
+### B4. panoptoProvider.ts Decomposition (666 lines → <200)
+Current: `core/transcripts/providers/panoptoProvider.ts` — 3x over limit
 
-- [x] Create `docs/ARCHITECTURE.md` - Stable architecture invariants
-- [x] Create `docs/REPO_MAP.md` - Repository structure map
-- [x] Create `docs/STATUS.md` - Living snapshot of current state
+- [ ] Extract detection logic
+- [ ] Extract extraction logic
+- [ ] Extract helper modules
+- [ ] Refactor provider as composition layer (<200 lines)
 
-### Phase 4: Shared Vite Config (C3)
+### B5. useNoteEditor.ts Decomposition (633 lines → <200)
+Current: `ui/hooks/useNoteEditor.ts` — 3x over limit
 
-- [x] Deduplicate shared Vite configuration
-- [x] Centralize build settings
+- [ ] Extract `useOfflineQueue.ts` — offline queue logic
+- [ ] Extract `useAutosave.ts` — autosave logic
+- [ ] Extract `useConflictResolution.ts` — conflict handling
+- [ ] Refactor `useNoteEditor.ts` as composition hook (<200 lines)
 
-### Phase 5: API Client Layering (C4)
+### B6. Secondary File Reductions
+- [ ] `core/transcripts/videoDetection.ts` (403 lines) — split by provider
+- [ ] `core/transcripts/parsers/echo360Parser.ts` (458 lines) — split by response type
+- [ ] `ui/extension/notes/NotesPanel.tsx` (515 lines) — extract components
 
-- [x] Layer API client into fetcher + resource clients
-- [x] Add contract guardrails (surface keys/signature locked)
-- [x] Add retry/abort/conflict/asset mapping tests
-- [x] Update documentation
+---
 
-### Phase 6: Content Runtime Versioning (C4C-1, C4C-2)
+## Phase C: Type Safety Improvement
 
-- [x] Version `window.LockInContent` runtime
-- [x] Migrate helpers to canonical API
-- [x] Add surface test + ESLint guard
-- [x] Remove compat shim (C4C-2)
-- [x] ESLint guard now errors on legacy identifiers
-- [x] Surface tests enforce canonical-only keys
+**Priority:** 🟠 HIGH — Reduce 126 `any` warnings to 0  
+**Timeline:** Sprint 2-3 (1-2 weeks)
 
-### Phase 7: Window Globals Contract Tests (C5A, C5B)
+### C1. API Boundaries (22 warnings)
+- [ ] Type `api/resources/notesClient.ts` — `RawNoteResponse` interface
+- [ ] Type `api/resources/chatsClient.ts` — `RawChatResponse` interface
+- [ ] Type `api/resources/assetsClient.ts` — `RawNoteAssetResponse` interface
+- [ ] Add proper generics to `apiRequest<T>()`
 
-- [x] Init API globals contract gate (`window.LockInAPI`/`window.LockInAuth`)
-- [x] UI globals contract gate (`window.LockInUI` sidebar factory)
-- [x] Surface tests covering keys + contracts
+### C2. Storage Interface (5 warnings)
+- [ ] Type `core/storage/storageInterface.ts` callbacks
+- [ ] Replace `any` with `Record<string, { oldValue?: unknown; newValue?: unknown }>`
+- [ ] Add proper generics to `get<T>()`
 
-### Phase 8: Manifest and Init Order Guardrails (C5C, C5D)
+### C3. Error Handling (10 warnings)
+- [ ] Type catch block errors as `unknown`
+- [ ] Use type guards for error checking
+- [ ] Type `api/fetcher.ts` error handling
 
-- [x] Manifest content_scripts order guardrail
-- [x] Locks `content_scripts[0].js` sequence
-- [x] Critical ordering assertions
-- [x] Content bootstrap init-order guardrail
-- [x] Tests late UI/runtime availability
-- [x] Tests idempotent bootstrap
+### C4. Extension Code (19 warnings)
+- [ ] Type `extension/src/*.ts` files
+- [ ] Type storage callbacks in `chromeStorage.ts`
+- [ ] Type runtime callbacks in `contentRuntime.ts`
 
-### Phase 9: CI Refactor Gate (C5E)
+### C5. Services Layer (10 warnings)
+- [ ] Type `core/services/notesService.ts` raw API responses
+- [ ] Add `RawNoteResponse` interface with validation
+- [ ] Type embedding as `number[]` in `core/domain/types.ts`
 
-- [x] GitHub Actions workflow: lint → test → type-check → build → verify-build
-- [x] Backend npm ci/test in CI
-- [x] Root `npm run check` mirrors the gate
+### C6. UI Components (30+ warnings)
+- [ ] Type event handlers properly
+- [ ] Replace `any` props with specific interfaces
+- [ ] Type `NoteEditor.tsx` (3 warnings)
 
-## Current Work (Phase B6)
+### C7. Remaining Warnings
+- [ ] Reduce from 126 to <50 warnings
+- [ ] Reduce from <50 to 0 warnings
 
-### In Progress
+---
 
-- [ ] Add critical-path unit tests (adapters, services, hooks)
-- [ ] Keep vitest fast
-- [ ] Reduce `any` lint noise by typing globals/edges
-- [ ] Align with DoD guardrail (lint clean)
+## Phase D: Test Coverage Expansion
 
-### Next Steps
+**Priority:** 🟡 MEDIUM — Critical for regression prevention  
+**Timeline:** Sprint 3-4 (2 weeks)
 
-1. Finish B6 by adding critical-path unit tests
-2. Reduce `any` lint noise (126 warnings currently)
-3. Keep refactor gate green and extend coverage
+### D1. Hook Tests (Currently: 0 tests)
+- [ ] Add `useNoteEditor.test.ts` — autosave, offline queue, conflict handling
+- [ ] Add `useNotesList.test.ts` — filtering, CRUD operations
+- [ ] Add `useChat.test.ts` — message handling, streaming
+- [ ] Add `useChatInput.test.ts` — keyboard handling, send logic
 
-## Definition of Done
+### D2. Component Tests (Currently: 1 test)
+- [ ] Add `NotesPanel.test.tsx` — filtering, selection, CRUD
+- [ ] Add `NoteEditor.test.tsx` — toolbar actions, content changes
+- [ ] Add `FeedbackModal.test.tsx` — form validation
+- [ ] Add `ChatSection.test.tsx` — message rendering
+- [x] Add chat history + send reliability tests (pagination, dedup, rate limit)
 
-### Build & Tooling
+### D3. Integration Tests
+- [ ] Add API endpoint tests for fetcher retry logic
+- [ ] Add adapter edge case tests (Moodle URL patterns)
+- [ ] Add message type contract tests (content script ↔ background)
+- [x] Add backend chat pagination + attachment validation tests
+- [x] Add backend test shims to keep TypeScript checks green for JS modules
 
-- [x] Build outputs are reproducible and documented
-- [x] Provider bundles are captured in `CODE_OVERVIEW.md`
-- [x] Vite configs are deduplicated and maintainable
+### D4. Coverage Targets
+- [ ] Define explicit coverage threshold in `vitest.config.ts`
+- [ ] Reach 60% coverage on `ui/extension/` components
+- [ ] Reach 80% coverage on `ui/hooks/`
 
-### Contract Tests
+---
 
-- [x] `window.LockInContent` surface test
-- [x] `window.LockInAPI`/`window.LockInAuth` surface tests
-- [x] `window.LockInUI` surface test
-- [x] Manifest script order test
-- [x] Init order dependency test
+## Phase E: Documentation Cleanup
 
-### Code Quality
+**Priority:** 🟡 MEDIUM — Developer experience  
+**Timeline:** Sprint 4-5 (1 week)
 
-- [ ] Lint clean (0 warnings) - **Current: 126 warnings (all `any` types)**
+### E1. Stale Documentation Fixes
+- [ ] Update `backend/README.md` — change `content` to `content_json` in schema
+- [ ] Update `docs/TRANSCRIPT_SYSTEM_MAP.md` — add Echo360 details
+- [ ] Archive `docs/QUALITY_AUDIT_2025-12-16.md` to `docs/archive/`
+- [ ] Verify `docs/STATUS.md` test count (143 tests)
+
+### E2. Missing Standard Files
+- [ ] Create `CONTRIBUTING.md` — contributor guidelines
+- [ ] Create `CHANGELOG.md` — version history
+
+### E3. Documentation Consolidation
+- [ ] Merge `tools/mcp/QUICK_START.md` into `tools/mcp/README.md`
+- [ ] Shorten `/AGENTS.md` (360 lines → <200 lines)
+- [ ] Move detailed rules to `docs/DEVELOPMENT.md`
+
+### E4. Accuracy Fixes
+- [ ] Fix `extension/AGENTS.md` — `noteService` → `notesService.ts`
+- [ ] Add `window.LockInSentry` and `window.LockInMediaFetcher` to `docs/ARCHITECTURE.md`
+- [ ] Standardize terminology: "sidebar" (not "widget" or "panel")
+
+### E5. MCP Template Alignment
+- [ ] Update `mcp.json.template` to match documented servers OR update README
+- [ ] Ensure `validate-mcp-setup.ps1` matches actual file structure
+
+---
+
+## Phase F: Performance & Scalability
+
+**Priority:** 🟢 LOW — Future optimization  
+**Timeline:** Sprint 5-6 (as needed)
+
+### F1. Rate Limiter Enhancement
+- [ ] Evaluate in-memory cache with TTL for rate limiting
+- [ ] Consider Redis for multi-instance deployments
+- [ ] Reduce DB queries on every AI request
+
+### F2. UI Performance
+- [ ] Add list virtualization for notes (NotesPanel.tsx)
+- [ ] Make offline queue operations async
+- [ ] Batch localStorage writes
+
+### F3. Bundle Optimization
+- [ ] Exclude `.js.map` files from production builds
+- [ ] Audit bundle size for optimization opportunities
+- [ ] Evaluate code splitting improvements
+
+---
+
+## Phase G: Dependencies & Standards
+
+**Priority:** 🟢 LOW — Scheduled maintenance  
+**Timeline:** Sprint 6+ (as scheduled)
+
+### G1. Security & Automation
+- [ ] Configure Dependabot (`.github/dependabot.yml`)
+- [ ] Review CORS localhost regex for production
+- [ ] Consider build-time injection for Supabase anon key
+
+### G2. Major Dependency Updates
+- [ ] Create Lexical upgrade plan (0.17.1 → 0.39.0) — breaking changes expected
+- [ ] Evaluate Tailwind 4.x migration path — major rewrite
+- [ ] Update @types/chrome (0.0.268 → 0.1.33)
+
+### G3. Minor Updates
+- [ ] Update remaining 24 outdated packages
+- [ ] Verify React 19 types compatibility
+
+### G4. Standards Compliance
+- [ ] Add OpenAPI/Swagger spec for backend API
+- [ ] Consider API versioning strategy (`/api/v1/`)
+- [ ] Consolidate overlapping CI workflows (test.yml + refactor-gate.yml)
+
+### G5. Code Style
+- [ ] Replace `console.log` with logger utility in `panoptoProvider.ts`
+- [ ] Standardize storage key naming conventions
+- [ ] Remove duplicate `AppError` class (backend/middleware vs core/errors)
+
+---
+
+## Definition of Done (Updated)
+
+### Critical Gate (Phase A)
+- [x] All dead MCP links resolved (A2 complete)
+- [x] README.md reflects actual features (A3 complete)
+- [ ] Privacy documentation accurate
+
+### File Size Gate (Phase B)
+- [ ] No files >400 lines (stretch goal: <200)
+- [ ] NoteEditor.tsx decomposed
+- [ ] Large providers decomposed
+
+### Type Safety Gate (Phase C)
+- [ ] Zero `any` TypeScript warnings
+- [ ] All API boundaries typed
+- [ ] Storage interface fully typed
+
+### Testing Gate (Phase D)
+- [ ] UI component test coverage >60%
+- [ ] Hook test coverage >80%
+- [ ] All contract tests passing
+
+### Documentation Gate (Phase E)
+- [ ] CONTRIBUTING.md exists
+- [ ] CHANGELOG.md exists
+- [ ] No dead documentation links
+
+### Quality Gate (All Phases)
 - [x] Type-check clean (0 errors)
-- [x] All tests passing (143 tests)
+- [x] All tests passing (252 tests)
 - [x] Build succeeds
 - [x] Verify-build passes
+- [ ] Lint clean (0 warnings) — **Current: 126 warnings**
 
-### Documentation
+---
 
-- [x] Architecture docs (`docs/ARCHITECTURE.md`)
-- [x] Repository map (`docs/REPO_MAP.md`)
-- [x] Status tracking (`docs/STATUS.md`)
-- [x] Code overview (`CODE_OVERVIEW.md`)
-- [x] Database schema (`DATABASE.MD`)
-- [x] Troubleshooting guide (`docs/TRANSCRIPT_TROUBLESHOOTING.md`)
+## Audit Findings Reference
 
-### CI/CD
+### Critical Issues (2)
+| # | Category | Issue | Phase |
+|---|----------|-------|-------|
+| 1 | Privacy | Sentry setUser() documented inaccurately | A1 |
+| 2 | Architecture | NoteEditor.tsx 1039 lines | B1 |
 
-- [x] GitHub Actions refactor gate
-- [x] Local `npm run check` command
-- [x] Backend tests in CI
+### High Priority Issues (14)
+| # | Category | Issue | Phase |
+|---|----------|-------|-------|
+| 1 | Code Quality | echo360Provider.ts 939 lines | B2 |
+| 2 | Code Quality | LockInSidebar.tsx 761 lines | B3 |
+| 3 | Code Quality | panoptoProvider.ts 666 lines | B4 |
+| 4 | Code Quality | useNoteEditor.ts 633 lines | B5 |
+| 5 | Type Safety | 126 `any` warnings | C1-C7 |
+| 6 | Testing | Zero UI component tests | D2 |
+| 7 | Testing | Zero hook tests | D1 |
+| 8 | Dependencies | Lexical/Tailwind outdated | G2 |
+| 9 | Documentation | docs/ADRS/ doesn't exist | A4 |
+| 10 | Documentation | Backend README schema stale | E1 |
+| 11 | Documentation | MCP template vs docs mismatch | E5 |
+| 12 | Documentation | No CONTRIBUTING.md | E2 |
+| 13 | Documentation | No CHANGELOG.md | E2 |
+| 14 | Security | No Dependabot configured | G1 |
 
-## Lint Warning Reduction Plan
+### Medium Priority Issues (18)
+| # | Category | Issue | Phase |
+|---|----------|-------|-------|
+| 1 | Security | Supabase anon key hardcoded | G1 |
+| 2 | Scalability | Rate limiter DB bottleneck | F1 |
+| 3 | Architecture | videoDetection.ts 403 lines | B6 |
+| 4 | Type Safety | notesService.ts uses `any` | C5 |
+| 5 | Type Safety | storageInterface.ts callbacks | C2 |
+| 6 | Performance | Sync localStorage reads | F2 |
+| 7 | Code Quality | echo360Parser.ts 458 lines | B6 |
+| 8 | Testing | Limited adapter edge tests | D3 |
+| 9 | Documentation | Privacy claim inaccuracy | A1 |
+| 10 | Architecture | let reassignment style | — |
+| 11 | Security | serverUserAgent in feedback | — |
+| 12 | Type Safety | assetsClient.ts mapNoteAsset | C1 |
+| 13 | Documentation | README.md stale | A3 |
+| 14 | Documentation | AGENTS.md too long | E3 |
+| 15 | Documentation | Terminology inconsistency | E4 |
+| 16 | Standards | No OpenAPI spec | G4 |
+| 17 | Standards | No test coverage target | D4 |
+| 18 | Documentation | Historical audit not archived | E1 |
 
-### Quick Fixes (Low Risk, High ROI) - ~30 warnings
+---
 
-- [ ] Error handling types (`api/fetcher.ts`, `core/errors/AppError.ts`)
-- [ ] Response types (`api/resources/*`)
-- [ ] Storage callbacks (`core/storage/storageInterface.ts`)
-- [ ] Test mocks (`core/services/__tests__/notesService.test.ts`)
+## Quick Reference: File Size Violations
 
-### Medium Refactors (Needs Care) - ~60 warnings
+| File | Lines | Target | Priority |
+|------|-------|--------|----------|
+| `ui/extension/notes/NoteEditor.tsx` | 1039 | <200 | 🔴 Critical |
+| `core/transcripts/providers/echo360Provider.ts` | 939 | <200 | 🟠 High |
+| `ui/extension/LockInSidebar.tsx` | 761 | <200 | 🟠 High |
+| `core/transcripts/providers/panoptoProvider.ts` | 666 | <200 | 🟠 High |
+| `ui/hooks/useNoteEditor.ts` | 633 | <200 | 🟠 High |
+| `ui/extension/notes/NotesPanel.tsx` | 515 | <200 | 🟡 Medium |
+| `core/transcripts/parsers/echo360Parser.ts` | 458 | <200 | 🟡 Medium |
+| `core/transcripts/videoDetection.ts` | 403 | <200 | 🟡 Medium |
 
-- [ ] API client generics (`api/fetcher.ts`)
-- [ ] Storage interface types (`core/storage/storageInterface.ts`, `extension/src/chromeStorage.ts`)
-- [ ] Auth callbacks (`api/auth.ts`)
-- [ ] UI hooks (`ui/hooks/*`)
-
-### Danger Zones (Editor/Sidebar/Storage/Runtime) - ~36 warnings
-
-- [ ] Editor types (`ui/extension/notes/NoteEditor.tsx`)
-- [ ] Sidebar types (`ui/extension/LockInSidebar.tsx`)
-- [ ] Storage types (`extension/src/storage.ts`, `extension/src/chromeStorage.ts`)
-- [ ] Runtime types (`extension/src/contentRuntime.ts`)
-- [ ] Init API types (`extension/src/initApi.ts`)
-
-## Future Phases
-
-### Phase B7: Test Coverage Expansion
-
-- [ ] Unit tests for all adapters
-- [ ] Unit tests for all services
-- [ ] Integration tests for critical flows
-- [ ] E2E tests for UI flows
-
-### Phase B8: Performance Optimization
-
-- [ ] Bundle size optimization
-- [ ] Lazy loading for large modules
-- [ ] Code splitting improvements
-
-### Phase B9: Documentation Enhancement
-
-- [ ] API documentation (OpenAPI/Swagger)
-- [ ] Architecture diagrams
-- [ ] Developer onboarding guide
+---
 
 ## Notes
 
-- All codex steps (C1-C5E) are documented in `docs/PROMPT_LOG.md`
+- All codex steps (C1-C5E) documented in `docs/PROMPT_LOG.md`
 - Current status tracked in `docs/STATUS.md`
-- Quality gates documented in `docs/QUALITY_AUDIT_2025-12-16.md`
+- Historical audit: `docs/QUALITY_AUDIT_2025-12-16.md`
+- Audit findings: January 2026 consolidated audit (Batch 1 + Batch 2)
+
+---
+
+## Changelog
+
+| Date | Version | Changes |
+|------|---------|---------|
+| 2026-01-11 | 2.0 | Complete rewrite based on consolidated audit (Batch 1 + Batch 2) |
+| Previous | 1.x | Original refactor plan (see git history) |

@@ -5,13 +5,14 @@
  */
 
 // Hooks
-export { useChat, useChatMessages, useChatHistory, useSendMessage, useChatInput } from './hooks';
+export { useChat, useChatMessages, useChatHistory, useSendMessage, useChatInput, useChatAttachments } from './hooks';
 
 // Provider
 export { ChatQueryProvider } from './ChatQueryProvider';
 
 // Types
 export type {
+    ChatAttachment,
     ChatMessage,
     ChatMessageRole,
     ChatHistoryItem,

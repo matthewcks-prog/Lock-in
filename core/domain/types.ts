@@ -11,11 +11,6 @@
 export type StudyMode = 'explain' | 'general';
 
 /**
- * Difficulty level
- */
-export type DifficultyLevel = 'highschool' | 'university';
-
-/**
  * Theme preference
  */
 export type Theme = 'light' | 'dark' | 'system';
@@ -121,7 +116,6 @@ export interface ChatSession {
  */
 export interface UserPreferences {
   preferredLanguage: string;
-  difficultyLevel: DifficultyLevel;
   theme: Theme;
   accentColor: string;
   defaultMode: StudyMode;

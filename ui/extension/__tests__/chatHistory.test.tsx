@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import type { ApiClient } from '@api/client';
+import chatLimits from '@core/config/chatLimits.json';
 import { LockInSidebar } from '../LockInSidebar';
 
 const actEnvironment = globalThis as typeof globalThis & {
@@ -34,6 +35,7 @@ function createStorageStub(values: Record<string, unknown> = {}): StorageStub {
 function createApiClientStub(overrides: Partial<ApiClient> = {}): ApiClient {
   return {
     processText: vi.fn(),
+    createChat: vi.fn(),
     getRecentChats: vi.fn(),
     getChatMessages: vi.fn(),
     deleteChat: vi.fn(),
@@ -80,13 +82,19 @@ describe('LockInSidebar chat history', () => {
 
   it('loads chat history entries from the API', async () => {
     const apiClient = createApiClientStub({
-      getRecentChats: vi.fn().mockResolvedValue([
-        {
-          id: 'chat-1',
-          title: 'Arrays and stacks overview',
-          updated_at: '2025-01-01T00:00:00.000Z',
+      getRecentChats: vi.fn().mockResolvedValue({
+        chats: [
+          {
+            id: 'chat-1',
+            title: 'Arrays and stacks overview',
+            updated_at: '2025-01-01T00:00:00.000Z',
+          },
+        ],
+        pagination: {
+          hasMore: false,
+          nextCursor: null,
         },
-      ]),
+      }),
     });
     const storage = createStorageStub({
       [SIDEBAR_ACTIVE_TAB_KEY]: null,
@@ -109,20 +117,98 @@ describe('LockInSidebar chat history', () => {
       await flushPromises(2);
     });
 
-    expect(apiClient.getRecentChats).toHaveBeenCalledWith({ limit: 8 });
+    expect(apiClient.getRecentChats).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: chatLimits.DEFAULT_CHAT_LIST_LIMIT }),
+    );
     const title = document.querySelector('.lockin-history-title');
     expect(title?.textContent).toBe('Arrays and stacks overview');
   });
 
+  it('loads more chat history entries on demand', async () => {
+    const apiClient = createApiClientStub({
+      getRecentChats: vi
+        .fn()
+        .mockResolvedValueOnce({
+          chats: [
+            {
+              id: 'chat-1',
+              title: 'First page chat',
+              updated_at: '2025-01-02T00:00:00.000Z',
+            },
+          ],
+          pagination: {
+            hasMore: true,
+            nextCursor: '2025-01-01T00:00:00.000Z',
+          },
+        })
+        .mockResolvedValueOnce({
+          chats: [
+            {
+              id: 'chat-2',
+              title: 'Second page chat',
+              updated_at: '2024-12-31T00:00:00.000Z',
+            },
+          ],
+          pagination: {
+            hasMore: false,
+            nextCursor: null,
+          },
+        }),
+    });
+    const storage = createStorageStub();
+
+    await act(async () => {
+      root.render(
+        <LockInSidebar
+          apiClient={apiClient}
+          isOpen={true}
+          onToggle={vi.fn()}
+          currentMode="explain"
+          storage={storage}
+        />,
+      );
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    const loadMoreButton = document.querySelector(
+      '.lockin-history-load-more',
+    ) as HTMLButtonElement | null;
+    expect(loadMoreButton).not.toBeNull();
+
+    await act(async () => {
+      loadMoreButton?.click();
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    expect(apiClient.getRecentChats).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cursor: '2025-01-01T00:00:00.000Z' }),
+    );
+    const titles = Array.from(document.querySelectorAll('.lockin-history-title')).map(
+      (node) => node.textContent,
+    );
+    expect(titles).toContain('Second page chat');
+  });
+
   it('loads messages when a history item is selected', async () => {
     const apiClient = createApiClientStub({
-      getRecentChats: vi.fn().mockResolvedValue([
-        {
-          id: 'chat-2',
-          title: 'Graph theory basics',
-          updated_at: '2025-01-02T00:00:00.000Z',
+      getRecentChats: vi.fn().mockResolvedValue({
+        chats: [
+          {
+            id: 'chat-2',
+            title: 'Graph theory basics',
+            updated_at: '2025-01-02T00:00:00.000Z',
+          },
+        ],
+        pagination: {
+          hasMore: false,
+          nextCursor: null,
         },
-      ]),
+      }),
       getChatMessages: vi.fn().mockResolvedValue([
         {
           id: 'msg-1',
@@ -181,7 +267,13 @@ describe('LockInSidebar chat history', () => {
   it('restores the last active chat from storage', async () => {
     const storedChatId = '11111111-1111-1111-8111-111111111111';
     const apiClient = createApiClientStub({
-      getRecentChats: vi.fn().mockResolvedValue([]),
+      getRecentChats: vi.fn().mockResolvedValue({
+        chats: [],
+        pagination: {
+          hasMore: false,
+          nextCursor: null,
+        },
+      }),
       getChatMessages: vi.fn().mockResolvedValue([
         {
           id: 'msg-3',

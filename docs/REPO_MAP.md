@@ -21,7 +21,7 @@ extension/
     libs/ (build outputs: initApi.js, contentLibs.js, webvttParser.js, transcriptProviders.js, maps)
     ui/   (build output: index.js + map)
 ui/
-  extension/ (index.tsx, LockInSidebar.tsx, notes/, hooks/)
+  extension/ (index.tsx, LockInSidebar.tsx, sidebar/, chat/, notes/, hooks/)
 shared/
   ui/components/ (Button, Card, ConfirmDialog, Toast, TextInput, Tabs)
 docs/
