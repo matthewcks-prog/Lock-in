@@ -8,10 +8,10 @@
 # =============================================================================
 
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$ResourceGroup,
     
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory = $true)]
     [string]$Location,
     
     [string]$AppName = "lock-in-backend",

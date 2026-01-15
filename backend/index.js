@@ -16,7 +16,10 @@ initSentry();
 // Now import everything else - Sentry will automatically instrument these
 const { createApp } = require('./app');
 const { PORT } = require('./config');
-const { startTranscriptJobReaper, stopTranscriptJobReaper } = require('./services/transcriptsService');
+const {
+  startTranscriptJobReaper,
+  stopTranscriptJobReaper,
+} = require('./services/transcriptsService');
 
 // =============================================================================
 // Production Environment Validation
@@ -26,8 +29,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 if (isProduction) {
   // Fail fast on missing critical environment variables in production
   const requiredEnvVars = ['OPENAI_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
-  const missingVars = requiredEnvVars.filter(v => !process.env[v]);
-  
+  const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
+
   if (missingVars.length > 0) {
     console.error(`FATAL: Missing required environment variables: ${missingVars.join(', ')}`);
     process.exit(1);
@@ -40,12 +43,14 @@ if (isProduction) {
 const log = (level, message, meta = {}) => {
   if (isProduction) {
     // JSON format for Azure Monitor ingestion
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level,
-      message,
-      ...meta
-    }));
+    console.log(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level,
+        message,
+        ...meta,
+      }),
+    );
   } else {
     // Human-readable format for development
     console.log(`[${level.toUpperCase()}] ${message}`, Object.keys(meta).length ? meta : '');
@@ -58,7 +63,10 @@ const log = (level, message, meta = {}) => {
 const app = createApp();
 
 const server = app.listen(PORT, () => {
-  log('info', `Lock-in backend server running on port ${PORT}`, { port: PORT, env: process.env.NODE_ENV });
+  log('info', `Lock-in backend server running on port ${PORT}`, {
+    port: PORT,
+    env: process.env.NODE_ENV,
+  });
   log('info', 'Ready to help students learn!');
 
   if (!process.env.OPENAI_API_KEY) {
@@ -74,24 +82,24 @@ const server = app.listen(PORT, () => {
 // =============================================================================
 const gracefulShutdown = (signal) => {
   log('info', `${signal} received, starting graceful shutdown...`, { signal });
-  
+
   // Stop accepting new connections
   server.close((err) => {
     if (err) {
       log('error', 'Error during server close', { error: err.message });
       process.exit(1);
     }
-    
+
     log('info', 'HTTP server closed');
-    
+
     // Stop background jobs
     stopTranscriptJobReaper();
     log('info', 'Transcript job reaper stopped');
-    
+
     log('info', 'Graceful shutdown complete');
     process.exit(0);
   });
-  
+
   // Force shutdown after 30 seconds if graceful shutdown fails
   setTimeout(() => {
     log('error', 'Forced shutdown after timeout');

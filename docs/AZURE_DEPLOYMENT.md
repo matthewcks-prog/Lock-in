@@ -60,12 +60,12 @@ In Supabase Dashboard → Storage:
 
 Collect these values (you'll need them for Azure setup):
 
-| Variable | Where to Get It |
-|----------|-----------------|
-| `OPENAI_API_KEY` | https://platform.openai.com/api-keys |
-| `SUPABASE_URL` | Supabase Dashboard → Settings → API |
+| Variable                    | Where to Get It                                        |
+| --------------------------- | ------------------------------------------------------ |
+| `OPENAI_API_KEY`            | https://platform.openai.com/api-keys                   |
+| `SUPABASE_URL`              | Supabase Dashboard → Settings → API                    |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API (service_role key) |
-| `SENTRY_DSN` | Sentry Dashboard → Project → Settings → Client Keys |
+| `SENTRY_DSN`                | Sentry Dashboard → Project → Settings → Client Keys    |
 
 ---
 
@@ -89,6 +89,7 @@ curl http://localhost:3000/health
 ```
 
 Expected response:
+
 ```json
 {
   "status": "ok",
@@ -112,7 +113,7 @@ TOKEN="your-jwt-token"
 # Test notes endpoint
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/notes
 
-# Test chats endpoint  
+# Test chats endpoint
 curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/chats
 ```
 
@@ -133,6 +134,7 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/chats
 ```
 
 This creates:
+
 - Resource Group
 - Azure Container Registry (ACR)
 - Azure Key Vault
@@ -260,13 +262,13 @@ Go to GitHub repo → Settings → Secrets and variables → Actions
 
 Add these secrets:
 
-| Secret Name | Value |
-|-------------|-------|
-| `AZURE_CREDENTIALS` | The JSON from service principal creation |
-| `AZURE_CONTAINER_REGISTRY` | `lockinacr` (name only, no .azurecr.io) |
-| `AZURE_RESOURCE_GROUP` | `lock-in-prod` |
-| `ACR_USERNAME` | ACR admin username (from setup script output) |
-| `ACR_PASSWORD` | ACR admin password (from setup script output) |
+| Secret Name                | Value                                         |
+| -------------------------- | --------------------------------------------- |
+| `AZURE_CREDENTIALS`        | The JSON from service principal creation      |
+| `AZURE_CONTAINER_REGISTRY` | `lockinacr` (name only, no .azurecr.io)       |
+| `AZURE_RESOURCE_GROUP`     | `lock-in-prod`                                |
+| `ACR_USERNAME`             | ACR admin username (from setup script output) |
+| `ACR_PASSWORD`             | ACR admin password (from setup script output) |
 
 ### 4.3 Create Production Environment
 
@@ -309,8 +311,9 @@ Edit `api/client.ts`:
 const API_BASE_URL = 'http://localhost:3000';
 
 // To production URL:
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-    ? 'https://lock-in-backend.azurecontainerapps.io'  // Your actual URL
+const API_BASE_URL =
+  process.env.NODE_ENV === 'production'
+    ? 'https://lock-in-backend.azurecontainerapps.io' // Your actual URL
     : 'http://localhost:3000';
 ```
 
@@ -322,7 +325,7 @@ If deploying a web app frontend, update `backend/config.js`:
 const ALLOWED_ORIGINS = [
   /^chrome-extension:\/\//,
   /localhost/,
-  /^https:\/\/your-web-app\.com$/,  // Add your web app domain
+  /^https:\/\/your-web-app\.com$/, // Add your web app domain
   // ... existing patterns
 ];
 ```
@@ -356,6 +359,7 @@ az monitor metrics alert create \
 ### 6.2 Sentry Alerts
 
 Configure in Sentry Dashboard:
+
 - Error rate threshold alerts
 - New issue notifications
 - Weekly error digest
@@ -457,11 +461,11 @@ curl http://localhost:3000/health
 
 ### Resource Sizing
 
-| Workload | CPU | Memory | Min Replicas | Max Replicas |
-|----------|-----|--------|--------------|--------------|
-| Low (dev) | 0.5 | 1Gi | 0 | 2 |
-| Medium | 1.0 | 2Gi | 1 | 5 |
-| High | 2.0 | 4Gi | 2 | 10 |
+| Workload  | CPU | Memory | Min Replicas | Max Replicas |
+| --------- | --- | ------ | ------------ | ------------ |
+| Low (dev) | 0.5 | 1Gi    | 0            | 2            |
+| Medium    | 1.0 | 2Gi    | 1            | 5            |
+| High      | 2.0 | 4Gi    | 2            | 10           |
 
 ### Cost-Saving Tips
 
