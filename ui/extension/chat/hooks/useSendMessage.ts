@@ -10,6 +10,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
+import { RateLimitError } from '@core/errors';
 import type { ChatMessage, SendMessageParams, ChatApiResponse, UseSendMessageOptions } from '../types';
 import { isValidUUID } from '../types';
 import { chatMessagesKeys } from './useChatMessages';
@@ -18,6 +19,55 @@ interface MutationContext {
     previousMessages: ChatMessage[];
     pendingMessageId: string;
     provisionalChatId: string;
+}
+
+/** Extended params that include attachments */
+interface SendMessageWithAttachmentsParams extends SendMessageParams {
+    /** Array of uploaded asset IDs to include */
+    attachmentIds?: string[];
+    /** Override selection payload sent to the API */
+    selectionOverride?: string;
+    /** Override user message payload sent to the API */
+    userMessageOverride?: string;
+    /** Idempotency key for de-duplication */
+    idempotencyKey?: string;
+}
+
+type SendMessageMutationParams = SendMessageWithAttachmentsParams & {
+    currentMessages: ChatMessage[];
+    activeChatId: string | null;
+};
+
+const IDEMPOTENCY_BUCKET_MS = 5000;
+
+function hashString(value: string): string {
+    let hash = 0;
+    for (let i = 0; i < value.length; i += 1) {
+        hash = (hash << 5) - hash + value.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+}
+
+function buildIdempotencyKey(params: SendMessageWithAttachmentsParams): string {
+    const bucket = Math.floor(Date.now() / IDEMPOTENCY_BUCKET_MS);
+    const attachmentKey = (params.attachmentIds || []).join(',');
+    const chatKey = params.chatId || '';
+    const payloadKey = params.selectionOverride ?? params.message;
+    const seed = `${chatKey}|${payloadKey}|${attachmentKey}|${bucket}`;
+    return `lockin-${hashString(seed)}`;
+}
+
+function formatSendError(error: Error): string {
+    if (error instanceof RateLimitError) {
+        const retryAfterMs = error.retryAfterMs;
+        if (retryAfterMs && retryAfterMs > 0) {
+            const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+            return `You're sending too fast - try again in ${seconds}s.`;
+        }
+        return "You're sending too fast - try again in a moment.";
+    }
+    return error?.message || 'We could not process this request. Try again in a moment.';
 }
 
 /**
@@ -33,6 +83,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
     const { apiClient, pageUrl, courseCode, onSuccess, onError } = options;
     const queryClient = useQueryClient();
     const abortControllerRef = useRef<AbortController | null>(null);
+    const pendingSendKeyRef = useRef<string | null>(null);
 
     // Cleanup on unmount
     useEffect(() => {
@@ -44,9 +95,10 @@ export function useSendMessage(options: UseSendMessageOptions) {
     const mutation = useMutation<
         ChatApiResponse & { resolvedChatId: string },
         Error,
-        SendMessageParams & { currentMessages: ChatMessage[]; activeChatId: string | null },
+        SendMessageMutationParams,
         MutationContext
     >({
+        retry: false,
         mutationFn: async (params) => {
             // Cancel any previous pending request
             if (abortControllerRef.current) {
@@ -64,15 +116,24 @@ export function useSendMessage(options: UseSendMessageOptions) {
             }));
 
             const apiChatId = isValidUUID(params.chatId) ? params.chatId : undefined;
+            const selectionPayload =
+                params.selectionOverride !== undefined ? params.selectionOverride : params.message;
+            const userMessagePayload =
+                params.source === 'followup'
+                    ? params.userMessageOverride ?? params.message
+                    : undefined;
+            const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
 
             const response = await apiClient.processText({
-                selection: params.message,
+                selection: selectionPayload,
                 mode: params.mode,
                 chatHistory: baseHistory,
-                newUserMessage: params.source === 'followup' ? params.message : undefined,
+                newUserMessage: userMessagePayload,
                 chatId: apiChatId,
                 pageUrl: params.pageUrl || pageUrl,
                 courseCode: params.courseCode || courseCode || undefined,
+                attachments: params.attachmentIds,
+                idempotencyKey,
             });
 
             const explanation = response?.data?.explanation || `(${params.mode}) ${params.message}`;
@@ -125,6 +186,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
         },
 
         onError: (error, params, context) => {
+            const message = formatSendError(error);
             // Rollback on error
             if (context) {
                 const chatId = params.activeChatId;
@@ -135,7 +197,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
                             msg.id === context.pendingMessageId
                                 ? {
                                     ...msg,
-                                    content: error?.message || 'We could not process this request. Try again in a moment.',
+                                    content: message,
                                     isPending: false,
                                 }
                                 : msg,
@@ -143,7 +205,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
                     );
                 }
             }
-            onError?.(error);
+            onError?.(message === error.message ? error : new Error(message));
         },
 
         onSuccess: (data, params, context) => {
@@ -166,6 +228,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
 
         onSettled: () => {
             abortControllerRef.current = null;
+            pendingSendKeyRef.current = null;
         },
     });
 
@@ -178,12 +241,33 @@ export function useSendMessage(options: UseSendMessageOptions) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
         }
+        pendingSendKeyRef.current = null;
         mutation.reset();
     }, [mutation]);
 
     return {
-        sendMessage: mutation.mutate,
-        sendMessageAsync: mutation.mutateAsync,
+        sendMessage: useCallback(
+            (params: SendMessageMutationParams) => {
+                const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
+                if (pendingSendKeyRef.current === idempotencyKey) {
+                    return;
+                }
+                pendingSendKeyRef.current = idempotencyKey;
+                mutation.mutate({ ...params, idempotencyKey });
+            },
+            [mutation],
+        ),
+        sendMessageAsync: useCallback(
+            async (params: SendMessageMutationParams) => {
+                const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
+                if (pendingSendKeyRef.current === idempotencyKey) {
+                    return undefined;
+                }
+                pendingSendKeyRef.current = idempotencyKey;
+                return mutation.mutateAsync({ ...params, idempotencyKey });
+            },
+            [mutation],
+        ),
         isSending: mutation.isPending,
         isError: mutation.isError,
         error: mutation.error,

@@ -9,3 +9,4 @@ export { useChatMessages, chatMessagesKeys } from './useChatMessages';
 export { useChatHistory, chatHistoryKeys } from './useChatHistory';
 export { useSendMessage } from './useSendMessage';
 export { useChatInput } from './useChatInput';
+export { useChatAttachments } from './useChatAttachments';

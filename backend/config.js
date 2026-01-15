@@ -7,6 +7,7 @@
  */
 
 const path = require('path');
+const chatLimits = require('../core/config/chatLimits.json');
 
 const PORT = process.env.PORT || 3000;
 
@@ -17,8 +18,16 @@ const MAX_USER_MESSAGE_LENGTH = 1500;
 // Per-user rate limiting (requests per UTC day)
 const DAILY_REQUEST_LIMIT = parseInt(process.env.DAILY_REQUEST_LIMIT, 10) || 100;
 
-// Number of chats returned in the sidebar by default``
-const DEFAULT_CHAT_LIST_LIMIT = parseInt(process.env.CHAT_LIST_LIMIT, 10) || 5;
+function readNumber(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+// Chat list limits
+const DEFAULT_CHAT_LIST_LIMIT =
+  readNumber(process.env.CHAT_LIST_LIMIT, chatLimits.DEFAULT_CHAT_LIST_LIMIT);
+const MAX_CHAT_LIST_LIMIT =
+  readNumber(process.env.MAX_CHAT_LIST_LIMIT, chatLimits.MAX_CHAT_LIST_LIMIT);
 
 // CORS configuration – in production prefer an explicit allow‑list
 const ALLOWED_ORIGINS = [
@@ -39,6 +48,16 @@ const ALLOWED_ORIGINS = [
 const NOTE_ASSETS_BUCKET = process.env.NOTE_ASSETS_BUCKET || 'note-assets';
 const NOTE_ASSETS_MAX_BYTES = parseInt(process.env.NOTE_ASSETS_MAX_BYTES, 10) || 10 * 1024 * 1024; // 10MB default
 
+// Chat asset uploads
+const CHAT_ASSETS_BUCKET = process.env.CHAT_ASSETS_BUCKET || 'chat-assets';
+const CHAT_ASSETS_MAX_BYTES = parseInt(process.env.CHAT_ASSETS_MAX_BYTES, 10) || 10 * 1024 * 1024; // 10MB default
+const CHAT_ASSET_DAILY_UPLOAD_LIMIT =
+  parseInt(process.env.CHAT_ASSET_DAILY_UPLOAD_LIMIT, 10) || 50;
+const CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT =
+  parseInt(process.env.CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT, 10) || 100 * 1024 * 1024;
+const CHAT_ASSET_SIGNED_URL_TTL_SECONDS =
+  parseInt(process.env.CHAT_ASSET_SIGNED_URL_TTL_SECONDS, 10) || 10 * 60;
+
 // MIME allow-list grouped by asset category for easy extension
 const NOTE_ASSET_MIME_GROUPS = {
   image: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
@@ -53,7 +72,34 @@ const NOTE_ASSET_MIME_GROUPS = {
   other: [],
 };
 
+// Chat assets support additional code file types
+const CHAT_ASSET_MIME_GROUPS = {
+  image: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+  document: [
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ],
+  code: [
+    'text/javascript',
+    'application/javascript',
+    'text/typescript',
+    'text/x-python',
+    'text/x-java',
+    'text/x-c',
+    'text/x-c++',
+    'text/css',
+    'text/html',
+    'application/json',
+    'text/x-rust',
+    'text/x-go',
+  ],
+  other: [],
+};
+
 const ALLOWED_ASSET_MIME_TYPES = Object.values(NOTE_ASSET_MIME_GROUPS).flat();
+const ALLOWED_CHAT_ASSET_MIME_TYPES = Object.values(CHAT_ASSET_MIME_GROUPS).flat();
 
 // Transcript processing
 const TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || 'whisper-1';
@@ -81,12 +127,25 @@ const TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES =
 const MIME_EXTENSION_MAP = {
   'application/pdf': 'pdf',
   'text/plain': 'txt',
+  'text/markdown': 'md',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'text/javascript': 'js',
+  'application/javascript': 'js',
+  'text/typescript': 'ts',
+  'text/x-python': 'py',
+  'text/x-java': 'java',
+  'text/x-c': 'c',
+  'text/x-c++': 'cpp',
+  'text/css': 'css',
+  'text/html': 'html',
+  'application/json': 'json',
+  'text/x-rust': 'rs',
+  'text/x-go': 'go',
 };
 
 function isOriginAllowed(origin) {
@@ -106,11 +165,19 @@ module.exports = {
   MAX_USER_MESSAGE_LENGTH,
   DAILY_REQUEST_LIMIT,
   DEFAULT_CHAT_LIST_LIMIT,
+  MAX_CHAT_LIST_LIMIT,
   isOriginAllowed,
   NOTE_ASSETS_BUCKET,
   NOTE_ASSETS_MAX_BYTES,
   NOTE_ASSET_MIME_GROUPS,
   ALLOWED_ASSET_MIME_TYPES,
+  CHAT_ASSETS_BUCKET,
+  CHAT_ASSETS_MAX_BYTES,
+  CHAT_ASSET_DAILY_UPLOAD_LIMIT,
+  CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT,
+  CHAT_ASSET_SIGNED_URL_TTL_SECONDS,
+  CHAT_ASSET_MIME_GROUPS,
+  ALLOWED_CHAT_ASSET_MIME_TYPES,
   MIME_EXTENSION_MAP,
   TRANSCRIPTION_MODEL,
   TRANSCRIPTION_SEGMENT_MAX_MB,

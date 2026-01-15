@@ -2,9 +2,8 @@ import type { ChatMessage, StudyResponse, ApiResponse } from '../../core/domain/
 import type { ApiRequest } from '../fetcher';
 
 export interface ProcessTextParams {
-  selection: string;
+  selection?: string;
   mode: 'explain' | 'general';
-  difficultyLevel?: 'highschool' | 'university';
   chatHistory?: ChatMessage[];
   newUserMessage?: string;
   chatId?: string;
@@ -12,6 +11,10 @@ export interface ProcessTextParams {
   pageUrl?: string;
   courseCode?: string;
   language?: string;
+  /** Array of asset IDs to include as attachments */
+  attachments?: string[];
+  /** Optional idempotency key for request de-duplication */
+  idempotencyKey?: string;
 }
 
 export function createLockinClient(apiRequest: ApiRequest) {
@@ -19,7 +22,6 @@ export function createLockinClient(apiRequest: ApiRequest) {
     const {
       selection,
       mode,
-      difficultyLevel = 'highschool',
       chatHistory = [],
       newUserMessage,
       chatId,
@@ -27,6 +29,8 @@ export function createLockinClient(apiRequest: ApiRequest) {
       pageUrl,
       courseCode,
       language = 'en',
+      attachments = [],
+      idempotencyKey,
     } = params;
 
     const normalizedHistory = (Array.isArray(chatHistory) ? chatHistory : [])
@@ -42,7 +46,6 @@ export function createLockinClient(apiRequest: ApiRequest) {
     const body: any = {
       selection: selection || '',
       mode,
-      difficultyLevel,
       chatHistory: normalizedHistory,
     };
 
@@ -52,10 +55,17 @@ export function createLockinClient(apiRequest: ApiRequest) {
     if (pageUrl) body.pageUrl = pageUrl;
     if (courseCode) body.courseCode = courseCode;
     if (language) body.language = language;
+    if (attachments && attachments.length > 0) body.attachments = attachments;
+    if (idempotencyKey) body.idempotencyKey = idempotencyKey;
 
     return apiRequest<ApiResponse<StudyResponse>>('/api/lockin', {
       method: 'POST',
       body: JSON.stringify(body),
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
+      retryConfig: {
+        maxRetries: 2,
+        retryableStatuses: [502, 503, 504],
+      },
     });
   }
 

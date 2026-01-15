@@ -1,0 +1,74 @@
+# =============================================================================
+# Lock-in Backend - Docker Compose for Local Development
+# Use this to test the containerized backend before Azure deployment
+# =============================================================================
+
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: lock-in-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - TRANSCRIPTION_TEMP_DIR=/tmp/transcripts
+      # These should be set in .env file or passed via command line
+      # DO NOT commit real values to source control
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      # Rate limiting (optional overrides)
+      - DAILY_REQUEST_LIMIT=${DAILY_REQUEST_LIMIT:-100}
+      - TRANSCRIPT_DAILY_JOB_LIMIT=${TRANSCRIPT_DAILY_JOB_LIMIT:-20}
+      - TRANSCRIPT_MAX_CONCURRENT_JOBS=${TRANSCRIPT_MAX_CONCURRENT_JOBS:-3}
+    volumes:
+      # Mount temp volume for transcription jobs (optional, container has ephemeral storage)
+      - transcripts-temp:/tmp/transcripts
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    # Resource limits (similar to Azure Container Apps)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+volumes:
+  transcripts-temp:
+    driver: local
+
+# =============================================================================
+# Usage:
+# 
+# 1. Create .env file in project root with required variables:
+#    OPENAI_API_KEY=sk-...
+#    SUPABASE_URL=https://xxx.supabase.co
+#    SUPABASE_SERVICE_ROLE_KEY=eyJ...
+#    SENTRY_DSN=https://...@sentry.io/...  (optional)
+#
+# 2. Build and run:
+#    docker-compose up --build
+#
+# 3. Test health endpoint:
+#    curl http://localhost:3000/health
+#
+# 4. Stop:
+#    docker-compose down
+#
+# 5. View logs:
+#    docker-compose logs -f backend
+# =============================================================================

@@ -1,8 +1,10 @@
 export const API_CLIENT_EXPECTED_KEYS = [
   'apiRequest',
   'chatWithNotes',
+  'createChat',
   'createNote',
   'deleteChat',
+  'deleteChatAsset',
   'deleteNote',
   'deleteNoteAsset',
   'generateChatTitle',
@@ -10,6 +12,7 @@ export const API_CLIENT_EXPECTED_KEYS = [
   'getChatMessages',
   'getFeedback',
   'getRecentChats',
+  'listChatAssets',
   'listFeedback',
   'listNoteAssets',
   'listNotes',
@@ -19,5 +22,6 @@ export const API_CLIENT_EXPECTED_KEYS = [
   'submitFeedback',
   'toggleNoteStar',
   'updateNote',
+  'uploadChatAsset',
   'uploadNoteAsset',
 ] as const;

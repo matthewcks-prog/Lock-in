@@ -66,8 +66,8 @@ Run this checklist:
 ### Steps
 
 1. Navigate to a supported page (e.g., Moodle course page, Edstem)
-2. Select some text on the page
-3. Press `Ctrl+Shift+L` (or `Cmd+Shift+L` on Mac) to open sidebar
+2. Hold **Ctrl** (Windows/Linux) or **Cmd** (Mac) and select some text on the page
+3. The sidebar should open automatically with the selected text
 4. Verify the selected text appears in the sidebar input or context
 5. Trigger a mode: click "Explain" or "General"
 6. Wait for AI response
@@ -79,7 +79,7 @@ Run this checklist:
 
 | Step                   | Expected                                                |
 | ---------------------- | ------------------------------------------------------- |
-| Select text + shortcut | Sidebar opens, selection captured in context            |
+| Ctrl/Cmd + select text | Sidebar opens, selection captured in context            |
 | Trigger mode           | Loading indicator shown, request sent to backend        |
 | AI response            | Message renders correctly, no JSON/HTML escaping issues |
 | Refresh + reopen       | Chat ID persists, conversation history visible          |

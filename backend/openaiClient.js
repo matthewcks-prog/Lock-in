@@ -9,6 +9,9 @@ const { TRANSCRIPTION_MODEL } = require('./config');
 
 const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_HISTORY_MESSAGES = 30;
+const MAX_ATTACHMENT_CONTEXT_CHARS = 5000;
+const MIN_SELECTION_PRIMARY_CHARS = 20;
+const ATTACHMENT_ONLY_SELECTION_PLACEHOLDER = '[Document-based question - see attached files]';
 
 // Initialize OpenAI client with API key from environment
 const openai = new OpenAI({
@@ -32,6 +35,50 @@ function toLanguageName(code = 'en') {
   return LANGUAGE_LABELS[code.toLowerCase()] || code;
 }
 
+function normalizeSelection(selection) {
+  if (typeof selection !== 'string') return '';
+  return selection.trim();
+}
+
+function extractHeadingLines(text, maxHeadings = 6) {
+  const headings = [];
+  const lines = text.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^#{1,6}\s+\S/.test(trimmed)) {
+      headings.push(trimmed);
+      if (headings.length >= maxHeadings) break;
+    }
+  }
+  return headings;
+}
+
+function buildHeadTailSnippet(text, maxChars) {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+
+  const marker = '\n\n... [content truncated] ...\n\n';
+  const available = Math.max(0, maxChars - marker.length);
+  const headLen = Math.max(0, Math.floor(available / 2));
+  const tailLen = Math.max(0, available - headLen);
+  const head = trimmed.slice(0, headLen);
+  const tail = trimmed.slice(-tailLen);
+
+  return `${head}${marker}${tail}`;
+}
+
+function buildAttachmentSnippet(text, maxChars = MAX_ATTACHMENT_CONTEXT_CHARS) {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+
+  const headings = extractHeadingLines(trimmed);
+  const headingBlock = headings.length ? `Headings:\n${headings.join('\n')}\n\n` : '';
+  const available = Math.max(0, maxChars - headingBlock.length);
+
+  return `${headingBlock}${buildHeadTailSnippet(trimmed, available)}`;
+}
+
 function buildModeDirective(mode) {
   switch (mode) {
     case 'explain':
@@ -40,11 +87,11 @@ function buildModeDirective(mode) {
   }
 }
 
-function buildSystemMessage({ mode, difficultyLevel }) {
+function buildSystemMessage({ mode }) {
   const directive = buildModeDirective(mode);
   const content = [
     'You are Lock-in, an AI study helper that replies as a concise, friendly tutor.',
-    `Match the student's ${difficultyLevel} level and keep answers grounded in the provided conversation and original text.`,
+    'Keep answers grounded in the provided conversation and original text.',
     directive,
     'Maintain academic integrity, cite the source text implicitly, and never introduce unrelated facts.',
   ].join(' ');
@@ -52,10 +99,9 @@ function buildSystemMessage({ mode, difficultyLevel }) {
   return { role: 'system', content };
 }
 
-function buildInitialHistory({ selection, mode, difficultyLevel }) {
+function buildInitialHistory({ selection, mode }) {
   const systemMessage = buildSystemMessage({
     mode,
-    difficultyLevel,
   });
 
   // Include the original text only if we have a selection
@@ -97,6 +143,173 @@ function clampHistory(messages) {
   return systemMessage ? [systemMessage, ...recent] : recent;
 }
 
+function buildStructuredStudyMessages(options) {
+  const {
+    mode = 'explain',
+    selection,
+    pageContext,
+    pageUrl,
+    courseCode,
+    language = 'en',
+    chatHistory = [],
+    newUserMessage,
+    attachments = [],
+  } = options;
+
+  const selectionText = normalizeSelection(selection);
+  const hasSelection = selectionText.length > 0;
+  const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
+  const hasUserQuestion = typeof newUserMessage === 'string' && newUserMessage.trim().length > 0;
+  const selectionIsShort =
+    selectionText.length > 0 && selectionText.length < MIN_SELECTION_PRIMARY_CHARS;
+  const selectionForPrompt = hasSelection
+    ? selectionText
+    : hasAttachments
+      ? ATTACHMENT_ONLY_SELECTION_PLACEHOLDER
+      : '';
+
+  if (!hasSelection && !hasAttachments) {
+    throw new Error('Selection or attachments are required to generate a response');
+  }
+
+  // Build system prompt that adapts by mode
+  let modeInstruction = '';
+  switch (mode) {
+    case 'explain':
+      modeInstruction =
+        "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
+      break;
+    case 'general':
+      modeInstruction =
+        "Treat this as general Q&A about the selection/context. Provide a helpful explanation in the 'explanation' field.";
+      break;
+    default:
+      modeInstruction =
+        "Provide a clear explanation in the 'explanation' field. Create notes and todos if relevant.";
+  }
+
+  const contextParts = [];
+  if (pageContext) {
+    contextParts.push(`Page context: ${pageContext}`);
+  }
+  if (pageUrl) {
+    contextParts.push(`Page URL: ${pageUrl}`);
+  }
+  if (courseCode) {
+    contextParts.push(`Course code: ${courseCode}`);
+  }
+  const contextInfo = contextParts.length > 0 ? `\n\n${contextParts.join('\n')}` : '';
+
+  const focusInstruction = hasUserQuestion
+    ? 'Treat the student question as the primary task. Use the selected text and any attachments as supporting evidence.'
+    : hasAttachments && (!hasSelection || selectionIsShort)
+      ? 'The attached files/images are the primary source of context. The selected text is minimal or missing; focus on the attachments first.'
+      : 'The selected text is the primary source of context. Use attachments as supporting evidence when available.';
+
+  const attachmentNote = hasAttachments
+    ? '\n\nThe student may also attach images, documents, or code files. For images, describe what you see and how it relates to the topic.'
+    : '';
+
+  const systemPrompt = `You are Lock-in, a helpful AI study assistant. Your task is to analyze the selected text and return a structured JSON response.
+
+${modeInstruction}
+${focusInstruction ? `\n${focusInstruction}` : ''}
+
+Use the provided context (page context, course code, page URL) to improve the quality of tags and notes.${attachmentNote}
+
+IMPORTANT: You MUST return ONLY a valid JSON object with this exact structure:
+{
+  "explanation": "string - the main answer/explanation for the user",
+  "notes": [{"title": "string", "content": "string", "type": "string"}],
+  "todos": [{"title": "string", "description": "string"}],
+  "tags": ["string"],
+  "difficulty": "easy" | "medium" | "hard"
+}
+
+Do NOT include any markdown, code blocks, or extra text. Return ONLY the JSON object.
+
+Guidelines:
+- explanation: The main answer based on the mode (explain/general)
+- notes: Array of study notes that could be saved (title, content, type like "definition", "formula", "concept", etc.)
+- todos: Array of study tasks (title, description)
+- tags: Array of topic tags relevant to the content
+- difficulty: Estimate the difficulty level of the selected text
+
+Selected text:
+${selectionForPrompt}${contextInfo}`;
+
+  // Build messages array starting with system prompt
+  const messages = [{ role: 'system', content: systemPrompt }];
+
+  // Append sanitized chat history if available
+  if (Array.isArray(chatHistory) && chatHistory.length > 0) {
+    const safeHistory = sanitizeHistory(chatHistory);
+    messages.push(...safeHistory);
+  }
+
+  // Build attachment context for text-based attachments (documents, code)
+  const textAttachments = (attachments || []).filter((a) => a.type !== 'image' && a.textContent);
+  let attachmentContext = '';
+  if (textAttachments.length > 0) {
+    const attachmentTexts = textAttachments.map((a) => {
+      const label = a.fileName || `${a.type} file`;
+      const content = buildAttachmentSnippet(a.textContent);
+      return `\n--- ${label} ---\n${content}`;
+    });
+    attachmentContext = `\n\nAttached files:${attachmentTexts.join('\n')}`;
+  }
+
+  // Add final user message (either follow-up or initial request)
+  let userTextContent;
+  if (hasUserQuestion) {
+    userTextContent = `The student has asked a follow-up question about the selected text and previous explanation:
+
+"${newUserMessage.trim()}"${attachmentContext}
+
+Using the selected text, the previous conversation, any attached files/images, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
+  } else if (hasAttachments && (!hasSelection || selectionIsShort)) {
+    userTextContent = `Analyze the attached files/images as the primary source of context. The selected text is minimal or missing, so treat it as optional background. Return ONLY the structured JSON response described in the system message.${attachmentContext}`;
+  } else {
+    userTextContent =
+      `Analyze the selected text${attachmentContext ? ' and the attached files/images' : ''} and return the structured JSON response described in the system message.${attachmentContext}`;
+  }
+
+  // Check if we have image attachments for vision
+  const imageAttachments = (attachments || []).filter(
+    (a) => a.type === 'image' && a.base64,
+  );
+
+  // Build user message - use multimodal format if we have images
+  if (imageAttachments.length > 0) {
+    // Build multimodal content array for vision
+    const contentParts = [{ type: 'text', text: userTextContent }];
+
+    // Add image parts
+    for (const img of imageAttachments.slice(0, 4)) { // Limit to 4 images
+      contentParts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${img.mimeType};base64,${img.base64}`,
+          detail: 'auto', // Let the model decide detail level
+        },
+      });
+    }
+
+    messages.push({ role: 'user', content: contentParts });
+  } else {
+    messages.push({ role: 'user', content: userTextContent });
+  }
+
+  return {
+    messages,
+    selectionForPrompt,
+    userTextContent,
+    hasAttachments,
+    hasUserQuestion,
+    language,
+  };
+}
+
 async function requestCompletion(messages) {
   const completion = await openai.chat.completions.create({
     model: DEFAULT_MODEL,
@@ -118,17 +331,16 @@ async function requestCompletion(messages) {
 }
 
 async function generateLockInResponse(options) {
-  const { selection, mode, difficultyLevel, chatHistory = [], newUserMessage } = options;
+  const { selection, mode, chatHistory = [], newUserMessage } = options;
 
   const baseHistory = sanitizeHistory(chatHistory);
   let messages = baseHistory.length
     ? baseHistory
-    : buildInitialHistory({ selection, mode, difficultyLevel });
+    : buildInitialHistory({ selection, mode });
 
   // Always replace or add the system message to ensure the current mode directive is used
   const systemMessage = buildSystemMessage({
     mode,
-    difficultyLevel,
   });
   const messagesWithoutSystem = messages.filter((msg) => msg.role !== 'system');
   messages = [systemMessage, ...messagesWithoutSystem];
@@ -165,117 +377,19 @@ async function generateLockInResponse(options) {
  * Generate a structured study response with explanation, notes, todos, tags, and difficulty
  * @param {Object} options - Request options
  * @param {string} options.mode - Mode: "explain" | "general"
- * @param {string} options.selection - The highlighted text (required)
+ * @param {string} [options.selection] - The highlighted text (required unless attachments provided)
  * @param {string} [options.pageContext] - Optional extra surrounding text or page summary
  * @param {string} [options.pageUrl] - Optional page URL
  * @param {string} [options.courseCode] - Optional course code (e.g. "FIT2101")
  * @param {string} [options.language] - UI language (e.g. "en")
- * @param {string} [options.difficultyLevel] - Difficulty level (e.g. "highschool", "university")
  * @param {Array<{role: string, content: string}>} [options.chatHistory] - Previous messages
  * @param {string} [options.newUserMessage] - Follow-up question from the user
+ * @param {Array<Object>} [options.attachments] - Processed attachments (images with base64, documents with textContent)
  * @returns {Promise<StudyResponse>}
  */
 async function generateStructuredStudyResponse(options) {
-  const {
-    mode = 'explain',
-    selection,
-    pageContext,
-    pageUrl,
-    courseCode,
-    language = 'en',
-    difficultyLevel = 'university',
-    chatHistory = [],
-    newUserMessage,
-  } = options;
-
-  if (!selection || typeof selection !== 'string' || selection.trim().length === 0) {
-    throw new Error('Selection is required and must be a non-empty string');
-  }
-
-  // Build system prompt that adapts by mode
-  let modeInstruction = '';
-  switch (mode) {
-    case 'explain':
-      modeInstruction =
-        "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
-      break;
-    case 'general':
-      modeInstruction =
-        "Treat this as general Q&A about the selection/context. Provide a helpful explanation in the 'explanation' field.";
-      break;
-    default:
-      modeInstruction =
-        "Provide a clear explanation in the 'explanation' field. Create notes and todos if relevant.";
-  }
-
-  const contextParts = [];
-  if (pageContext) {
-    contextParts.push(`Page context: ${pageContext}`);
-  }
-  if (pageUrl) {
-    contextParts.push(`Page URL: ${pageUrl}`);
-  }
-  if (courseCode) {
-    contextParts.push(`Course code: ${courseCode}`);
-  }
-  const contextInfo = contextParts.length > 0 ? `\n\n${contextParts.join('\n')}` : '';
-
-  // Build difficulty instruction
-  const difficultyInstruction = difficultyLevel
-    ? `Match the student's ${difficultyLevel} level in your explanation.`
-    : '';
-
-  const systemPrompt = `You are Lock-in, a helpful AI study assistant. Your task is to analyze the selected text and return a structured JSON response.
-
-${modeInstruction}
-${difficultyInstruction ? `\n${difficultyInstruction}` : ''}
-
-Use the provided context (page context, course code, page URL) to improve the quality of tags and notes.
-
-IMPORTANT: You MUST return ONLY a valid JSON object with this exact structure:
-{
-  "explanation": "string - the main answer/explanation for the user",
-  "notes": [{"title": "string", "content": "string", "type": "string"}],
-  "todos": [{"title": "string", "description": "string"}],
-  "tags": ["string"],
-  "difficulty": "easy" | "medium" | "hard"
-}
-
-Do NOT include any markdown, code blocks, or extra text. Return ONLY the JSON object.
-
-Guidelines:
-- explanation: The main answer based on the mode (explain/general)
-- notes: Array of study notes that could be saved (title, content, type like "definition", "formula", "concept", etc.)
-- todos: Array of study tasks (title, description)
-- tags: Array of topic tags relevant to the content
-- difficulty: Estimate the difficulty level of the selected text
-
-Selected text:
-${selection}${contextInfo}`;
-
-  // Build messages array starting with system prompt
-  const messages = [{ role: 'system', content: systemPrompt }];
-
-  // Append sanitized chat history if available
-  if (Array.isArray(chatHistory) && chatHistory.length > 0) {
-    const safeHistory = sanitizeHistory(chatHistory);
-    messages.push(...safeHistory);
-  }
-
-  // Add final user message (either follow-up or initial request)
-  let userContent;
-  if (newUserMessage && newUserMessage.trim().length > 0) {
-    userContent = `The student has asked a follow-up question about the selected text and the previous explanation:
-
-"${newUserMessage.trim()}"
-
-Using the selected text, the previous conversation, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
-  } else {
-    userContent =
-      'Analyze the selected text and return the structured JSON response described in the system message.';
-  }
-
-  messages.push({ role: 'user', content: userContent });
+  const { mode = 'explain' } = options;
+  const { messages } = buildStructuredStudyMessages(options);
 
   // Clamp history before sending to OpenAI
   const finalMessages = clampHistory(messages);
@@ -571,6 +685,7 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
 module.exports = {
   generateLockInResponse,
   generateStructuredStudyResponse,
+  buildStructuredStudyMessages,
   generateChatTitleFromHistory,
   embedText,
   chatWithModel,

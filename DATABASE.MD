@@ -222,6 +222,50 @@ CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
 
 ---
 
+### `chat_message_assets`
+
+Attachments for chat messages (images/documents/code files). Files live in Supabase Storage bucket `chat-assets` using the path `<user_id>/<chat_id>/<asset_id>.<ext>`.
+
+```sql
+CREATE TABLE public.chat_message_assets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  message_id uuid REFERENCES public.chat_messages(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  type text NOT NULL CHECK (type IN ('image', 'document', 'code', 'other')),
+  mime_type text NOT NULL,
+  storage_path text NOT NULL,  -- path in Supabase Storage bucket `chat-assets`
+  file_name text,              -- original filename for display
+  file_size integer,           -- size in bytes for validation
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_chat_message_assets_message_id ON public.chat_message_assets(message_id);
+CREATE INDEX idx_chat_message_assets_user_id ON public.chat_message_assets(user_id);
+```
+
+**Fields:**
+
+- `id` - Asset id
+- `message_id` - Parent chat message id (nullable for pending uploads, cascade delete)
+- `user_id` - Owner (FK to `auth.users`)
+- `type` - High-level category (`image`, `document`, `code`, `other`)
+- `mime_type` - Exact MIME type
+- `storage_path` - Path inside the `chat-assets` bucket
+- `file_name` - Original filename for display purposes
+- `file_size` - File size in bytes for validation and display
+- `created_at` - Upload timestamp
+
+**Usage:** Stores file attachments for chat messages. Images are sent to GPT-4o-mini for vision analysis. Documents and code files have their text extracted and included in the prompt context. Asset URLs are generated using signed URLs (private bucket).
+
+**Cleanup:** Orphaned uploads (`message_id IS NULL`) older than 24 hours are deleted by `clean_orphaned_chat_assets()` (scheduled daily).
+
+**RLS Policies:**
+
+- Users can view, insert, and delete their own chat assets
+- Access controlled via `user_id` column
+
+---
+
 ### `folders`
 
 User-defined folder groupings (future: for organizing notes).
@@ -440,6 +484,8 @@ See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
 - `NoteRecord` - Matches `notes` table
 - `NoteAsset` - Frontend domain model for `note_assets` (camelCase: noteId, userId, mimeType, storagePath, createdAt)
 - `NoteAssetType` - Union type: `'image' | 'document' | 'audio' | 'video' | 'other'`
+- `ChatAsset` - Frontend domain model for `chat_message_assets` (defined in `api/resources/chatAssetsClient.ts`)
+- `ChatAssetType` - Union type: `'image' | 'document' | 'code' | 'other'`
 - `FolderRecord` - Matches `folders` table
 - `AIRequestRecord` - Matches `ai_requests` table
 - `FeedbackRecord` - Matches `feedback` table
@@ -454,6 +500,7 @@ See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
 auth.users (Supabase)
   -> chats (1:N)
      -> chat_messages (1:N)
+        -> chat_message_assets (1:N)
   -> notes (1:N)
      -> note_assets (1:N)
   -> folders (1:N)
@@ -500,6 +547,10 @@ CREATE INDEX idx_chat_messages_chat_created ON public.chat_messages(chat_id, cre
 -- Note assets: By note and user
 CREATE INDEX idx_note_assets_note_id ON public.note_assets(note_id);
 CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
+
+-- Chat assets: Orphan cleanup (pending uploads)
+CREATE INDEX idx_chat_message_assets_orphaned_created_at ON public.chat_message_assets(created_at)
+  WHERE message_id IS NULL;
 
 -- AI requests: Rate limiting + analytics
 CREATE INDEX idx_ai_requests_user_created ON public.ai_requests(user_id, created_at DESC);
@@ -574,6 +625,8 @@ Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, an
 | `007_transcripts_hardening.sql`        | Jan 2026 | Transcript job state + cache hardening               |
 | `008_transcript_privacy_hardening.sql` | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking |
 | `009_feedback.sql`                     | Jan 2026 | User feedback table for bug reports/feature requests |
+| `010_chat_assets.sql`                  | Jan 2026 | Chat message attachments table and storage bucket    |
+| `011_chat_assets_cleanup.sql`          | Feb 2026 | Cleanup function for orphaned chat assets            |
 
 ---
 

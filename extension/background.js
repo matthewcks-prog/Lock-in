@@ -1823,7 +1823,7 @@ async function handleMessage(message, sender) {
       case 'getSettings':
       case 'GET_SETTINGS': {
         return new Promise((resolve) => {
-          chrome.storage.sync.get(['preferredLanguage', 'difficultyLevel'], (data) => {
+          chrome.storage.sync.get(['preferredLanguage'], (data) => {
             resolve(Messaging ? Messaging.createSuccessResponse(data) : data);
           });
         });

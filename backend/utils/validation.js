@@ -3,7 +3,6 @@
  */
 
 const VALID_MODES = ['explain', 'general'];
-const VALID_DIFFICULTY_LEVELS = ['highschool', 'university'];
 const VALID_LANGUAGE_CODES = [
   'en',
   'es',
@@ -67,24 +66,6 @@ function validateLanguageCode(code) {
   return { valid: true, normalized };
 }
 
-/**
- * Validate difficulty level
- * @param {*} level - Difficulty level to validate
- * @returns {{valid: boolean, error?: string}}
- */
-function validateDifficultyLevel(level) {
-  if (!level || typeof level !== 'string') {
-    return { valid: false, error: 'Difficulty level must be a string' };
-  }
-  const normalized = level.toLowerCase().trim();
-  if (!VALID_DIFFICULTY_LEVELS.includes(normalized)) {
-    return {
-      valid: false,
-      error: `Difficulty level must be one of: ${VALID_DIFFICULTY_LEVELS.join(', ')}`,
-    };
-  }
-  return { valid: true, normalized };
-}
 
 /**
  * Validate UUID
@@ -186,11 +167,9 @@ function validateText(text, maxLength, fieldName = 'Text') {
 
 module.exports = {
   VALID_MODES,
-  VALID_DIFFICULTY_LEVELS,
   VALID_LANGUAGE_CODES,
   validateMode,
   validateLanguageCode,
-  validateDifficultyLevel,
   validateUUID,
   validateChatHistory,
   validateText,

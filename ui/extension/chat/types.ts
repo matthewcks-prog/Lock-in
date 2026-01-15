@@ -5,13 +5,23 @@
  * Used by hooks, components, and API layer.
  */
 
-import type { StudyMode } from '../../../core/domain/types';
+import type { StudyMode } from '@core/domain/types';
 
 // =============================================================================
 // Message Types
 // =============================================================================
 
 export type ChatMessageRole = 'user' | 'assistant';
+
+export type ChatAttachmentKind = 'image' | 'document' | 'code' | 'other';
+
+export interface ChatAttachment {
+    kind: ChatAttachmentKind;
+    mime: string;
+    name: string;
+    dataUrl?: string;
+    url?: string;
+}
 
 export interface ChatMessage {
     id: string;
@@ -21,6 +31,7 @@ export interface ChatMessage {
     mode?: StudyMode;
     source?: 'selection' | 'followup';
     isPending?: boolean;
+    attachments?: ChatAttachment[];
 }
 
 // =============================================================================
@@ -164,4 +175,42 @@ export function relativeTimeLabel(iso: string | null | undefined): string {
     if (hours < 24) return `${hours}h ago`;
     const days = Math.round(hours / 24);
     return `${days}d ago`;
+}
+
+export function normalizeChatAttachment(raw: any): ChatAttachment | null {
+    if (!raw) return null;
+
+    const kind = (raw.kind || raw.type || 'other') as ChatAttachmentKind;
+    const mime = raw.mime || raw.mimeType || raw.mime_type || '';
+    const name = raw.name || raw.fileName || raw.file_name || 'Attachment';
+    const dataUrl = raw.dataUrl;
+    const url = raw.url;
+
+    return {
+        kind,
+        mime,
+        name,
+        dataUrl: typeof dataUrl === 'string' ? dataUrl : undefined,
+        url: typeof url === 'string' ? url : undefined,
+    };
+}
+
+export function normalizeChatMessage(raw: any, mode: StudyMode): ChatMessage {
+    const attachments = Array.isArray(raw?.attachments)
+        ? raw.attachments
+              .map(normalizeChatAttachment)
+              .filter(
+                  (attachment: ChatAttachment | null): attachment is ChatAttachment =>
+                      Boolean(attachment),
+              )
+        : undefined;
+
+    return {
+        id: raw?.id || `msg-${Math.random().toString(16).slice(2)}`,
+        role: raw?.role === 'assistant' ? 'assistant' : 'user',
+        content: raw?.content || raw?.output_text || raw?.input_text || 'Message',
+        timestamp: raw?.created_at || new Date().toISOString(),
+        mode: raw?.mode || mode,
+        attachments,
+    };
 }

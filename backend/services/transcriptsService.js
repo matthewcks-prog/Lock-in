@@ -464,6 +464,9 @@ async function reapStaleTranscriptJobs() {
   return { reaped: staleJobs.length };
 }
 
+// Track the reaper interval for graceful shutdown
+let reaperInterval = null;
+
 function startTranscriptJobReaper() {
   const intervalMs = Math.max(1, TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES) * 60 * 1000;
 
@@ -471,13 +474,20 @@ function startTranscriptJobReaper() {
     console.warn('[Transcripts] Initial job reaper run failed:', error);
   });
 
-  const timer = setInterval(() => {
+  reaperInterval = setInterval(() => {
     reapStaleTranscriptJobs().catch((error) => {
       console.warn('[Transcripts] Job reaper run failed:', error);
     });
   }, intervalMs);
 
-  return () => clearInterval(timer);
+  return () => stopTranscriptJobReaper();
+}
+
+function stopTranscriptJobReaper() {
+  if (reaperInterval) {
+    clearInterval(reaperInterval);
+    reaperInterval = null;
+  }
 }
 
 module.exports = {
@@ -486,4 +496,5 @@ module.exports = {
   cancelTranscriptProcessing,
   reapStaleTranscriptJobs,
   startTranscriptJobReaper,
+  stopTranscriptJobReaper,
 };

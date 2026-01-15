@@ -30,7 +30,6 @@ This project uses a structured documentation approach:
 - **`docs/ARCHITECTURE.md`** - Stable architecture invariants (surfaces, boundaries, contracts)
 - **`docs/STATUS.md`** - Living snapshot: outstanding issues, recent changes, implementation status
 - **`docs/REPO_MAP.md`** - Repository structure map and entrypoints
-- **`docs/ADRS/`** - Architecture Decision Records (when created)
 - **`docs/REFACTOR_PLAN.md`** - Phased refactoring plan
 - **`docs/PROMPT_LOG.md`** - Log of refactoring prompts and outcomes
 - **`CODE_OVERVIEW.md`** - Current codebase snapshot (implementation details)
