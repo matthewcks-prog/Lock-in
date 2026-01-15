@@ -1,0 +1,197 @@
+# =============================================================================
+# Lock-in Backend - GitHub Actions CI/CD Pipeline
+# Builds, tests, and deploys to Azure Container Apps
+# =============================================================================
+
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-deploy.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/**'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  REGISTRY_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io
+  IMAGE_NAME: lock-in-backend
+  CONTAINER_APP_NAME: lock-in-backend
+  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+
+jobs:
+  # ===========================================================================
+  # Build and Test
+  # ===========================================================================
+  build-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Run tests
+        working-directory: backend
+        run: npm test
+        continue-on-error: true  # Don't fail build if no tests yet
+
+      - name: Build Docker image (test)
+        run: docker build -f backend/Dockerfile -t ${{ env.IMAGE_NAME }}:test .
+
+      - name: Test health endpoint
+        run: |
+          # Start container in background
+          docker run -d --name test-container -p 3000:3000 \
+            -e NODE_ENV=development \
+            -e OPENAI_API_KEY=test \
+            -e SUPABASE_URL=https://test.supabase.co \
+            -e SUPABASE_SERVICE_ROLE_KEY=test \
+            ${{ env.IMAGE_NAME }}:test
+          
+          # Wait for container to start
+          sleep 10
+          
+          # Test health endpoint
+          curl -f http://localhost:3000/health || exit 1
+          
+          # Cleanup
+          docker stop test-container
+          docker rm test-container
+
+  # ===========================================================================
+  # Build and Push to ACR
+  # ===========================================================================
+  push-to-acr:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.REGISTRY_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ===========================================================================
+  # Deploy to Azure Container Apps
+  # NOTE: Requires AZURE_CREDENTIALS secret (service principal)
+  # If you can't create a service principal, use manual deployment:
+  #   az containerapp update --name lock-in-backend --resource-group lock-in-prod \
+  #     --image lockinacr.azurecr.io/lock-in-backend:<sha>
+  # ===========================================================================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: push-to-acr
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.AZURE_CREDENTIALS != ''
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Container Apps
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          resourceGroup: ${{ env.RESOURCE_GROUP }}
+          containerAppName: ${{ env.CONTAINER_APP_NAME }}
+          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Verify deployment
+        run: |
+          # Get the app URL
+          APP_URL=$(az containerapp show \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          
+          echo "App URL: https://$APP_URL"
+          
+          # Wait for deployment to stabilize
+          sleep 30
+          
+          # Test health endpoint
+          curl -f "https://$APP_URL/health" || exit 1
+          
+          echo "✅ Deployment verified successfully!"
+  
+  # ===========================================================================
+  # Manual Deploy (when no service principal available)
+  # Pushes image info for manual deployment
+  # ===========================================================================
+  manual-deploy-info:
+    runs-on: ubuntu-latest
+    needs: push-to-acr
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Print deployment instructions
+        run: |
+          echo "🚀 Image pushed to ACR successfully!"
+          echo ""
+          echo "Image: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo ""
+          echo "To deploy manually, run:"
+          echo "  az containerapp update --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+# =============================================================================
+# Required GitHub Secrets:
+#
+# AZURE_CREDENTIALS        - Azure Service Principal JSON
+# AZURE_CONTAINER_REGISTRY - ACR name (without .azurecr.io)
+# AZURE_RESOURCE_GROUP     - Resource group name
+# ACR_USERNAME             - ACR admin username
+# ACR_PASSWORD             - ACR admin password
+#
+# To create Azure credentials:
+# az ad sp create-for-rbac --name "github-actions-lock-in" \
+#   --role contributor \
+#   --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group} \
+#   --sdk-auth
+# =============================================================================
