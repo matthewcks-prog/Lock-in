@@ -124,19 +124,32 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: push-to-acr
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.AZURE_CREDENTIALS != ''
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
     
     steps:
+      - name: Check for Azure credentials
+        id: check-creds
+        run: |
+          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⚠️ AZURE_CREDENTIALS not set - skipping deployment"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout code
+        if: steps.check-creds.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Login to Azure
+        if: steps.check-creds.outputs.skip != 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Container Apps
+        if: steps.check-creds.outputs.skip != 'true'
         uses: azure/container-apps-deploy-action@v2
         with:
           resourceGroup: ${{ env.RESOURCE_GROUP }}
@@ -144,6 +157,7 @@ jobs:
           imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
       - name: Verify deployment
+        if: steps.check-creds.outputs.skip != 'true'
         run: |
           # Get the app URL
           APP_URL=$(az containerapp show \
