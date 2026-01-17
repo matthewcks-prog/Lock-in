@@ -134,9 +134,9 @@ Current: `ui/hooks/useNoteEditor.ts` — 3x over limit
 
 ### E1. Stale Documentation Fixes
 - [ ] Update `backend/README.md` — change `content` to `content_json` in schema
-- [ ] Update `docs/TRANSCRIPT_SYSTEM_MAP.md` — add Echo360 details
-- [ ] Archive `docs/QUALITY_AUDIT_2025-12-16.md` to `docs/archive/`
-- [ ] Verify `docs/STATUS.md` test count (143 tests)
+- [ ] Update `docs/features/transcripts/SYSTEM_MAP.md` — add Echo360 details
+- [x] Archive `docs/archive/QUALITY_AUDIT_2025-12-16.md` to `docs/archive/`
+- [ ] Verify `docs/tracking/STATUS.md` test count (143 tests)
 
 ### E2. Missing Standard Files
 - [ ] Create `CONTRIBUTING.md` — contributor guidelines
@@ -149,7 +149,7 @@ Current: `ui/hooks/useNoteEditor.ts` — 3x over limit
 
 ### E4. Accuracy Fixes
 - [ ] Fix `extension/AGENTS.md` — `noteService` → `notesService.ts`
-- [ ] Add `window.LockInSentry` and `window.LockInMediaFetcher` to `docs/ARCHITECTURE.md`
+- [ ] Add `window.LockInSentry` and `window.LockInMediaFetcher` to `docs/architecture/ARCHITECTURE.md`
 - [ ] Standardize terminology: "sidebar" (not "widget" or "panel")
 
 ### E5. MCP Template Alignment
@@ -314,9 +314,9 @@ Current: `ui/hooks/useNoteEditor.ts` — 3x over limit
 
 ## Notes
 
-- All codex steps (C1-C5E) documented in `docs/PROMPT_LOG.md`
-- Current status tracked in `docs/STATUS.md`
-- Historical audit: `docs/QUALITY_AUDIT_2025-12-16.md`
+- All codex steps (C1-C5E) documented in `docs/tracking/PROMPT_LOG.md`
+- Current status tracked in `docs/tracking/STATUS.md`
+- Historical audit: `docs/archive/QUALITY_AUDIT_2025-12-16.md`
 - Audit findings: January 2026 consolidated audit (Batch 1 + Batch 2)
 
 ---

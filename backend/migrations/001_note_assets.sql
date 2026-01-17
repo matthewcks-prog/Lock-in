@@ -18,14 +18,17 @@ CREATE INDEX IF NOT EXISTS idx_note_assets_user_id ON public.note_assets(user_id
 -- RLS
 ALTER TABLE public.note_assets ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "Users can view own note assets"
+DROP POLICY IF EXISTS "Users can view own note assets" ON public.note_assets;
+CREATE POLICY "Users can view own note assets"
   ON public.note_assets FOR SELECT
   USING (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can insert own note assets"
+DROP POLICY IF EXISTS "Users can insert own note assets" ON public.note_assets;
+CREATE POLICY "Users can insert own note assets"
   ON public.note_assets FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY IF NOT EXISTS "Users can delete own note assets"
+DROP POLICY IF EXISTS "Users can delete own note assets" ON public.note_assets;
+CREATE POLICY "Users can delete own note assets"
   ON public.note_assets FOR DELETE
   USING (auth.uid() = user_id);

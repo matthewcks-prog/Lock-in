@@ -39,19 +39,23 @@ CREATE INDEX IF NOT EXISTS idx_transcripts_media_url_norm
 
 ALTER TABLE public.transcript_jobs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own transcript jobs" ON public.transcript_jobs;
 CREATE POLICY "Users can view own transcript jobs"
   ON public.transcript_jobs FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own transcript jobs" ON public.transcript_jobs;
 CREATE POLICY "Users can insert own transcript jobs"
   ON public.transcript_jobs FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own transcript jobs" ON public.transcript_jobs;
 CREATE POLICY "Users can update own transcript jobs"
   ON public.transcript_jobs FOR UPDATE
   USING (auth.uid() = user_id)
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own transcript jobs" ON public.transcript_jobs;
 CREATE POLICY "Users can delete own transcript jobs"
   ON public.transcript_jobs FOR DELETE
   USING (auth.uid() = user_id);

@@ -24,16 +24,19 @@ CREATE INDEX IF NOT EXISTS idx_chat_message_assets_user_id ON public.chat_messag
 ALTER TABLE public.chat_message_assets ENABLE ROW LEVEL SECURITY;
 
 -- Users can view their own chat assets
+DROP POLICY IF EXISTS "Users can view own chat assets" ON public.chat_message_assets;
 CREATE POLICY "Users can view own chat assets"
   ON public.chat_message_assets FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Users can insert their own chat assets
+DROP POLICY IF EXISTS "Users can insert own chat assets" ON public.chat_message_assets;
 CREATE POLICY "Users can insert own chat assets"
   ON public.chat_message_assets FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 -- Users can delete their own chat assets
+DROP POLICY IF EXISTS "Users can delete own chat assets" ON public.chat_message_assets;
 CREATE POLICY "Users can delete own chat assets"
   ON public.chat_message_assets FOR DELETE
   USING (auth.uid() = user_id);

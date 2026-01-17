@@ -9,6 +9,51 @@
 const path = require('path');
 const chatLimits = require('../core/config/chatLimits.json');
 
+// =============================================================================
+// Environment Selection & Supabase Configuration
+// =============================================================================
+
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PRODUCTION = NODE_ENV === 'production';
+const IS_DEVELOPMENT = NODE_ENV === 'development';
+
+/**
+ * Get environment-aware Supabase configuration.
+ * In production: Uses SUPABASE_URL_PROD and SUPABASE_SERVICE_ROLE_KEY_PROD
+ * In development: Uses SUPABASE_URL_DEV and SUPABASE_SERVICE_ROLE_KEY_DEV
+ * 
+ * Fallback: If environment-specific vars not found, try legacy vars
+ * (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) for backward compatibility
+ */
+function getSupabaseConfig() {
+  if (IS_PRODUCTION) {
+    return {
+      url: process.env.SUPABASE_URL_PROD || process.env.SUPABASE_URL,
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_PROD || process.env.SUPABASE_SERVICE_ROLE_KEY,
+      anonKey: process.env.SUPABASE_ANON_KEY_PROD || process.env.SUPABASE_ANON_KEY,
+      environment: 'production',
+    };
+  }
+  
+  // Development or staging
+  return {
+    url: process.env.SUPABASE_URL_DEV || process.env.SUPABASE_URL,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_DEV || process.env.SUPABASE_SERVICE_ROLE_KEY,
+    anonKey: process.env.SUPABASE_ANON_KEY_DEV || process.env.SUPABASE_ANON_KEY,
+    environment: 'development',
+  };
+}
+
+const SUPABASE_CONFIG = getSupabaseConfig();
+
+// Validate that Supabase credentials are available
+if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.serviceRoleKey) {
+  console.error(
+    `CRITICAL: Missing Supabase credentials for ${NODE_ENV} environment.`,
+    `Expected: SUPABASE_URL_${IS_PRODUCTION ? 'PROD' : 'DEV'} and SUPABASE_SERVICE_ROLE_KEY_${IS_PRODUCTION ? 'PROD' : 'DEV'}`
+  );
+}
+
 const PORT = process.env.PORT || 3000;
 
 // Request/body limits
@@ -160,6 +205,18 @@ function isOriginAllowed(origin) {
 }
 
 module.exports = {
+  // Environment
+  NODE_ENV,
+  IS_PRODUCTION,
+  IS_DEVELOPMENT,
+  
+  // Supabase Configuration
+  SUPABASE_CONFIG,
+  SUPABASE_URL: SUPABASE_CONFIG.url,
+  SUPABASE_SERVICE_ROLE_KEY: SUPABASE_CONFIG.serviceRoleKey,
+  SUPABASE_ANON_KEY: SUPABASE_CONFIG.anonKey,
+  
+  // Server
   PORT,
   MAX_SELECTION_LENGTH,
   MAX_USER_MESSAGE_LENGTH,
@@ -167,10 +224,14 @@ module.exports = {
   DEFAULT_CHAT_LIST_LIMIT,
   MAX_CHAT_LIST_LIMIT,
   isOriginAllowed,
+  
+  // Note Assets
   NOTE_ASSETS_BUCKET,
   NOTE_ASSETS_MAX_BYTES,
   NOTE_ASSET_MIME_GROUPS,
   ALLOWED_ASSET_MIME_TYPES,
+  
+  // Chat Assets
   CHAT_ASSETS_BUCKET,
   CHAT_ASSETS_MAX_BYTES,
   CHAT_ASSET_DAILY_UPLOAD_LIMIT,
@@ -179,6 +240,8 @@ module.exports = {
   CHAT_ASSET_MIME_GROUPS,
   ALLOWED_CHAT_ASSET_MIME_TYPES,
   MIME_EXTENSION_MAP,
+  
+  // Transcripts
   TRANSCRIPTION_MODEL,
   TRANSCRIPTION_SEGMENT_MAX_MB,
   TRANSCRIPTION_TEMP_DIR,
