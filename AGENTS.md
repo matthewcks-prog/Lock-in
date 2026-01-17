@@ -27,21 +27,21 @@ Every feature should reinforce this loop:
 This project uses a structured documentation approach:
 
 - **`/AGENTS.md`** (this file) - Canonical stable contract: architecture boundaries, coding rules, workflow patterns
-- **`docs/ARCHITECTURE.md`** - Stable architecture invariants (surfaces, boundaries, contracts)
-- **`docs/STATUS.md`** - Living snapshot: outstanding issues, recent changes, implementation status
-- **`docs/REPO_MAP.md`** - Repository structure map and entrypoints
-- **`docs/REFACTOR_PLAN.md`** - Phased refactoring plan
-- **`docs/PROMPT_LOG.md`** - Log of refactoring prompts and outcomes
+- **`docs/architecture/ARCHITECTURE.md`** - Stable architecture invariants (surfaces, boundaries, contracts)
+- **`docs/tracking/STATUS.md`** - Living snapshot: outstanding issues, recent changes, implementation status
+- **`docs/architecture/REPO_MAP.md`** - Repository structure map and entrypoints
+- **`docs/tracking/REFACTOR_PLAN.md`** - Phased refactoring plan
+- **`docs/tracking/PROMPT_LOG.md`** - Log of refactoring prompts and outcomes
 - **`CODE_OVERVIEW.md`** - Current codebase snapshot (implementation details)
-- **`DATABASE.MD`** - Database schema and migration history
+- **`DATABASE.md`** - Database schema and migration history
 - **Folder-level `AGENTS.md`** - Folder-specific conventions (e.g., `/extension/AGENTS.md`)
 
-**Doc stability**: `/AGENTS.md` and `docs/ARCHITECTURE.md` are stable contracts; `docs/STATUS.md` and `CODE_OVERVIEW.md` are living snapshots; `docs/REPO_MAP.md` is a concise navigation map.
+**Doc stability**: `/AGENTS.md` and `docs/architecture/ARCHITECTURE.md` are stable contracts; `docs/tracking/STATUS.md` and `CODE_OVERVIEW.md` are living snapshots; `docs/architecture/REPO_MAP.md` is a concise navigation map.
 
 **When to update docs:**
 
 - **`/AGENTS.md`**: Only when architectural boundaries, coding rules, or workflow patterns change
-- **`DATABASE.MD`**: When schema changes (new tables/columns, migrations)
+- **`DATABASE.md`**: When schema changes (new tables/columns, migrations)
 - **`CODE_OVERVIEW.md`**: When file structure or implementation patterns change
 - **Folder `AGENTS.md`**: When folder-specific conventions change
 
@@ -169,7 +169,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 
 1. **Scan key docs & structure**
    - Read `/AGENTS.md` (this file)
-   - Check `DATABASE.MD` if touching schema
+   - Check `DATABASE.md` if touching schema
    - Check folder-level `AGENTS.md` if editing specific folders
    - Review `CODE_OVERVIEW.md` for current implementation patterns
 
@@ -185,7 +185,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
    - Incremental changes: Don't rewrite everything at once
 
 4. **Update living docs (MANDATORY)**
-   - Update `DATABASE.MD` if schema changes (new tables/columns, migrations)
+   - Update `DATABASE.md` if schema changes (new tables/columns, migrations)
    - Update `CODE_OVERVIEW.md` if file structure or implementation patterns change
    - Update folder `AGENTS.md` if folder-specific conventions change
    - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
@@ -219,7 +219,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - [ ] Are types defined in `/core/domain/types.ts`?
 - [ ] Is state managed properly (React hooks or TanStack Query)?
 - [ ] Are components small and focused?
-- [ ] If adding new database tables → Updated `DATABASE.MD`?
+- [ ] If adding new database tables → Updated `DATABASE.md`?
 - [ ] If changing file structure → Updated `CODE_OVERVIEW.md`?
 
 ---
@@ -320,7 +320,7 @@ When building new features, consider: Will the core logic work in both extension
 
 - **Web app**: Will reuse `/core` and `/api` layers, but will have its own UI in `/web`
 - **UI kit**: May create `/shared/ui` for basic reusable components (Button, Card, etc.)
-- See `docs/STATUS.md` for current feature status and planned work
+- See `docs/tracking/STATUS.md` for current feature status and planned work
 
 ---
 
@@ -328,11 +328,11 @@ When building new features, consider: Will the core logic work in both extension
 
 When making changes related to refactor preparation (guardrails, documentation, tests, build scripts), you **MUST** update:
 
-1. **`docs/REFACTOR_PLAN.md`**
+1. **`docs/tracking/REFACTOR_PLAN.md`**
    - Mark completed phases or update phase descriptions
    - Update "Definition of Done" checklist if criteria change
 
-2. **`docs/PROMPT_LOG.md`**
+2. **`docs/tracking/PROMPT_LOG.md`**
    - Add a new row for the prompt session
    - Include: Prompt ID, Tool, Mode, Purpose, Output Summary, Date
 
@@ -353,7 +353,7 @@ This ensures the refactor plan and prompt log stay accurate and reflect the curr
 
 - Check folder-level `AGENTS.md` files
 - Review `CODE_OVERVIEW.md` for current implementation patterns
-- Check `docs/STATUS.md` for outstanding issues and recent changes
+- Check `docs/tracking/STATUS.md` for outstanding issues and recent changes
 - Ask before making large architectural changes
 
 **Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`) Chrome-free. Extension UI source (`/ui/extension`, built to `/extension/dist/ui`) is specific to the sidebar widget and will not be reused by the web app.

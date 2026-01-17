@@ -31,7 +31,7 @@
    - ✅ Enhanced logging for caption URL extraction
 
 4. **Documentation**:
-   - ✅ Created `docs/TRANSCRIPT_TROUBLESHOOTING.md` - comprehensive troubleshooting guide
+   - ✅ Created `docs/features/transcripts/TROUBLESHOOTING.md` - comprehensive troubleshooting guide
 
 **Best Practices:**
 

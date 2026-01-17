@@ -785,7 +785,7 @@ Get-Content tools\mcp\config\*.json
 **4. Review Lock-in docs:**
 
 - [AGENTS.md](../../AGENTS.md) - Architecture principles
-- [STATUS.md](../../docs/STATUS.md) - Current status
+- [STATUS.md](../../docs/tracking/STATUS.md) - Current status
 
 **5. Check Supabase status:**
 

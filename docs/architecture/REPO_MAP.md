@@ -63,7 +63,7 @@ tools/
 
 - Unit tests: `core/utils/__tests__/`, `integrations/adapters/__tests__/` (vitest, jsdom).
 - Guardrail commands: `npm run lint`, `npm run test`, `npm run type-check`, `npm run build`, `npm run verify-build`.
-- Manual: see `docs/SMOKE_CHECKLIST.md` (run §1 for build/load sanity).
+- Manual: see `docs/testing/SMOKE_CHECKLIST.md` (run §1 for build/load sanity).
 
 ## MCP Tooling
 

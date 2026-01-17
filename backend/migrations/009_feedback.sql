@@ -24,11 +24,13 @@ CREATE INDEX idx_feedback_status ON public.feedback(status, created_at DESC);
 ALTER TABLE public.feedback ENABLE ROW LEVEL SECURITY;
 
 -- Users can view their own feedback
+DROP POLICY IF EXISTS "Users can view own feedback" ON public.feedback;
 CREATE POLICY "Users can view own feedback"
   ON public.feedback FOR SELECT
   USING (auth.uid() = user_id);
 
 -- Users can insert their own feedback
+DROP POLICY IF EXISTS "Users can insert own feedback" ON public.feedback;
 CREATE POLICY "Users can insert own feedback"
   ON public.feedback FOR INSERT
   WITH CHECK (auth.uid() = user_id);

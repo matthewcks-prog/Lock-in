@@ -4,11 +4,33 @@
 
 This guide walks through deploying the Lock-in backend to Azure Container Apps with production-grade configuration including secrets management, monitoring, and CI/CD.
 
+## Environment Strategy
+
+Lock-in uses **two separate Supabase projects** for environment isolation:
+
+| Environment | Supabase Project | Use Case |
+|-------------|-----------------|----------|
+| **Development** | `uszxfuzauetcchwcgufe` | Local dev, staging, testing |
+| **Production** | `vtuflatvllpldohhimao` | Real users, real data |
+
+**Key Principles:**
+
+- Production credentials stored in Azure Key Vault ONLY (never in .env files)
+- Development credentials can be in local .env files (gitignored)
+- Environment variables use `_DEV` and `_PROD` suffixes
+- `NODE_ENV` determines which Supabase project to use
+
+**Backend Configuration:**
+
+The backend automatically selects the correct Supabase project based on `NODE_ENV`:
+- `NODE_ENV=development` → Uses `SUPABASE_URL_DEV`, `SUPABASE_SERVICE_ROLE_KEY_DEV`
+- `NODE_ENV=production` → Uses `SUPABASE_URL_PROD`, `SUPABASE_SERVICE_ROLE_KEY_PROD`
+
 ## Prerequisites
 
 - [ ] Azure CLI installed and logged in (`az login`)
 - [ ] Docker Desktop installed (for local testing)
-- [ ] Supabase project created with database and storage
+- [ ] Supabase projects created (dev AND prod)
 - [ ] OpenAI API key
 - [ ] Sentry account (optional but recommended)
 
@@ -22,18 +44,21 @@ Run all migrations in order via Supabase SQL Editor:
 
 ```bash
 # Location: backend/migrations/
-001_note_assets.sql
-002_performance_indexes.sql
-003_note_search_indexes.sql
-004_chat_message_assets.sql
-005_transcripts_table.sql
-006_feedback_table.sql
-007_folders_table.sql
-008_note_folder_relation.sql
-009_transcript_jobs.sql
-010_chat_asset_restrictions.sql
-011_note_starred_field.sql
+001_note_assets.sql          # Note attachments table + RLS
+002_performance_indexes.sql  # Query performance indexes
+003_row_level_security.sql   # RLS policies for all tables
+004_vector_extension_schema.sql  # pgvector schema fix
+005_starred_notes.sql        # Starred notes feature
+006_transcripts.sql          # Transcript tables + RLS
+007_transcripts_hardening.sql    # State machine + chunk tracking
+008_transcript_privacy_hardening.sql  # Privacy: TTL + URL redaction
+009_feedback.sql             # User feedback table
+010_chat_assets.sql          # Chat message attachments
+011_chat_assets_cleanup.sql  # Orphan cleanup function
 ```
+
+> **Note**: All migrations are idempotent and safe to re-run. They use
+> `IF NOT EXISTS`, `DROP POLICY IF EXISTS`, and conditional blocks.
 
 **Critical**: After running migrations, verify pgvector extension:
 
@@ -58,13 +83,29 @@ In Supabase Dashboard → Storage:
 
 ### 1.3 Gather Required Values
 
-Collect these values (you'll need them for Azure setup):
+Collect these values for **EACH ENVIRONMENT**:
+
+**Development Supabase (uszxfuzauetcchwcgufe):**
+
+| Variable                    | Where to Get It                                        |
+| --------------------------- | ------------------------------------------------------ |
+| `SUPABASE_URL_DEV`          | Supabase Dashboard → Settings → API (dev project)     |
+| `SUPABASE_ANON_KEY_DEV`     | Supabase Dashboard → Settings → API (anon key)        |
+| `SUPABASE_SERVICE_ROLE_KEY_DEV` | Supabase Dashboard → Settings → API (service_role key) |
+
+**Production Supabase (vtuflatvllpldohhimao):**
+
+| Variable                    | Where to Get It                                        |
+| --------------------------- | ------------------------------------------------------ |
+| `SUPABASE_URL_PROD`         | Supabase Dashboard → Settings → API (prod project)    |
+| `SUPABASE_ANON_KEY_PROD`    | Supabase Dashboard → Settings → API (anon key)        |
+| `SUPABASE_SERVICE_ROLE_KEY_PROD` | Supabase Dashboard → Settings → API (service_role key) |
+
+**Shared Credentials:**
 
 | Variable                    | Where to Get It                                        |
 | --------------------------- | ------------------------------------------------------ |
 | `OPENAI_API_KEY`            | https://platform.openai.com/api-keys                   |
-| `SUPABASE_URL`              | Supabase Dashboard → Settings → API                    |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API (service_role key) |
 | `SENTRY_DSN`                | Sentry Dashboard → Project → Settings → Client Keys    |
 
 ---
@@ -144,12 +185,23 @@ This creates:
 
 ### 3.2 Add Secrets to Key Vault
 
+**Production secrets (for PROD deployment):**
+
 ```bash
-# Add required secrets
+# Add production secrets
 az keyvault secret set --vault-name lock-in-kv --name OPENAI-API-KEY --value "sk-your-key"
-az keyvault secret set --vault-name lock-in-kv --name SUPABASE-URL --value "https://xxx.supabase.co"
-az keyvault secret set --vault-name lock-in-kv --name SUPABASE-SERVICE-ROLE-KEY --value "eyJ..."
+az keyvault secret set --vault-name lock-in-kv --name SUPABASE-URL-PROD --value "https://vtuflatvllpldohhimao.supabase.co"
+az keyvault secret set --vault-name lock-in-kv --name SUPABASE-ANON-KEY-PROD --value "your-prod-anon-key"
+az keyvault secret set --vault-name lock-in-kv --name SUPABASE-SERVICE-ROLE-KEY-PROD --value "eyJ..."
 az keyvault secret set --vault-name lock-in-kv --name SENTRY-DSN --value "https://...@sentry.io/..."
+```
+
+**Development secrets (for STAGING deployment, optional):**
+
+```bash
+# Add dev secrets (only if deploying staging environment to Azure)
+az keyvault secret set --vault-name lock-in-kv-dev --name SUPABASE-URL-DEV --value "https://uszxfuzauetcchwcgufe.supabase.co"
+az keyvault secret set --vault-name lock-in-kv-dev --name SUPABASE-SERVICE-ROLE-KEY-DEV --value "eyJ..."
 ```
 
 ### 3.3 Configure Container App Secrets
@@ -169,24 +221,24 @@ az keyvault set-policy \
     --object-id $IDENTITY_ID \
     --secret-permissions get list
 
-# Add secrets from Key Vault
+# Add secrets from Key Vault (PRODUCTION deployment)
 az containerapp secret set \
     --name lock-in-backend \
     --resource-group lock-in-prod \
     --secrets \
         "openai-api-key=keyvaultref:https://lock-in-kv.vault.azure.net/secrets/OPENAI-API-KEY,identityref:system" \
-        "supabase-url=keyvaultref:https://lock-in-kv.vault.azure.net/secrets/SUPABASE-URL,identityref:system" \
-        "supabase-service-role-key=keyvaultref:https://lock-in-kv.vault.azure.net/secrets/SUPABASE-SERVICE-ROLE-KEY,identityref:system" \
+        "supabase-url-prod=keyvaultref:https://lock-in-kv.vault.azure.net/secrets/SUPABASE-URL-PROD,identityref:system" \
+        "supabase-service-role-key-prod=keyvaultref:https://lock-in-kv.vault.azure.net/secrets/SUPABASE-SERVICE-ROLE-KEY-PROD,identityref:system" \
         "sentry-dsn=keyvaultref:https://lock-in-kv.vault.azure.net/secrets/SENTRY-DSN,identityref:system"
 
-# Update environment variables to use secrets
+# Update environment variables to use secrets (PRODUCTION)
 az containerapp update \
     --name lock-in-backend \
     --resource-group lock-in-prod \
     --set-env-vars \
         "OPENAI_API_KEY=secretref:openai-api-key" \
-        "SUPABASE_URL=secretref:supabase-url" \
-        "SUPABASE_SERVICE_ROLE_KEY=secretref:supabase-service-role-key" \
+        "SUPABASE_URL_PROD=secretref:supabase-url-prod" \
+        "SUPABASE_SERVICE_ROLE_KEY_PROD=secretref:supabase-service-role-key-prod" \
         "SENTRY_DSN=secretref:sentry-dsn" \
         "NODE_ENV=production" \
         "PORT=3000" \

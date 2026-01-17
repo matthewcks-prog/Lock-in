@@ -350,7 +350,7 @@ If issues persist:
    - Browser version
 
 2. **Check Known Issues**:
-   - Review `docs/STATUS.md` for recent changes
+   - Review `docs/tracking/STATUS.md` for recent changes
    - Check `TRANSCRIPT_FIX_SUMMARY.md` for recent fixes
 
 3. **Report Issue**:

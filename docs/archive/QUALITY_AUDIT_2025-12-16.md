@@ -4,7 +4,7 @@
 **Tool**: Cursor (Read-only)  
 **Purpose**: Bulletproof quality/risk audit without functional changes
 
-> **Note**: This is a historical snapshot. Some items have been addressed since this audit. See `docs/STATUS.md` for current status. Contract tests for window globals (C5A-C5D) and manifest/init order guardrails have been completed. Current test count: 143 tests (was 136 at time of audit).
+> **Note**: This is a historical snapshot. Some items have been addressed since this audit. See `docs/tracking/STATUS.md` for current status. Contract tests for window globals (C5A-C5D) and manifest/init order guardrails have been completed. Current test count: 143 tests (was 136 at time of audit).
 
 ---
 

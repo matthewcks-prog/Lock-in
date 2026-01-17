@@ -8,6 +8,49 @@ It exists so future humans and AI agents can understand how data is stored and a
 
 ---
 
+## Environment Separation
+
+Lock-in uses **two separate Supabase projects** for environment isolation:
+
+| Environment | Project Reference | URL | Use Case |
+|-------------|------------------|-----|----------|
+| **Development** | `uszxfuzauetcchwcgufe` | https://uszxfuzauetcchwcgufe.supabase.co | Local dev, staging, testing |
+| **Production** | `vtuflatvllpldohhimao` | https://vtuflatvllpldohhimao.supabase.co | Real users, real data |
+
+**Schema Sync Strategy:**
+
+- Schema migrations are version-controlled in `backend/migrations/`
+- Apply migrations to dev first, test, then apply to prod
+- Use Supabase CLI (`supabase db push`) for migration sync
+- See [docs/setup/LOCAL_SUPABASE_SETUP.md](/docs/setup/LOCAL_SUPABASE_SETUP.md) for local development
+
+---
+
+## Database Roles
+
+### Supabase Built-in Roles
+
+| Role | Description | RLS? |
+|------|-------------|------|
+| `authenticator` | Connection pooler role | N/A |
+| `anon` | Anonymous (unauthenticated) requests | Yes |
+| `authenticated` | Authenticated user requests | Yes |
+| `service_role` | Backend API (bypasses RLS) | No |
+
+### Custom MCP Roles (Development Only)
+
+| Role | Description | Permissions | Environment |
+|------|-------------|-------------|-------------|
+| `dev_admin` | MCP AI assistant (full CRUD) | SELECT, INSERT, UPDATE, DELETE on all tables | Dev only |
+
+**Note:** MCP has NO access to production database. All production writes go through the backend API.
+
+**Setup Instructions:**
+- [tools/mcp/docs/SUPABASE_DEV_ADMIN_SETUP.md](/tools/mcp/docs/SUPABASE_DEV_ADMIN_SETUP.md) - Full CRUD for MCP
+- [tools/mcp/docs/SUPABASE_READONLY_SETUP.md](/tools/mcp/docs/SUPABASE_READONLY_SETUP.md) - Read-only for MCP (optional)
+
+---
+
 ## Extensions & Schema Configuration
 
 ### pgvector Extension
@@ -571,11 +614,11 @@ CREATE INDEX idx_transcripts_media_url_norm ON public.transcripts(media_url_norm
 
 ## Row Level Security (RLS) - Applied
 
-All tables have RLS policies ensuring users can only access their own data. Migration applied December 2024 via `backend/migrations/003_row_level_security.sql`.
+All tables have RLS policies ensuring users can only access their own data. Base policies applied December 2024 via `backend/migrations/003_row_level_security.sql`. Additional table-specific RLS policies are defined in their respective migration files.
 
 **Critical**: RLS provides defense-in-depth security. Even if application code has bugs, users cannot access each other's data.
 
-**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `folders`, `ai_requests`, `transcripts`, `transcript_jobs`, `transcript_job_chunks`
+**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `chat_message_assets`, `folders`, `ai_requests`, `feedback`, `transcripts`, `transcript_jobs`, `transcript_job_chunks`
 
 ```sql
 -- Enable RLS on all tables
@@ -601,7 +644,21 @@ CREATE POLICY "Users can delete own notes"
   USING (auth.uid() = user_id);
 ```
 
-Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, and `ai_requests`.
+**RLS Policy Sources by Table:**
+
+| Table                    | Migration Source                      | Operations               |
+| ------------------------ | ------------------------------------- | ------------------------ |
+| `chats`                  | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `chat_messages`          | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `notes`                  | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `note_assets`            | `001_note_assets.sql`, `003_row_level_security.sql` | SELECT, INSERT, DELETE |
+| `chat_message_assets`    | `010_chat_assets.sql`                 | SELECT, INSERT, DELETE   |
+| `folders`                | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `ai_requests`            | `003_row_level_security.sql`          | SELECT, INSERT (append-only) |
+| `feedback`               | `009_feedback.sql`                    | SELECT, INSERT           |
+| `transcripts`            | `007_transcripts_hardening.sql`       | SELECT, INSERT, UPDATE, DELETE |
+| `transcript_jobs`        | `006_transcripts.sql`                 | SELECT, INSERT, UPDATE, DELETE |
+| `transcript_job_chunks`  | `007_transcripts_hardening.sql`       | SELECT (via parent job)  |
 
 ---
 

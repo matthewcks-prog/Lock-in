@@ -174,7 +174,7 @@ FOR SELECT
 USING (auth.uid() = user_id);
 ```
 
-See [DATABASE.MD](../../DATABASE.MD) for full RLS policy definitions.
+See [DATABASE.md](../../DATABASE.md) for full RLS policy definitions.
 
 ---
 
@@ -407,5 +407,5 @@ USING (true);
 
 - [Supabase RLS Documentation](https://supabase.com/docs/guides/auth/row-level-security)
 - [PostgreSQL GRANT Documentation](https://www.postgresql.org/docs/current/sql-grant.html)
-- [Lock-in DATABASE.MD](../../DATABASE.MD) - Schema and RLS policies
+- [Lock-in DATABASE.md](../../DATABASE.md) - Schema and RLS policies
 - [MCP README.md](README.md) - Full MCP setup guide

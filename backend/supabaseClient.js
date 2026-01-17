@@ -1,11 +1,15 @@
 const { createClient } = require('@supabase/supabase-js');
+const config = require('./config');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Use environment-aware configuration from centralized config
+const SUPABASE_URL = config.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = config.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.warn(
-    'WARNING: Supabase credentials are missing. Ensure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.',
+  console.error(
+    `CRITICAL: Supabase credentials missing for ${config.NODE_ENV} environment.`,
+    'Backend will not function correctly.',
+    `Environment: ${config.SUPABASE_CONFIG.environment}`,
   );
 }
 

@@ -14,15 +14,29 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=production
+      # Environment selection
+      - NODE_ENV=${NODE_ENV:-development}
       - PORT=3000
-      - TRANSCRIPTION_TEMP_DIR=/tmp/transcripts
-      # These should be set in .env file or passed via command line
-      # DO NOT commit real values to source control
+      
+      # Development Supabase (default)
+      - SUPABASE_URL_DEV=${SUPABASE_URL_DEV}
+      - SUPABASE_SERVICE_ROLE_KEY_DEV=${SUPABASE_SERVICE_ROLE_KEY_DEV}
+      - SUPABASE_ANON_KEY_DEV=${SUPABASE_ANON_KEY_DEV:-}
+      
+      # Production Supabase (for testing prod config locally)
+      - SUPABASE_URL_PROD=${SUPABASE_URL_PROD:-}
+      - SUPABASE_SERVICE_ROLE_KEY_PROD=${SUPABASE_SERVICE_ROLE_KEY_PROD:-}
+      - SUPABASE_ANON_KEY_PROD=${SUPABASE_ANON_KEY_PROD:-}
+      
+      # OpenAI
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # Sentry (optional)
       - SENTRY_DSN=${SENTRY_DSN:-}
+      
+      # Transcription
+      - TRANSCRIPTION_TEMP_DIR=/tmp/transcripts
+      
       # Rate limiting (optional overrides)
       - DAILY_REQUEST_LIMIT=${DAILY_REQUEST_LIMIT:-100}
       - TRANSCRIPT_DAILY_JOB_LIMIT=${TRANSCRIPT_DAILY_JOB_LIMIT:-20}
@@ -55,20 +69,31 @@ volumes:
 # Usage:
 # 
 # 1. Create .env file in project root with required variables:
+#
+#    # Development (default)
+#    NODE_ENV=development
+#    SUPABASE_URL_DEV=https://uszxfuzauetcchwcgufe.supabase.co
+#    SUPABASE_SERVICE_ROLE_KEY_DEV=eyJ...
 #    OPENAI_API_KEY=sk-...
-#    SUPABASE_URL=https://xxx.supabase.co
-#    SUPABASE_SERVICE_ROLE_KEY=eyJ...
 #    SENTRY_DSN=https://...@sentry.io/...  (optional)
 #
-# 2. Build and run:
+#    # Production (for testing prod config locally)
+#    # NODE_ENV=production
+#    # SUPABASE_URL_PROD=https://vtuflatvllpldohhimao.supabase.co
+#    # SUPABASE_SERVICE_ROLE_KEY_PROD=eyJ...
+#
+# 2. Build and run (development by default):
 #    docker-compose up --build
 #
-# 3. Test health endpoint:
+# 3. Run with production config:
+#    NODE_ENV=production docker-compose up --build
+#
+# 4. Test health endpoint:
 #    curl http://localhost:3000/health
 #
-# 4. Stop:
+# 5. Stop:
 #    docker-compose down
 #
-# 5. View logs:
+# 6. View logs:
 #    docker-compose logs -f backend
 # =============================================================================
