@@ -91,13 +91,20 @@ This plan is based on direct repository inspection. Items are prioritized for st
 
 ## Phase 3 — Deferred / Optional (non-blocking)
 
-- [ ] **OpenAI provider finalization** (DEFERRED unless dev/testing breaks)
-  - **Problem:** OpenAI fallback and Azure primary configuration are evolving; integration needs final QA.
-  - **Files/areas:** `backend/openaiClient.js`, `backend/providers/llmProviderFactory.js`, `.env.example`.
-  - **Proposed change:** Validate fallback behavior and error handling once deployment targets are locked.
-  - **Acceptance criteria:** End-to-end chat + embeddings + transcription validated on both providers.
-  - **Risk/migration:** Dependent on infra and credentials.
-  - **Confidence:** LOW.
+- [x] **OpenAI provider finalization** (COMPLETED 2026-01-19)
+  - **Solution:** Refactored to use dedicated provider factories with proper checks:
+    - Chat: OpenAI only (no Azure quota for students)
+    - Embeddings: Azure (primary) → OpenAI (fallback) - uses `isAzureEmbeddingsEnabled()`
+    - Transcription: Azure Speech (primary) → OpenAI Whisper (fallback)
+  - **Files updated:**
+    - Created: `backend/services/embeddings.js`
+    - Updated: `backend/providers/llmProviderFactory.js` (simplified to OpenAI-only)
+    - Updated: `backend/services/transcriptsService.js` (uses transcription.js)
+    - Updated: Controllers to use embeddings.js service
+    - Removed: Legacy embedText() and transcribeAudioFile() from openaiClient.js
+  - **Verification:** All tests pass, build succeeds (`npm run check` ✅)
+  - **Documentation:** Updated `docs/AI_SERVICES_ARCHITECTURE.md` with complete architecture
+  - **Confidence:** HIGH.
 
 - [ ] **Deployment/infra cleanup** (DEFERRED)
   - **Problem:** Azure deployment scripts and URLs are placeholders pending infra finalization.

@@ -12,6 +12,7 @@ const lockinRoutes = require('./routes/lockinRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
+// const healthRoutes = require('./routes/healthRoutes'); // TODO: Fix and re-enable
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { setupSentryErrorHandler } = require('./sentry');
 const { createRequestLogger, sentryRequestIdMiddleware } = require('./observability/requestLogger');
@@ -74,6 +75,7 @@ function createApp() {
   app.use('/api', noteRoutes);
   app.use('/api', transcriptsRoutes);
   app.use('/api', feedbackRoutes);
+  // app.use('/api/health/embeddings', healthRoutes); // TODO: Fix and re-enable
 
   // 404 handler for unmatched routes
   app.use(notFoundHandler);

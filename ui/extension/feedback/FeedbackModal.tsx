@@ -26,7 +26,11 @@ export interface FeedbackModalProps {
 
 const FEEDBACK_TYPES: { value: FeedbackType; label: string; description: string }[] = [
   { value: 'bug', label: '🐛 Bug Report', description: 'Something is broken or not working' },
-  { value: 'feature', label: '💡 Feature Request', description: 'Suggest a new feature or improvement' },
+  {
+    value: 'feature',
+    label: '💡 Feature Request',
+    description: 'Suggest a new feature or improvement',
+  },
   { value: 'question', label: '❓ Question', description: 'Ask a question about using Lock-in' },
   { value: 'other', label: '💬 Other', description: 'General feedback or comments' },
 ];
@@ -274,11 +278,7 @@ export function FeedbackModal({
               </details>
 
               {/* Error */}
-              {error && (
-                <div className="lockin-feedback-error-banner">
-                  {error.message}
-                </div>
-              )}
+              {error && <div className="lockin-feedback-error-banner">{error.message}</div>}
             </div>
 
             {/* Footer */}

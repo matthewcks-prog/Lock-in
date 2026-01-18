@@ -1,7 +1,8 @@
 // backend/controllers/notesChatController.js
 
 const notesRepo = require('../repositories/notesRepository');
-const { embedText, chatWithModel } = require('../openaiClient');
+const { embedText } = require('../services/embeddings');
+const { chatWithModel } = require('../openaiClient');
 const { extractPlainTextFromLexical } = require('../utils/lexicalUtils');
 
 // POST /api/notes/chat

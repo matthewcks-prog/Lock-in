@@ -1,7 +1,11 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import type { ApiClient } from '@api/client';
 import type { StudyMode } from '@core/domain/types';
-import { AttachmentButton, AttachmentPreview, ChatMessage as ChatMessageComponent } from '../chat/components';
+import {
+  AttachmentButton,
+  AttachmentPreview,
+  ChatMessage as ChatMessageComponent,
+} from '../chat/components';
 import {
   useChat,
   useChatAttachments,
@@ -65,7 +69,6 @@ export function ChatSection({
     recentChats,
     activeHistoryId,
     isSending,
-    error: chatError,
     sendMessage,
     startBlankChat,
     selectChat,
@@ -253,15 +256,14 @@ export function ChatSection({
         </div>
       </div>
 
-      <div
-        className="lockin-chat-container"
-        data-history-state={isHistoryOpen ? 'open' : 'closed'}
-      >
+      <div className="lockin-chat-container" data-history-state={isHistoryOpen ? 'open' : 'closed'}>
         <aside className="lockin-chat-history-panel" data-state={isHistoryOpen ? 'open' : 'closed'}>
           <div className="lockin-history-list">
             {recentChats.length === 0 ? (
               <div className="lockin-history-empty">
-                {isLoadingHistory ? 'Loading chats...' : 'No chats yet. Start from a highlight or a question.'}
+                {isLoadingHistory
+                  ? 'Loading chats...'
+                  : 'No chats yet. Start from a highlight or a question.'}
               </div>
             ) : (
               recentChats.map((item) => (

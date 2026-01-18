@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn, execSync } = require('child_process');
-const { transcribeAudioFile } = require('../openaiClient');
+const { transcribeAudioFile } = require('./transcription');
 const {
   updateTranscriptJob,
   upsertTranscriptCache,

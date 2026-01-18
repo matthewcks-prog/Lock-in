@@ -1,5 +1,13 @@
 /**
- * OpenAI Client Module - Chat based orchestration for Lock-in conversations
+ * OpenAI Client Module - Chat Completions Only
+ * 
+ * Strategy:
+ * - Chat Completions: OpenAI (Primary) - gpt-4o-mini (~$0.23/month)
+ * 
+ * Note: Embeddings → services/embeddings.js (Azure primary, OpenAI fallback)
+ *       Transcription → services/transcription.js (Azure Speech primary, Whisper fallback)
+ * 
+ * @module openaiClient
  */
 
 const fs = require('fs');
@@ -564,39 +572,6 @@ async function generateChatTitleFromHistory({ history = [], fallbackTitle = '' }
 }
 
 /**
- * Generate embedding for text using OpenAI's embedding model
- * @param {string} text - Text to embed
- * @returns {Promise<number[]>} Array of embedding floats
- */
-async function embedText(text) {
-  if (!text || typeof text !== 'string' || text.trim().length === 0) {
-    throw new Error('Text is required and must be a non-empty string');
-  }
-
-  const { primary, fallback } = getLlmClients();
-  const primaryRequest = () =>
-    primary.client.embeddings.create({
-      model: getDeployment('embeddings', primary.provider),
-      input: text.trim(),
-    });
-  const fallbackRequest = fallback
-    ? () =>
-        fallback.client.embeddings.create({
-          model: getDeployment('embeddings', fallback.provider),
-          input: text.trim(),
-        })
-    : null;
-
-  const res = await withRetryAndFallback(primaryRequest, fallbackRequest, {
-    operation: 'embeddings.create',
-    primaryProvider: primary.provider,
-    fallbackProvider: fallback?.provider,
-  });
-
-  return res.data[0].embedding; // array of floats
-}
-
-/**
  * Generic chat function for use with any messages array
  * @param {Array<{role: string, content: string}>} messages - Chat messages
  * @returns {Promise<string>} Assistant's response text
@@ -613,97 +588,10 @@ async function chatWithModel({ messages }) {
   return (choice?.content || '').trim();
 }
 
-/**
- * Transcribe an audio file using OpenAI Speech-to-Text.
- * Includes retry logic and timeout handling for large files.
- *
- * Best practices implemented:
- * - Exponential backoff with jitter for retries
- * - Detailed error logging for debugging
- * - File size validation before upload
- * - Appropriate timeouts for file size
- */
-async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
-  if (!filePath) {
-    throw new Error('Audio file path is required');
-  }
-
-  // Check file size before attempting upload
-  const stats = fs.statSync(filePath);
-  const fileSizeMB = stats.size / (1024 * 1024);
-
-  // OpenAI Whisper has a 25MB limit
-  if (stats.size > 25 * 1024 * 1024) {
-    throw new Error(
-      `Audio file too large: ${fileSizeMB.toFixed(
-        1,
-      )}MB (max 25MB). File should be split into smaller segments.`,
-    );
-  }
-
-  console.log(
-    `[LLM] Transcribing ${fileSizeMB.toFixed(1)}MB audio file: ${path.basename(filePath)}`,
-  );
-
-  const { primary, fallback } = getLlmClients();
-  const timeoutMs = Math.max(30000, 30000 + Math.ceil(fileSizeMB) * 20000);
-
-  const buildTranscriptionRequest = (client, provider) => () =>
-    client.audio.transcriptions.create(
-      {
-        file: fs.createReadStream(filePath),
-        model: getDeployment('transcription', provider),
-        response_format: 'verbose_json',
-        language: language || undefined,
-        temperature: 0,
-        timestamp_granularities: ['segment'],
-      },
-      {
-        timeout: timeoutMs,
-      },
-    );
-
-  try {
-    const startTime = Date.now();
-    const response = await withRetryAndFallback(
-      buildTranscriptionRequest(primary.client, primary.provider),
-      fallback ? buildTranscriptionRequest(fallback.client, fallback.provider) : null,
-      {
-        operation: 'audio.transcriptions.create',
-        maxRetries,
-        primaryProvider: primary.provider,
-        fallbackProvider: fallback?.provider,
-      },
-    );
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[LLM] Transcription completed in ${duration}s`);
-    return response;
-  } catch (error) {
-    let message = 'Transcription failed';
-    if (error?.message) {
-      message = error.message;
-    } else if (error?.error?.message) {
-      message = error.error.message;
-    }
-
-    if (error?.message?.includes('Connection error')) {
-      message += '. This may be a temporary network issue - please try again.';
-    }
-
-    console.error('[LLM] Transcription failed:', message);
-    const wrappedError = new Error(message);
-    wrappedError.originalError = error;
-    throw wrappedError;
-  }
-}
-
 module.exports = {
   generateLockInResponse,
   generateStructuredStudyResponse,
   buildStructuredStudyMessages,
   generateChatTitleFromHistory,
-  embedText,
   chatWithModel,
-  transcribeAudioFile,
 };

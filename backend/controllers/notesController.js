@@ -4,7 +4,7 @@ const notesRepo = require('../repositories/notesRepository');
 const noteAssetsRepo = require('../repositories/noteAssetsRepository');
 const { supabase } = require('../supabaseClient');
 const { NOTE_ASSETS_BUCKET } = require('../config');
-const { embedText } = require('../openaiClient');
+const { embedText } = require('../services/embeddings');
 const { extractPlainTextFromLexical } = require('../utils/lexicalUtils');
 
 /**

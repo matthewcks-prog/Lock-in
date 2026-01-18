@@ -5,12 +5,14 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 ## Features
 
 ### AI-Powered Learning
+
 - **Explain**: Get clear, plain-English explanations with concrete examples
 - **Sidebar Interface**: Modern right-hand sidebar with chat history and persistent conversations
 - **Split Layout**: Ctrl/Cmd + select to open, 65/35 split with mobile overlay
 - **Chat History**: Persistent chat sessions saved to Supabase
 
 ### Notes
+
 - **Rich Text Notes**: Full-featured note editor with formatting (bold, lists, headings)
 - **Autosave**: Notes save automatically as you type
 - **Asset Attachments**: Upload images and files directly into notes
@@ -18,15 +20,18 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 - **Starred Notes**: Mark important notes for quick access
 
 ### Transcripts
+
 - **Video Transcripts**: Extract transcripts from lecture videos (Panopto, Echo360, HTML5)
 - **AI Transcription**: Transcribe videos without captions using AI
 - **Multi-provider Support**: Works with Monash Panopto, Echo360, and standard HTML5 video
 
 ### Feedback
+
 - **In-app Feedback**: Submit bug reports, feature requests, and questions
 - **Auto-captured Context**: Includes page URL, course code, extension version
 
 ### Other
+
 - **Authentication**: Secure user authentication via Supabase
 
 ## Architecture
@@ -64,64 +69,75 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 ## Setup Instructions
 
-### 1. Backend Setup
+### Prerequisites
 
-1. Navigate to the backend directory:
+- Node.js 18+ and npm
+- Chrome browser
+- Supabase account (free tier works)
+- OpenAI API key
+
+### 1. Environment Setup
+
+**Important:** Follow the [ENV_SETUP.md](ENV_SETUP.md) guide for detailed environment variable configuration.
+
+1. Copy the environment template:
 
    ```bash
-   cd backend
+   cp .env.example .env.local
    ```
 
-2. Install dependencies:
+2. Edit `.env.local` with your actual credentials:
+
+   ```bash
+   # Extension Build (VITE_ prefix required)
+   VITE_SUPABASE_URL_DEV=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY_DEV=your-dev-anon-key
+   VITE_BACKEND_URL_DEV=http://localhost:3000
+
+   # Backend Server (NO VITE_ prefix)
+   SUPABASE_URL_DEV=https://your-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY_DEV=your-service-role-key
+   OPENAI_API_KEY=sk-proj-your-openai-key
+   ```
+
+   **Note:** `.env.local` is gitignored and contains your real secrets. Never commit it!
+
+3. Install dependencies:
 
    ```bash
    npm install
+   cd backend && npm install && cd ..
    ```
 
-3. Create a `.env` file:
+### 2. Backend Setup
 
-   ```env
-   OPENAI_API_KEY=your_openai_api_key_here
-   PORT=3000
-   DAILY_REQUEST_LIMIT=100
-   CHAT_LIST_LIMIT=20
-   MAX_CHAT_LIST_LIMIT=100
-   ```
-
-4. Start the development server:
+1. Start the development server:
 
    ```bash
+   cd backend
    npm run dev
    ```
 
    The server will start at `http://localhost:3000`
 
-### 2. Chrome Extension Setup
+### 3. Chrome Extension Setup
 
-1. Create a root `.env` (see `.env.example`):
-
-   ```bash
-   VITE_APP_ENV=development
-   VITE_SUPABASE_URL_DEV=https://your-dev-project.supabase.co
-   VITE_SUPABASE_ANON_KEY_DEV=your-dev-anon-key
-   VITE_BACKEND_URL_DEV=http://localhost:3000
-   ```
-
-2. Build the extension so `extension/config.js` is generated:
+1. Build the extension:
 
    ```bash
    npm run build
    ```
 
-3. Open Chrome and navigate to `chrome://extensions/`
+   This creates `extension/dist/` with all necessary files.
 
-4. Enable "Developer mode" (toggle in top-right corner)
+2. Load in Chrome:
+   - Open Chrome and navigate to `chrome://extensions/`
+   - Enable "Developer mode" (toggle in top-right corner)
+   - Click "Load unpacked"
 
-5. Click "Load unpacked"
+3. Select the `extension` folder
 
-6. Select the `extension` folder
-
-7. The Lock-in extension should now appear in your extensions list!
+4. The Lock-in extension should now appear in your extensions list!
 
 ### 3. Usage
 
@@ -142,7 +158,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 1. Click the Lock-in extension icon in Chrome's toolbar
 2. Adjust your preferred language for translations
-4. Settings are automatically saved
+3. Settings are automatically saved
 
 ## API Endpoints
 

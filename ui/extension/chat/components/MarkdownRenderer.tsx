@@ -57,7 +57,7 @@ const CodeBlock = memo(function CodeBlock({
         </div>
       )}
       <SyntaxHighlighter
-        style={oneDark}
+        style={oneDark as any}
         language={language || 'text'}
         PreTag="div"
         customStyle={{
