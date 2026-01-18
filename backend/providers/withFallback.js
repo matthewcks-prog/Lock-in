@@ -29,13 +29,20 @@ function isRetryableError(error) {
   const code = getErrorCode(error);
   if (code === 'ECONNRESET' || code === 'ETIMEDOUT') return true;
   if (code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'EAI_AGAIN') return true;
+  if (code === 'EPIPE' || code === 'ECONNABORTED') return true;
 
   const message = (getErrorMessage(error) || '').toLowerCase();
   return (
     message.includes('timeout') ||
     message.includes('timed out') ||
     message.includes('connection reset') ||
-    message.includes('socket hang up')
+    message.includes('socket hang up') ||
+    message.includes('connection error') ||
+    message.includes('network error') ||
+    message.includes('fetch failed') ||
+    message.includes('econnrefused') ||
+    message.includes('socket closed') ||
+    message.includes('unable to connect')
   );
 }
 
@@ -67,15 +74,8 @@ function logStructured(level, message, meta) {
 }
 
 async function attemptWithRetry(fn, provider, options) {
-  const {
-    operation,
-    maxAttempts,
-    baseDelayMs,
-    maxDelayMs,
-    jitterRatio,
-    shouldRetry,
-    logger,
-  } = options;
+  const { operation, maxAttempts, baseDelayMs, maxDelayMs, jitterRatio, shouldRetry, logger } =
+    options;
 
   let lastError;
 

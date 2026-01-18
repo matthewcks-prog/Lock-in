@@ -41,6 +41,7 @@ export const ChatMessage = memo(function ChatMessage({
 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isPending = message.isPending;
+  const isError = message.isError;
   const attachments = message.attachments?.filter(Boolean) ?? [];
 
   const renderAttachment = (attachment: ChatAttachment) => {
@@ -74,7 +75,7 @@ export const ChatMessage = memo(function ChatMessage({
     <div
       className={`lockin-chat-msg ${isUser ? 'lockin-chat-msg-user' : 'lockin-chat-msg-assistant'} ${
         isPending ? 'lockin-chat-msg-pending' : ''
-      }`}
+      } ${isError ? 'lockin-chat-msg-error' : ''}`}
     >
       {/* Message bubble */}
       <div className="lockin-chat-bubble">

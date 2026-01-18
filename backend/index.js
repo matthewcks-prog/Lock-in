@@ -24,7 +24,7 @@ const { validateEnvOrExit, LOCKIN_BACKEND_SCHEMA } = require('./utils/validateEn
 validateEnvOrExit(LOCKIN_BACKEND_SCHEMA);
 
 // Initialize Application Insights BEFORE other imports (instruments Node modules)
-const { initApplicationInsights, logger } = require('./observability');
+const { initApplicationInsights, disposeApplicationInsights, logger } = require('./observability');
 initApplicationInsights();
 
 // Initialize Sentry after App Insights
@@ -51,8 +51,15 @@ const {
 // =============================================================================
 const app = createApp();
 
+// Track server state for graceful shutdown
+let isServerRunning = false;
+
 const server = app.listen(PORT, () => {
-  logger.info({ port: PORT, env: process.env.NODE_ENV }, `Lock-in backend server running on port ${PORT}`);
+  isServerRunning = true;
+  logger.info(
+    { port: PORT, env: process.env.NODE_ENV },
+    `Lock-in backend server running on port ${PORT}`,
+  );
   logger.info('Ready to help students learn!');
 
   if (!isAzureEnabled() && !isOpenAIEnabled()) {
@@ -64,15 +71,44 @@ const server = app.listen(PORT, () => {
   startTranscriptJobReaper();
 });
 
+// Handle server startup errors (e.g., EADDRINUSE)
+server.on('error', (err) => {
+  isServerRunning = false;
+  if (err.code === 'EADDRINUSE') {
+    logger.error(
+      { port: PORT, error: err.message },
+      `Port ${PORT} is already in use. Kill the existing process or use a different port.`,
+    );
+    logger.info('Hint: Run "netstat -ano | findstr :3000" to find the process using the port');
+  } else {
+    logger.error({ error: err.message, code: err.code }, 'Server startup error');
+  }
+  process.exit(1);
+});
+
 // =============================================================================
 // Graceful Shutdown Handlers
 // Ensures clean container termination in Azure Container Apps
 // =============================================================================
-const gracefulShutdown = (signal) => {
+let isShuttingDown = false;
+
+const gracefulShutdown = async (signal) => {
+  // Prevent multiple shutdown attempts
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+
   logger.info({ signal }, `${signal} received, starting graceful shutdown...`);
 
+  // If server never started, exit immediately
+  if (!isServerRunning) {
+    logger.info('Server was not running, exiting immediately');
+    process.exit(1);
+  }
+
   // Stop accepting new connections
-  server.close((err) => {
+  server.close(async (err) => {
     if (err) {
       logger.error({ error: err.message }, 'Error during server close');
       process.exit(1);
@@ -83,6 +119,9 @@ const gracefulShutdown = (signal) => {
     // Stop background jobs
     stopTranscriptJobReaper();
     logger.info('Transcript job reaper stopped');
+
+    // Dispose Application Insights (flushes telemetry and cleans up OpenTelemetry)
+    await disposeApplicationInsights();
 
     logger.info('Graceful shutdown complete');
     process.exit(0);

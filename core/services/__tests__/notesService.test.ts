@@ -97,17 +97,18 @@ describe('NotesService', () => {
           plainText: '',
         } as NoteContent,
         courseCode: 'FIT1045',
-        sourceUrl: 'https://example.com',
+        sourceUrl: 'https://example.com/page',
       };
 
       const result = await notesService.createNote(input);
 
+      // Note: URL is sanitized (query params stripped, normalized)
       expect(mockApiClient.createNote).toHaveBeenCalledWith(
         expect.objectContaining({
           courseCode: 'FIT1045',
           course_code: 'FIT1045',
-          sourceUrl: 'https://example.com',
-          source_url: 'https://example.com',
+          sourceUrl: 'https://example.com/page',
+          source_url: 'https://example.com/page',
         }),
         undefined,
       );

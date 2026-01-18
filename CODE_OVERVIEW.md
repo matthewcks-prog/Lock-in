@@ -81,14 +81,14 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`core/transcripts/types.ts`** - Domain types for transcripts (TranscriptSegment, DetectedVideo, etc.)
 - **`core/transcripts/types/echo360Types.ts`** - Echo360-specific types for syllabus parsing and detection.
-- **`core/transcripts/parsers/echo360Parser.ts`** - Echo360 syllabus parsing and syllabus API fetch helpers (re-exported by provider).
+- **`core/transcripts/parsers/echo360Parser.ts`** - Thin entrypoint for Echo360 syllabus parsing; implementation split under `core/transcripts/parsers/echo360/` (record utils, URL helpers, syllabus parser + fetcher).
 - **`core/transcripts/utils/echo360Logger.ts`** - Echo360 logging utility shared by provider and parser.
 - **`core/transcripts/utils/echo360Network.ts`** - Echo360 network helpers for retries/timeouts/redirect-aware HTML fetches.
 - **`core/transcripts/webvttParser.ts`** - WebVTT parsing with HTML entity decoding
 - **`core/transcripts/fetchers/types.ts`** - Fetcher interfaces (AsyncFetcher, EnhancedAsyncFetcher) and type guards. No Chrome dependencies.
-- **`core/transcripts/providers/panoptoProvider.ts`** - Panopto provider: detection + extraction with dynamic URL discovery. Uses fetcher interface for network operations.
-- **`core/transcripts/providers/echo360Provider.ts`** - Echo360 provider: detection + transcript extraction with JSON transcript endpoint (primary), VTT/TXT fallback, and syllabus API integration for section pages. Uses fetcher interface for network operations.
-- **`core/transcripts/videoDetection.ts`** - Panopto + Echo360 + HTML5 video detection from DOM context
+- **`core/transcripts/providers/panoptoProvider.ts`** - Thin entrypoint; implementation split across `core/transcripts/providers/panopto/` (URL utils, link detection, extraction, provider).
+- **`core/transcripts/providers/echo360Provider.ts`** - Thin entrypoint; implementation split across `core/transcripts/providers/echo360/` (URL helpers, detection, transcript parsing, resolver, provider).
+- **`core/transcripts/videoDetection.ts`** - Thin entrypoint for video detection; modules live under `core/transcripts/videoDetection/` (context helpers, Panopto iframe detection, HTML5 detection, sync aggregator).
 - **`core/transcripts/providerRegistry.ts`** - Provider registry and TranscriptProviderV2 interface
 - **`extension/dist/libs/transcriptProviders.js`** - Bundled transcript providers for background usage (loaded via `importScripts`).
 - **`extension/src/networkUtils.js`** - Background fetch helpers (retry, credentials, VTT/HTML fetch, redirect tracking) used by transcript helpers.
@@ -241,7 +241,7 @@ This is a living overview of the current codebase. Update it whenever files move
 3. **Storage/messaging abstractions**: `storage.js` and `messaging.js` hide Chrome APIs behind async helpers.
 4. **Separation of concerns**: Orchestrator delegates state, session, and UI responsibilities to dedicated helpers.
 5. **API abstraction**: Shared `/api` TypeScript client is bundled into `dist/libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
-6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor`/`useNotesList`, and the Lexical editor resides in `ui/extension/notes/` with inline attachment/image nodes (resizable images, paperclip insertion).
+6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor` (composed from `ui/hooks/noteEditor/` helpers) and `useNotesList`, and the Lexical editor UI is split across `ui/extension/notes/NoteEditor.tsx` + `ui/extension/notes/editor/` (toolbar/plugins) with the notes list UI under `ui/extension/notes/panel/`.
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
 8. **Transcript extraction**: Captions-first flow for Panopto/Echo360/HTML5. Panopto caption URLs are extracted from embed HTML; Echo360 uses JSON transcript endpoint (primary) with VTT/TXT fallback, and integrates with syllabus API for section pages. If captions are missing, `PanoptoMediaResolver` resolves podcast/download URLs (viewer/embed HTML + MAIN-world probe + range validation) and the background AI pipeline uploads media to the backend. UI shows the video list and exposes AI fallback when captions are unavailable.
 9. **Cross-tab sync**: `useCrossTabSync` uses `chrome.storage.local` as a lightweight event bus to refresh notes/chat state across tabs without duplicating feature-specific wiring.

@@ -294,7 +294,6 @@ export function ChatSection({
             <div className="lockin-chat-messages-wrapper">
               <div className="lockin-chat-messages">
                 {renderChatMessages()}
-                {chatError && <div className="lockin-chat-error">{chatError.message}</div>}
                 {composerError && <div className="lockin-chat-error">{composerError}</div>}
               </div>
             </div>

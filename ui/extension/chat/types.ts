@@ -31,6 +31,7 @@ export interface ChatMessage {
     mode?: StudyMode;
     source?: 'selection' | 'followup';
     isPending?: boolean;
+    isError?: boolean;
     attachments?: ChatAttachment[];
 }
 

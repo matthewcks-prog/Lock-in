@@ -88,16 +88,19 @@ In Supabase Dashboard → Storage:
 Create an Azure OpenAI resource and deployments for the models used by Lock-in:
 
 **Required deployments:**
+
 - `gpt-4o-mini` (chat)
 - `text-embedding-3-small` (embeddings)
 - `whisper-1` (transcription)
 
 **Portal (recommended):**
+
 1. Create an Azure OpenAI resource in your target region.
 2. Open the resource and create deployments for the three models above.
 3. Record the deployment names you choose (used in env vars).
 
 **CLI (example):**
+
 ```bash
 OPENAI_RG="lock-in-prod"
 OPENAI_NAME="lock-in-openai"
@@ -165,21 +168,21 @@ Collect these values for **EACH ENVIRONMENT**:
 
 **Azure OpenAI (primary provider):**
 
-| Variable                             | Where to Get It                                           |
-| ------------------------------------ | --------------------------------------------------------- |
-| `AZURE_OPENAI_API_KEY`               | Azure OpenAI resource → Keys and Endpoint                 |
-| `AZURE_OPENAI_ENDPOINT`              | Azure OpenAI resource → Keys and Endpoint                 |
-| `AZURE_OPENAI_API_VERSION`           | Use `2024-02-01` unless your resource requires a newer API |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT`        | Deployment name for `gpt-4o-mini`                         |
-| `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`  | Deployment name for `text-embedding-3-small`              |
-| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Deployment name for `whisper-1`                         |
+| Variable                                | Where to Get It                                            |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `AZURE_OPENAI_API_KEY`                  | Azure OpenAI resource → Keys and Endpoint                  |
+| `AZURE_OPENAI_ENDPOINT`                 | Azure OpenAI resource → Keys and Endpoint                  |
+| `AZURE_OPENAI_API_VERSION`              | Use `2024-02-01` unless your resource requires a newer API |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT`          | Deployment name for `gpt-4o-mini`                          |
+| `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`    | Deployment name for `text-embedding-3-small`               |
+| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Deployment name for `whisper-1`                            |
 
 **Shared Credentials:**
 
-| Variable         | Where to Get It                                     |
-| ---------------- | --------------------------------------------------- |
+| Variable         | Where to Get It                                      |
+| ---------------- | ---------------------------------------------------- |
 | `OPENAI_API_KEY` | https://platform.openai.com/api-keys (fallback only) |
-| `SENTRY_DSN`     | Sentry Dashboard → Project → Settings → Client Keys |
+| `SENTRY_DSN`     | Sentry Dashboard → Project → Settings → Client Keys  |
 
 ---
 
@@ -490,6 +493,7 @@ Enable diagnostic logging on your Azure OpenAI resource to track usage, costs, a
      - Create new workspace in `lock-in-prod` resource group if needed
 
 **Benefits**:
+
 - Track token usage per model/deployment
 - Monitor request latency and errors
 - Debug failed API calls with request/response details
@@ -500,6 +504,7 @@ Enable diagnostic logging on your Azure OpenAI resource to track usage, costs, a
 The backend now supports Azure Application Insights for Azure-native APM:
 
 1. **Create Application Insights resource**:
+
    ```bash
    # Create Log Analytics workspace (if not exists)
    az monitor log-analytics workspace create \
@@ -516,6 +521,7 @@ The backend now supports Azure Application Insights for Azure-native APM:
    ```
 
 2. **Get connection string**:
+
    ```bash
    az monitor app-insights component show \
        --app lock-in-backend-insights \
@@ -524,6 +530,7 @@ The backend now supports Azure Application Insights for Azure-native APM:
    ```
 
 3. **Add to Key Vault**:
+
    ```bash
    az keyvault secret set \
        --vault-name lock-in-secrets \
@@ -540,6 +547,7 @@ The backend now supports Azure Application Insights for Azure-native APM:
    ```
 
 **What you get**:
+
 - Request tracing with correlation IDs
 - Dependency tracking (Supabase, Azure OpenAI calls)
 - Performance metrics and latency histograms

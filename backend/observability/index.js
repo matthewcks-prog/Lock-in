@@ -30,6 +30,42 @@ const LOG_LEVEL = process.env.LOG_LEVEL || (IS_PRODUCTION ? 'info' : 'debug');
 
 let appInsightsClient = null;
 let appInsightsInitialized = false;
+let isShuttingDown = false;
+
+/**
+ * Suppress OpenTelemetry MeterProvider warnings in development.
+ * These warnings are harmless and occur during nodemon hot-reloads because
+ * the OpenTelemetry SDK's shutdown is called multiple times.
+ */
+function suppressOTelWarningsInDev() {
+  if (IS_PRODUCTION) return;
+
+  const originalConsoleLog = console.log;
+  const originalConsoleWarn = console.warn;
+  const originalConsoleError = console.error;
+
+  const shouldSuppress = (args) => {
+    const message = args[0];
+    if (typeof message !== 'string') return false;
+    return (
+      message.includes('shutdown may only be called once per MeterProvider') ||
+      message.includes('shutdown may only be called once per TracerProvider')
+    );
+  };
+
+  console.log = (...args) => {
+    if (!shouldSuppress(args)) originalConsoleLog.apply(console, args);
+  };
+  console.warn = (...args) => {
+    if (!shouldSuppress(args)) originalConsoleWarn.apply(console, args);
+  };
+  console.error = (...args) => {
+    if (!shouldSuppress(args)) originalConsoleError.apply(console, args);
+  };
+}
+
+// Apply suppression immediately on module load (before App Insights init)
+suppressOTelWarningsInDev();
 
 /**
  * Initialize Application Insights for Azure-native APM.
@@ -37,10 +73,6 @@ let appInsightsInitialized = false;
  *
  * Set APPLICATIONINSIGHTS_CONNECTION_STRING in your environment.
  * Get the connection string from Azure Portal -> Application Insights -> Overview -> Connection String
- *
- * Note: Application Insights v3+ uses OpenTelemetry internally. The "shutdown may only
- * be called once per MeterProvider" warning occurs during hot-reload (nodemon) because
- * the SDK's meter provider is already initialized. This is harmless in development.
  *
  * @returns {boolean} Whether App Insights was initialized
  */
@@ -102,6 +134,46 @@ function initApplicationInsights() {
     }
     console.error('[AppInsights] Failed to initialize:', error.message);
     return false;
+  }
+}
+
+/**
+ * Gracefully dispose of Application Insights.
+ * Call this during graceful shutdown to flush telemetry and clean up resources.
+ * Uses a guard to prevent multiple shutdown calls (which cause MeterProvider warnings).
+ *
+ * @returns {Promise<void>}
+ */
+async function disposeApplicationInsights() {
+  // Guard against multiple shutdown calls
+  if (isShuttingDown || !appInsightsClient) {
+    return;
+  }
+
+  isShuttingDown = true;
+
+  try {
+    // Flush any pending telemetry before shutdown
+    await new Promise((resolve) => {
+      appInsightsClient.flush({
+        callback: () => {
+          console.log('[AppInsights] Telemetry flushed');
+          resolve();
+        },
+      });
+
+      // Timeout fallback in case flush hangs
+      setTimeout(resolve, 5000);
+    });
+
+    // Dispose the SDK (this internally calls OpenTelemetry shutdown)
+    appInsights.dispose();
+    console.log('[AppInsights] Disposed successfully');
+  } catch (error) {
+    // Swallow shutdown errors - these are expected during nodemon restarts
+    if (!error.message?.includes('MeterProvider')) {
+      console.error('[AppInsights] Error during dispose:', error.message);
+    }
   }
 }
 
@@ -292,6 +364,7 @@ function trackLlmUsage(options) {
 module.exports = {
   // Application Insights
   initApplicationInsights,
+  disposeApplicationInsights,
   getAppInsightsClient,
   trackMetric,
   trackEvent,

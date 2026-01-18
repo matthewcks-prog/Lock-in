@@ -1,5 +1,6 @@
 import type { ChatMessage, StudyResponse, ApiResponse } from '../../core/domain/types';
 import type { ApiRequest } from '../fetcher';
+import { sanitizeUrl } from '../../core/utils/urlSanitizer';
 
 export interface ProcessTextParams {
   selection?: string;
@@ -52,7 +53,8 @@ export function createLockinClient(apiRequest: ApiRequest) {
     if (newUserMessage) body.newUserMessage = newUserMessage;
     if (chatId) body.chatId = chatId;
     if (pageContext) body.pageContext = pageContext;
-    if (pageUrl) body.pageUrl = pageUrl;
+    // Sanitize URL to remove sensitive query parameters (sesskey, tokens, etc.)
+    if (pageUrl) body.pageUrl = sanitizeUrl(pageUrl);
     if (courseCode) body.courseCode = courseCode;
     if (language) body.language = language;
     if (attachments && attachments.length > 0) body.attachments = attachments;

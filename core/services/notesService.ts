@@ -2,6 +2,7 @@ import type { ApiClient } from '../../api/client';
 import type { Note, NoteAsset, NoteContent, NoteContentVersion, NoteType } from '../domain/Note.ts';
 import { AppError, ErrorCodes } from '../errors';
 import { createLogger } from '../utils/logger';
+import { sanitizeUrl } from '../utils/urlSanitizer';
 
 export interface CreateNoteInput {
   title: string;
@@ -299,10 +300,12 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
 
   async function createNote(initial: CreateNoteInput, options?: NoteRequestOptions): Promise<Note> {
     ensureService(apiClient);
+    // Sanitize URL to remove sensitive query parameters (sesskey, tokens, etc.)
+    const cleanSourceUrl = initial.sourceUrl ? sanitizeUrl(initial.sourceUrl) : null;
     const payload = {
       title: initial.title,
-      sourceUrl: initial.sourceUrl ?? null,
-      source_url: initial.sourceUrl ?? null,
+      sourceUrl: cleanSourceUrl,
+      source_url: cleanSourceUrl,
       sourceSelection: initial.sourceSelection ?? null,
       source_selection: initial.sourceSelection ?? null,
       courseCode: initial.courseCode ?? null,
@@ -325,10 +328,12 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
     options?: NoteRequestOptions,
   ): Promise<Note> {
     ensureService(apiClient);
+    // Sanitize URL to remove sensitive query parameters (sesskey, tokens, etc.)
+    const cleanSourceUrl = changes.sourceUrl ? sanitizeUrl(changes.sourceUrl) : undefined;
     const payload = {
       ...(changes.title ? { title: changes.title } : {}),
-      sourceUrl: changes.sourceUrl ?? undefined,
-      source_url: changes.sourceUrl ?? undefined,
+      sourceUrl: cleanSourceUrl,
+      source_url: cleanSourceUrl,
       sourceSelection: changes.sourceSelection ?? undefined,
       source_selection: changes.sourceSelection ?? undefined,
       courseCode: changes.courseCode ?? undefined,

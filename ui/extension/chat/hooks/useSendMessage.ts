@@ -187,7 +187,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
 
         onError: (error, params, context) => {
             const message = formatSendError(error);
-            // Rollback on error
+            // Rollback on error - update the pending message to show error state
             if (context) {
                 const chatId = params.activeChatId;
                 if (chatId) {
@@ -199,6 +199,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
                                     ...msg,
                                     content: message,
                                     isPending: false,
+                                    isError: true,
                                 }
                                 : msg,
                         ),

@@ -181,6 +181,11 @@ const AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT =
   process.env.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT || process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT;
 const AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT = process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT;
 
+// Azure Speech-to-Text Configuration (Primary transcription service)
+const AZURE_SPEECH_API_KEY = process.env.AZURE_SPEECH_API_KEY;
+const AZURE_SPEECH_REGION = process.env.AZURE_SPEECH_REGION || 'australiaeast';
+const AZURE_SPEECH_LANGUAGE = process.env.AZURE_SPEECH_LANGUAGE || 'en-US';
+
 function isAzureEnabled() {
   return Boolean(AZURE_OPENAI_API_KEY && AZURE_OPENAI_ENDPOINT);
 }
@@ -191,6 +196,18 @@ function isOpenAIEnabled() {
 
 function isOpenAIFallbackEnabled() {
   return OPENAI_FALLBACK_ENABLED && isOpenAIEnabled();
+}
+
+function isAzureSpeechEnabled() {
+  return Boolean(AZURE_SPEECH_API_KEY && AZURE_SPEECH_REGION);
+}
+
+function isAzureEmbeddingsEnabled() {
+  return Boolean(
+    AZURE_OPENAI_API_KEY &&
+    AZURE_OPENAI_ENDPOINT &&
+    AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT
+  );
 }
 
 function getDeployment(type, provider = isAzureEnabled() ? 'azure' : 'openai') {
@@ -351,7 +368,14 @@ module.exports = {
   isAzureEnabled,
   isOpenAIEnabled,
   isOpenAIFallbackEnabled,
+  isAzureSpeechEnabled,
+  isAzureEmbeddingsEnabled,
   getDeployment,
+
+  // Azure Speech Configuration
+  AZURE_SPEECH_API_KEY,
+  AZURE_SPEECH_REGION,
+  AZURE_SPEECH_LANGUAGE,
 
   // Transcripts
   TRANSCRIPTION_MODEL,

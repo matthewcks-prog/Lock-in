@@ -9,6 +9,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useFeedbackForm } from './hooks/useFeedbackForm';
 import type { ApiClient } from '@api/client';
 import type { FeedbackType, FeedbackContext } from '@api/resources/feedbackClient';
+import { sanitizeUrl } from '@core/utils/urlSanitizer';
 
 export interface FeedbackModalProps {
   /** Whether the modal is open */
@@ -125,8 +126,9 @@ export function FeedbackModal({
   }, [isOpen, isSubmitting, onClose]);
 
   const handleSubmit = useCallback(async () => {
+    // Sanitize URL to remove sensitive query parameters (sesskey, tokens, etc.)
     const context: FeedbackContext = {
-      url: pageUrl || window.location.href,
+      url: sanitizeUrl(pageUrl || window.location.href),
       courseCode: courseCode || undefined,
       extensionVersion: getExtensionVersion(),
       browser: getBrowserInfo(),

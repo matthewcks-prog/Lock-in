@@ -34,9 +34,9 @@ This plan is based on direct repository inspection. Items are prioritized for st
 
 ---
 
-## Phase 1 — Structure + Scalability
+## Phase 1 – Structure + Scalability
 
-- [ ] **Decompose oversized UI/editor modules**
+- [x] **Decompose oversized UI/editor modules**
   - **Problem:** Several UI files exceed 500–1100 lines, increasing coupling and making regression risk high.
   - **Files/areas:**
     - `ui/extension/notes/NoteEditor.tsx` (~1140 lines)
@@ -47,7 +47,7 @@ This plan is based on direct repository inspection. Items are prioritized for st
   - **Risk/migration:** Requires careful refactor around Lexical editor state and hooks.
   - **Confidence:** MED.
 
-- [ ] **Split transcript providers and parsers**
+- [x] **Split transcript providers and parsers**
   - **Problem:** Transcript providers/parsers are oversized and blend detection, extraction, parsing, and mapping logic.
   - **Files/areas:**
     - `core/transcripts/providers/echo360Provider.ts` (~1074 lines)

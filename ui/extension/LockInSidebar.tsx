@@ -14,6 +14,7 @@ import { ToolProvider, useToolContext } from './tools';
 import { NoteSaveProvider } from './contexts/NoteSaveContext';
 import { ChatQueryProvider } from './chat';
 import { FeedbackModal } from './feedback';
+import { PrivacyNotice } from './sidebar/PrivacyNotice';
 import { SidebarLayout } from './sidebar/SidebarLayout';
 import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ChatSection } from './sidebar/ChatSection';
@@ -175,6 +176,9 @@ function LockInSidebarContent({
         )}
 
         {activeTab === TOOL_TAB_ID && <ToolSection activeToolId={activeToolId} onClose={closeTool} />}
+
+        {/* Privacy disclosure notice - shown on first use */}
+        <PrivacyNotice />
       </SidebarLayout>
 
       <FeedbackModal
