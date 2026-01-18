@@ -21,9 +21,22 @@ jobs:
         run: npm ci
 
       - name: Install backend dependencies
-        if: ${{ hashFiles('backend/package-lock.json') != '' }}
         run: npm ci
         working-directory: backend
+
+      - name: Setup backend environment
+        run: |
+          echo "NODE_ENV=test" >> backend/.env
+          echo "AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }}" >> backend/.env
+          echo "AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }}" >> backend/.env
+          echo "AZURE_OPENAI_API_VERSION=${{ secrets.AZURE_OPENAI_API_VERSION || '2024-02-01' }}" >> backend/.env
+          echo "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=${{ secrets.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT }}" >> backend/.env
+          echo "AZURE_OPENAI_CHAT_DEPLOYMENT=${{ secrets.AZURE_OPENAI_CHAT_DEPLOYMENT || 'gpt-4o-mini' }}" >> backend/.env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || '' }}" >> backend/.env
+          echo "OPENAI_EMBEDDINGS_MODEL=${{ secrets.OPENAI_EMBEDDINGS_MODEL || 'text-embedding-3-small' }}" >> backend/.env
+          echo "SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://example.supabase.co' }}" >> backend/.env
+          echo "SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'dummy-key' }}" >> backend/.env
+          echo "SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'dummy-key' }}" >> backend/.env
 
       - name: Run lint
         run: npm run lint
