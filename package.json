@@ -14,6 +14,7 @@
     "build:config": "vite build --config vite.config.extensionConfig.ts",
     "build:libs": "npm run build:sentry && npm run build:initApi && npm run build:contentLibs && npm run build:webvttParser && npm run build:transcriptProviders && npm run build:config",
     "build:extension": "npm run build:libs && vite build",
+    "verify-build": "node scripts/verify-build.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
