@@ -24,7 +24,7 @@ try {
     config.AZURE_OPENAI_API_KEY,
     config.AZURE_OPENAI_ENDPOINT,
     config.AZURE_OPENAI_API_VERSION,
-    config.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT
+    config.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT,
   );
 
   console.log('✅ Client created successfully!');
@@ -61,7 +61,6 @@ try {
       process.exit(1);
     }
   })();
-
 } catch (error) {
   console.error('\n❌ Failed to create Azure client:');
   console.error(`  ${error.message}\n`);

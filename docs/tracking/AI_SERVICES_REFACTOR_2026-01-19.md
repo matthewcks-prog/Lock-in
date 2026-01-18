@@ -22,12 +22,14 @@ The existing AI services architecture had several issues:
 Implemented **provider factory pattern** with proper separation of concerns:
 
 ### 1. Chat Completions → OpenAI (Primary Only)
+
 - **Rationale:** No Azure GPT quota on student accounts
 - **Model:** `gpt-4o-mini` (~$0.23/month)
 - **Factory:** `backend/providers/llmProviderFactory.js` (simplified to OpenAI-only)
 - **Consumer:** `backend/openaiClient.js` (505 lines, down from 710)
 
 ### 2. Text Embeddings → Azure OpenAI (Primary) → OpenAI (Fallback)
+
 - **Rationale:** Uses $100 Azure credits (FREE), 1000 TPM quota
 - **Factory:** `backend/providers/embeddingsFactory.js` (142 lines)
 - **Service:** `backend/services/embeddings.js` (NEW, 87 lines)
@@ -35,6 +37,7 @@ Implemented **provider factory pattern** with proper separation of concerns:
 - **Consumers:** `notesController.js`, `notesChatController.js`
 
 ### 3. Transcription → Azure Speech (Primary) → OpenAI Whisper (Fallback)
+
 - **Rationale:** Azure Speech has higher limits (5hrs/month free)
 - **Factory:** `backend/providers/transcriptionFactory.js` (236 lines)
 - **Service:** `backend/services/transcription.js` (145 lines)
@@ -45,9 +48,11 @@ Implemented **provider factory pattern** with proper separation of concerns:
 ## Changes Made
 
 ### Files Created:
+
 - ✅ `backend/services/embeddings.js` (87 lines)
 
 ### Files Modified:
+
 - ✅ `backend/providers/llmProviderFactory.js` - Simplified to OpenAI-only for chat
 - ✅ `backend/services/transcriptsService.js` - Now imports from `./transcription` instead of `../openaiClient`
 - ✅ `backend/controllers/notesController.js` - Uses `embeddings.js` service
@@ -55,6 +60,7 @@ Implemented **provider factory pattern** with proper separation of concerns:
 - ✅ `backend/openaiClient.js` - Removed `embedText()` and `transcribeAudioFile()`
 
 ### Documentation Updated:
+
 - ✅ `docs/AI_SERVICES_ARCHITECTURE.md` - Complete architecture documentation
 - ✅ `docs/tracking/REFACTOR_PLAN.md` - Marked Phase 3 OpenAI provider item as complete
 
@@ -63,6 +69,7 @@ Implemented **provider factory pattern** with proper separation of concerns:
 ## Architecture Improvements
 
 ### Before:
+
 ```
 openaiClient.js (710 lines)
 ├── Chat completions ✓
@@ -74,6 +81,7 @@ Controllers
 ```
 
 ### After:
+
 ```
 Factories (Provider Layer)
 ├── llmProviderFactory.js → openaiClient.js (505 lines)
@@ -96,21 +104,25 @@ Controllers (HTTP Layer)
 ## Benefits
 
 ### 1. Correct Configuration Checks
+
 - ✅ Embeddings now use `isAzureEmbeddingsEnabled()` (validates deployment exists)
 - ✅ Chat uses `isOpenAIEnabled()` (OpenAI-only)
 - ✅ Transcription uses `isAzureSpeechEnabled()` (Azure Speech check)
 
 ### 2. Proper Separation of Concerns
+
 - ✅ Factories handle client instantiation and fallback logic
 - ✅ Services handle business logic and normalization
 - ✅ Controllers handle HTTP requests and orchestration
 
 ### 3. Scalability & Maintainability
+
 - ✅ All modules under 250 lines (except orchestration layer)
 - ✅ Clear dependency flow: Controllers → Services → Factories
 - ✅ Easy to test with mock clients
 
 ### 4. Cost Optimization
+
 - ✅ Azure embeddings (FREE with $100 credits)
 - ✅ Azure Speech (FREE 5hrs/month)
 - ✅ OpenAI chat only (~$0.23/month)
@@ -119,14 +131,14 @@ Controllers (HTTP Layer)
 
 ## Module Line Counts
 
-| Module | Lines | Target | Status |
-|--------|-------|--------|--------|
-| `embeddingsFactory.js` | 142 | <250 | ✅ |
-| `transcriptionFactory.js` | 236 | <250 | ✅ |
-| `llmProviderFactory.js` | 47 | <250 | ✅ |
-| `embeddings.js` | 87 | <250 | ✅ |
-| `transcription.js` | 145 | <250 | ✅ |
-| `openaiClient.js` | 505 | N/A | ⚠️ Orchestration layer |
+| Module                    | Lines | Target | Status                 |
+| ------------------------- | ----- | ------ | ---------------------- |
+| `embeddingsFactory.js`    | 142   | <250   | ✅                     |
+| `transcriptionFactory.js` | 236   | <250   | ✅                     |
+| `llmProviderFactory.js`   | 47    | <250   | ✅                     |
+| `embeddings.js`           | 87    | <250   | ✅                     |
+| `transcription.js`        | 145   | <250   | ✅                     |
+| `openaiClient.js`         | 505   | N/A    | ⚠️ Orchestration layer |
 
 **Result:** All targeted modules are under the 250-line threshold ✅
 
@@ -135,17 +147,20 @@ Controllers (HTTP Layer)
 ## Testing & Verification
 
 ### Commands Run:
+
 ```bash
 npm run check
 ```
 
 ### Results:
+
 - ✅ **Linting:** 74 warnings (no errors) - existing warnings, not introduced by changes
 - ✅ **Tests:** 252 tests passed (23 test files)
 - ✅ **Type Check:** No errors
 - ✅ **Build:** All bundles built successfully
 
 ### Test Coverage:
+
 - Unit tests for provider extraction logic
 - Integration tests for notes service (embeddings)
 - Surface tests for UI/extension contract
@@ -155,10 +170,13 @@ npm run check
 ## Migration Path
 
 ### For Developers:
+
 No code changes required in controllers or UI. The refactor is **backward compatible** at the API level.
 
 ### For Deployment:
+
 Ensure environment variables are configured:
+
 ```env
 # OpenAI (Chat)
 OPENAI_API_KEY=sk-...
@@ -179,12 +197,14 @@ AZURE_SPEECH_REGION=australiaeast
 ## Follow-Up Work
 
 ### Recommended Next Steps:
+
 1. **Monitoring:** Track provider usage and fallback frequency in production
 2. **Caching:** Add embedding caching for frequently accessed notes
 3. **Rate Limiting:** Add per-user rate limits for embeddings/transcription
 4. **Cost Tracking:** Monitor OpenAI usage vs. Azure credits
 
 ### Not Required (Working as Designed):
+
 - Chat fallback (not needed for student accounts)
 - Additional provider options (OpenAI + Azure sufficient)
 

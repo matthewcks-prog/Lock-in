@@ -1,18 +1,16 @@
 /**
  * LLM Provider Factory - Chat Completions Only
- * 
+ *
  * Strategy for Lock-in:
  * - Chat Completions: OpenAI (Primary) - No Azure GPT quota on student accounts
- * 
+ *
  * Note: Embeddings and transcription use separate factories
- * 
+ *
  * @module providers/llmProviderFactory
  */
 
 const OpenAI = require('openai');
-const {
-  OPENAI_API_KEY,
-} = require('../config');
+const { OPENAI_API_KEY } = require('../config');
 
 let cachedPrimaryClient;
 

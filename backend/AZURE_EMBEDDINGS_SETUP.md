@@ -5,6 +5,7 @@
 Your Azure OpenAI embeddings are now properly configured and working!
 
 ### Resource Details
+
 - **Resource Name**: `lockin-study-assistant-openai`
 - **Resource Group**: `lock-in-dev`
 - **Location**: `australiaeast`
@@ -12,6 +13,7 @@ Your Azure OpenAI embeddings are now properly configured and working!
 - **Subscription**: Azure for Students ($100 credit)
 
 ### Deployment Details
+
 - **Model**: `text-embedding-3-small` (version 1)
 - **Deployment Name**: `text-embedding-3-small`
 - **Capacity**: 120K TPM (Tokens Per Minute)
@@ -19,12 +21,14 @@ Your Azure OpenAI embeddings are now properly configured and working!
 - **API Version**: `2024-02-01`
 
 ### Rate Limits & Quotas
+
 - **Requests**: 120 requests per 10 seconds
 - **Tokens**: 120,000 tokens per minute
 - **Batch Size**: Up to 2,048 embeddings per request
 - **Vector Dimensions**: 1536 (default) or 512 (reduced)
 
 ### Cost Structure
+
 - **Pricing**: $0.02 per 1M tokens
 - **Average Token Count**: ~1 token per 4 characters
 - **Estimated Cost per 1K notes** (assuming 500 chars each): ~$0.0025
@@ -34,30 +38,35 @@ Your Azure OpenAI embeddings are now properly configured and working!
 ## 🏗️ Industry Best Practices Implemented
 
 ### 1. **Connection Management**
+
 - ✅ 60-second timeout for embeddings operations
 - ✅ Automatic retry with exponential backoff (3 attempts)
 - ✅ Connection pooling via Azure SDK
 - ✅ Graceful error handling with detailed diagnostics
 
 ### 2. **Error Handling**
+
 - ✅ Specific error types (auth, rate limit, network, service)
 - ✅ Actionable error messages with troubleshooting steps
 - ✅ Fallback to OpenAI when Azure unavailable
 - ✅ Error tracking and logging
 
 ### 3. **Performance & Scalability**
+
 - ✅ Batch processing support (up to 2,048 items)
 - ✅ Optimal capacity allocation (120K TPM)
 - ✅ Usage tracking and cost monitoring
 - ✅ Efficient token utilization
 
 ### 4. **Monitoring & Observability**
+
 - ✅ Usage statistics tracking (requests, tokens, cost)
 - ✅ Health check endpoints (planned)
 - ✅ Diagnostic tools for troubleshooting
 - ✅ Structured logging with context
 
 ### 5. **Security**
+
 - ✅ API keys stored in environment variables
 - ✅ Sensitive data redacted in logs
 - ✅ Secure credential rotation support
@@ -68,19 +77,23 @@ Your Azure OpenAI embeddings are now properly configured and working!
 ## 📊 Usage Monitoring
 
 ### Check Your Usage
+
 Run the test script to see current statistics:
+
 ```bash
 cd backend
 node test-embeddings.js
 ```
 
 ### View Azure Portal Metrics
+
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Navigate to: **lock-in-dev** > **lockin-study-assistant-openai**
 3. Click **Metrics** in the left menu
 4. View: Total Calls, Token Usage, Latency
 
 ### Monitor Costs
+
 1. Azure Portal > **Cost Management + Billing**
 2. Filter by Resource Group: `lock-in-dev`
 3. Review daily/monthly spending
@@ -90,6 +103,7 @@ node test-embeddings.js
 ## 🔧 Maintenance & Troubleshooting
 
 ### Rotate API Keys
+
 ```bash
 # Regenerate key1
 az cognitiveservices account keys regenerate \
@@ -106,6 +120,7 @@ az cognitiveservices account keys list \
 ```
 
 ### Check Deployment Status
+
 ```bash
 az cognitiveservices account deployment list \
   --name lockin-study-assistant-openai \
@@ -113,6 +128,7 @@ az cognitiveservices account deployment list \
 ```
 
 ### View Quota Usage
+
 ```bash
 az cognitiveservices usage list \
   --name lockin-study-assistant-openai \
@@ -120,6 +136,7 @@ az cognitiveservices usage list \
 ```
 
 ### Run Diagnostics
+
 ```bash
 cd backend
 node test-azure-direct.js
@@ -130,10 +147,12 @@ node test-azure-direct.js
 ## 🚀 Scaling Recommendations
 
 ### Current Capacity
+
 - **120K TPM**: Good for development and moderate production load
 - **Estimated capacity**: ~2,000 embedding requests per minute
 
 ### When to Scale Up
+
 If you hit rate limits or need higher throughput:
 
 ```bash
@@ -150,6 +169,7 @@ az cognitiveservices account deployment create \
 ```
 
 ### Production Recommendations
+
 1. **Monitor usage patterns** - Track peak hours and adjust capacity
 2. **Enable auto-scaling** - Use Azure Monitor alerts
 3. **Implement caching** - Cache embeddings for repeated content
@@ -161,6 +181,7 @@ az cognitiveservices account deployment create \
 ## 🔐 Environment Configuration
 
 ### backend/.env (Development)
+
 ```env
 AZURE_OPENAI_API_KEY=your-azure-openai-api-key-here
 AZURE_OPENAI_ENDPOINT=https://lock-in-openai-dev.openai.azure.com/
@@ -174,7 +195,9 @@ OPENAI_FALLBACK_ENABLED=true
 ```
 
 ### Production Setup
+
 For production deployment:
+
 1. Create separate Azure resource for prod
 2. Use separate API keys (never share dev/prod)
 3. Enable private endpoints for enhanced security
@@ -186,6 +209,7 @@ For production deployment:
 ## 📈 Performance Optimization
 
 ### Batch Processing Example
+
 ```javascript
 // Instead of multiple calls
 for (const note of notes) {
@@ -193,11 +217,12 @@ for (const note of notes) {
 }
 
 // Use batch processing
-const texts = notes.map(n => n.content);
+const texts = notes.map((n) => n.content);
 const embeddings = await embedTexts(texts); // ✅ Fast
 ```
 
 ### Caching Strategy
+
 ```javascript
 // Implement caching to avoid redundant embeddings
 const embeddingCache = new Map();
@@ -213,6 +238,7 @@ function getOrCreateEmbedding(text) {
 ```
 
 ### Reduced Dimensions for Speed
+
 ```javascript
 // Use 512 dimensions for faster processing (slight accuracy trade-off)
 const embedding = await client.embed(text, { dimensions: 512 });

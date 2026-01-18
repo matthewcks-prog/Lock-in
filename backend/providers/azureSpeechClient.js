@@ -1,14 +1,14 @@
 /**
  * Azure Speech-to-Text Client
- * 
+ *
  * Provides speech-to-text transcription using Azure Cognitive Services Speech API.
  * This is the primary transcription service when available, leveraging Azure credits.
- * 
+ *
  * Features:
  * - Supports multiple audio formats (wav, mp3, ogg, webm)
  * - Language detection or explicit language specification
  * - Handles file uploads and streaming
- * 
+ *
  * @module providers/azureSpeechClient
  */
 
@@ -49,7 +49,7 @@ class AzureSpeechClient {
 
   /**
    * Transcribe audio file to text
-   * 
+   *
    * @param {Buffer|Stream} audioData - Audio file data
    * @param {Object} options - Transcription options
    * @param {string} options.language - Language code (e.g., 'en-US', 'es-ES')
@@ -61,19 +61,15 @@ class AzureSpeechClient {
     const format = options.format || 'wav';
 
     try {
-      const response = await axios.post(
-        this.config.getEndpoint(language),
-        audioData,
-        {
-          headers: {
-            'Ocp-Apim-Subscription-Key': this.config.apiKey,
-            'Content-Type': this.getContentType(format),
-            'Accept': 'application/json',
-          },
-          maxBodyLength: Infinity,
-          timeout: 60000, // 60 second timeout
-        }
-      );
+      const response = await axios.post(this.config.getEndpoint(language), audioData, {
+        headers: {
+          'Ocp-Apim-Subscription-Key': this.config.apiKey,
+          'Content-Type': this.getContentType(format),
+          Accept: 'application/json',
+        },
+        maxBodyLength: Infinity,
+        timeout: 60000, // 60 second timeout
+      });
 
       return this.parseResponse(response.data);
     } catch (error) {

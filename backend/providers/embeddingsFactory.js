@@ -1,10 +1,10 @@
 /**
  * Embeddings Provider Factory
- * 
+ *
  * Creates embeddings clients with automatic fallback:
  * - Primary: Azure OpenAI Embeddings (uses Azure credits)
  * - Fallback: OpenAI Embeddings (when Azure unavailable)
- * 
+ *
  * @module providers/embeddingsFactory
  */
 
@@ -33,7 +33,14 @@ function createOpenAIEmbeddingsClient(apiKey, model) {
  * Unified embeddings interface
  */
 class EmbeddingsClient {
-  constructor(primaryClient, primaryProvider, primaryModel, fallbackClient, fallbackProvider, fallbackModel) {
+  constructor(
+    primaryClient,
+    primaryProvider,
+    primaryModel,
+    fallbackClient,
+    fallbackProvider,
+    fallbackModel,
+  ) {
     this.primaryClient = primaryClient;
     this.primaryProvider = primaryProvider;
     this.primaryModel = primaryModel;
@@ -44,7 +51,7 @@ class EmbeddingsClient {
 
   /**
    * Generate embeddings with automatic fallback
-   * 
+   *
    * @param {string|string[]} input - Text or array of texts
    * @param {Object} options - Embedding options
    * @returns {Promise<Object>} Embeddings result
@@ -57,7 +64,7 @@ class EmbeddingsClient {
         this.primaryProvider,
         this.primaryModel,
         input,
-        options
+        options,
       );
       return {
         ...result,
@@ -72,7 +79,7 @@ class EmbeddingsClient {
             this.fallbackProvider,
             this.fallbackModel,
             input,
-            options
+            options,
           );
           return {
             ...result,
@@ -83,7 +90,7 @@ class EmbeddingsClient {
         } catch (fallbackError) {
           throw new Error(
             `Embeddings failed. Primary (${this.primaryProvider}): ${primaryError.message}. ` +
-            `Fallback (${this.fallbackProvider}): ${fallbackError.message}`
+              `Fallback (${this.fallbackProvider}): ${fallbackError.message}`,
           );
         }
       }
@@ -108,7 +115,7 @@ class EmbeddingsClient {
     });
 
     return {
-      embeddings: response.data.map(item => item.embedding),
+      embeddings: response.data.map((item) => item.embedding),
       model: response.model,
       usage: response.usage,
     };
@@ -151,7 +158,7 @@ class EmbeddingsClient {
     ];
 
     const errorMessage = error.message.toLowerCase();
-    return fallbackReasons.some(reason => errorMessage.includes(reason));
+    return fallbackReasons.some((reason) => errorMessage.includes(reason));
   }
 }
 
@@ -182,7 +189,7 @@ function createEmbeddingsClient(config) {
         azureApiKey,
         azureEndpoint,
         azureApiVersion,
-        azureDeployment
+        azureDeployment,
       );
       primaryProvider = EmbeddingsProvider.AZURE_OPENAI;
       primaryModel = azureDeployment;
@@ -195,7 +202,7 @@ function createEmbeddingsClient(config) {
   if (openaiApiKey && openaiModel) {
     try {
       const openaiClient = createOpenAIEmbeddingsClient(openaiApiKey, openaiModel);
-      
+
       if (primaryClient) {
         // Use as fallback
         fallbackClient = openaiClient;
@@ -214,7 +221,7 @@ function createEmbeddingsClient(config) {
 
   if (!primaryClient) {
     throw new Error(
-      'No embeddings provider available. Configure either Azure OpenAI or OpenAI embeddings.'
+      'No embeddings provider available. Configure either Azure OpenAI or OpenAI embeddings.',
     );
   }
 
@@ -224,7 +231,7 @@ function createEmbeddingsClient(config) {
     primaryModel,
     fallbackClient,
     fallbackProvider,
-    fallbackModel
+    fallbackModel,
   );
 }
 

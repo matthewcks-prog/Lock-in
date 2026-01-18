@@ -1,11 +1,11 @@
 /**
  * Health Check & Monitoring Routes
- * 
+ *
  * Provides endpoints for monitoring service health, including:
  * - Azure embeddings connection status
  * - Usage statistics
  * - Diagnostics
- * 
+ *
  * @module routes/healthRoutes
  */
 

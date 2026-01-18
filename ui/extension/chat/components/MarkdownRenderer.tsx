@@ -80,12 +80,12 @@ const CodeBlock = memo(function CodeBlock({
 const markdownComponents = {
   // Code blocks with syntax highlighting
   code: CodeBlock,
-  
+
   // Paragraphs with proper spacing
   p: ({ children }: { children?: React.ReactNode }) => (
     <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>
   ),
-  
+
   // Headings
   h1: ({ children }: { children?: React.ReactNode }) => (
     <h1 className="text-xl font-bold mb-3 mt-4 first:mt-0">{children}</h1>
@@ -96,7 +96,7 @@ const markdownComponents = {
   h3: ({ children }: { children?: React.ReactNode }) => (
     <h3 className="text-base font-semibold mb-2 mt-3 first:mt-0">{children}</h3>
   ),
-  
+
   // Lists
   ul: ({ children }: { children?: React.ReactNode }) => (
     <ul className="list-disc list-inside mb-3 space-y-1">{children}</ul>
@@ -107,7 +107,7 @@ const markdownComponents = {
   li: ({ children }: { children?: React.ReactNode }) => (
     <li className="leading-relaxed">{children}</li>
   ),
-  
+
   // Links
   a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (
     <a
@@ -119,14 +119,14 @@ const markdownComponents = {
       {children}
     </a>
   ),
-  
+
   // Blockquotes
   blockquote: ({ children }: { children?: React.ReactNode }) => (
     <blockquote className="border-l-4 border-gray-300 pl-4 py-1 my-3 italic text-gray-700">
       {children}
     </blockquote>
   ),
-  
+
   // Tables
   table: ({ children }: { children?: React.ReactNode }) => (
     <div className="overflow-x-auto my-3">
@@ -141,17 +141,15 @@ const markdownComponents = {
   td: ({ children }: { children?: React.ReactNode }) => (
     <td className="border border-gray-300 px-3 py-2">{children}</td>
   ),
-  
+
   // Horizontal rule
   hr: () => <hr className="my-4 border-t border-gray-300" />,
-  
+
   // Strong and emphasis
   strong: ({ children }: { children?: React.ReactNode }) => (
     <strong className="font-semibold">{children}</strong>
   ),
-  em: ({ children }: { children?: React.ReactNode }) => (
-    <em className="italic">{children}</em>
-  ),
+  em: ({ children }: { children?: React.ReactNode }) => <em className="italic">{children}</em>,
 };
 
 export const MarkdownRenderer = memo(function MarkdownRenderer({
@@ -162,10 +160,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
 
   return (
     <div className={`markdown-content text-gray-900 ${className}`}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={markdownComponents as any}
-      >
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as any}>
         {content}
       </ReactMarkdown>
     </div>

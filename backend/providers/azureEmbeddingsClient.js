@@ -1,14 +1,14 @@
 /**
  * Azure OpenAI Embeddings Client
- * 
+ *
  * Provides text embeddings using Azure OpenAI Service.
  * This is the primary embeddings service, leveraging Azure credits.
- * 
+ *
  * Features:
  * - text-embedding-3-small model
  * - Batch processing support
  * - Automatic retry with exponential backoff
- * 
+ *
  * @module providers/azureEmbeddingsClient
  */
 
@@ -49,7 +49,7 @@ class AzureEmbeddingsClient {
       timeout: 60000, // 60 second timeout for embeddings
       maxRetries: 3, // Retry failed requests up to 3 times
     });
-    
+
     // Usage tracking for monitoring and cost estimation
     this.stats = {
       totalRequests: 0,
@@ -86,7 +86,7 @@ class AzureEmbeddingsClient {
 
   /**
    * Generate embeddings for text input
-   * 
+   *
    * @param {string|string[]} input - Text or array of texts to embed
    * @param {Object} options - Embedding options
    * @param {number} options.dimensions - Optional dimensions (for 3-small: 512 or 1536)
@@ -113,7 +113,7 @@ class AzureEmbeddingsClient {
       this.stats.lastRequestTime = new Date();
 
       return {
-        embeddings: response.data.map(item => item.embedding),
+        embeddings: response.data.map((item) => item.embedding),
         model: response.model,
         usage: response.usage,
       };
@@ -125,7 +125,7 @@ class AzureEmbeddingsClient {
 
   /**
    * Generate single embedding
-   * 
+   *
    * @param {string} text - Text to embed
    * @param {Object} options - Embedding options
    * @returns {Promise<number[]>} Embedding vector
@@ -137,7 +137,7 @@ class AzureEmbeddingsClient {
 
   /**
    * Generate embeddings in batches
-   * 
+   *
    * @param {string[]} texts - Array of texts to embed
    * @param {Object} options - Embedding options
    * @param {number} options.batchSize - Batch size (default: 2048, max for Azure)
@@ -170,8 +170,8 @@ class AzureEmbeddingsClient {
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND' || error.code === 'ETIMEDOUT') {
       return new Error(
         `Azure embeddings connection error: Cannot reach ${errorContext.endpoint}. ` +
-        `Please verify: 1) Endpoint URL is correct, 2) Network connection is active, ` +
-        `3) Firewall allows outbound HTTPS. Error: ${error.message}`
+          `Please verify: 1) Endpoint URL is correct, 2) Network connection is active, ` +
+          `3) Firewall allows outbound HTTPS. Error: ${error.message}`,
       );
     }
 
@@ -180,8 +180,8 @@ class AzureEmbeddingsClient {
       const retryAfter = error.headers?.['retry-after'] || 'unknown';
       return new Error(
         `Azure embeddings quota exceeded or rate limited. ` +
-        `Retry after: ${retryAfter} seconds. ` +
-        `Deployment: ${errorContext.deployment}, TPM Limit: 120K`
+          `Retry after: ${retryAfter} seconds. ` +
+          `Deployment: ${errorContext.deployment}, TPM Limit: 120K`,
       );
     }
 
@@ -189,9 +189,9 @@ class AzureEmbeddingsClient {
     if (error.status === 401 || error.status === 403) {
       return new Error(
         `Azure embeddings authentication failed. ` +
-        `Please verify: 1) AZURE_OPENAI_API_KEY is correct, ` +
-        `2) API key has not expired, 3) Resource '${errorContext.deployment}' exists. ` +
-        `Status: ${error.status}`
+          `Please verify: 1) AZURE_OPENAI_API_KEY is correct, ` +
+          `2) API key has not expired, 3) Resource '${errorContext.deployment}' exists. ` +
+          `Status: ${error.status}`,
       );
     }
 
@@ -199,8 +199,8 @@ class AzureEmbeddingsClient {
     if (error.status === 404) {
       return new Error(
         `Azure embeddings deployment not found. ` +
-        `Please verify deployment '${errorContext.deployment}' exists at ${errorContext.endpoint}. ` +
-        `Run: az cognitiveservices account deployment list`
+          `Please verify deployment '${errorContext.deployment}' exists at ${errorContext.endpoint}. ` +
+          `Run: az cognitiveservices account deployment list`,
       );
     }
 
@@ -208,17 +208,17 @@ class AzureEmbeddingsClient {
     if (error.status >= 500) {
       return new Error(
         `Azure embeddings service error (${error.status}): ${error.message}. ` +
-        `The Azure OpenAI service may be experiencing issues. ` +
-        `Endpoint: ${errorContext.endpoint}`
+          `The Azure OpenAI service may be experiencing issues. ` +
+          `Endpoint: ${errorContext.endpoint}`,
       );
     }
 
     // Generic error with context
     return new Error(
       `Azure embeddings error: ${error.message}. ` +
-      `Status: ${error.status || 'unknown'}, ` +
-      `Code: ${error.code || 'none'}, ` +
-      `Deployment: ${errorContext.deployment}`
+        `Status: ${error.status || 'unknown'}, ` +
+        `Code: ${error.code || 'none'}, ` +
+        `Deployment: ${errorContext.deployment}`,
     );
   }
 
@@ -285,7 +285,7 @@ class AzureEmbeddingsClient {
 function createAzureEmbeddingsClient(apiKey, endpoint, apiVersion, deployment) {
   const config = new AzureEmbeddingsConfig({ apiKey, endpoint, apiVersion, deployment });
   const client = new AzureEmbeddingsClient(config);
-  
+
   // Log configuration (without exposing sensitive data)
   console.log('[Azure Embeddings] Initialized:', {
     endpoint: config.endpoint,
@@ -293,7 +293,7 @@ function createAzureEmbeddingsClient(apiKey, endpoint, apiVersion, deployment) {
     apiVersion: config.apiVersion,
     hasApiKey: Boolean(config.apiKey),
   });
-  
+
   return client;
 }
 

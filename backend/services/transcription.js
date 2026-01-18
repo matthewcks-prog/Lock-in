@@ -1,10 +1,10 @@
 /**
  * Transcription Service Wrapper
- * 
+ *
  * Provides unified interface for audio transcription with Azure Speech (primary)
  * and OpenAI Whisper (fallback). This wrapper maintains backward compatibility
  * with existing transcribeAudioFile interface.
- * 
+ *
  * @module services/transcription
  */
 
@@ -37,10 +37,10 @@ function getTranscriptionClient() {
 
 /**
  * Transcribe audio file with automatic provider selection
- * 
+ *
  * Maintains backward compatibility with existing interface while using
  * modular provider architecture underneath.
- * 
+ *
  * @param {Object} options - Transcription options
  * @param {string} options.filePath - Path to audio file
  * @param {string} options.language - Language code (ISO 639-1)
@@ -72,18 +72,16 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
 
   const filename = path.basename(filePath);
   const format = path.extname(filename).slice(1) || 'wav';
-  
-  console.log(
-    `[Transcription] Processing ${fileSizeMB.toFixed(1)}MB audio file: ${filename}`,
-  );
+
+  console.log(`[Transcription] Processing ${fileSizeMB.toFixed(1)}MB audio file: ${filename}`);
 
   try {
     const startTime = Date.now();
     const client = getTranscriptionClient();
-    
+
     // Read audio file
     const audioData = fs.readFileSync(filePath);
-    
+
     // Transcribe with automatic fallback
     const result = await client.transcribe(audioData, {
       language,
@@ -94,10 +92,8 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
     const provider = result.provider || 'unknown';
     const fallbackNote = result.fallbackUsed ? ' (fallback used)' : '';
-    
-    console.log(
-      `[Transcription] Completed in ${duration}s using ${provider}${fallbackNote}`,
-    );
+
+    console.log(`[Transcription] Completed in ${duration}s using ${provider}${fallbackNote}`);
 
     // Normalize response format to match existing interface
     return normalizeTranscriptionResponse(result);
@@ -120,7 +116,7 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
 
 /**
  * Normalize transcription response to common format
- * 
+ *
  * Ensures response matches the format expected by transcriptsService.js
  */
 function normalizeTranscriptionResponse(result) {

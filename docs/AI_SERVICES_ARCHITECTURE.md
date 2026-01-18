@@ -19,11 +19,13 @@ Lock-in uses a **provider factory pattern** with **automatic fallback** for AI s
 **Fallback:** None (student budget optimized for single provider)
 
 **Architecture:**
+
 - Factory: `backend/providers/llmProviderFactory.js`
 - Consumer: `backend/openaiClient.js`
 - Line count: 505 lines (chat orchestration + prompt building)
 
 **Key Files:**
+
 ```
 backend/providers/llmProviderFactory.js  (chat client factory)
 backend/openaiClient.js                  (chat orchestration & prompts)
@@ -40,19 +42,22 @@ backend/openaiClient.js                  (chat orchestration & prompts)
 **Quota:** 1000 TPM (Tokens Per Minute)
 
 **Architecture:**
+
 - Factory: `backend/providers/embeddingsFactory.js` (142 lines)
 - Service: `backend/services/embeddings.js` (87 lines)
-- Consumers: 
+- Consumers:
   - `backend/controllers/notesController.js` (semantic search, note embeddings)
   - `backend/controllers/notesChatController.js` (RAG queries)
 
 **Key Features:**
+
 - Checks `isAzureEmbeddingsEnabled()` (validates deployment exists)
 - Automatic fallback on quota/auth errors
 - Batch embedding support (for bulk operations)
 - Singleton client instance (performance optimization)
 
 **Key Files:**
+
 ```
 backend/providers/embeddingsFactory.js       (factory + fallback logic)
 backend/providers/azureEmbeddingsClient.js   (Azure-specific implementation)
@@ -71,17 +76,20 @@ backend/controllers/notesChatController.js   (consumer: RAG queries)
 **Rationale:** Azure Speech has higher limits and better regional support
 
 **Architecture:**
+
 - Factory: `backend/providers/transcriptionFactory.js` (236 lines)
 - Service: `backend/services/transcription.js` (145 lines)
 - Consumer: `backend/services/transcriptsService.js` (transcript job orchestration)
 
 **Key Features:**
+
 - Language code mapping (ISO 639-1 → Azure locale format)
 - File size validation (25MB limit for Whisper, 200MB for Azure Speech)
 - Automatic format detection
 - Response normalization (Azure ↔ Whisper format compatibility)
 
 **Key Files:**
+
 ```
 backend/providers/transcriptionFactory.js       (factory + fallback logic)
 backend/providers/azureSpeechClient.js          (Azure Speech implementation)
@@ -94,6 +102,7 @@ backend/services/transcriptsService.js          (consumer: job orchestration)
 ## File Organization
 
 ### Provider Layer (`backend/providers/`)
+
 - **Purpose:** Client instantiation, fallback logic, error handling
 - **Pattern:** Factory pattern with dependency injection
 - **Files:**
@@ -105,6 +114,7 @@ backend/services/transcriptsService.js          (consumer: job orchestration)
   - `withFallback.js` - Retry + fallback utility (shared)
 
 ### Service Layer (`backend/services/`)
+
 - **Purpose:** Business logic, request/response normalization
 - **Pattern:** Service wrapper with singleton instances
 - **Files:**
@@ -113,11 +123,13 @@ backend/services/transcriptsService.js          (consumer: job orchestration)
   - `transcriptsService.js` - Transcript job orchestration (uses transcription service)
 
 ### Application Layer (`backend/`)
+
 - **Purpose:** High-level chat orchestration, prompt building
 - **Files:**
   - `openaiClient.js` - Chat completions orchestration (uses llmProviderFactory)
 
 ### Controller Layer (`backend/controllers/`)
+
 - **Purpose:** HTTP request handling, business logic coordination
 - **Files:**
   - `lockinController.js` - Main chat endpoint (uses openaiClient)
@@ -131,6 +143,7 @@ backend/services/transcriptsService.js          (consumer: job orchestration)
 ### Environment Variables
 
 **OpenAI:**
+
 ```env
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-4o-mini
@@ -138,6 +151,7 @@ OPENAI_EMBEDDINGS_MODEL=text-embedding-3-small
 ```
 
 **Azure OpenAI (Embeddings Only):**
+
 ```env
 AZURE_OPENAI_API_KEY=...
 AZURE_OPENAI_ENDPOINT=https://....openai.azure.com
@@ -146,6 +160,7 @@ AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=text-embedding-3-small
 ```
 
 **Azure Speech (Transcription Only):**
+
 ```env
 AZURE_SPEECH_API_KEY=...
 AZURE_SPEECH_REGION=australiaeast
@@ -155,15 +170,16 @@ AZURE_SPEECH_LANGUAGE=en-US
 ### Configuration Functions
 
 **backend/config.js:**
+
 ```javascript
 // Chat: Always OpenAI (no Azure check needed)
-isOpenAIEnabled()  // Checks OPENAI_API_KEY
+isOpenAIEnabled(); // Checks OPENAI_API_KEY
 
 // Embeddings: Azure (primary) → OpenAI (fallback)
-isAzureEmbeddingsEnabled()  // Checks AZURE_OPENAI_API_KEY + ENDPOINT + EMBEDDINGS_DEPLOYMENT
+isAzureEmbeddingsEnabled(); // Checks AZURE_OPENAI_API_KEY + ENDPOINT + EMBEDDINGS_DEPLOYMENT
 
 // Transcription: Azure Speech (primary) → Whisper (fallback)
-isAzureSpeechEnabled()  // Checks AZURE_SPEECH_API_KEY + REGION
+isAzureSpeechEnabled(); // Checks AZURE_SPEECH_API_KEY + REGION
 ```
 
 ---
@@ -171,26 +187,31 @@ isAzureSpeechEnabled()  // Checks AZURE_SPEECH_API_KEY + REGION
 ## Design Principles
 
 ### 1. Separation of Concerns
+
 - **Factories:** Client instantiation + configuration
 - **Services:** Business logic + normalization
 - **Controllers:** HTTP handling + orchestration
 
 ### 2. Dependency Injection
+
 - Factories create clients with explicit configuration
 - Services depend on factory interfaces, not concrete implementations
 - Enables testing with mock clients
 
 ### 3. Fail-Fast Validation
+
 - Configuration validation at startup (backend/index.js)
 - Provider availability checks before request handling
 - Clear error messages with remediation steps
 
 ### 4. Graceful Degradation
+
 - Automatic fallback on quota/auth errors
 - Detailed error context for debugging
 - Log provider usage for monitoring
 
 ### 5. Cost Optimization
+
 - Azure embeddings (FREE with $100 credits)
 - Azure Speech (FREE 5hrs/month)
 - OpenAI chat only (~$0.23/month for gpt-4o-mini)
@@ -201,14 +222,14 @@ isAzureSpeechEnabled()  // Checks AZURE_SPEECH_API_KEY + REGION
 
 **Target:** Primary files <250 lines (per REFACTOR_PLAN.md)
 
-| Module | Lines | Status |
-|--------|-------|--------|
-| `embeddingsFactory.js` | 142 | ✅ Under limit |
-| `transcriptionFactory.js` | 236 | ✅ Under limit |
-| `llmProviderFactory.js` | 47 | ✅ Under limit |
-| `embeddings.js` | 87 | ✅ Under limit |
-| `transcription.js` | 145 | ✅ Under limit |
-| `openaiClient.js` | 505 | ⚠️ Orchestration file (acceptable) |
+| Module                    | Lines | Status                             |
+| ------------------------- | ----- | ---------------------------------- |
+| `embeddingsFactory.js`    | 142   | ✅ Under limit                     |
+| `transcriptionFactory.js` | 236   | ✅ Under limit                     |
+| `llmProviderFactory.js`   | 47    | ✅ Under limit                     |
+| `embeddings.js`           | 87    | ✅ Under limit                     |
+| `transcription.js`        | 145   | ✅ Under limit                     |
+| `openaiClient.js`         | 505   | ⚠️ Orchestration file (acceptable) |
 
 **Refactor Complete:** All targeted modules are now under the 250-line threshold. `openaiClient.js` is larger but serves as the main chat orchestration layer (prompt building, context management, streaming).
 
@@ -217,6 +238,7 @@ isAzureSpeechEnabled()  // Checks AZURE_SPEECH_API_KEY + REGION
 ## Migration Summary (2026-01-19)
 
 ### Changes Made:
+
 1. **Created `backend/services/embeddings.js`** - Uses embeddingsFactory with proper Azure check
 2. **Updated `backend/providers/llmProviderFactory.js`** - Simplified to OpenAI-only for chat
 3. **Updated `backend/services/transcriptsService.js`** - Uses transcription.js service
@@ -224,12 +246,14 @@ isAzureSpeechEnabled()  // Checks AZURE_SPEECH_API_KEY + REGION
 5. **Removed from openaiClient.js** - Legacy embedText() and transcribeAudioFile() functions
 
 ### Before:
+
 - ❌ embedText() in openaiClient used `isAzureEnabled()` (chat check, not embeddings)
 - ❌ embeddingsFactory existed but wasn't used
 - ❌ transcriptsService imported from openaiClient (wrong layer)
 - ❌ Mixed concerns: chat, embeddings, transcription in one file
 
 ### After:
+
 - ✅ Embeddings use `isAzureEmbeddingsEnabled()` (correct check)
 - ✅ embeddingsFactory properly used via embeddings.js service
 - ✅ Transcription uses dedicated transcription.js service
@@ -237,6 +261,7 @@ isAzureSpeechEnabled()  // Checks AZURE_SPEECH_API_KEY + REGION
 - ✅ Clear separation: factories → services → controllers
 
 ### Verification:
+
 ```bash
 npm run check  # ✅ All tests pass, build succeeds
 ```
@@ -246,15 +271,18 @@ npm run check  # ✅ All tests pass, build succeeds
 ## Testing
 
 ### Unit Tests:
+
 - `core/transcripts/providers/__tests__/` - Provider extraction logic
 - `core/services/__tests__/notesService.test.ts` - Note service (embeddings)
 
 ### Integration Tests:
+
 - Test factories with mock clients
 - Test fallback logic with simulated failures
 - Test response normalization
 
 ### End-to-End:
+
 - Manual testing with real API keys
 - Monitor provider usage in production logs
 

@@ -1,6 +1,6 @@
 /**
  * Test Azure Embeddings Setup
- * 
+ *
  * Run this to verify your Azure OpenAI embeddings configuration is working correctly.
  */
 
@@ -48,7 +48,12 @@ try {
       console.log(`\n✅ Embedding generated successfully!`);
       console.log(`  Dimensions: ${result.embeddings[0].length}`);
       console.log(`  Duration: ${duration}ms`);
-      console.log(`  Sample (first 5 values): [${result.embeddings[0].slice(0, 5).map(v => v.toFixed(6)).join(', ')}...]`);
+      console.log(
+        `  Sample (first 5 values): [${result.embeddings[0]
+          .slice(0, 5)
+          .map((v) => v.toFixed(6))
+          .join(', ')}...]`,
+      );
       console.log(`  Model: ${result.model}`);
       console.log(`  Provider: ${result.provider}`);
       console.log(`  Tokens Used: ${result.usage.total_tokens}`);
@@ -81,7 +86,6 @@ try {
       process.exit(1);
     }
   })();
-
 } catch (error) {
   console.error('\n❌ Failed to create embeddings client:');
   console.error(`  ${error.message}\n`);

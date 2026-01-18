@@ -1,13 +1,13 @@
 /**
  * Embeddings Service Wrapper
- * 
+ *
  * Provides unified interface for text embeddings with Azure OpenAI (primary)
  * and OpenAI (fallback). Uses embeddingsFactory for proper provider routing.
- * 
+ *
  * Strategy:
  * - Primary: Azure OpenAI Embeddings (uses $100 Azure credits, 1000 TPM quota)
  * - Fallback: OpenAI Embeddings (when Azure unavailable or quota exceeded)
- * 
+ *
  * @module services/embeddings
  */
 
@@ -42,7 +42,7 @@ function getEmbeddingsClient() {
 
 /**
  * Generate embedding for text
- * 
+ *
  * @param {string} text - Text to embed
  * @returns {Promise<number[]>} Array of embedding floats
  */
@@ -53,13 +53,13 @@ async function embedText(text) {
 
   const client = getEmbeddingsClient();
   const embedding = await client.embed(text.trim());
-  
+
   return embedding;
 }
 
 /**
  * Generate embeddings for multiple texts in batches
- * 
+ *
  * @param {string[]} texts - Array of texts to embed
  * @param {Object} options - Batch options
  * @returns {Promise<number[][]>} Array of embedding arrays
@@ -71,7 +71,7 @@ async function embedTexts(texts, options = {}) {
 
   const client = getEmbeddingsClient();
   const embeddings = await client.batchEmbed(texts, options);
-  
+
   return embeddings;
 }
 
@@ -81,7 +81,7 @@ async function embedTexts(texts, options = {}) {
  */
 function getEmbeddingsStats() {
   const client = getEmbeddingsClient();
-  
+
   // Try to get stats from primary Azure client
   if (client.primaryClient && typeof client.primaryClient.getStats === 'function') {
     return {
@@ -89,7 +89,7 @@ function getEmbeddingsStats() {
       stats: client.primaryClient.getStats(),
     };
   }
-  
+
   return {
     provider: 'unknown',
     stats: null,
@@ -101,11 +101,11 @@ function getEmbeddingsStats() {
  */
 async function runEmbeddingsDiagnostics() {
   const client = getEmbeddingsClient();
-  
+
   if (client.primaryClient && typeof client.primaryClient.runDiagnostics === 'function') {
     return await client.primaryClient.runDiagnostics();
   }
-  
+
   throw new Error('Diagnostics not supported by current embeddings provider');
 }
 

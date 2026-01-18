@@ -1,10 +1,10 @@
 /**
  * Transcription Provider Factory
- * 
+ *
  * Creates transcription clients with automatic fallback:
  * - Primary: Azure Speech-to-Text (uses Azure credits, 5hrs/month free)
  * - Fallback: OpenAI Whisper (when Azure quota exceeded or unavailable)
- * 
+ *
  * @module providers/transcriptionFactory
  */
 
@@ -42,7 +42,7 @@ class TranscriptionClient {
 
   /**
    * Transcribe audio with automatic fallback
-   * 
+   *
    * @param {Buffer|Stream} audioData - Audio file data or file path
    * @param {Object} options - Transcription options
    * @param {string} options.language - Language code ('en', 'es', etc.)
@@ -82,7 +82,7 @@ class TranscriptionClient {
           // Both failed
           throw new Error(
             `Transcription failed. Primary (${this.primaryProvider}): ${primaryError.message}. ` +
-            `Fallback (${this.fallbackProvider}): ${fallbackError.message}`
+              `Fallback (${this.fallbackProvider}): ${fallbackError.message}`,
           );
         }
       }
@@ -108,7 +108,7 @@ class TranscriptionClient {
    */
   async transcribeWithWhisper(audioData, options) {
     const client = this.fallbackClient || this.primaryClient;
-    
+
     // Whisper expects a File object or form data
     const formData = {
       file: audioData,
@@ -141,7 +141,7 @@ class TranscriptionClient {
     ];
 
     const errorMessage = error.message.toLowerCase();
-    return fallbackReasons.some(reason => errorMessage.includes(reason));
+    return fallbackReasons.some((reason) => errorMessage.includes(reason));
   }
 
   /**
@@ -190,7 +190,7 @@ function createTranscriptionClient(config) {
       primaryClient = createAzureSpeechClient(
         azureSpeechApiKey,
         azureSpeechRegion,
-        preferredLanguage
+        preferredLanguage,
       );
       primaryProvider = TranscriptionProvider.AZURE_SPEECH;
     } catch (error) {
@@ -202,7 +202,7 @@ function createTranscriptionClient(config) {
   if (openaiApiKey) {
     try {
       const whisperClient = createWhisperClient(openaiApiKey);
-      
+
       if (primaryClient) {
         // Use as fallback
         fallbackClient = whisperClient;
@@ -219,16 +219,11 @@ function createTranscriptionClient(config) {
 
   if (!primaryClient) {
     throw new Error(
-      'No transcription provider available. Configure either Azure Speech or OpenAI Whisper.'
+      'No transcription provider available. Configure either Azure Speech or OpenAI Whisper.',
     );
   }
 
-  return new TranscriptionClient(
-    primaryClient,
-    primaryProvider,
-    fallbackClient,
-    fallbackProvider
-  );
+  return new TranscriptionClient(primaryClient, primaryProvider, fallbackClient, fallbackProvider);
 }
 
 module.exports = {

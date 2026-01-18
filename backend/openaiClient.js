@@ -1,12 +1,12 @@
 /**
  * OpenAI Client Module - Chat Completions Only
- * 
+ *
  * Strategy:
  * - Chat Completions: OpenAI (Primary) - gpt-4o-mini (~$0.23/month)
- * 
+ *
  * Note: Embeddings → services/embeddings.js (Azure primary, OpenAI fallback)
  *       Transcription → services/transcription.js (Azure Speech primary, Whisper fallback)
- * 
+ *
  * @module openaiClient
  */
 
@@ -308,14 +308,11 @@ Using the selected text, the previous conversation, any attached files/images, a
   } else if (hasAttachments && (!hasSelection || selectionIsShort)) {
     userTextContent = `Analyze the attached files/images as the primary source of context. The selected text is minimal or missing, so treat it as optional background. Return ONLY the structured JSON response described in the system message.${attachmentContext}`;
   } else {
-    userTextContent =
-      `Analyze the selected text${attachmentContext ? ' and the attached files/images' : ''} and return the structured JSON response described in the system message.${attachmentContext}`;
+    userTextContent = `Analyze the selected text${attachmentContext ? ' and the attached files/images' : ''} and return the structured JSON response described in the system message.${attachmentContext}`;
   }
 
   // Check if we have image attachments for vision
-  const imageAttachments = (attachments || []).filter(
-    (a) => a.type === 'image' && a.base64,
-  );
+  const imageAttachments = (attachments || []).filter((a) => a.type === 'image' && a.base64);
 
   // Build user message - use multimodal format if we have images
   if (imageAttachments.length > 0) {
@@ -323,7 +320,8 @@ Using the selected text, the previous conversation, any attached files/images, a
     const contentParts = [{ type: 'text', text: userTextContent }];
 
     // Add image parts
-    for (const img of imageAttachments.slice(0, 4)) { // Limit to 4 images
+    for (const img of imageAttachments.slice(0, 4)) {
+      // Limit to 4 images
       contentParts.push({
         type: 'image_url',
         image_url: {
@@ -372,9 +370,7 @@ async function generateLockInResponse(options) {
   const { selection, mode, chatHistory = [], newUserMessage } = options;
 
   const baseHistory = sanitizeHistory(chatHistory);
-  let messages = baseHistory.length
-    ? baseHistory
-    : buildInitialHistory({ selection, mode });
+  let messages = baseHistory.length ? baseHistory : buildInitialHistory({ selection, mode });
 
   // Always replace or add the system message to ensure the current mode directive is used
   const systemMessage = buildSystemMessage({

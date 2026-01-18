@@ -104,8 +104,8 @@ export function PrivacyNotice({ storage = defaultStorage, compact = false }: Pri
           <strong>Privacy Notice</strong>
         </div>
         <p className="lockin-privacy-message">
-          We store the source URL (without sensitive parameters like session tokens) and page title 
-          to show where your summaries came from. Course codes and week numbers are extracted 
+          We store the source URL (without sensitive parameters like session tokens) and page title
+          to show where your summaries came from. Course codes and week numbers are extracted
           locally and only used for organizing your notes.
         </p>
         <ul className="lockin-privacy-list">
@@ -135,8 +135,8 @@ export function PrivacyFooter() {
     <div className="lockin-privacy-footer">
       <span className="lockin-privacy-icon">🔒</span>
       <span className="lockin-privacy-text">
-        We store sanitized URLs and page titles to show where your content came from. 
-        Course codes are extracted locally for organization.
+        We store sanitized URLs and page titles to show where your content came from. Course codes
+        are extracted locally for organization.
       </span>
     </div>
   );
