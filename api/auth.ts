@@ -149,7 +149,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
 
   async function readStorage(): Promise<AuthSession | null> {
     try {
-      const data = await storage.get(sessionStorageKey);
+      const data = await storage.get<AuthSession | null>(sessionStorageKey);
       return data[sessionStorageKey] || null;
     } catch (error) {
       logger.error('Auth storage read error', error);
@@ -332,9 +332,10 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
   }
 
   // Listen to storage changes
-  storage.onChanged((changes, areaName) => {
+  storage.onChanged<AuthSession | null>((changes, areaName) => {
     if (areaName === 'sync' && changes[sessionStorageKey]) {
-      notify(changes[sessionStorageKey].newValue || null);
+      const nextSession = changes[sessionStorageKey].newValue ?? null;
+      notify(nextSession);
     }
   });
 

@@ -190,7 +190,7 @@ Run this checklist:
 | ----------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------- |
 | Content script not loading          | Manifest `content_scripts` misconfigured, URL pattern mismatch    | Check `manifest.json` matches patterns                |
 | `undefined` globals                 | Build didn't run, or `contentLibs.js` not injected before sidebar | Run `npm run build`, check injection order            |
-| API calls failing                   | Backend URL wrong, CORS issue, auth token missing                 | Check `config.js`, backend logs, network tab          |
+| API calls failing                   | Backend URL wrong, CORS issue, auth token missing                 | Check `.env` (VITE_BACKEND_URL_*), rebuild config.js, backend logs, network tab |
 | Sidebar blank                       | React/Preact not bundled, missing entry point                     | Check `extension/dist/ui/` has built files            |
 | "Cannot read property of undefined" | Missing dependency injection, adapter not registered              | Check adapter registration in `integrations/index.ts` |
 | State not persisting                | `chrome.storage` permissions missing, storage key mismatch        | Check `manifest.json` permissions, storage keys       |

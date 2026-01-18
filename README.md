@@ -42,7 +42,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 **Shared Modules:**
 
-- `config.js` - Runtime configuration (backend URL, Supabase credentials)
+- `config.js` - Runtime configuration (generated from `.env` via Vite for backend URL + Supabase credentials)
 - `messaging.js` - Typed message system for extension communication
 - `storage.js` - Wrapper for chrome.storage operations
 - `dist/libs/initApi.js` - Bundled `/api` TypeScript client/auth (exposes `window.LockInAPI` + `window.LockInAuth`)
@@ -98,25 +98,30 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 ### 2. Chrome Extension Setup
 
-1. Configure `extension/config.js`:
+1. Create a root `.env` (see `.env.example`):
 
-   ```javascript
-   window.LOCKIN_CONFIG = {
-     BACKEND_URL: 'http://localhost:3000',
-     SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
-     SUPABASE_ANON_KEY: 'your-anon-key',
-   };
+   ```bash
+   VITE_APP_ENV=development
+   VITE_SUPABASE_URL_DEV=https://your-dev-project.supabase.co
+   VITE_SUPABASE_ANON_KEY_DEV=your-dev-anon-key
+   VITE_BACKEND_URL_DEV=http://localhost:3000
    ```
 
-2. Open Chrome and navigate to `chrome://extensions/`
+2. Build the extension so `extension/config.js` is generated:
 
-3. Enable "Developer mode" (toggle in top-right corner)
+   ```bash
+   npm run build
+   ```
 
-4. Click "Load unpacked"
+3. Open Chrome and navigate to `chrome://extensions/`
 
-5. Select the `extension` folder
+4. Enable "Developer mode" (toggle in top-right corner)
 
-6. The Lock-in extension should now appear in your extensions list!
+5. Click "Load unpacked"
+
+6. Select the `extension` folder
+
+7. The Lock-in extension should now appear in your extensions list!
 
 ### 3. Usage
 
@@ -248,11 +253,11 @@ The extension follows best practices:
 - **Solution**:
   1. Check that backend is running on `http://localhost:3000`
   2. Check Chrome DevTools Console for errors (F12)
-  3. Verify `BACKEND_URL` in `config.js` matches your backend
+  3. Verify `VITE_BACKEND_URL_DEV` in `.env` matches your backend and rebuild
 
 **Problem**: Authentication not working
 
-- **Solution**: Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `config.js`
+- **Solution**: Verify `VITE_SUPABASE_URL_DEV` and `VITE_SUPABASE_ANON_KEY_DEV` in `.env` and rebuild
 
 ## License
 

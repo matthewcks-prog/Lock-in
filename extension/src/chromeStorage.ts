@@ -12,7 +12,7 @@ import type { StorageInterface } from '../../core/storage/storageInterface';
  * Uses chrome.storage.sync for cross-device persistence
  */
 export const chromeStorage: StorageInterface = {
-  async get<T = any>(key: string | string[]): Promise<Record<string, T>> {
+  async get<T = unknown>(key: string | string[]): Promise<Record<string, T>> {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.sync.get(key, (result) => {
@@ -28,7 +28,7 @@ export const chromeStorage: StorageInterface = {
     });
   },
 
-  async set(data: Record<string, any>): Promise<void> {
+  async set<T = unknown>(data: Record<string, T>): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.sync.set(data, () => {
@@ -60,9 +60,9 @@ export const chromeStorage: StorageInterface = {
     });
   },
 
-  onChanged(
+  onChanged<T = unknown>(
     callback: (
-      changes: Record<string, { oldValue?: any; newValue?: any }>,
+      changes: Record<string, { oldValue?: T; newValue?: T }>,
       areaName: string,
     ) => void,
   ): () => void {
@@ -71,7 +71,7 @@ export const chromeStorage: StorageInterface = {
       areaName: string,
     ) => {
       // Convert Chrome's StorageChange format to our interface format
-      const normalizedChanges: Record<string, { oldValue?: any; newValue?: any }> = {};
+      const normalizedChanges: Record<string, { oldValue?: T; newValue?: T }> = {};
       for (const key in changes) {
         normalizedChanges[key] = {
           oldValue: changes[key].oldValue,
@@ -95,7 +95,7 @@ export const chromeStorage: StorageInterface = {
  * Uses chrome.storage.local for larger, device-specific data
  */
 export const chromeLocalStorage: StorageInterface = {
-  async get<T = any>(key: string | string[]): Promise<Record<string, T>> {
+  async get<T = unknown>(key: string | string[]): Promise<Record<string, T>> {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.local.get(key, (result) => {
@@ -111,7 +111,7 @@ export const chromeLocalStorage: StorageInterface = {
     });
   },
 
-  async set(data: Record<string, any>): Promise<void> {
+  async set<T = unknown>(data: Record<string, T>): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.local.set(data, () => {
@@ -143,9 +143,9 @@ export const chromeLocalStorage: StorageInterface = {
     });
   },
 
-  onChanged(
+  onChanged<T = unknown>(
     callback: (
-      changes: Record<string, { oldValue?: any; newValue?: any }>,
+      changes: Record<string, { oldValue?: T; newValue?: T }>,
       areaName: string,
     ) => void,
   ): () => void {
@@ -156,7 +156,7 @@ export const chromeLocalStorage: StorageInterface = {
       // Only fire for local storage changes
       if (areaName !== 'local') return;
 
-      const normalizedChanges: Record<string, { oldValue?: any; newValue?: any }> = {};
+      const normalizedChanges: Record<string, { oldValue?: T; newValue?: T }> = {};
       for (const key in changes) {
         normalizedChanges[key] = {
           oldValue: changes[key].oldValue,

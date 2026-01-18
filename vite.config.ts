@@ -6,6 +6,7 @@ import {
   createAliases,
   createDefines,
   createIifeBuildConfig,
+  createOptionalDependencyAliases,
   ensureAsciiSafeOutput,
 } from './build/viteShared';
 
@@ -22,6 +23,13 @@ export default defineConfig(({ mode }) => {
 
   // Use production JSX runtime for builds (avoids jsxDEV not a function error)
   const isDev = mode === 'development';
+
+  const baseAliases = createAliases({ includeApi: true, includeSharedUi: true });
+  const optionalAliases = createOptionalDependencyAliases();
+  const aliasEntries = [
+    ...optionalAliases,
+    ...Object.entries(baseAliases).map(([find, replacement]) => ({ find, replacement })),
+  ];
 
   return {
     define: createDefines(mode),
@@ -62,7 +70,7 @@ export default defineConfig(({ mode }) => {
       fileName: 'index.js',
     }),
     resolve: {
-      alias: createAliases({ includeApi: true, includeSharedUi: true }),
+      alias: aliasEntries,
     },
   };
 });

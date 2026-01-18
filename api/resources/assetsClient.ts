@@ -1,5 +1,6 @@
 import type { NoteAsset } from '../../core/domain/types';
 import type { ApiRequest } from '../fetcher';
+import { validateNoteAssetRecord, validateNoteAssetRecords } from '../validation';
 
 export interface UploadNoteAssetParams {
   noteId: string;
@@ -41,12 +42,12 @@ export function createAssetsClient(apiRequest: ApiRequest) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const raw = await apiRequest<any>(`/api/notes/${noteId}/assets`, {
+    const raw = await apiRequest<unknown>(`/api/notes/${noteId}/assets`, {
       method: 'POST',
       body: formData,
     });
 
-    return mapNoteAsset(raw);
+    return mapNoteAsset(validateNoteAssetRecord(raw, 'uploadNoteAsset'));
   }
 
   async function listNoteAssets(params: ListNoteAssetsParams): Promise<NoteAsset[]> {
@@ -55,11 +56,11 @@ export function createAssetsClient(apiRequest: ApiRequest) {
       throw new Error('noteId is required to list assets');
     }
 
-    const raw = await apiRequest<any[]>(`/api/notes/${noteId}/assets`, {
+    const raw = await apiRequest<unknown>(`/api/notes/${noteId}/assets`, {
       method: 'GET',
     });
 
-    return raw.map(mapNoteAsset);
+    return validateNoteAssetRecords(raw, 'listNoteAssets').map(mapNoteAsset);
   }
 
   async function deleteNoteAsset(params: DeleteNoteAssetParams): Promise<void> {

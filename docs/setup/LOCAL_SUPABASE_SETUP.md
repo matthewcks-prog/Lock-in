@@ -243,19 +243,20 @@ npm run backend:start
 
 ## Step 8: Configure Extension for Local Supabase
 
-**Update `extension/config.js` (for local testing only):**
+**Update the root `.env` (for local testing only):**
 
-```javascript
-// Temporary: Point to local Supabase
-url: 'http://localhost:54321',
-anonKey: 'eyJhbGci...',  // From supabase start output
+```bash
+VITE_APP_ENV=development
+VITE_SUPABASE_URL_DEV=http://localhost:54321
+VITE_SUPABASE_ANON_KEY_DEV=eyJhbGci...
+VITE_BACKEND_URL_DEV=http://localhost:3000
 ```
 
-**Important:**
+Rebuild the extension after updating `.env`:
 
-- Do NOT commit this change
-- Only for local extension testing
-- Revert before building for deployment
+```bash
+npm run build
+```
 
 ---
 
@@ -431,7 +432,7 @@ supabase start
 # 2. Run backend pointing to local
 npm run backend:start
 
-# 3. Load extension (already points to local in config.js)
+# 3. Load extension (after running npm run build with local env)
 # Open Chrome -> Load unpacked -> extension/
 
 # 4. Develop features, test locally

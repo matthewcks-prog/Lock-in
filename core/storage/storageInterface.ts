@@ -16,12 +16,12 @@ export interface StorageInterface {
   /**
    * Get value(s) from storage
    */
-  get<T = any>(key: string | string[]): Promise<Record<string, T>>;
+  get<T = unknown>(key: string | string[]): Promise<Record<string, T>>;
 
   /**
    * Set value(s) in storage
    */
-  set(data: Record<string, any>): Promise<void>;
+  set<T = unknown>(data: Record<string, T>): Promise<void>;
 
   /**
    * Remove key(s) from storage
@@ -31,9 +31,9 @@ export interface StorageInterface {
   /**
    * Listen for storage changes
    */
-  onChanged(
+  onChanged<T = unknown>(
     callback: (
-      changes: Record<string, { oldValue?: any; newValue?: any }>,
+      changes: Record<string, { oldValue?: T; newValue?: T }>,
       areaName: string,
     ) => void,
   ): () => void;
@@ -43,7 +43,7 @@ export interface StorageInterface {
  * Local storage interface (for per-tab or temporary data)
  */
 export interface LocalStorageInterface {
-  get<T = any>(key: string | string[]): Promise<Record<string, T>>;
-  set(data: Record<string, any>): Promise<void>;
+  get<T = unknown>(key: string | string[]): Promise<Record<string, T>>;
+  set<T = unknown>(data: Record<string, T>): Promise<void>;
   remove(keys: string | string[]): Promise<void>;
 }

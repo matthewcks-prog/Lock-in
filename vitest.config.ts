@@ -1,14 +1,16 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'node:path';
+import { createOptionalDependencyAliases } from './build/viteShared';
 
 export default defineConfig({
   resolve: {
-    alias: {
-      '@core': resolve(process.cwd(), 'core'),
-      '@api': resolve(process.cwd(), 'api'),
-      '@shared/ui': resolve(process.cwd(), 'shared/ui'),
-      '@ui': resolve(process.cwd(), 'ui'),
-    },
+    alias: [
+      ...createOptionalDependencyAliases(),
+      { find: '@core', replacement: resolve(process.cwd(), 'core') },
+      { find: '@api', replacement: resolve(process.cwd(), 'api') },
+      { find: '@shared/ui', replacement: resolve(process.cwd(), 'shared/ui') },
+      { find: '@ui', replacement: resolve(process.cwd(), 'ui') },
+    ],
   },
   test: {
     environment: 'jsdom',
