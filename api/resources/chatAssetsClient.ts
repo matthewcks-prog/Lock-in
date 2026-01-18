@@ -6,6 +6,7 @@
  */
 
 import type { ApiRequest } from '../fetcher';
+import { validateChatAssetRecord, validateChatAssetRecords } from '../validation';
 
 export interface ChatAsset {
   id: string;
@@ -37,9 +38,9 @@ function mapChatAsset(raw: any): ChatAsset {
     messageId: raw.messageId || raw.message_id || null,
     type: raw.type,
     mimeType: raw.mimeType || raw.mime_type,
-    fileName: raw.fileName || raw.file_name || null,
-    fileSize: raw.fileSize || raw.file_size || null,
-    url: raw.url || null,
+    fileName: raw.fileName ?? raw.file_name ?? null,
+    fileSize: raw.fileSize ?? raw.file_size ?? null,
+    url: raw.url ?? null,
     createdAt: raw.createdAt || raw.created_at,
   };
 }
@@ -62,12 +63,12 @@ export function createChatAssetsClient(apiRequest: ApiRequest) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const raw = await apiRequest<any>(`/api/chats/${chatId}/assets`, {
+    const raw = await apiRequest<unknown>(`/api/chats/${chatId}/assets`, {
       method: 'POST',
       body: formData,
     });
 
-    return mapChatAsset(raw);
+    return mapChatAsset(validateChatAssetRecord(raw, 'uploadChatAsset'));
   }
 
   /**
@@ -81,11 +82,11 @@ export function createChatAssetsClient(apiRequest: ApiRequest) {
       throw new Error('chatId is required to list assets');
     }
 
-    const raw = await apiRequest<any[]>(`/api/chats/${chatId}/assets`, {
+    const raw = await apiRequest<unknown>(`/api/chats/${chatId}/assets`, {
       method: 'GET',
     });
 
-    return raw.map(mapChatAsset);
+    return validateChatAssetRecords(raw, 'listChatAssets').map(mapChatAsset);
   }
 
   /**

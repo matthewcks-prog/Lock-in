@@ -1,6 +1,6 @@
 # Refactor Plan (Audit Refresh)
 
-Last updated: 2026-01-19
+Last updated: 2026-01-18
 
 This plan is based on direct repository inspection. Items are prioritized for stability and scalability and grouped into phased work. Use the acceptance criteria to verify completion before moving on.
 
@@ -8,7 +8,7 @@ This plan is based on direct repository inspection. Items are prioritized for st
 
 ## Phase 0 — Safety + Correctness (blockers before feature work)
 
-- [ ] **Remove hardcoded Supabase anon keys from the extension bundle**
+- [x] **Remove hardcoded Supabase anon keys from the extension bundle**
   - **Problem:** `extension/config.js` embeds Supabase anon keys in source, which makes rotation and environment separation brittle.
   - **Files/areas:** `extension/config.js`, build-time env injection (Vite defines), extension build pipeline.
   - **Proposed change:** Move anon keys to build-time environment variables with explicit dev/prod defaults in `.env`/`.env.example`; ensure `config.js` reads from injected constants only.
@@ -16,7 +16,7 @@ This plan is based on direct repository inspection. Items are prioritized for st
   - **Risk/migration:** Requires coordinating build pipeline updates and extension deployment scripts.
   - **Confidence:** HIGH.
 
-- [ ] **Add runtime validation at API boundaries**
+- [x] **Add runtime validation at API boundaries**
   - **Problem:** API responses are cast to `T` without validation, risking runtime exceptions and hidden contract drift.
   - **Files/areas:** `api/fetcher.ts`, resource clients under `api/resources/`, domain types in `core/domain/`.
   - **Proposed change:** Introduce lightweight schema validation (e.g., zod) for critical responses or implement per-client type guards; return validated types or throw `ValidationError` with context.
@@ -24,7 +24,7 @@ This plan is based on direct repository inspection. Items are prioritized for st
   - **Risk/migration:** Requires touchpoints across API clients and tests; avoid breaking response shapes.
   - **Confidence:** MED.
 
-- [ ] **Tighten storage interface typing**
+- [x] **Tighten storage interface typing**
   - **Problem:** `StorageInterface` and `LocalStorageInterface` use `any`, propagating untyped data across core/extension code.
   - **Files/areas:** `core/storage/storageInterface.ts`, storage wrappers in `extension/` and usage sites.
   - **Proposed change:** Replace `any` with generics and explicit change record types (`Record<string, { oldValue?: unknown; newValue?: unknown }>`); update callers accordingly.
@@ -114,4 +114,3 @@ This plan is based on direct repository inspection. Items are prioritized for st
 - [ ] Each phase has an owner and scope defined.
 - [ ] Keep `npm run check` green after each task.
 - [ ] Update `docs/tracking/PROMPT_LOG.md` for each refactor-prep session.
-

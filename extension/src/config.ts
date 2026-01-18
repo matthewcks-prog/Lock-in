@@ -1,0 +1,90 @@
+/**
+ * Extension Runtime Configuration
+ *
+ * Environment-aware configuration injected at build time via Vite.
+ * Set VITE_APP_ENV=production for prod builds, defaults to development.
+ *
+ * Build commands:
+ * - Development: npm run build (uses DEV Supabase)
+ * - Production: VITE_APP_ENV=production npm run build (uses PROD Supabase)
+ */
+(function () {
+  type LockInConfig = {
+    APP_ENV: string;
+    IS_PRODUCTION: boolean;
+    BACKEND_URL: string;
+    SUPABASE_URL: string;
+    SUPABASE_ANON_KEY: string;
+    SUPABASE_ENVIRONMENT: 'development' | 'production';
+    SESSION_STORAGE_KEY: string;
+    TOKEN_EXPIRY_BUFFER_MS: number;
+    DEBUG_PANOPTO_RESOLVER: boolean;
+    DEBUG?: string;
+    SENTRY_DSN?: string;
+  };
+
+  const root = (typeof window !== 'undefined' ? window : self) as typeof globalThis & {
+    LOCKIN_CONFIG?: LockInConfig;
+  };
+  if (root.LOCKIN_CONFIG) {
+    return;
+  }
+
+  const appEnv = (import.meta.env.VITE_APP_ENV || 'development').toLowerCase();
+  const isProduction = appEnv === 'production';
+
+  const configByEnv = {
+    development: {
+      url: import.meta.env.VITE_SUPABASE_URL_DEV || '',
+      anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_DEV || '',
+      environment: 'development',
+      backendUrl: import.meta.env.VITE_BACKEND_URL_DEV || 'http://localhost:3000',
+    },
+    production: {
+      url: import.meta.env.VITE_SUPABASE_URL_PROD || '',
+      anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_PROD || '',
+      environment: 'production',
+      backendUrl:
+        import.meta.env.VITE_BACKEND_URL_PROD ||
+        'https://lock-in-backend.australiaeast.azurecontainerapps.io',
+    },
+  } as const;
+
+  const supabaseConfig = isProduction ? configByEnv.production : configByEnv.development;
+  const missingEnvVars: string[] = [];
+
+  if (!supabaseConfig.url) {
+    missingEnvVars.push(isProduction ? 'VITE_SUPABASE_URL_PROD' : 'VITE_SUPABASE_URL_DEV');
+  }
+  if (!supabaseConfig.anonKey) {
+    missingEnvVars.push(
+      isProduction ? 'VITE_SUPABASE_ANON_KEY_PROD' : 'VITE_SUPABASE_ANON_KEY_DEV',
+    );
+  }
+
+  root.LOCKIN_CONFIG = {
+    APP_ENV: appEnv,
+    IS_PRODUCTION: isProduction,
+    BACKEND_URL: supabaseConfig.backendUrl,
+    SUPABASE_URL: supabaseConfig.url,
+    SUPABASE_ANON_KEY: supabaseConfig.anonKey,
+    SUPABASE_ENVIRONMENT: supabaseConfig.environment,
+    SESSION_STORAGE_KEY: 'lockinSupabaseSession',
+    TOKEN_EXPIRY_BUFFER_MS: 60000,
+    DEBUG_PANOPTO_RESOLVER: !isProduction,
+    DEBUG: import.meta.env.VITE_DEBUG || undefined,
+    SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN || undefined,
+  };
+
+  if (missingEnvVars.length > 0 && typeof console !== 'undefined') {
+    console.warn('[Lock-in] Missing extension env vars:', missingEnvVars);
+  }
+
+  if (!isProduction && typeof console !== 'undefined') {
+    console.log('[Lock-in] Extension config loaded:', {
+      environment: appEnv,
+      supabase: supabaseConfig.environment,
+      backendUrl: root.LOCKIN_CONFIG.BACKEND_URL,
+    });
+  }
+})();

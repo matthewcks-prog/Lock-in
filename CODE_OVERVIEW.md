@@ -23,7 +23,8 @@ This is a living overview of the current codebase. Update it whenever files move
   - Chrome Extension manifest (permissions, content scripts, background service worker, icons).
 
 - **`config.js`**
-  - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key).
+  - Generated from `extension/src/config.ts` during build.
+  - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key) from `.env`-driven `VITE_*` values.
   - Single source of truth for runtime URLs.
 
 - **`contentScript-react.js`**
@@ -244,7 +245,7 @@ This is a living overview of the current codebase. Update it whenever files move
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
 8. **Transcript extraction**: Captions-first flow for Panopto/Echo360/HTML5. Panopto caption URLs are extracted from embed HTML; Echo360 uses JSON transcript endpoint (primary) with VTT/TXT fallback, and integrates with syllabus API for section pages. If captions are missing, `PanoptoMediaResolver` resolves podcast/download URLs (viewer/embed HTML + MAIN-world probe + range validation) and the background AI pipeline uploads media to the backend. UI shows the video list and exposes AI fallback when captions are unavailable.
 9. **Cross-tab sync**: `useCrossTabSync` uses `chrome.storage.local` as a lightweight event bus to refresh notes/chat state across tabs without duplicating feature-specific wiring.
-10. **Error Tracking (Sentry)**: Uses browser extension pattern with isolated `BrowserClient` + `Scope` (not `Sentry.init()`) per [Sentry best practices](https://docs.sentry.io/platforms/javascript/best-practices/browser-extensions/). Located in `extension/src/sentry.ts`, initialized in sidebar bundle. Captures errors via `scope.captureException()`. Privacy-focused: request bodies, auth headers, and query params are stripped; user context is not attached to error events. DSN configured in `extension/config.js`.
+10. **Error Tracking (Sentry)**: Uses browser extension pattern with isolated `BrowserClient` + `Scope` (not `Sentry.init()`) per [Sentry best practices](https://docs.sentry.io/platforms/javascript/best-practices/browser-extensions/). Located in `extension/src/sentry.ts`, initialized in sidebar bundle. Captures errors via `scope.captureException()`. Privacy-focused: request bodies, auth headers, and query params are stripped; user context is not attached to error events. DSN configured in `extension/config.js` via `VITE_SENTRY_DSN` at build time.
 11. **Feedback System**: Structured user feedback via `FeedbackModal` in sidebar. Backend at `POST /api/feedback`, types in `core/domain/types.ts` and `api/resources/feedbackClient.ts`, stored in `feedback` table with RLS.
 
 ### Backend
@@ -252,7 +253,7 @@ This is a living overview of the current codebase. Update it whenever files move
 1. **Layered architecture**: Routes -> Controllers -> Repository -> Database.
 2. **Middleware chain**: Auth -> Rate Limit -> Validation -> Handler.
 3. **Centralized error handling**: `middleware/errorHandler.js` provides consistent error responses with proper codes and status mapping.
-4. **Configuration**: All env vars accessed through `config.js`.
+4. **Configuration**: All extension env vars accessed through `extension/config.js` (generated from `extension/src/config.ts` with Vite `VITE_*` env injection).
 5. **Optimistic locking**: Notes support `If-Unmodified-Since` header for conflict detection.
 6. **Input validation**: UUID validation, content length limits, tag sanitization.
 

@@ -91,7 +91,6 @@ const isDevelopment = isDevelopmentBuild();
  * Vite replaces this with the actual DSN string at build time via the define config.
  * We use a separate constant to avoid complex typeof checks on import.meta which break in service workers.
  */
-// @ts-expect-error - Vite replaces this at build time
 const BUILD_TIME_DSN: string = import.meta.env.VITE_SENTRY_DSN;
 
 /**
@@ -107,8 +106,9 @@ function getSentryDsn(): string | undefined {
   }
 
   // Fallback: LOCKIN_CONFIG (for popup/content script where config.js loads first)
-  // @ts-expect-error LOCKIN_CONFIG
-  const configDsn = globalContext.LOCKIN_CONFIG?.SENTRY_DSN;
+  const configDsn = (
+    globalContext as typeof globalThis & { LOCKIN_CONFIG?: { SENTRY_DSN?: string } }
+  ).LOCKIN_CONFIG?.SENTRY_DSN;
   if (configDsn && configDsn !== '__SENTRY_DSN__' && configDsn !== '') {
     return configDsn;
   }

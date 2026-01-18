@@ -1,5 +1,5 @@
 import { resolve } from "path";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { PluginOption, UserConfig } from "vite";
 
 type AliasOptions = {
@@ -52,6 +52,37 @@ export function createAliases(options: AliasOptions = {}): Record<string, string
   }
 
   return aliases;
+}
+
+export function createOptionalDependencyAliases(): Array<{
+  find: string | RegExp;
+  replacement: string;
+}> {
+  const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const optionalAliases: Array<{ pkg: string; stub: string }> = [
+    {
+      pkg: "react-syntax-highlighter/dist/esm/styles/prism",
+      stub: "tools/stubs/react-syntax-highlighter-prism.ts",
+    },
+    { pkg: "react-syntax-highlighter", stub: "tools/stubs/react-syntax-highlighter.tsx" },
+    { pkg: "react-markdown", stub: "tools/stubs/react-markdown.tsx" },
+    { pkg: "remark-gfm", stub: "tools/stubs/remark-gfm.ts" },
+  ];
+
+  return optionalAliases.reduce<Array<{ find: string | RegExp; replacement: string }>>(
+    (aliases, { pkg, stub }) => {
+      const packageRoot = pkg.split("/")[0];
+      const packageJsonPath = resolve(process.cwd(), "node_modules", packageRoot, "package.json");
+      if (!existsSync(packageJsonPath)) {
+        aliases.push({
+          find: new RegExp(`^${escapeRegex(pkg)}$`),
+          replacement: resolve(process.cwd(), stub),
+        });
+      }
+      return aliases;
+    },
+    [],
+  );
 }
 
 export function ensureAsciiSafeOutput(

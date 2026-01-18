@@ -1,4 +1,9 @@
 import type { ApiRequest, ApiRequestOptions } from '../fetcher';
+import {
+  validateNoteRecord,
+  validateNoteRecords,
+  validateNotesChatResponse,
+} from '../validation';
 
 export interface ListNotesParams {
   sourceUrl?: string;
@@ -41,27 +46,29 @@ export function createNotesClient(apiRequest: ApiRequest) {
   async function createNote(
     note: NotePayload & { title: string },
     options?: ApiRequestOptions,
-  ): Promise<any> {
-    return apiRequest<any>('/api/notes', {
+  ): Promise<Record<string, unknown>> {
+    const raw = await apiRequest<unknown>('/api/notes', {
       method: 'POST',
       body: JSON.stringify(note),
       ...options,
     });
+    return validateNoteRecord(raw, 'createNote');
   }
 
   async function updateNote(
     noteId: string,
     note: NotePayload,
     options?: ApiRequestOptions,
-  ): Promise<any> {
+  ): Promise<Record<string, unknown>> {
     if (!noteId) {
       throw new Error('noteId is required to update a note');
     }
-    return apiRequest<any>(`/api/notes/${noteId}`, {
+    const raw = await apiRequest<unknown>(`/api/notes/${noteId}`, {
       method: 'PUT',
       body: JSON.stringify(note),
       ...options,
     });
+    return validateNoteRecord(raw, 'updateNote');
   }
 
   async function deleteNote(noteId: string): Promise<void> {
@@ -73,26 +80,31 @@ export function createNotesClient(apiRequest: ApiRequest) {
     });
   }
 
-  async function toggleNoteStar(noteId: string): Promise<any> {
+  async function toggleNoteStar(noteId: string): Promise<Record<string, unknown>> {
     if (!noteId) {
       throw new Error('noteId is required to toggle star');
     }
-    return apiRequest<any>(`/api/notes/${noteId}/star`, {
+    const raw = await apiRequest<unknown>(`/api/notes/${noteId}/star`, {
       method: 'PATCH',
     });
+    return validateNoteRecord(raw, 'toggleNoteStar');
   }
 
-  async function setNoteStar(noteId: string, isStarred: boolean): Promise<any> {
+  async function setNoteStar(
+    noteId: string,
+    isStarred: boolean,
+  ): Promise<Record<string, unknown>> {
     if (!noteId) {
       throw new Error('noteId is required to set star');
     }
-    return apiRequest<any>(`/api/notes/${noteId}/star`, {
+    const raw = await apiRequest<unknown>(`/api/notes/${noteId}/star`, {
       method: 'PUT',
       body: JSON.stringify({ isStarred }),
     });
+    return validateNoteRecord(raw, 'setNoteStar');
   }
 
-  async function listNotes(params: ListNotesParams = {}): Promise<any[]> {
+  async function listNotes(params: ListNotesParams = {}): Promise<Record<string, unknown>[]> {
     const { sourceUrl, courseCode, limit = 50 } = params;
     const queryParams = new URLSearchParams();
     if (sourceUrl) queryParams.set('sourceUrl', sourceUrl);
@@ -100,28 +112,32 @@ export function createNotesClient(apiRequest: ApiRequest) {
     if (limit) queryParams.set('limit', String(limit));
 
     const endpoint = `/api/notes${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return apiRequest<any[]>(endpoint, {
+    const raw = await apiRequest<unknown>(endpoint, {
       method: 'GET',
     });
+    return validateNoteRecords(raw, 'listNotes');
   }
 
-  async function searchNotes(params: SearchNotesParams): Promise<any[]> {
+  async function searchNotes(params: SearchNotesParams): Promise<Record<string, unknown>[]> {
     const { query, courseCode, k = 10 } = params;
     const queryParams = new URLSearchParams({ q: query, k: String(k) });
     if (courseCode) queryParams.set('courseCode', courseCode);
 
-    return apiRequest<any[]>(`/api/notes/search?${queryParams.toString()}`, {
+    const raw = await apiRequest<unknown>(`/api/notes/search?${queryParams.toString()}`, {
       method: 'GET',
     });
+    return validateNoteRecords(raw, 'searchNotes');
   }
 
-  async function chatWithNotes(
-    params: ChatWithNotesParams,
-  ): Promise<{ answer: string; usedNotes: any[] }> {
-    return apiRequest<{ answer: string; usedNotes: any[] }>('/api/notes/chat', {
+  async function chatWithNotes(params: ChatWithNotesParams): Promise<{
+    answer: string;
+    usedNotes: Record<string, unknown>[];
+  }> {
+    const raw = await apiRequest<unknown>('/api/notes/chat', {
       method: 'POST',
       body: JSON.stringify({ query: params.query, courseCode: params.courseCode, k: params.k }),
     });
+    return validateNotesChatResponse(raw, 'chatWithNotes');
   }
 
   return {

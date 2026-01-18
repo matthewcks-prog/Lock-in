@@ -388,5 +388,4 @@ If issues persist:
 - **Info**: Normal operation
 - **Debug**: Detailed debugging (requires `DEBUG=true` in config)
 
-Enable debug logging by setting `DEBUG=true` in `extension/config.js` or via extension settings.
-
+Enable debug logging by setting `VITE_DEBUG=true` in the root `.env` and rebuilding the extension config.

@@ -1,9 +1,15 @@
 import type { ApiRequest } from '../fetcher';
 import chatLimits from '@core/config/chatLimits.json';
+import {
+  validateChatListResponse,
+  validateChatMessages,
+  validateChatRecord,
+  validateChatTitleResponse,
+} from '../validation';
 
 export function createChatsClient(apiRequest: ApiRequest) {
   interface ChatListResponse {
-    chats: any[];
+    chats: Record<string, unknown>[];
     pagination: {
       hasMore: boolean;
       nextCursor?: string | null;
@@ -11,19 +17,17 @@ export function createChatsClient(apiRequest: ApiRequest) {
   }
 
   async function createChat(params: { title?: string; initialMessage?: string } = {}) {
-    return apiRequest<{
-      id: string;
-      title: string | null;
-      createdAt: string;
-      updatedAt: string;
-      lastMessageAt: string | null;
-    }>('/api/chats', {
+    const raw = await apiRequest<unknown>('/api/chats', {
       method: 'POST',
       body: JSON.stringify(params),
     });
+    return validateChatRecord(raw, 'createChat');
   }
 
-  async function getRecentChats(params: { limit?: number; cursor?: string | null } = {}): Promise<ChatListResponse> {
+  async function getRecentChats(params: {
+    limit?: number;
+    cursor?: string | null;
+  } = {}): Promise<ChatListResponse> {
     const defaultLimit = Number(chatLimits.DEFAULT_CHAT_LIST_LIMIT) || 20;
     const { limit = defaultLimit, cursor } = params;
     const queryParams = new URLSearchParams();
@@ -35,19 +39,21 @@ export function createChatsClient(apiRequest: ApiRequest) {
     }
 
     const endpoint = `/api/chats${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return apiRequest<ChatListResponse>(endpoint, {
+    const raw = await apiRequest<unknown>(endpoint, {
       method: 'GET',
     });
+    return validateChatListResponse(raw, 'getRecentChats');
   }
 
-  async function getChatMessages(chatId: string): Promise<any[]> {
+  async function getChatMessages(chatId: string): Promise<Record<string, unknown>[]> {
     if (!chatId) {
       throw new Error('Chat ID is required');
     }
 
-    return apiRequest<any[]>(`/api/chats/${chatId}/messages`, {
+    const raw = await apiRequest<unknown>(`/api/chats/${chatId}/messages`, {
       method: 'GET',
     });
+    return validateChatMessages(raw, 'getChatMessages');
   }
 
   async function deleteChat(chatId: string): Promise<void> {
@@ -65,9 +71,10 @@ export function createChatsClient(apiRequest: ApiRequest) {
       throw new Error('Chat ID is required');
     }
 
-    return apiRequest<{ chatId: string; title: string }>(`/api/chats/${chatId}/title`, {
+    const raw = await apiRequest<unknown>(`/api/chats/${chatId}/title`, {
       method: 'POST',
     });
+    return validateChatTitleResponse(raw, 'generateChatTitle');
   }
 
   return {

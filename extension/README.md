@@ -106,18 +106,28 @@ Feedback is stored in the database for review via Supabase Studio or a future ad
 
 ### `config.js`
 
-All runtime URLs live in `extension/config.js`:
+`extension/config.js` is generated from `extension/src/config.ts` during the build and reads
+runtime configuration from `.env` values (Vite injects `VITE_*` variables).
 
-```javascript
-window.LOCKIN_CONFIG = {
-  BACKEND_URL: 'http://localhost:3000',
-  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
-  SUPABASE_ANON_KEY: 'your-anon-key',
-  // SENTRY_DSN is injected at build time via VITE_SENTRY_DSN
-};
+**Required `.env` values (development):**
+
+```bash
+VITE_APP_ENV=development
+VITE_SUPABASE_URL_DEV=https://your-dev-project.supabase.co
+VITE_SUPABASE_ANON_KEY_DEV=your-dev-anon-key
+VITE_BACKEND_URL_DEV=http://localhost:3000
 ```
 
-Update these values before loading the extension.
+**Production build values:**
+
+```bash
+VITE_APP_ENV=production
+VITE_SUPABASE_URL_PROD=https://your-prod-project.supabase.co
+VITE_SUPABASE_ANON_KEY_PROD=your-prod-anon-key
+VITE_BACKEND_URL_PROD=https://lock-in-backend.australiaeast.azurecontainerapps.io
+```
+
+Rebuild the extension after updating `.env`.
 
 ### Error Tracking (Sentry)
 
@@ -215,13 +225,13 @@ The extension follows best practices:
 ### No Response from Backend
 
 1. Verify backend is running
-2. Check `BACKEND_URL` in `config.js`
+2. Check `VITE_BACKEND_URL_DEV` / `VITE_BACKEND_URL_PROD` in `.env` and rebuild
 3. Check Network tab in DevTools
 4. Verify authentication is working
 
 ### Authentication Issues
 
-1. Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `config.js`
+1. Verify `VITE_SUPABASE_URL_*` and `VITE_SUPABASE_ANON_KEY_*` in `.env` and rebuild
 2. Check popup for error messages
 3. Try signing out and back in
 

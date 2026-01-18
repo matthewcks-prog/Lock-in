@@ -11,8 +11,15 @@
  * Application Insights needs to instrument Node.js modules before they're loaded.
  */
 
-const appInsights = require('applicationinsights');
-const pino = require('pino');
+const { existsSync } = require('node:fs');
+const { resolve } = require('node:path');
+
+const shouldLoadAppInsights = Boolean(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING);
+const appInsights = shouldLoadAppInsights ? require('applicationinsights') : null;
+
+const pinoPackagePath = resolve(__dirname, '../node_modules/pino/package.json');
+const pinoRootPath = resolve(process.cwd(), 'node_modules/pino/package.json');
+const pino = existsSync(pinoPackagePath) || existsSync(pinoRootPath) ? require('pino') : null;
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const LOG_LEVEL = process.env.LOG_LEVEL || (IS_PRODUCTION ? 'info' : 'debug');
@@ -42,6 +49,14 @@ function initApplicationInsights() {
   if (appInsightsInitialized) {
     console.log('[AppInsights] Already initialized, skipping');
     return Boolean(appInsightsClient);
+  }
+
+  if (!appInsights) {
+    if (!IS_PRODUCTION) {
+      console.log('[AppInsights] Module not loaded, skipping initialization');
+    }
+    appInsightsInitialized = true;
+    return false;
   }
 
   const connectionString = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
@@ -142,31 +157,44 @@ function trackEvent(name, properties = {}, measurements = {}) {
  * Create the base pino logger instance.
  * Configures JSON output for production, pretty output for development.
  */
-const logger = pino({
-  level: LOG_LEVEL,
-  // Base fields included in every log entry
-  base: {
-    service: 'lockin-backend',
-    env: process.env.NODE_ENV || 'development',
-  },
-  // Timestamp configuration
-  timestamp: pino.stdTimeFunctions.isoTime,
-  // Format options
-  formatters: {
-    level: (label) => ({ level: label }),
-    bindings: (bindings) => ({
-      pid: bindings.pid,
-      host: bindings.hostname,
-    }),
-  },
-  // In development, use pretty printing
-  transport: IS_PRODUCTION
-    ? undefined
-    : {
-        target: 'pino/file',
-        options: { destination: 1 }, // stdout
+function createConsoleLogger() {
+  return {
+    level: LOG_LEVEL,
+    info: console.log.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+    debug: console.debug.bind(console),
+    child: () => createConsoleLogger(),
+  };
+}
+
+const logger = pino
+  ? pino({
+      level: LOG_LEVEL,
+      // Base fields included in every log entry
+      base: {
+        service: 'lockin-backend',
+        env: process.env.NODE_ENV || 'development',
       },
-});
+      // Timestamp configuration
+      timestamp: pino.stdTimeFunctions.isoTime,
+      // Format options
+      formatters: {
+        level: (label) => ({ level: label }),
+        bindings: (bindings) => ({
+          pid: bindings.pid,
+          host: bindings.hostname,
+        }),
+      },
+      // In development, use pretty printing
+      transport: IS_PRODUCTION
+        ? undefined
+        : {
+            target: 'pino/file',
+            options: { destination: 1 }, // stdout
+          },
+    })
+  : createConsoleLogger();
 
 /**
  * Create a child logger with additional context (e.g., request ID, user ID).

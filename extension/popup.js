@@ -261,7 +261,10 @@ function initAuthSection() {
 
   if (!isSupabaseConfigured()) {
     disableAuthInputs();
-    setAuthMessage('Configure SUPABASE_URL and SUPABASE_ANON_KEY in config.js', 'error');
+    setAuthMessage(
+      'Configure VITE_SUPABASE_URL_DEV and VITE_SUPABASE_ANON_KEY_DEV in .env, then rebuild the extension.',
+      'error',
+    );
     return;
   }
 
