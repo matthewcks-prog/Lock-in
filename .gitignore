@@ -2,19 +2,16 @@
 node_modules/
 
 # Environment variables
-# Follow hierarchy: .env.local (secrets) > .env.development/.env.production (mode defaults) > .env (safe defaults)
-# Only .env.local and other sensitive env files are gitignored
-.env.local
-.env.*.local
-.env.production.local
-.env.development.local
+# All .env files should be ignored to prevent accidental secret commits
+.env
+.env.*
+!.env.example
+!.env.template
 
-# COMMITTED (safe defaults only, no secrets):
-# .env - Safe default values
-# .env.example - Template with documentation
-# .env.example.local - Extended backend template
-# .env.development - Development mode defaults
-# .env.production - Production mode defaults
+# COMMITTED (templates and examples only - no secrets):
+# .env.example - Root-level template with documentation
+# .env.template - Alternative template format
+# backend/.env.example - Backend-specific template
 
 # Logs
 logs
