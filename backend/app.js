@@ -14,6 +14,10 @@ const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { setupSentryErrorHandler } = require('./sentry');
+const { createRequestLogger, sentryRequestIdMiddleware } = require('./observability/requestLogger');
+const { createHealthRoutes } = require('./observability/healthCheck');
+const { supabase } = require('./supabaseClient');
+const config = require('./config');
 
 function createApp() {
   const app = express();
@@ -23,6 +27,10 @@ function createApp() {
 
   // Core middleware
   app.use(express.json());
+
+  // Request ID and structured logging (must be early in middleware chain)
+  app.use(sentryRequestIdMiddleware);
+  app.use(createRequestLogger());
 
   // CORS configuration – allow Chrome extensions and localhost by default.
   app.use(
@@ -39,33 +47,19 @@ function createApp() {
     }),
   );
 
-  // Lightweight structured request logging
-  app.use((req, res, next) => {
-    const body = req.body || {};
-    const selection = body.selection || body.text;
-    const chatLength = Array.isArray(body.chatHistory) ? body.chatHistory.length : 0;
-
-    if (selection || chatLength) {
-      console.log(
-        `[${new Date().toISOString()}] ${req.method} ${req.path} - Mode: ${
-          body.mode || 'n/a'
-        }, Selection length: ${selection ? selection.length : 0}, Chat messages: ${chatLength}`,
-      );
-    }
-    next();
+  // Health check endpoints (before auth middleware)
+  const healthRoutes = createHealthRoutes({
+    supabase,
+    config,
+    limits: {
+      maxSelectionLength: MAX_SELECTION_LENGTH,
+      maxUserMessageLength: MAX_USER_MESSAGE_LENGTH,
+    },
   });
 
-  // Health check
-  app.get('/health', (req, res) => {
-    res.json({
-      status: 'ok',
-      message: 'Lock-in API is running',
-      limits: {
-        maxSelectionLength: MAX_SELECTION_LENGTH,
-        maxUserMessageLength: MAX_USER_MESSAGE_LENGTH,
-      },
-    });
-  });
+  app.get('/health', healthRoutes.liveness);
+  app.get('/health/ready', healthRoutes.readiness);
+  app.get('/health/deep', healthRoutes.deep);
 
   // Sentry test endpoint (only in development)
   if (process.env.NODE_ENV !== 'production') {

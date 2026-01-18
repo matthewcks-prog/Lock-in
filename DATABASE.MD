@@ -12,10 +12,10 @@ It exists so future humans and AI agents can understand how data is stored and a
 
 Lock-in uses **two separate Supabase projects** for environment isolation:
 
-| Environment | Project Reference | URL | Use Case |
-|-------------|------------------|-----|----------|
+| Environment     | Project Reference      | URL                                      | Use Case                    |
+| --------------- | ---------------------- | ---------------------------------------- | --------------------------- |
 | **Development** | `uszxfuzauetcchwcgufe` | https://uszxfuzauetcchwcgufe.supabase.co | Local dev, staging, testing |
-| **Production** | `vtuflatvllpldohhimao` | https://vtuflatvllpldohhimao.supabase.co | Real users, real data |
+| **Production**  | `vtuflatvllpldohhimao` | https://vtuflatvllpldohhimao.supabase.co | Real users, real data       |
 
 **Schema Sync Strategy:**
 
@@ -30,22 +30,23 @@ Lock-in uses **two separate Supabase projects** for environment isolation:
 
 ### Supabase Built-in Roles
 
-| Role | Description | RLS? |
-|------|-------------|------|
-| `authenticator` | Connection pooler role | N/A |
-| `anon` | Anonymous (unauthenticated) requests | Yes |
-| `authenticated` | Authenticated user requests | Yes |
-| `service_role` | Backend API (bypasses RLS) | No |
+| Role            | Description                          | RLS? |
+| --------------- | ------------------------------------ | ---- |
+| `authenticator` | Connection pooler role               | N/A  |
+| `anon`          | Anonymous (unauthenticated) requests | Yes  |
+| `authenticated` | Authenticated user requests          | Yes  |
+| `service_role`  | Backend API (bypasses RLS)           | No   |
 
 ### Custom MCP Roles (Development Only)
 
-| Role | Description | Permissions | Environment |
-|------|-------------|-------------|-------------|
-| `dev_admin` | MCP AI assistant (full CRUD) | SELECT, INSERT, UPDATE, DELETE on all tables | Dev only |
+| Role        | Description                  | Permissions                                  | Environment |
+| ----------- | ---------------------------- | -------------------------------------------- | ----------- |
+| `dev_admin` | MCP AI assistant (full CRUD) | SELECT, INSERT, UPDATE, DELETE on all tables | Dev only    |
 
 **Note:** MCP has NO access to production database. All production writes go through the backend API.
 
 **Setup Instructions:**
+
 - [tools/mcp/docs/SUPABASE_DEV_ADMIN_SETUP.md](/tools/mcp/docs/SUPABASE_DEV_ADMIN_SETUP.md) - Full CRUD for MCP
 - [tools/mcp/docs/SUPABASE_READONLY_SETUP.md](/tools/mcp/docs/SUPABASE_READONLY_SETUP.md) - Read-only for MCP (optional)
 
@@ -646,19 +647,19 @@ CREATE POLICY "Users can delete own notes"
 
 **RLS Policy Sources by Table:**
 
-| Table                    | Migration Source                      | Operations               |
-| ------------------------ | ------------------------------------- | ------------------------ |
-| `chats`                  | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `chat_messages`          | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `notes`                  | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `note_assets`            | `001_note_assets.sql`, `003_row_level_security.sql` | SELECT, INSERT, DELETE |
-| `chat_message_assets`    | `010_chat_assets.sql`                 | SELECT, INSERT, DELETE   |
-| `folders`                | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `ai_requests`            | `003_row_level_security.sql`          | SELECT, INSERT (append-only) |
-| `feedback`               | `009_feedback.sql`                    | SELECT, INSERT           |
-| `transcripts`            | `007_transcripts_hardening.sql`       | SELECT, INSERT, UPDATE, DELETE |
-| `transcript_jobs`        | `006_transcripts.sql`                 | SELECT, INSERT, UPDATE, DELETE |
-| `transcript_job_chunks`  | `007_transcripts_hardening.sql`       | SELECT (via parent job)  |
+| Table                   | Migration Source                                    | Operations                     |
+| ----------------------- | --------------------------------------------------- | ------------------------------ |
+| `chats`                 | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
+| `chat_messages`         | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
+| `notes`                 | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
+| `note_assets`           | `001_note_assets.sql`, `003_row_level_security.sql` | SELECT, INSERT, DELETE         |
+| `chat_message_assets`   | `010_chat_assets.sql`                               | SELECT, INSERT, DELETE         |
+| `folders`               | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
+| `ai_requests`           | `003_row_level_security.sql`                        | SELECT, INSERT (append-only)   |
+| `feedback`              | `009_feedback.sql`                                  | SELECT, INSERT                 |
+| `transcripts`           | `007_transcripts_hardening.sql`                     | SELECT, INSERT, UPDATE, DELETE |
+| `transcript_jobs`       | `006_transcripts.sql`                               | SELECT, INSERT, UPDATE, DELETE |
+| `transcript_job_chunks` | `007_transcripts_hardening.sql`                     | SELECT (via parent job)        |
 
 ---
 

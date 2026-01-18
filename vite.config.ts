@@ -4,9 +4,9 @@ import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { resolve } from 'path';
 import {
   createAliases,
+  createDefines,
   createIifeBuildConfig,
   ensureAsciiSafeOutput,
-  sharedDefines,
 } from './build/viteShared';
 
 export default defineConfig(({ mode }) => {
@@ -20,13 +20,21 @@ export default defineConfig(({ mode }) => {
     env.SENTRY_ORG &&
     env.SENTRY_PROJECT;
 
+  // Use production JSX runtime for builds (avoids jsxDEV not a function error)
+  const isDev = mode === 'development';
+
   return {
-    define: sharedDefines,
+    define: createDefines(mode),
     css: {
       postcss: './postcss.config.js',
     },
     plugins: [
-      react(),
+      react({
+        // Explicitly set JSX runtime mode to avoid dev/prod mismatch
+        jsxRuntime: 'automatic',
+        // In production, don't include React Refresh or dev helpers
+        ...(isDev ? {} : { jsxImportSource: 'react' }),
+      }),
       ensureAsciiSafeOutput(
         resolve(process.cwd(), 'extension/dist/ui/index.js'),
         'Processed output file for ASCII compatibility',

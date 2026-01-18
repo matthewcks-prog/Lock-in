@@ -4,7 +4,7 @@
   "description": "AI-powered study assistant Chrome extension",
   "type": "module",
   "scripts": {
-    "dev": "vite build --watch --mode development",
+    "dev": "vite build --watch",
     "build": "npm run build:libs && vite build",
     "build:sentry": "vite build --config vite.config.sentry.ts",
     "build:initApi": "vite build --config vite.config.initApi.ts",
@@ -17,8 +17,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "type-check": "tsc --noEmit",
-    "verify-build": "npm run type-check && npm run build",
-    "check": "npm run lint && npm run test && npm run type-check && npm run build && npm run verify-build",
+    "check": "npm run lint && npm run test && npm run type-check && npm run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

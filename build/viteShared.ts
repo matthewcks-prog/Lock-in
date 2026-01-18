@@ -10,6 +10,19 @@ type AliasOptions = {
   extra?: Record<string, string>;
 };
 
+/**
+ * Create define replacements that respect build mode.
+ * This ensures JSX runtime (jsxDEV vs jsx) matches NODE_ENV.
+ */
+export function createDefines(mode: string) {
+  const nodeEnv = mode === 'development' ? 'development' : 'production';
+  return {
+    "process.env.NODE_ENV": JSON.stringify(nodeEnv),
+    process: JSON.stringify({}),
+  };
+}
+
+/** @deprecated Use createDefines(mode) instead for proper JSX runtime alignment */
 export const sharedDefines = {
   "process.env.NODE_ENV": JSON.stringify("production"),
   process: JSON.stringify({}),

@@ -7,6 +7,10 @@ node_modules/
 .env.local
 .env.*.local
 
+# EXCEPTION: Track .env.example (template with no secrets)
+!.env.example
+!backend/.env.example
+
 # Logs
 logs
 *.log

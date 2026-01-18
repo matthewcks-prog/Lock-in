@@ -2,8 +2,11 @@
  * Unit tests for lockinController title generation and storage
  */
 
-process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://example.supabase.test';
-process.env.SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'service-role-key';
+// Test environment setup - use _DEV suffixed vars as per the environment config pattern
+process.env.NODE_ENV = 'development';
+process.env.SUPABASE_URL_DEV = process.env.SUPABASE_URL_DEV || 'https://example.supabase.test';
+process.env.SUPABASE_SERVICE_ROLE_KEY_DEV =
+  process.env.SUPABASE_SERVICE_ROLE_KEY_DEV || 'service-role-key';
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-api-key';
 
 const test = require('node:test');

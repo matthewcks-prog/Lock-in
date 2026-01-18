@@ -1,9 +1,9 @@
 /**
  * Extension Runtime Configuration
- * 
+ *
  * Environment-aware configuration injected at build time.
  * Set VITE_APP_ENV=production for prod builds, defaults to development.
- * 
+ *
  * Build commands:
  * - Development: npm run build (uses DEV Supabase)
  * - Production: VITE_APP_ENV=production npm run build (uses PROD Supabase)
@@ -28,7 +28,7 @@
   } catch (e) {
     // Fallback to development
   }
-  
+
   const IS_PRODUCTION = APP_ENV === 'production';
 
   // Environment-specific Supabase configuration
@@ -36,22 +36,27 @@
     ? {
         // Production environment (vtuflatvllpldohhimao)
         url: 'https://vtuflatvllpldohhimao.supabase.co',
-        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0dWZsYXR2bGxwbGRvaGhpbWFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1Nzc4NjUsImV4cCI6MjA4NDE1Mzg2NX0.yoP_BCxVUPOLXiEg2Rb_-BbihPHCXjgfE1lCDUYfvvU',
+        anonKey:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ0dWZsYXR2bGxwbGRvaGhpbWFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg1Nzc4NjUsImV4cCI6MjA4NDE1Mzg2NX0.yoP_BCxVUPOLXiEg2Rb_-BbihPHCXjgfE1lCDUYfvvU',
         environment: 'production',
       }
     : {
         // Development environment (uszxfuzauetcchwcgufe)
         url: 'https://uszxfuzauetcchwcgufe.supabase.co',
-        anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzenhmdXphdWV0Y2Nod2NndWZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzM4MzgsImV4cCI6MjA4MDAwOTgzOH0.iiCytIONfubK7ZkDJj95cAiOl_jjMimbfYWDrMhDw7E',
+        anonKey:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzenhmdXphdWV0Y2Nod2NndWZlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ0MzM4MzgsImV4cCI6MjA4MDAwOTgzOH0.iiCytIONfubK7ZkDJj95cAiOl_jjMimbfYWDrMhDw7E',
         environment: 'development',
       };
 
   root.LOCKIN_CONFIG = {
     APP_ENV,
     IS_PRODUCTION,
+    // NOTE: Update BACKEND_URL after deploying to Azure Container Apps in lock-in-dev resource group
+    // Run: .\scripts\azure-setup.ps1 -ResourceGroup lock-in-dev -Location australiaeast
+    // The new URL will be: https://lock-in-backend.<env-id>.australiaeast.azurecontainerapps.io
     BACKEND_URL: IS_PRODUCTION
-      ? 'https://lock-in-backend-prod.mangoriver-ea919cda.australiaeast.azurecontainerapps.io' // TODO: Update prod backend URL
-      : 'https://lock-in-backend.mangoriver-ea919cda.australiaeast.azurecontainerapps.io',
+      ? 'https://lock-in-backend.australiaeast.azurecontainerapps.io' // TODO: Update after Azure deployment
+      : 'http://localhost:3000',
     SUPABASE_URL: SUPABASE_CONFIG.url,
     SUPABASE_ANON_KEY: SUPABASE_CONFIG.anonKey,
     SUPABASE_ENVIRONMENT: SUPABASE_CONFIG.environment,

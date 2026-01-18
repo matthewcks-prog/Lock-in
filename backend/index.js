@@ -7,55 +7,44 @@
  * and controllers/ folders to keep things testable and maintainable.
  */
 
-// IMPORTANT: Load environment variables first, then initialize Sentry
-// BEFORE any other imports. This ensures Sentry can instrument all modules.
+// =============================================================================
+// CRITICAL: Load order matters!
+// 1. Environment variables
+// 2. Validation
+// 3. Application Insights (must be before other imports to instrument them)
+// 4. Sentry
+// 5. Everything else
+// =============================================================================
+
+// Load environment variables first
 require('dotenv').config();
+
+// Validate environment variables (fail fast if misconfigured)
+const { validateEnvOrExit, LOCKIN_BACKEND_SCHEMA } = require('./utils/validateEnv');
+validateEnvOrExit(LOCKIN_BACKEND_SCHEMA);
+
+// Initialize Application Insights BEFORE other imports (instruments Node modules)
+const { initApplicationInsights, logger } = require('./observability');
+initApplicationInsights();
+
+// Initialize Sentry after App Insights
 const { initSentry } = require('./sentry');
 initSentry();
 
-// Now import everything else - Sentry will automatically instrument these
+// Now import everything else - both App Insights and Sentry will instrument these
 const { createApp } = require('./app');
-const { PORT } = require('./config');
+const {
+  PORT,
+  SUPABASE_URL,
+  SUPABASE_SERVICE_ROLE_KEY,
+  isAzureEnabled,
+  isOpenAIEnabled,
+  isOpenAIFallbackEnabled,
+} = require('./config');
 const {
   startTranscriptJobReaper,
   stopTranscriptJobReaper,
 } = require('./services/transcriptsService');
-
-// =============================================================================
-// Production Environment Validation
-// =============================================================================
-const isProduction = process.env.NODE_ENV === 'production';
-
-if (isProduction) {
-  // Fail fast on missing critical environment variables in production
-  const requiredEnvVars = ['OPENAI_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
-  const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
-
-  if (missingVars.length > 0) {
-    console.error(`FATAL: Missing required environment variables: ${missingVars.join(', ')}`);
-    process.exit(1);
-  }
-}
-
-// =============================================================================
-// Structured Logging for Production
-// =============================================================================
-const log = (level, message, meta = {}) => {
-  if (isProduction) {
-    // JSON format for Azure Monitor ingestion
-    console.log(
-      JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level,
-        message,
-        ...meta,
-      }),
-    );
-  } else {
-    // Human-readable format for development
-    console.log(`[${level.toUpperCase()}] ${message}`, Object.keys(meta).length ? meta : '');
-  }
-};
 
 // =============================================================================
 // Application Startup
@@ -63,14 +52,13 @@ const log = (level, message, meta = {}) => {
 const app = createApp();
 
 const server = app.listen(PORT, () => {
-  log('info', `Lock-in backend server running on port ${PORT}`, {
-    port: PORT,
-    env: process.env.NODE_ENV,
-  });
-  log('info', 'Ready to help students learn!');
+  logger.info({ port: PORT, env: process.env.NODE_ENV }, `Lock-in backend server running on port ${PORT}`);
+  logger.info('Ready to help students learn!');
 
-  if (!process.env.OPENAI_API_KEY) {
-    log('warn', 'OPENAI_API_KEY not found in environment variables');
+  if (!isAzureEnabled() && !isOpenAIEnabled()) {
+    logger.warn('No LLM credentials found (Azure OpenAI or OpenAI).');
+  } else if (isAzureEnabled() && !isOpenAIFallbackEnabled()) {
+    logger.warn('Azure OpenAI enabled without OpenAI fallback credentials.');
   }
 
   startTranscriptJobReaper();
@@ -81,28 +69,28 @@ const server = app.listen(PORT, () => {
 // Ensures clean container termination in Azure Container Apps
 // =============================================================================
 const gracefulShutdown = (signal) => {
-  log('info', `${signal} received, starting graceful shutdown...`, { signal });
+  logger.info({ signal }, `${signal} received, starting graceful shutdown...`);
 
   // Stop accepting new connections
   server.close((err) => {
     if (err) {
-      log('error', 'Error during server close', { error: err.message });
+      logger.error({ error: err.message }, 'Error during server close');
       process.exit(1);
     }
 
-    log('info', 'HTTP server closed');
+    logger.info('HTTP server closed');
 
     // Stop background jobs
     stopTranscriptJobReaper();
-    log('info', 'Transcript job reaper stopped');
+    logger.info('Transcript job reaper stopped');
 
-    log('info', 'Graceful shutdown complete');
+    logger.info('Graceful shutdown complete');
     process.exit(0);
   });
 
   // Force shutdown after 30 seconds if graceful shutdown fails
   setTimeout(() => {
-    log('error', 'Forced shutdown after timeout');
+    logger.error('Forced shutdown after timeout');
     process.exit(1);
   }, 30000);
 };
@@ -112,10 +100,10 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Handle uncaught exceptions gracefully
 process.on('uncaughtException', (err) => {
-  log('error', 'Uncaught exception', { error: err.message, stack: err.stack });
+  logger.error({ error: err.message, stack: err.stack }, 'Uncaught exception');
   gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  log('error', 'Unhandled rejection', { reason: String(reason) });
+  logger.error({ reason: String(reason) }, 'Unhandled rejection');
 });

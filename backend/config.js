@@ -19,40 +19,34 @@ const IS_DEVELOPMENT = NODE_ENV === 'development';
 
 /**
  * Get environment-aware Supabase configuration.
- * In production: Uses SUPABASE_URL_PROD and SUPABASE_SERVICE_ROLE_KEY_PROD
- * In development: Uses SUPABASE_URL_DEV and SUPABASE_SERVICE_ROLE_KEY_DEV
- * 
- * Fallback: If environment-specific vars not found, try legacy vars
- * (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) for backward compatibility
+ *
+ * Environment isolation:
+ * - Production: Uses SUPABASE_URL_PROD and SUPABASE_SERVICE_ROLE_KEY_PROD
+ * - Development/Staging: Uses SUPABASE_URL_DEV and SUPABASE_SERVICE_ROLE_KEY_DEV
+ *
+ * No fallbacks to legacy vars - fail fast if vars are misconfigured.
+ * Validation is handled by utils/validateEnv.js at startup.
  */
 function getSupabaseConfig() {
   if (IS_PRODUCTION) {
     return {
-      url: process.env.SUPABASE_URL_PROD || process.env.SUPABASE_URL,
-      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_PROD || process.env.SUPABASE_SERVICE_ROLE_KEY,
-      anonKey: process.env.SUPABASE_ANON_KEY_PROD || process.env.SUPABASE_ANON_KEY,
+      url: process.env.SUPABASE_URL_PROD,
+      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_PROD,
+      anonKey: process.env.SUPABASE_ANON_KEY_PROD,
       environment: 'production',
     };
   }
-  
+
   // Development or staging
   return {
-    url: process.env.SUPABASE_URL_DEV || process.env.SUPABASE_URL,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_DEV || process.env.SUPABASE_SERVICE_ROLE_KEY,
-    anonKey: process.env.SUPABASE_ANON_KEY_DEV || process.env.SUPABASE_ANON_KEY,
+    url: process.env.SUPABASE_URL_DEV,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_DEV,
+    anonKey: process.env.SUPABASE_ANON_KEY_DEV,
     environment: 'development',
   };
 }
 
 const SUPABASE_CONFIG = getSupabaseConfig();
-
-// Validate that Supabase credentials are available
-if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.serviceRoleKey) {
-  console.error(
-    `CRITICAL: Missing Supabase credentials for ${NODE_ENV} environment.`,
-    `Expected: SUPABASE_URL_${IS_PRODUCTION ? 'PROD' : 'DEV'} and SUPABASE_SERVICE_ROLE_KEY_${IS_PRODUCTION ? 'PROD' : 'DEV'}`
-  );
-}
 
 const PORT = process.env.PORT || 3000;
 
@@ -68,11 +62,31 @@ function readNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function readBoolean(value, fallback) {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (['true', '1', 'yes', 'y'].includes(normalized)) {
+    return true;
+  }
+  if (['false', '0', 'no', 'n'].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
+}
+
 // Chat list limits
-const DEFAULT_CHAT_LIST_LIMIT =
-  readNumber(process.env.CHAT_LIST_LIMIT, chatLimits.DEFAULT_CHAT_LIST_LIMIT);
-const MAX_CHAT_LIST_LIMIT =
-  readNumber(process.env.MAX_CHAT_LIST_LIMIT, chatLimits.MAX_CHAT_LIST_LIMIT);
+const DEFAULT_CHAT_LIST_LIMIT = readNumber(
+  process.env.CHAT_LIST_LIMIT,
+  chatLimits.DEFAULT_CHAT_LIST_LIMIT,
+);
+const MAX_CHAT_LIST_LIMIT = readNumber(
+  process.env.MAX_CHAT_LIST_LIMIT,
+  chatLimits.MAX_CHAT_LIST_LIMIT,
+);
 
 // CORS configuration – in production prefer an explicit allow‑list
 const ALLOWED_ORIGINS = [
@@ -96,8 +110,7 @@ const NOTE_ASSETS_MAX_BYTES = parseInt(process.env.NOTE_ASSETS_MAX_BYTES, 10) ||
 // Chat asset uploads
 const CHAT_ASSETS_BUCKET = process.env.CHAT_ASSETS_BUCKET || 'chat-assets';
 const CHAT_ASSETS_MAX_BYTES = parseInt(process.env.CHAT_ASSETS_MAX_BYTES, 10) || 10 * 1024 * 1024; // 10MB default
-const CHAT_ASSET_DAILY_UPLOAD_LIMIT =
-  parseInt(process.env.CHAT_ASSET_DAILY_UPLOAD_LIMIT, 10) || 50;
+const CHAT_ASSET_DAILY_UPLOAD_LIMIT = parseInt(process.env.CHAT_ASSET_DAILY_UPLOAD_LIMIT, 10) || 50;
 const CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT =
   parseInt(process.env.CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT, 10) || 100 * 1024 * 1024;
 const CHAT_ASSET_SIGNED_URL_TTL_SECONDS =
@@ -146,8 +159,90 @@ const CHAT_ASSET_MIME_GROUPS = {
 const ALLOWED_ASSET_MIME_TYPES = Object.values(NOTE_ASSET_MIME_GROUPS).flat();
 const ALLOWED_CHAT_ASSET_MIME_TYPES = Object.values(CHAT_ASSET_MIME_GROUPS).flat();
 
+// =============================================================================
+// LLM Provider Configuration
+// =============================================================================
+
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const OPENAI_EMBEDDINGS_MODEL = process.env.OPENAI_EMBEDDINGS_MODEL || 'text-embedding-3-small';
+const OPENAI_TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || 'whisper-1';
+const OPENAI_FALLBACK_ENABLED = readBoolean(
+  process.env.OPENAI_FALLBACK_ENABLED,
+  Boolean(OPENAI_API_KEY),
+);
+
+const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY;
+const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT;
+const AZURE_OPENAI_API_VERSION = process.env.AZURE_OPENAI_API_VERSION || '2024-02-01';
+const AZURE_OPENAI_CHAT_DEPLOYMENT =
+  process.env.AZURE_OPENAI_CHAT_DEPLOYMENT || process.env.AZURE_OPENAI_DEPLOYMENT;
+const AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT =
+  process.env.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT || process.env.AZURE_OPENAI_EMBEDDING_DEPLOYMENT;
+const AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT = process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT;
+
+function isAzureEnabled() {
+  return Boolean(AZURE_OPENAI_API_KEY && AZURE_OPENAI_ENDPOINT);
+}
+
+function isOpenAIEnabled() {
+  return Boolean(OPENAI_API_KEY);
+}
+
+function isOpenAIFallbackEnabled() {
+  return OPENAI_FALLBACK_ENABLED && isOpenAIEnabled();
+}
+
+function getDeployment(type, provider = isAzureEnabled() ? 'azure' : 'openai') {
+  const deployments = {
+    openai: {
+      chat: OPENAI_MODEL,
+      embeddings: OPENAI_EMBEDDINGS_MODEL,
+      transcription: OPENAI_TRANSCRIPTION_MODEL,
+    },
+    azure: {
+      chat: AZURE_OPENAI_CHAT_DEPLOYMENT || OPENAI_MODEL,
+      embeddings: AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT || OPENAI_EMBEDDINGS_MODEL,
+      transcription: AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT || OPENAI_TRANSCRIPTION_MODEL,
+    },
+  };
+
+  const providerKey = provider === 'azure' ? 'azure' : 'openai';
+  const deployment = deployments[providerKey]?.[type];
+
+  if (!deployment) {
+    throw new Error(`Unknown deployment type "${type}" for provider "${providerKey}"`);
+  }
+
+  return deployment;
+}
+
+function validateAzureOpenAIConfig() {
+  if (!isAzureEnabled()) {
+    return;
+  }
+
+  const missing = [];
+  if (!AZURE_OPENAI_CHAT_DEPLOYMENT) missing.push('AZURE_OPENAI_CHAT_DEPLOYMENT');
+  if (!AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT) missing.push('AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT');
+  if (!AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT) missing.push('AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT');
+
+  if (missing.length > 0) {
+    console.warn(
+      '[config] Azure OpenAI enabled, but deployment names are missing. Defaulting to OpenAI model names:',
+      missing.join(', '),
+    );
+  }
+}
+
+if (OPENAI_FALLBACK_ENABLED && !OPENAI_API_KEY) {
+  console.warn('[config] OPENAI_FALLBACK_ENABLED is set but OPENAI_API_KEY is missing.');
+}
+
+validateAzureOpenAIConfig();
+
 // Transcript processing
-const TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || 'whisper-1';
+const TRANSCRIPTION_MODEL = OPENAI_TRANSCRIPTION_MODEL;
 const TRANSCRIPTION_SEGMENT_MAX_MB = parseInt(process.env.TRANSCRIPTION_SEGMENT_MAX_MB, 10) || 24;
 const TRANSCRIPTION_TEMP_DIR =
   process.env.TRANSCRIPTION_TEMP_DIR || path.join(__dirname, 'tmp', 'transcripts');
@@ -209,13 +304,13 @@ module.exports = {
   NODE_ENV,
   IS_PRODUCTION,
   IS_DEVELOPMENT,
-  
+
   // Supabase Configuration
   SUPABASE_CONFIG,
   SUPABASE_URL: SUPABASE_CONFIG.url,
   SUPABASE_SERVICE_ROLE_KEY: SUPABASE_CONFIG.serviceRoleKey,
   SUPABASE_ANON_KEY: SUPABASE_CONFIG.anonKey,
-  
+
   // Server
   PORT,
   MAX_SELECTION_LENGTH,
@@ -224,13 +319,13 @@ module.exports = {
   DEFAULT_CHAT_LIST_LIMIT,
   MAX_CHAT_LIST_LIMIT,
   isOriginAllowed,
-  
+
   // Note Assets
   NOTE_ASSETS_BUCKET,
   NOTE_ASSETS_MAX_BYTES,
   NOTE_ASSET_MIME_GROUPS,
   ALLOWED_ASSET_MIME_TYPES,
-  
+
   // Chat Assets
   CHAT_ASSETS_BUCKET,
   CHAT_ASSETS_MAX_BYTES,
@@ -240,7 +335,24 @@ module.exports = {
   CHAT_ASSET_MIME_GROUPS,
   ALLOWED_CHAT_ASSET_MIME_TYPES,
   MIME_EXTENSION_MAP,
-  
+
+  // LLM Providers
+  OPENAI_API_KEY,
+  OPENAI_MODEL,
+  OPENAI_EMBEDDINGS_MODEL,
+  OPENAI_TRANSCRIPTION_MODEL,
+  OPENAI_FALLBACK_ENABLED,
+  AZURE_OPENAI_API_KEY,
+  AZURE_OPENAI_ENDPOINT,
+  AZURE_OPENAI_API_VERSION,
+  AZURE_OPENAI_CHAT_DEPLOYMENT,
+  AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT,
+  AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT,
+  isAzureEnabled,
+  isOpenAIEnabled,
+  isOpenAIFallbackEnabled,
+  getDeployment,
+
   // Transcripts
   TRANSCRIPTION_MODEL,
   TRANSCRIPTION_SEGMENT_MAX_MB,

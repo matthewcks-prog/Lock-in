@@ -60,11 +60,11 @@ MCP servers enable Cursor AI to interact with the codebase, run commands, query 
 
 The main MCP configuration location depends on your IDE:
 
-| IDE | Config Location |
-|-----|----------------|
-| **VS Code** | `.vscode/mcp.json` (copy from `.vscode/mcp.json.template`) |
-| **Cursor** | `.cursor/mcp.json` |
-| **GitHub Copilot** | `.github/copilot/mcp.json` |
+| IDE                | Config Location                                            |
+| ------------------ | ---------------------------------------------------------- |
+| **VS Code**        | `.vscode/mcp.json` (copy from `.vscode/mcp.json.template`) |
+| **Cursor**         | `.cursor/mcp.json`                                         |
+| **GitHub Copilot** | `.github/copilot/mcp.json`                                 |
 
 ### Environment Variables
 
@@ -87,6 +87,7 @@ LOCKIN_REPO_ROOT=C:/Users/matth/Lock-in
 ```
 
 **Important:**
+
 - **Never** add production credentials to MCP configuration
 - MCP is for development environment only
 - Production database access goes through backend API
