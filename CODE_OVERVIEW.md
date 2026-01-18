@@ -202,10 +202,18 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`services/transcriptsService.js`**
   - Handles ffmpeg audio extraction, segmentation, OpenAI STT, job cleanup/cancellation, and stale job reaping.
 
+### Providers
+
+- **`providers/llmProviderFactory.js`**
+  - Creates the primary Azure OpenAI client and optional OpenAI fallback client.
+
+- **`providers/withFallback.js`**
+  - Generic retry + fallback wrapper with exponential backoff and structured logging.
+
 ### External Services
 
 - **`openaiClient.js`**
-  - OpenAI SDK wrapper, prompt construction, response formatting, and audio transcription.
+  - LLM SDK wrapper (Azure OpenAI primary + OpenAI fallback), prompt construction, response formatting, and audio transcription.
 
 ### Middleware
 
@@ -217,6 +225,11 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`middleware/uploadMiddleware.js`**
   - Multer-based in-memory upload handler with size and MIME validation for note assets.
+
+### Scripts
+
+- **`scripts/check-syntax.js`**
+  - Syntax validation for backend root JS files (used by `npm run check`).
 
 ## Key Design Patterns
 

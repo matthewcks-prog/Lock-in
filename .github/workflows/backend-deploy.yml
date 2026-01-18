@@ -15,7 +15,7 @@ on:
     branches: [main]
     paths:
       - 'backend/**'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch: # Allow manual trigger
 
 env:
   AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
@@ -30,7 +30,7 @@ jobs:
   # ===========================================================================
   build-and-test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,7 +49,7 @@ jobs:
       - name: Run tests
         working-directory: backend
         run: npm test
-        continue-on-error: true  # Don't fail build if no tests yet
+        continue-on-error: true # Don't fail build if no tests yet
 
       - name: Build Docker image (test)
         run: docker build -f backend/Dockerfile -t ${{ env.IMAGE_NAME }}:test .
@@ -63,13 +63,13 @@ jobs:
             -e SUPABASE_URL=https://test.supabase.co \
             -e SUPABASE_SERVICE_ROLE_KEY=test \
             ${{ env.IMAGE_NAME }}:test
-          
+
           # Wait for container to start
           sleep 10
-          
+
           # Test health endpoint
           curl -f http://localhost:3000/health || exit 1
-          
+
           # Cleanup
           docker stop test-container
           docker rm test-container
@@ -81,10 +81,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-test
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    
+
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
-      
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -126,7 +126,7 @@ jobs:
     needs: push-to-acr
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
-    
+
     steps:
       - name: Check for Azure credentials
         id: check-creds
@@ -164,17 +164,17 @@ jobs:
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --query "properties.configuration.ingress.fqdn" -o tsv)
-          
+
           echo "App URL: https://$APP_URL"
-          
+
           # Wait for deployment to stabilize
           sleep 30
-          
+
           # Test health endpoint
           curl -f "https://$APP_URL/health" || exit 1
-          
+
           echo "✅ Deployment verified successfully!"
-  
+
   # ===========================================================================
   # Manual Deploy (when no service principal available)
   # Pushes image info for manual deployment
@@ -183,7 +183,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: push-to-acr
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-    
+
     steps:
       - name: Print deployment instructions
         run: |

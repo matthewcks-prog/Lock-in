@@ -11,19 +11,38 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
    ```
 
 2. **Set up environment:**
-   Create a `.env` file:
 
-   ```env
-   OPENAI_API_KEY=your_openai_api_key_here
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
-   PORT=3000
-   DAILY_REQUEST_LIMIT=100
-   CHAT_LIST_LIMIT=20
-   MAX_CHAT_LIST_LIMIT=100
+   ```bash
+   # Copy template
+   cp .env.example .env
+
+   # Edit .env with your credentials
+   # See docs/setup/ENVIRONMENT_SETUP.md for full guide
    ```
 
+   **Minimum required:**
+
+   ```env
+   NODE_ENV=development
+   SUPABASE_URL_DEV=https://your-dev-project.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY_DEV=your_service_role_key
+   AZURE_OPENAI_API_KEY=your_azure_openai_key
+   AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+   AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o-mini
+   ```
+
+   📚 **Full documentation:**
+   - [Environment Setup Guide](../docs/setup/ENVIRONMENT_SETUP.md) - Comprehensive setup instructions
+   - [Quick Reference](../docs/setup/ENV_QUICK_REFERENCE.md) - Cheat sheet
+   - [Migration Checklist](./MIGRATION_CHECKLIST.md) - Upgrade from legacy .env
+
 3. **Run development server:**
+
+   ```bash
+   npm start  # Validates environment + starts server
+   ```
+
+   Or with nodemon (auto-reload):
 
    ```bash
    npm run dev
@@ -31,16 +50,38 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
 
 4. **For production:**
    ```bash
-   npm start
+   npm run start:prod
    ```
+
+## Environment Variables
+
+### Security Model
+
+- **Development:** Uses `*_DEV` credentials (local Supabase, dev AI resources)
+- **Production:** Uses `*_PROD` credentials (prod Supabase, prod AI resources)
+- **Validation:** Fails fast on startup if required variables are missing
+- **Isolation:** Never mix dev/prod credentials in the same .env file
+
+### Required Variables
+
+See [.env.example](./.env.example) for complete list with descriptions.
+
+**Core requirements:**
+
+- `NODE_ENV` - Environment selection (development|staging|production)
+- `SUPABASE_URL_DEV` / `SUPABASE_URL_PROD` - Database connection
+- `SUPABASE_SERVICE_ROLE_KEY_DEV` / `SUPABASE_SERVICE_ROLE_KEY_PROD` - Database auth
+- `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` - AI provider (or `OPENAI_API_KEY`)
 
 ## Project Structure
 
 ```
 backend/
-├── index.js                    # Server entry point
+├── index.js                    # Server entry point + validation
 ├── app.js                      # Express application setup
 ├── config.js                   # Centralized configuration
+├── utils/
+│   └── validateEnv.js          # Environment validation
 ├── routes/
 │   ├── lockinRoutes.js         # Chat/processing API routes
 │   └── noteRoutes.js           # Notes API routes
@@ -50,7 +91,7 @@ backend/
 │   └── notesChatController.js  # Notes-based chat (RAG)
 ├── repositories/
 │   └── notesRepository.js      # Database operations for notes
-├── openaiClient.js             # OpenAI API integration (chat + embeddings)
+├── openaiClient.js             # LLM provider integration (Azure OpenAI + fallback)
 ├── chatRepository.js           # Chat persistence operations
 ├── supabaseClient.js           # Supabase client configuration
 ├── authMiddleware.js           # Authentication middleware
@@ -269,15 +310,25 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 
 ## Environment Variables
 
-| Variable                    | Description                          | Default |
-| --------------------------- | ------------------------------------ | ------- |
-| `OPENAI_API_KEY`            | Your OpenAI API key (required)       | -       |
-| `SUPABASE_URL`              | Supabase project URL (required)      | -       |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (required) | -       |
-| `PORT`                      | Server port                          | 3000    |
-| `DAILY_REQUEST_LIMIT`       | Requests per user per day            | 100     |
-| `CHAT_LIST_LIMIT`           | Default chat list size               | 20      |
-| `MAX_CHAT_LIST_LIMIT`       | Maximum chat list size               | 100     |
+| Variable                                | Description                           | Default                |
+| --------------------------------------- | ------------------------------------- | ---------------------- |
+| `AZURE_OPENAI_API_KEY`                  | Azure OpenAI API key (primary)        | -                      |
+| `AZURE_OPENAI_ENDPOINT`                 | Azure OpenAI endpoint (primary)       | -                      |
+| `AZURE_OPENAI_API_VERSION`              | Azure OpenAI API version              | 2024-02-01             |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT`          | Azure chat deployment name            | gpt-4o-mini            |
+| `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`    | Azure embeddings deployment name      | text-embedding-3-small |
+| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Azure transcription deployment name   | whisper-1              |
+| `OPENAI_API_KEY`                        | OpenAI API key (fallback)             | -                      |
+| `OPENAI_FALLBACK_ENABLED`               | Enable OpenAI fallback                | true when key set      |
+| `OPENAI_MODEL`                          | OpenAI chat model (fallback)          | gpt-4o-mini            |
+| `OPENAI_EMBEDDINGS_MODEL`               | OpenAI embeddings model (fallback)    | text-embedding-3-small |
+| `OPENAI_TRANSCRIPTION_MODEL`            | OpenAI transcription model (fallback) | whisper-1              |
+| `SUPABASE_URL`                          | Supabase project URL (required)       | -                      |
+| `SUPABASE_SERVICE_ROLE_KEY`             | Supabase service role key (required)  | -                      |
+| `PORT`                                  | Server port                           | 3000                   |
+| `DAILY_REQUEST_LIMIT`                   | Requests per user per day             | 100                    |
+| `CHAT_LIST_LIMIT`                       | Default chat list size                | 20                     |
+| `MAX_CHAT_LIST_LIMIT`                   | Maximum chat list size                | 100                    |
 
 ## Database Schema
 

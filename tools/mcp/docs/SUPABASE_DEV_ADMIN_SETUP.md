@@ -8,10 +8,10 @@ This creates a `dev_admin` database user with full CRUD access (CREATE, READ, UP
 
 ## Security Model
 
-| Environment | MCP User | Permissions | Use Case |
-|-------------|----------|-------------|----------|
+| Environment     | MCP User    | Permissions                             | Use Case                               |
+| --------------- | ----------- | --------------------------------------- | -------------------------------------- |
 | **Development** | `dev_admin` | Full CRUD (INSERT/UPDATE/DELETE/SELECT) | Local testing, AI-assisted development |
-| **Production** | None | No MCP access to prod database | Security boundary |
+| **Production**  | None        | No MCP access to prod database          | Security boundary                      |
 
 **Why full CRUD for dev?**
 
@@ -321,17 +321,17 @@ SELECT * FROM notes;
 
 ## Comparison: Read-Only vs Dev Admin
 
-| Feature | `readonly_user` | `dev_admin` |
-|---------|----------------|-------------|
-| **SELECT** | ✅ Yes | ✅ Yes |
-| **INSERT** | ❌ No | ✅ Yes |
-| **UPDATE** | ❌ No | ✅ Yes |
-| **DELETE** | ❌ No | ✅ Yes |
-| **RLS Enforced** | ✅ Yes | ✅ Yes |
-| **Auth Table Access** | ❌ No | ❌ No |
-| **DROP/TRUNCATE** | ❌ No | ❌ No |
-| **Environment** | Dev (optional) | Dev only |
-| **Use Case** | Query-only MCP | Full CRUD MCP for testing |
+| Feature               | `readonly_user` | `dev_admin`               |
+| --------------------- | --------------- | ------------------------- |
+| **SELECT**            | ✅ Yes          | ✅ Yes                    |
+| **INSERT**            | ❌ No           | ✅ Yes                    |
+| **UPDATE**            | ❌ No           | ✅ Yes                    |
+| **DELETE**            | ❌ No           | ✅ Yes                    |
+| **RLS Enforced**      | ✅ Yes          | ✅ Yes                    |
+| **Auth Table Access** | ❌ No           | ❌ No                     |
+| **DROP/TRUNCATE**     | ❌ No           | ❌ No                     |
+| **Environment**       | Dev (optional)  | Dev only                  |
+| **Use Case**          | Query-only MCP  | Full CRUD MCP for testing |
 
 ---
 

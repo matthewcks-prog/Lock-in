@@ -3,20 +3,50 @@
  */
 
 const fs = require('fs');
-const OpenAI = require('openai');
+const path = require('path');
 const { buildInitialChatTitle, coerceGeneratedTitle } = require('./utils/chatTitle');
-const { TRANSCRIPTION_MODEL } = require('./config');
-
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const { getDeployment } = require('./config');
+const { createPrimaryClient, createFallbackClient } = require('./providers/llmProviderFactory');
+const { withRetryAndFallback } = require('./providers/withFallback');
 const MAX_HISTORY_MESSAGES = 30;
 const MAX_ATTACHMENT_CONTEXT_CHARS = 5000;
 const MIN_SELECTION_PRIMARY_CHARS = 20;
 const ATTACHMENT_ONLY_SELECTION_PLACEHOLDER = '[Document-based question - see attached files]';
 
-// Initialize OpenAI client with API key from environment
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+function getLlmClients() {
+  const primary = createPrimaryClient();
+  const fallback = createFallbackClient();
+  return { primary, fallback };
+}
+
+function createChatCompletionRequest(client, provider, options) {
+  const payload = {
+    model: getDeployment('chat', provider),
+    messages: options.messages,
+    temperature: options.temperature,
+    max_tokens: options.maxTokens,
+  };
+
+  if (options.responseFormat) {
+    payload.response_format = options.responseFormat;
+  }
+
+  return () => client.chat.completions.create(payload);
+}
+
+async function createChatCompletion(options) {
+  const { primary, fallback } = getLlmClients();
+  const primaryRequest = createChatCompletionRequest(primary.client, primary.provider, options);
+  const fallbackRequest = fallback
+    ? createChatCompletionRequest(fallback.client, fallback.provider, options)
+    : null;
+
+  return withRetryAndFallback(primaryRequest, fallbackRequest, {
+    operation: options.operation || 'chat.completions.create',
+    primaryProvider: primary.provider,
+    fallbackProvider: fallback?.provider,
+  });
+}
 
 const LANGUAGE_LABELS = {
   en: 'English',
@@ -311,11 +341,11 @@ Using the selected text, the previous conversation, any attached files/images, a
 }
 
 async function requestCompletion(messages) {
-  const completion = await openai.chat.completions.create({
-    model: DEFAULT_MODEL,
+  const completion = await createChatCompletion({
     messages,
     temperature: 0.4,
-    max_tokens: 700,
+    maxTokens: 700,
+    operation: 'chat.completions.create',
   });
 
   const choice = completion.choices[0]?.message;
@@ -395,12 +425,12 @@ async function generateStructuredStudyResponse(options) {
   const finalMessages = clampHistory(messages);
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: DEFAULT_MODEL,
+    const completion = await createChatCompletion({
       messages: finalMessages,
       temperature: 0.4,
-      max_tokens: 1500,
-      response_format: { type: 'json_object' },
+      maxTokens: 1500,
+      responseFormat: { type: 'json_object' },
+      operation: 'chat.completions.create',
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -517,11 +547,11 @@ async function generateChatTitleFromHistory({ history = [], fallbackTitle = '' }
   ];
 
   try {
-    const completion = await openai.chat.completions.create({
-      model: DEFAULT_MODEL,
+    const completion = await createChatCompletion({
       messages,
       temperature: 0.2,
-      max_tokens: 24,
+      maxTokens: 24,
+      operation: 'chat.completions.create',
     });
 
     const candidate = (completion.choices[0]?.message?.content || '').split('\n')[0].trim();
@@ -543,9 +573,24 @@ async function embedText(text) {
     throw new Error('Text is required and must be a non-empty string');
   }
 
-  const res = await openai.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: text.trim(),
+  const { primary, fallback } = getLlmClients();
+  const primaryRequest = () =>
+    primary.client.embeddings.create({
+      model: getDeployment('embeddings', primary.provider),
+      input: text.trim(),
+    });
+  const fallbackRequest = fallback
+    ? () =>
+        fallback.client.embeddings.create({
+          model: getDeployment('embeddings', fallback.provider),
+          input: text.trim(),
+        })
+    : null;
+
+  const res = await withRetryAndFallback(primaryRequest, fallbackRequest, {
+    operation: 'embeddings.create',
+    primaryProvider: primary.provider,
+    fallbackProvider: fallback?.provider,
   });
 
   return res.data[0].embedding; // array of floats
@@ -557,11 +602,11 @@ async function embedText(text) {
  * @returns {Promise<string>} Assistant's response text
  */
 async function chatWithModel({ messages }) {
-  const completion = await openai.chat.completions.create({
-    model: DEFAULT_MODEL,
+  const completion = await createChatCompletion({
     messages,
     temperature: 0.4,
-    max_tokens: 700,
+    maxTokens: 700,
+    operation: 'chat.completions.create',
   });
 
   const choice = completion.choices[0]?.message;
@@ -597,89 +642,60 @@ async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
   }
 
   console.log(
-    `[OpenAI] Transcribing ${fileSizeMB.toFixed(
-      1,
-    )}MB audio file: ${require('path').basename(filePath)}`,
+    `[LLM] Transcribing ${fileSizeMB.toFixed(1)}MB audio file: ${path.basename(filePath)}`,
   );
 
-  let lastError = null;
+  const { primary, fallback } = getLlmClients();
+  const timeoutMs = Math.max(30000, 30000 + Math.ceil(fileSizeMB) * 20000);
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const startTime = Date.now();
-      const response = await openai.audio.transcriptions.create(
-        {
-          file: fs.createReadStream(filePath),
-          model: TRANSCRIPTION_MODEL,
-          response_format: 'verbose_json',
-          language: language || undefined,
-          temperature: 0,
-          timestamp_granularities: ['segment'],
-        },
-        {
-          // Timeout scales with file size: 30s base + 20s per MB
-          timeout: Math.max(30000, 30000 + Math.ceil(fileSizeMB) * 20000),
-        },
-      );
+  const buildTranscriptionRequest = (client, provider) => () =>
+    client.audio.transcriptions.create(
+      {
+        file: fs.createReadStream(filePath),
+        model: getDeployment('transcription', provider),
+        response_format: 'verbose_json',
+        language: language || undefined,
+        temperature: 0,
+        timestamp_granularities: ['segment'],
+      },
+      {
+        timeout: timeoutMs,
+      },
+    );
 
-      const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.log(`[OpenAI] Transcription completed in ${duration}s`);
-      return response;
-    } catch (error) {
-      lastError = error;
+  try {
+    const startTime = Date.now();
+    const response = await withRetryAndFallback(
+      buildTranscriptionRequest(primary.client, primary.provider),
+      fallback ? buildTranscriptionRequest(fallback.client, fallback.provider) : null,
+      {
+        operation: 'audio.transcriptions.create',
+        maxRetries,
+        primaryProvider: primary.provider,
+        fallbackProvider: fallback?.provider,
+      },
+    );
 
-      // Determine if error is retryable
-      const isRetryable =
-        error?.code === 'ECONNRESET' ||
-        error?.code === 'ETIMEDOUT' ||
-        error?.code === 'ENOTFOUND' ||
-        error?.code === 'ECONNREFUSED' ||
-        error?.message?.includes('Connection error') ||
-        error?.message?.includes('timeout') ||
-        error?.message?.includes('network') ||
-        error?.message?.includes('socket') ||
-        error?.status === 429 || // Rate limited
-        error?.status === 500 || // Internal server error
-        error?.status === 502 || // Bad gateway
-        error?.status === 503 || // Service unavailable
-        error?.status === 504; // Gateway timeout
-
-      const errorType = error?.code || error?.status || 'unknown';
-      console.warn(
-        `[OpenAI] Transcription attempt ${attempt}/${maxRetries} failed (${errorType}):`,
-        error?.message || error,
-      );
-
-      if (!isRetryable || attempt === maxRetries) {
-        // Format error message for user
-        let message = 'Transcription failed';
-        if (error?.message) {
-          message = error.message;
-        } else if (error?.error?.message) {
-          message = error.error.message;
-        }
-
-        // Add helpful context for common errors
-        if (error?.message?.includes('Connection error')) {
-          message += '. This may be a temporary network issue - please try again.';
-        }
-
-        console.error(`[OpenAI] Transcription failed after ${attempt} attempts:`, message);
-        const wrappedError = new Error(message);
-        wrappedError.originalError = error;
-        throw wrappedError;
-      }
-
-      // Exponential backoff with jitter: 2-3s, 4-6s, 8-12s
-      const baseBackoff = 2000 * Math.pow(2, attempt - 1);
-      const jitter = Math.random() * baseBackoff * 0.5;
-      const backoffMs = Math.min(baseBackoff + jitter, 12000);
-      console.log(`[OpenAI] Retrying in ${(backoffMs / 1000).toFixed(1)}s...`);
-      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`[LLM] Transcription completed in ${duration}s`);
+    return response;
+  } catch (error) {
+    let message = 'Transcription failed';
+    if (error?.message) {
+      message = error.message;
+    } else if (error?.error?.message) {
+      message = error.error.message;
     }
-  }
 
-  throw lastError || new Error('Transcription failed after retries');
+    if (error?.message?.includes('Connection error')) {
+      message += '. This may be a temporary network issue - please try again.';
+    }
+
+    console.error('[LLM] Transcription failed:', message);
+    const wrappedError = new Error(message);
+    wrappedError.originalError = error;
+    throw wrappedError;
+  }
 }
 
 module.exports = {

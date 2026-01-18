@@ -209,6 +209,9 @@ Current: `ui/hooks/useNoteEditor.ts` — 3x over limit
 - [ ] Standardize storage key naming conventions
 - [ ] Remove duplicate `AppError` class (backend/middleware vs core/errors)
 
+### G6. Build Script Guardrails
+- [x] Add backend `npm run check` (syntax check + tests)
+
 ---
 
 ## Definition of Done (Updated)

@@ -8,10 +8,10 @@ This guide walks through deploying the Lock-in backend to Azure Container Apps w
 
 Lock-in uses **two separate Supabase projects** for environment isolation:
 
-| Environment | Supabase Project | Use Case |
-|-------------|-----------------|----------|
+| Environment     | Supabase Project       | Use Case                    |
+| --------------- | ---------------------- | --------------------------- |
 | **Development** | `uszxfuzauetcchwcgufe` | Local dev, staging, testing |
-| **Production** | `vtuflatvllpldohhimao` | Real users, real data |
+| **Production**  | `vtuflatvllpldohhimao` | Real users, real data       |
 
 **Key Principles:**
 
@@ -23,6 +23,7 @@ Lock-in uses **two separate Supabase projects** for environment isolation:
 **Backend Configuration:**
 
 The backend automatically selects the correct Supabase project based on `NODE_ENV`:
+
 - `NODE_ENV=development` → Uses `SUPABASE_URL_DEV`, `SUPABASE_SERVICE_ROLE_KEY_DEV`
 - `NODE_ENV=production` → Uses `SUPABASE_URL_PROD`, `SUPABASE_SERVICE_ROLE_KEY_PROD`
 
@@ -148,18 +149,18 @@ Collect these values for **EACH ENVIRONMENT**:
 
 **Development Supabase (uszxfuzauetcchwcgufe):**
 
-| Variable                    | Where to Get It                                        |
-| --------------------------- | ------------------------------------------------------ |
-| `SUPABASE_URL_DEV`          | Supabase Dashboard → Settings → API (dev project)     |
-| `SUPABASE_ANON_KEY_DEV`     | Supabase Dashboard → Settings → API (anon key)        |
+| Variable                        | Where to Get It                                        |
+| ------------------------------- | ------------------------------------------------------ |
+| `SUPABASE_URL_DEV`              | Supabase Dashboard → Settings → API (dev project)      |
+| `SUPABASE_ANON_KEY_DEV`         | Supabase Dashboard → Settings → API (anon key)         |
 | `SUPABASE_SERVICE_ROLE_KEY_DEV` | Supabase Dashboard → Settings → API (service_role key) |
 
 **Production Supabase (vtuflatvllpldohhimao):**
 
-| Variable                    | Where to Get It                                        |
-| --------------------------- | ------------------------------------------------------ |
-| `SUPABASE_URL_PROD`         | Supabase Dashboard → Settings → API (prod project)    |
-| `SUPABASE_ANON_KEY_PROD`    | Supabase Dashboard → Settings → API (anon key)        |
+| Variable                         | Where to Get It                                        |
+| -------------------------------- | ------------------------------------------------------ |
+| `SUPABASE_URL_PROD`              | Supabase Dashboard → Settings → API (prod project)     |
+| `SUPABASE_ANON_KEY_PROD`         | Supabase Dashboard → Settings → API (anon key)         |
 | `SUPABASE_SERVICE_ROLE_KEY_PROD` | Supabase Dashboard → Settings → API (service_role key) |
 
 **Azure OpenAI (primary provider):**
@@ -175,10 +176,10 @@ Collect these values for **EACH ENVIRONMENT**:
 
 **Shared Credentials:**
 
-| Variable                    | Where to Get It                                        |
-| --------------------------- | ------------------------------------------------------ |
-| `OPENAI_API_KEY`            | https://platform.openai.com/api-keys (fallback only)   |
-| `SENTRY_DSN`                | Sentry Dashboard → Project → Settings → Client Keys    |
+| Variable         | Where to Get It                                     |
+| ---------------- | --------------------------------------------------- |
+| `OPENAI_API_KEY` | https://platform.openai.com/api-keys (fallback only) |
+| `SENTRY_DSN`     | Sentry Dashboard → Project → Settings → Client Keys |
 
 ---
 
@@ -470,7 +471,82 @@ const ALLOWED_ORIGINS = [
 
 ## Phase 6: Monitoring Setup
 
-### 6.1 Azure Monitor Alerts
+### 6.1 Azure OpenAI Diagnostic Settings (Recommended)
+
+Enable diagnostic logging on your Azure OpenAI resource to track usage, costs, and troubleshoot issues:
+
+1. **Azure Portal** → Azure OpenAI resource (`lock-in-openai-dev`)
+2. **Monitoring** → **Diagnostic settings** → **Add diagnostic setting**
+3. Configure:
+   - **Name**: `lock-in-openai-diagnostics`
+   - **Logs** (check all):
+     - ✅ Audit
+     - ✅ Request and Response Logs
+     - ✅ Azure OpenAI Request Usage
+     - ✅ Trace Logs
+   - **Metrics**:
+     - ✅ AllMetrics
+   - **Destination**: Send to Log Analytics workspace
+     - Create new workspace in `lock-in-prod` resource group if needed
+
+**Benefits**:
+- Track token usage per model/deployment
+- Monitor request latency and errors
+- Debug failed API calls with request/response details
+- Cost analysis via Log Analytics queries
+
+### 6.2 Application Insights (Recommended)
+
+The backend now supports Azure Application Insights for Azure-native APM:
+
+1. **Create Application Insights resource**:
+   ```bash
+   # Create Log Analytics workspace (if not exists)
+   az monitor log-analytics workspace create \
+       --name lock-in-logs \
+       --resource-group lock-in-prod \
+       --location australiaeast
+
+   # Create Application Insights
+   az monitor app-insights component create \
+       --app lock-in-backend-insights \
+       --resource-group lock-in-prod \
+       --location australiaeast \
+       --workspace lock-in-logs
+   ```
+
+2. **Get connection string**:
+   ```bash
+   az monitor app-insights component show \
+       --app lock-in-backend-insights \
+       --resource-group lock-in-prod \
+       --query connectionString -o tsv
+   ```
+
+3. **Add to Key Vault**:
+   ```bash
+   az keyvault secret set \
+       --vault-name lock-in-secrets \
+       --name "APPLICATIONINSIGHTS-CONNECTION-STRING" \
+       --value "InstrumentationKey=xxx;IngestionEndpoint=..."
+   ```
+
+4. **Add to Container App environment**:
+   ```bash
+   az containerapp update \
+       --name lock-in-backend \
+       --resource-group lock-in-prod \
+       --set-env-vars "APPLICATIONINSIGHTS_CONNECTION_STRING=secretref:applicationinsights-connection-string"
+   ```
+
+**What you get**:
+- Request tracing with correlation IDs
+- Dependency tracking (Supabase, Azure OpenAI calls)
+- Performance metrics and latency histograms
+- Live metrics stream in Azure Portal
+- Custom LLM token usage metrics
+
+### 6.3 Azure Monitor Alerts
 
 ```bash
 # Create alert for high error rate
