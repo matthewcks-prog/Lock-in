@@ -24,10 +24,6 @@ jobs:
         run: npm ci
         working-directory: backend
 
-      - name: Run backend linting
-        working-directory: backend
-        run: npm run lint
-
       - name: Setup backend environment
         run: |
           echo "NODE_ENV=test" >> backend/.env

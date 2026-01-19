@@ -8,7 +8,6 @@ export default [
   {
     ignores: [
       '**/node_modules/**',
-      'backend/**',
       'extension/dist/**',
       '**/dist/**',
       '**/build/**',
@@ -172,6 +171,61 @@ export default [
           ],
         },
       ],
+    },
+  },
+
+  // Backend-specific configuration
+  {
+    files: ['backend/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs', // Backend uses CommonJS (require/module.exports)
+      globals: {
+        process: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        Buffer: 'readonly',
+        console: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
+        global: 'readonly',
+        fetch: 'readonly', // Node.js 18+ built-in
+        FormData: 'readonly', // Node.js 18+ built-in
+        Headers: 'readonly', // Node.js 18+ built-in
+        Request: 'readonly', // Node.js 18+ built-in
+        Response: 'readonly', // Node.js 18+ built-in
+        URL: 'readonly', // Node.js 18+ built-in
+        URLSearchParams: 'readonly', // Node.js 18+ built-in
+        AbortController: 'readonly', // Node.js 18+ built-in
+        AbortSignal: 'readonly', // Node.js 18+ built-in
+      },
+    },
+    rules: {
+      'no-console': 'off', // Allow console in backend
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      'no-undef': 'error',
+    },
+  },
+  {
+    files: ['backend/**/*.test.js'],
+    languageOptions: {
+      globals: {
+        test: 'readonly',
+        describe: 'readonly',
+        it: 'readonly',
+        before: 'readonly',
+        after: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+      },
+    },
+    rules: {
+      'no-undef': 'off', // Test globals
     },
   },
   prettierConfig,
