@@ -3,8 +3,6 @@
 # Use this to test the containerized backend before Azure deployment
 # =============================================================================
 
-version: '3.8'
-
 services:
   backend:
     build:
@@ -14,11 +12,13 @@ services:
     ports:
       - '3000:3000'
     environment:
-      # Environment selection (always development for local Docker)
+      # Environment selection (ALWAYS development for local Docker testing)
+      # This overrides any NODE_ENV set in the Dockerfile
       - NODE_ENV=development
       - PORT=3000
 
       # Development Supabase ONLY (never mix dev/prod in local env)
+      # Backend will use *_DEV variables when NODE_ENV=development
       - SUPABASE_URL_DEV=${SUPABASE_URL_DEV}
       - SUPABASE_SERVICE_ROLE_KEY_DEV=${SUPABASE_SERVICE_ROLE_KEY_DEV}
       - SUPABASE_ANON_KEY_DEV=${SUPABASE_ANON_KEY_DEV:-}
@@ -75,40 +75,27 @@ volumes:
 # =============================================================================
 # Usage:
 #
-# 1. Create backend/.env file with DEVELOPMENT credentials:
+# 1. Create .env file in project root (NOT backend/.env) with DEVELOPMENT credentials:
 #
-#    NODE_ENV=development
 #    SUPABASE_URL_DEV=https://your-dev-project.supabase.co
 #    SUPABASE_SERVICE_ROLE_KEY_DEV=eyJ...
+#    SUPABASE_ANON_KEY_DEV=eyJ...
 #    AZURE_OPENAI_API_KEY=your-key
 #    AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
 #    AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o-mini
 #    OPENAI_API_KEY=sk-... (optional fallback)
 #    SENTRY_DSN=https://...@sentry.io/...  (optional)
 #
-# 2. Start container:
+# 2. Start Docker Desktop
+#
+# 3. Start container:
 #    docker-compose up --build
 #
-# 3. Test endpoint:
+# 4. Test endpoint:
 #    curl http://localhost:3000/health
 #
 # ⚠️ SECURITY: Docker Compose is for LOCAL DEVELOPMENT ONLY.
-#    - Never use production credentials in docker-compose.yml
+#    - Never use production credentials
 #    - For production deployment, use Azure Container Apps with Key Vault
 #    - docker-compose.yml should ONLY reference *_DEV environment variables
-#
-# 2. Build and run (development by default):
-#    docker-compose up --build
-#
-# 3. Run with production config:
-#    NODE_ENV=production docker-compose up --build
-#
-# 4. Test health endpoint:
-#    curl http://localhost:3000/health
-#
-# 5. Stop:
-#    docker-compose down
-#
-# 6. View logs:
-#    docker-compose logs -f backend
 # =============================================================================

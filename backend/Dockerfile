@@ -59,8 +59,10 @@ RUN mkdir -p /tmp/transcripts && \
 USER nodejs
 
 # Environment configuration
-ENV NODE_ENV=production \
-    PORT=3000 \
+# NOTE: NODE_ENV is NOT set here - it should be provided at runtime:
+#   - docker-compose.yml sets it to 'development' for local testing
+#   - Azure Container Apps sets it to 'development' (staging) or 'production'
+ENV PORT=3000 \
     TRANSCRIPTION_TEMP_DIR=/tmp/transcripts
 
 # Expose the application port

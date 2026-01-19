@@ -81,8 +81,8 @@ jobs:
           docker run -d --name test-container -p 3000:3000 \
             -e NODE_ENV=development \
             -e OPENAI_API_KEY=test-key \
-            -e SUPABASE_URL=https://test.supabase.co \
-            -e SUPABASE_SERVICE_ROLE_KEY=test-key \
+            -e SUPABASE_URL_DEV=https://test.supabase.co \
+            -e SUPABASE_SERVICE_ROLE_KEY_DEV=test-key \
             ${{ env.IMAGE_NAME }}:test
 
       - name: Wait for container to be healthy
