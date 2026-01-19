@@ -15,7 +15,7 @@ initSentry();
 
 // Now import everything else - Sentry will automatically instrument these
 const { createApp } = require('./app');
-const { PORT } = require('./config');
+const { PORT, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = require('./config');
 const {
   startTranscriptJobReaper,
   stopTranscriptJobReaper,
@@ -28,8 +28,16 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 if (isProduction) {
   // Fail fast on missing critical environment variables in production
-  const requiredEnvVars = ['OPENAI_API_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'];
-  const missingVars = requiredEnvVars.filter((v) => !process.env[v]);
+  const missingVars = [];
+  if (!process.env.OPENAI_API_KEY) {
+    missingVars.push('OPENAI_API_KEY');
+  }
+  if (!SUPABASE_URL) {
+    missingVars.push('SUPABASE_URL_(selected)');
+  }
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    missingVars.push('SUPABASE_SERVICE_ROLE_KEY_(selected)');
+  }
 
   if (missingVars.length > 0) {
     console.error(`FATAL: Missing required environment variables: ${missingVars.join(', ')}`);

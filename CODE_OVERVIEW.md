@@ -24,7 +24,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`config.js`**
   - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key).
-  - Single source of truth for runtime URLs.
+  - Generated from env via `scripts/generate-extension-config.mjs`.
 
 - **`contentScript-react.js`**
   - Thin orchestrator injected into webpages.
@@ -196,6 +196,12 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`supabaseClient.js`**
   - Configured Supabase client instance used across the data layer.
+
+### Database Migrations
+
+- **`supabase/migrations/`**
+  - Canonical migrations managed by Supabase CLI (local source of truth).
+  - Applied to dev/prod via `supabase db push`.
 
 ### Services
 

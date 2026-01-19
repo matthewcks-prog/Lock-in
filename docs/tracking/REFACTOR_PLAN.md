@@ -156,6 +156,9 @@ Current: `ui/hooks/useNoteEditor.ts` — 3x over limit
 - [ ] Update `mcp.json.template` to match documented servers OR update README
 - [ ] Ensure `validate-mcp-setup.ps1` matches actual file structure
 
+### E6. Supabase Workflow Guardrails
+- [x] Add local → dev → prod migration workflow + scripts
+
 ---
 
 ## Phase F: Performance & Scalability

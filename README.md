@@ -96,16 +96,51 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
    The server will start at `http://localhost:3000`
 
+### 1.5 Database Workflow (Local → Dev → Prod)
+
+This repo uses Supabase CLI migrations as the source of truth. Do not edit
+schemas manually in the Supabase dashboard.
+Local development requires Docker Desktop and the Supabase CLI.
+
+**Local (source of truth):**
+
+```bash
+npm run supabase:start
+npm run supabase:migration:new -- add_feature_name
+```
+
+**Apply migrations to dev/prod:**
+
+```bash
+npm run supabase:push:dev
+npm run supabase:push:prod
+```
+
+**Required env vars (no secrets committed):**
+
+```env
+SUPABASE_ENV=local|dev|prod
+SUPABASE_URL_LOCAL=http://127.0.0.1:54331
+SUPABASE_ANON_KEY_LOCAL=...
+SUPABASE_SERVICE_ROLE_KEY_LOCAL=...
+SUPABASE_URL_DEV=...
+SUPABASE_ANON_KEY_DEV=...
+SUPABASE_SERVICE_ROLE_KEY_DEV=...
+SUPABASE_URL_PROD=...
+SUPABASE_ANON_KEY_PROD=...
+SUPABASE_SERVICE_ROLE_KEY_PROD=...
+SUPABASE_PROJECT_REF_DEV=...
+SUPABASE_PROJECT_REF_PROD=...
+```
+
+See `docs/setup/LOCAL_SUPABASE_SETUP.md` for the full workflow.
+
 ### 2. Chrome Extension Setup
 
-1. Configure `extension/config.js`:
+1. Generate `extension/config.js`:
 
-   ```javascript
-   window.LOCKIN_CONFIG = {
-     BACKEND_URL: 'http://localhost:3000',
-     SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
-     SUPABASE_ANON_KEY: 'your-anon-key',
-   };
+   ```bash
+   LOCKIN_APP_ENV=local npm run extension:config
    ```
 
 2. Open Chrome and navigate to `chrome://extensions/`

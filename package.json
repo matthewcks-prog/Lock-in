@@ -22,7 +22,15 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "extension:config": "node scripts/generate-extension-config.mjs",
+    "supabase:start": "node scripts/supabase.mjs start",
+    "supabase:stop": "node scripts/supabase.mjs stop",
+    "supabase:status": "node scripts/supabase.mjs status",
+    "supabase:migration:new": "node scripts/supabase.mjs migration:new",
+    "supabase:migration:diff": "node scripts/supabase.mjs migration:diff",
+    "supabase:push:dev": "node scripts/supabase.mjs push:dev",
+    "supabase:push:prod": "node scripts/supabase.mjs push:prod"
   },
   "dependencies": {
     "@lexical/code": "^0.17.0",

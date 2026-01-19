@@ -1,6 +1,8 @@
-# Database Migrations
+# Database Migrations (Deprecated Location)
 
-This directory contains SQL migrations for the Lock-in Supabase database.
+This directory previously held SQL migrations for the Lock-in Supabase database.
+The canonical migration source of truth is now `supabase/migrations/` via the
+Supabase CLI. Keep these files for historical reference only.
 
 ## Migration Overview
 
@@ -18,28 +20,33 @@ This directory contains SQL migrations for the Lock-in Supabase database.
 | `010_chat_assets.sql` | Chat attachments | `chat_message_assets` table |
 | `011_chat_assets_cleanup.sql` | Orphan cleanup | Cleanup function for unlinked assets |
 
-## Running Migrations
+## Running Migrations (Current Workflow)
 
-### Manual (Current Method)
+Use the Supabase CLI and the migrations in `supabase/migrations/`. Do not
+manually edit schemas in Supabase Dashboard.
 
-1. Open [Supabase Dashboard](https://supabase.com/dashboard) → SQL Editor
-2. Run each migration file in numeric order (001, 002, 003, ...)
-3. Verify no errors in output
+### Local (Source of Truth)
 
-### Automated (Future)
+```bash
+supabase start
+supabase db reset
+```
 
-See the migration automation setup in `backend/package.json` (coming soon).
+### Dev/Prod (Apply migrations)
+
+```bash
+supabase db push --project-ref <project-ref>
+```
 
 ## Writing New Migrations
 
 ### Naming Convention
 
-```
-NNN_descriptive_name.sql
-```
+Supabase CLI uses timestamp-based names:
 
-- `NNN` = 3-digit sequential number (012, 013, etc.)
-- `descriptive_name` = snake_case description of changes
+```
+YYYYMMDDHHMMSS_descriptive_name.sql
+```
 
 ### Best Practices
 
@@ -143,4 +150,5 @@ Currently, migrations are forward-only. For rollbacks:
 ## Related Documentation
 
 - [DATABASE.md](../../DATABASE.md) - Full schema documentation
+- [docs/setup/LOCAL_SUPABASE_SETUP.md](../../docs/setup/LOCAL_SUPABASE_SETUP.md) - Local workflow
 - [AZURE_DEPLOYMENT.md](../../docs/setup/AZURE_DEPLOYMENT.md) - Deployment guide

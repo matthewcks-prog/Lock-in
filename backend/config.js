@@ -16,6 +16,25 @@ const chatLimits = require('../core/config/chatLimits.json');
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
 const IS_DEVELOPMENT = NODE_ENV === 'development';
+const SUPABASE_ENV = (process.env.SUPABASE_ENV || (IS_PRODUCTION ? 'prod' : 'dev')).toLowerCase();
+
+function normalizeSupabaseEnv(value) {
+  if (!value) {
+    return 'dev';
+  }
+  if (value === 'production' || value === 'prod') {
+    return 'prod';
+  }
+  if (value === 'development' || value === 'dev') {
+    return 'dev';
+  }
+  if (value === 'local') {
+    return 'local';
+  }
+  return 'dev';
+}
+
+const EFFECTIVE_SUPABASE_ENV = normalizeSupabaseEnv(SUPABASE_ENV);
 
 /**
  * Get environment-aware Supabase configuration.
@@ -26,7 +45,7 @@ const IS_DEVELOPMENT = NODE_ENV === 'development';
  * (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) for backward compatibility
  */
 function getSupabaseConfig() {
-  if (IS_PRODUCTION) {
+  if (EFFECTIVE_SUPABASE_ENV === 'prod') {
     return {
       url: process.env.SUPABASE_URL_PROD || process.env.SUPABASE_URL,
       serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_PROD || process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -34,7 +53,19 @@ function getSupabaseConfig() {
       environment: 'production',
     };
   }
-  
+
+  if (EFFECTIVE_SUPABASE_ENV === 'local') {
+    return {
+      url: process.env.SUPABASE_URL_LOCAL || process.env.SUPABASE_URL_DEV || process.env.SUPABASE_URL,
+      serviceRoleKey:
+        process.env.SUPABASE_SERVICE_ROLE_KEY_LOCAL ||
+        process.env.SUPABASE_SERVICE_ROLE_KEY_DEV ||
+        process.env.SUPABASE_SERVICE_ROLE_KEY,
+      anonKey: process.env.SUPABASE_ANON_KEY_LOCAL || process.env.SUPABASE_ANON_KEY_DEV || process.env.SUPABASE_ANON_KEY,
+      environment: 'local',
+    };
+  }
+
   // Development or staging
   return {
     url: process.env.SUPABASE_URL_DEV || process.env.SUPABASE_URL,
@@ -50,7 +81,7 @@ const SUPABASE_CONFIG = getSupabaseConfig();
 if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.serviceRoleKey) {
   console.error(
     `CRITICAL: Missing Supabase credentials for ${NODE_ENV} environment.`,
-    `Expected: SUPABASE_URL_${IS_PRODUCTION ? 'PROD' : 'DEV'} and SUPABASE_SERVICE_ROLE_KEY_${IS_PRODUCTION ? 'PROD' : 'DEV'}`
+    `Expected: SUPABASE_URL_${EFFECTIVE_SUPABASE_ENV.toUpperCase()} and SUPABASE_SERVICE_ROLE_KEY_${EFFECTIVE_SUPABASE_ENV.toUpperCase()}`
   );
 }
 
@@ -209,6 +240,7 @@ module.exports = {
   NODE_ENV,
   IS_PRODUCTION,
   IS_DEVELOPMENT,
+  SUPABASE_ENV,
   
   // Supabase Configuration
   SUPABASE_CONFIG,

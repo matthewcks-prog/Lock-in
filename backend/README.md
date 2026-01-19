@@ -11,12 +11,20 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
    ```
 
 2. **Set up environment:**
-   Create a `.env` file:
+   Create a `.env` file (or `.env.local`):
 
    ```env
    OPENAI_API_KEY=your_openai_api_key_here
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+   SUPABASE_ENV=local|dev|prod
+   SUPABASE_URL_LOCAL=http://127.0.0.1:54331
+   SUPABASE_ANON_KEY_LOCAL=your_local_anon_key
+   SUPABASE_SERVICE_ROLE_KEY_LOCAL=your_local_service_role_key
+   SUPABASE_URL_DEV=your_supabase_dev_url
+   SUPABASE_ANON_KEY_DEV=your_supabase_dev_anon_key
+   SUPABASE_SERVICE_ROLE_KEY_DEV=your_supabase_dev_service_role_key
+   SUPABASE_URL_PROD=your_supabase_prod_url
+   SUPABASE_ANON_KEY_PROD=your_supabase_prod_anon_key
+   SUPABASE_SERVICE_ROLE_KEY_PROD=your_supabase_prod_service_role_key
    PORT=3000
    DAILY_REQUEST_LIMIT=100
    CHAT_LIST_LIMIT=20
@@ -272,8 +280,16 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 | Variable                    | Description                          | Default |
 | --------------------------- | ------------------------------------ | ------- |
 | `OPENAI_API_KEY`            | Your OpenAI API key (required)       | -       |
-| `SUPABASE_URL`              | Supabase project URL (required)      | -       |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (required) | -       |
+| `SUPABASE_ENV`              | local/dev/prod selector              | dev     |
+| `SUPABASE_URL_LOCAL`        | Local Supabase API URL               | -       |
+| `SUPABASE_ANON_KEY_LOCAL`   | Local Supabase anon key              | -       |
+| `SUPABASE_SERVICE_ROLE_KEY_LOCAL` | Local service role key         | -       |
+| `SUPABASE_URL_DEV`          | Dev Supabase API URL                 | -       |
+| `SUPABASE_ANON_KEY_DEV`     | Dev Supabase anon key                | -       |
+| `SUPABASE_SERVICE_ROLE_KEY_DEV` | Dev service role key             | -       |
+| `SUPABASE_URL_PROD`         | Prod Supabase API URL                | -       |
+| `SUPABASE_ANON_KEY_PROD`    | Prod Supabase anon key               | -       |
+| `SUPABASE_SERVICE_ROLE_KEY_PROD` | Prod service role key           | -       |
 | `PORT`                      | Server port                          | 3000    |
 | `DAILY_REQUEST_LIMIT`       | Requests per user per day            | 100     |
 | `CHAT_LIST_LIMIT`           | Default chat list size               | 20      |

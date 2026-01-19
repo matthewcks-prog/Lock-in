@@ -77,10 +77,10 @@ supabase --version
 **Navigate to project root:**
 
 ```bash
-cd C:/Users/matth/Lock-in
+cd <repo-root>
 ```
 
-**Initialize Supabase (creates `supabase/` directory):**
+**Initialize Supabase (only needed if `supabase/config.toml` is missing):**
 
 ```bash
 supabase init
@@ -89,13 +89,13 @@ supabase init
 **Expected output:**
 
 ```
-✔ Port for Supabase local DB: · 54322
-✔ Port for Supabase API: · 54321
-✔ Port for Supabase Studio: · 54323
+✔ Port for Supabase local DB: · 54326
+✔ Port for Supabase API: · 54331
+✔ Port for Supabase Studio: · 54335
 Finished supabase init.
 ```
 
-**What this creates:**
+**What this creates (already in this repo):**
 
 ```
 Lock-in/
@@ -157,14 +157,14 @@ ls supabase/migrations/
 **Start all Supabase services (Docker containers):**
 
 ```bash
-supabase start
+npm run supabase:start
 ```
 
 **What runs:**
 
-- PostgreSQL database (port 54322)
-- PostgREST API (port 54321)
-- Supabase Studio UI (port 54323)
+- PostgreSQL database (port 54326)
+- PostgREST API (port 54331)
+- Supabase Studio UI (port 54335)
 - GoTrue auth server
 - Storage server
 - Realtime server
@@ -174,13 +174,12 @@ supabase start
 ```
 Started supabase local development setup.
 
-         API URL: http://localhost:54321
-          DB URL: postgresql://postgres:postgres@localhost:54322/postgres
-      Studio URL: http://localhost:54323
-    Inbucket URL: http://localhost:54324
-        JWT secret: super-secret-jwt-token-with-at-least-32-characters-long
-          anon key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-service_role key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+         API URL: http://127.0.0.1:54331
+          DB URL: postgresql://postgres:postgres@127.0.0.1:54326/postgres
+      Studio URL: http://127.0.0.1:54335
+    Inbucket URL: http://127.0.0.1:54334
+   Publishable key: sb_publishable_xxx
+        Secret key: sb_secret_xxx
 ```
 
 **Save these credentials** - you'll need them for local development.
@@ -192,7 +191,7 @@ service_role key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 **Open in browser:**
 
 ```
-http://localhost:54323
+http://127.0.0.1:54335
 ```
 
 **What you can do:**
@@ -209,16 +208,19 @@ http://localhost:54323
 
 ## Step 7: Configure Backend for Local Supabase
 
-**Option A: Environment-specific .env file**
+**Option A: Environment-specific .env file (recommended)**
 
-Create `.env.local` in project root:
+Create `.env` in `backend/`:
 
 ```bash
+cd backend
+
 # Local Supabase Configuration
 NODE_ENV=development
-SUPABASE_URL_DEV=http://localhost:54321
-SUPABASE_ANON_KEY_DEV=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...  # From supabase start output
-SUPABASE_SERVICE_ROLE_KEY_DEV=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...  # From supabase start output
+SUPABASE_ENV=local
+SUPABASE_URL_LOCAL=http://127.0.0.1:54331
+SUPABASE_ANON_KEY_LOCAL=sb_publishable_xxx  # From supabase start output
+SUPABASE_SERVICE_ROLE_KEY_LOCAL=sb_secret_xxx  # From supabase start output
 
 # OpenAI (still needs remote API)
 OPENAI_API_KEY=sk-your-api-key-here
@@ -231,29 +233,28 @@ PORT=3000
 
 ```bash
 # Set for current terminal session only
-export SUPABASE_URL_DEV=http://localhost:54321
-export SUPABASE_ANON_KEY_DEV=eyJhbGci...
-export SUPABASE_SERVICE_ROLE_KEY_DEV=eyJhbGci...
+export SUPABASE_ENV=local
+export SUPABASE_URL_LOCAL=http://127.0.0.1:54331
+export SUPABASE_ANON_KEY_LOCAL=sb_publishable_xxx
+export SUPABASE_SERVICE_ROLE_KEY_LOCAL=sb_secret_xxx
 
 # Run backend
-npm run backend:start
+npm run dev
 ```
 
 ---
 
 ## Step 8: Configure Extension for Local Supabase
 
-**Update `extension/config.js` (for local testing only):**
+**Generate `extension/config.js` (for local testing only):**
 
-```javascript
-// Temporary: Point to local Supabase
-url: 'http://localhost:54321',
-anonKey: 'eyJhbGci...',  // From supabase start output
+```bash
+LOCKIN_APP_ENV=local npm run extension:config
 ```
 
 **Important:**
 
-- Do NOT commit this change
+- Do NOT commit generated secrets
 - Only for local extension testing
 - Revert before building for deployment
 
@@ -316,7 +317,7 @@ supabase db reset
 
 ```bash
 # Create new migration file
-supabase migration new add_tags_to_notes
+npm run supabase:migration:new -- add_tags_to_notes
 
 # Opens: supabase/migrations/YYYYMMDDHHMMSS_add_tags_to_notes.sql
 ```
@@ -344,8 +345,10 @@ supabase db reset
 **After testing locally, push to dev:**
 
 ```bash
-supabase db push
+npm run supabase:push:dev
 ```
+
+Requires `SUPABASE_PROJECT_REF_DEV` in your environment (and `supabase login` or `SUPABASE_ACCESS_TOKEN`).
 
 **What this does:**
 
@@ -362,10 +365,10 @@ supabase db push
 
 ```bash
 # Start all services
-supabase start
+npm run supabase:start
 
 # Stop all services (preserves data)
-supabase stop
+npm run supabase:stop
 
 # Stop and remove all data
 supabase stop --no-backup
@@ -387,14 +390,14 @@ supabase db shell
 supabase db execute --file path/to/file.sql
 
 # Diff local vs dev database
-supabase db diff
+npm run supabase:migration:diff -- -f remote_schema
 ```
 
 ### Migration Management
 
 ```bash
 # Create new migration
-supabase migration new migration_name
+npm run supabase:migration:new -- migration_name
 
 # List migrations
 supabase migration list
@@ -403,14 +406,15 @@ supabase migration list
 supabase migration up --version 20260117000000
 
 # Push migrations to remote (dev/prod)
-supabase db push
+npm run supabase:push:dev
+npm run supabase:push:prod
 ```
 
 ### Status & Logs
 
 ```bash
 # Check service status
-supabase status
+npm run supabase:status
 
 # View logs
 supabase logs
@@ -426,25 +430,27 @@ supabase logs --api
 
 ```bash
 # 1. Start local Supabase
-supabase start
+npm run supabase:start
 
 # 2. Run backend pointing to local
-npm run backend:start
+cd backend
+npm run dev
 
-# 3. Load extension (already points to local in config.js)
+# 3. Generate extension config + load unpacked extension
+LOCKIN_APP_ENV=local npm run extension:config
 # Open Chrome -> Load unpacked -> extension/
 
 # 4. Develop features, test locally
 
 # 5. Stop local Supabase when done
-supabase stop
+npm run supabase:stop
 ```
 
 ### Schema Change Workflow
 
 ```bash
 # 1. Create migration for schema change
-supabase migration new add_new_feature
+npm run supabase:migration:new -- add_new_feature
 
 # 2. Edit generated SQL file
 # supabase/migrations/YYYYMMDDHHMMSS_add_new_feature.sql
@@ -453,10 +459,11 @@ supabase migration new add_new_feature
 supabase db reset
 
 # 4. Test backend with new schema
-npm run backend:start
+cd backend
+npm run dev
 
 # 5. If all works, push to dev
-supabase db push
+npm run supabase:push:dev
 
 # 6. Commit migration file to git
 git add supabase/migrations/
@@ -482,18 +489,18 @@ git push
 
 ### Port Already in Use
 
-**Symptom:** `Error: port 54321 already allocated`
+**Symptom:** `Error: port 54331 already allocated`
 
 **Solution:**
 
 ```bash
 # Check what's using the port
-netstat -ano | findstr :54321  # Windows
-lsof -i :54321                 # macOS/Linux
+netstat -ano | findstr :54331  # Windows
+lsof -i :54331                 # macOS/Linux
 
 # Kill the process or change port in supabase/config.toml
 [api]
-port = 54321  # Change to 54326 or another port
+port = 54331  # Change to another unused port
 ```
 
 ### Migration Conflict
@@ -517,8 +524,9 @@ supabase db reset
 **Check:**
 
 1. `supabase status` shows all services running
-2. `.env` has correct `SUPABASE_URL_DEV=http://localhost:54321`
+2. `.env` has correct `SUPABASE_URL_LOCAL=http://127.0.0.1:54331`
 3. Anon key matches output from `supabase start`
+4. The backend is running from `backend/` so it loads the correct `.env`
 
 ---
 
@@ -526,7 +534,7 @@ supabase db reset
 
 | Environment | Database | URL | Use Case |
 |-------------|----------|-----|----------|
-| **Local** | Local Docker | `localhost:54321` | Offline dev, schema changes, testing |
+| **Local** | Local Docker | `127.0.0.1:54331` | Offline dev, schema changes, testing |
 | **Dev/Staging** | `uszxfuzauetcchwcgufe` | `https://uszxfuzauetcchwcgufe.supabase.co` | Team testing, integration tests |
 | **Production** | `vtuflatvllpldohhimao` | `https://vtuflatvllpldohhimao.supabase.co` | Real users, real data |
 

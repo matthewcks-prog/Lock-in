@@ -104,20 +104,25 @@ Feedback is stored in the database for review via Supabase Studio or a future ad
 
 ## Configuration
 
-### `config.js`
+### `config.js` (Generated)
 
-All runtime URLs live in `extension/config.js`:
+`extension/config.js` is generated from environment variables:
 
-```javascript
-window.LOCKIN_CONFIG = {
-  BACKEND_URL: 'http://localhost:3000',
-  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
-  SUPABASE_ANON_KEY: 'your-anon-key',
-  // SENTRY_DSN is injected at build time via VITE_SENTRY_DSN
-};
+```bash
+# Example: local
+LOCKIN_APP_ENV=local npm run extension:config
 ```
 
-Update these values before loading the extension.
+**Required env vars (per environment):**
+
+```env
+BACKEND_URL_LOCAL=http://localhost:3000
+SUPABASE_URL_LOCAL=http://127.0.0.1:54331
+SUPABASE_ANON_KEY_LOCAL=...
+```
+
+Use `LOCKIN_APP_ENV=dev|prod` with matching `BACKEND_URL_DEV/PROD` and
+`SUPABASE_URL_DEV/PROD`, `SUPABASE_ANON_KEY_DEV/PROD`.
 
 ### Error Tracking (Sentry)
 
