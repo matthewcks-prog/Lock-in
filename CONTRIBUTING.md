@@ -7,6 +7,7 @@ Thank you for your interest in contributing to Lock-in! This document provides g
 1. **Read the documentation**:
    - [README.md](README.md) - Project overview
    - [AGENTS.md](AGENTS.md) - Development guidelines and architecture rules
+   - [ENVIRONMENTS.md](ENVIRONMENTS.md) - Environment setup and deployment workflow
    - [docs/README.md](docs/README.md) - Documentation structure
 
 2. **Set up your development environment**:
@@ -19,6 +20,74 @@ Thank you for your interest in contributing to Lock-in! This document provides g
    - Check [CODE_OVERVIEW.md](CODE_OVERVIEW.md) for implementation details
 
 ## Development Workflow
+
+### Git Workflow (Industry Standard)
+
+We follow a **GitFlow-inspired** workflow with protected branches:
+
+```
+main (protected)           ← Production deployments
+  ↑
+  │ PR with review
+  │
+develop                    ← Staging deployments, integration testing
+  ↑
+  │ PR or direct push
+  │
+feature/your-feature       ← Your feature branches
+```
+
+**Environment Mapping:**
+| Branch | Environment | Azure Resource |
+|--------|-------------|----------------|
+| `main` | Production | `lock-in-backend` |
+| `develop` | Staging | `lock-in-dev` |
+
+**Full workflow details**: See [ENVIRONMENTS.md](ENVIRONMENTS.md)
+
+**Quick Workflow:**
+
+1. **Create a feature branch from develop**:
+
+   ```bash
+   git checkout develop
+   git pull origin develop
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes** (following the rules below)
+
+3. **Run full validation before pushing**:
+
+   ```bash
+   npm run prepush   # type-check + lint + test + build + verify
+   ```
+
+4. **Push and create PR to develop**:
+
+   ```bash
+   git push origin feature/your-feature-name
+   gh pr create --base develop
+   ```
+
+5. **Once merged to develop**: Auto-deploys to Staging (`lock-in-dev`)
+
+6. **Promote to Production**: Create PR from `develop` → `main`
+
+   ```bash
+   gh pr create --base main --head develop --title "Release: feature description"
+   ```
+
+**Branch Protection Rules:**
+
+- ✅ All PRs require at least 1 approval
+- ✅ CI checks must pass (refactor-gate, tests)
+- ✅ Branch must be up to date before merging
+- ❌ Direct pushes to `main` are blocked
+- ❌ Force pushes to `main` are forbidden
+
+**Pre-push Hook:**
+A pre-push hook automatically runs validation before pushing. If it fails, fix the issues first.
 
 ### Before Making Changes
 

@@ -15,7 +15,17 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['**/__tests__/**/*.test.{ts,tsx}', '**/__tests__/**/*.test.js'],
-    exclude: ['**/node_modules/**', 'backend/**', 'extension/dist/**', 'dist/**'],
+    exclude: [
+      '**/node_modules/**',
+      'backend/**',
+      'extension/dist/**',
+      'dist/**',
+      // Backend integration tests - run separately with backend's test runner
+      // These require backend dependencies (openai, @supabase/supabase-js)
+      '**/backendOpenaiPrompt.test.ts',
+      '**/backendChatPagination.test.ts',
+      '**/backendLockinController.test.ts',
+    ],
     globals: true,
     restoreMocks: true,
     clearMocks: true,

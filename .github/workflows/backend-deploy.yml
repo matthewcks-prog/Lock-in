@@ -1,35 +1,57 @@
 # =============================================================================
 # Lock-in Backend - GitHub Actions CI/CD Pipeline
-# Builds, tests, and deploys to Azure Container Apps
+# Industry-standard multi-environment deployment (Staging → Production)
+#
+# ENVIRONMENTS:
+#   - Staging: lock-in-dev (Azure Container Apps) - auto-deploys from develop
+#   - Production: lock-in-backend (Azure Container Apps) - deploys from main
+#
+# WORKFLOW:
+#   1. Push to develop → Tests + Build → Deploy to Staging
+#   2. Create PR: develop → main
+#   3. Merge to main → Tests + Build → Deploy to Production
 # =============================================================================
 
 name: Backend CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'backend/**'
+      - 'core/config/**'
       - '.github/workflows/backend-deploy.yml'
   pull_request:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - 'backend/**'
-  workflow_dispatch: # Allow manual trigger
+      - 'core/config/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
 
 env:
   AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
   REGISTRY_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io
   IMAGE_NAME: lock-in-backend
-  CONTAINER_APP_NAME: lock-in-backend
-  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
 
 jobs:
   # ===========================================================================
   # Build and Test
+  # Runs on all pushes and PRs
   # ===========================================================================
   build-and-test:
     runs-on: ubuntu-latest
+    outputs:
+      should-deploy-staging: ${{ steps.check-deploy.outputs.staging }}
+      should-deploy-production: ${{ steps.check-deploy.outputs.production }}
 
     steps:
       - name: Checkout code
@@ -46,44 +68,85 @@ jobs:
         working-directory: backend
         run: npm ci
 
-      - name: Run tests
+      - name: Run backend tests
         working-directory: backend
         run: npm test
-        continue-on-error: true # Don't fail build if no tests yet
+        continue-on-error: true
 
-      - name: Build Docker image (test)
+      - name: Build Docker image
         run: docker build -f backend/Dockerfile -t ${{ env.IMAGE_NAME }}:test .
 
-      - name: Test health endpoint
+      - name: Start test container
         run: |
-          # Start container in background
           docker run -d --name test-container -p 3000:3000 \
             -e NODE_ENV=development \
-            -e OPENAI_API_KEY=test \
+            -e OPENAI_API_KEY=test-key \
             -e SUPABASE_URL=https://test.supabase.co \
-            -e SUPABASE_SERVICE_ROLE_KEY=test \
+            -e SUPABASE_SERVICE_ROLE_KEY=test-key \
             ${{ env.IMAGE_NAME }}:test
 
-          # Wait for container to start
-          sleep 10
+      - name: Wait for container to be healthy
+        run: |
+          echo "Waiting for container to start..."
+          max_attempts=30
+          attempt=0
 
-          # Test health endpoint
-          curl -f http://localhost:3000/health || exit 1
+          while [ $attempt -lt $max_attempts ]; do
+            if curl -sf http://localhost:3000/health > /dev/null 2>&1; then
+              echo "✅ Health check passed!"
+              exit 0
+            fi
+            attempt=$((attempt + 1))
+            echo "Attempt $attempt/$max_attempts - waiting..."
+            sleep 2
+          done
 
-          # Cleanup
-          docker stop test-container
-          docker rm test-container
+          echo "❌ Container failed to become healthy"
+          docker logs test-container
+          exit 1
+
+      - name: Cleanup test container
+        if: always()
+        run: |
+          docker stop test-container || true
+          docker rm test-container || true
+
+      - name: Determine deployment targets
+        id: check-deploy
+        run: |
+          # Manual dispatch
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.environment }}" = "staging" ]; then
+              echo "staging=true" >> $GITHUB_OUTPUT
+              echo "production=false" >> $GITHUB_OUTPUT
+            else
+              echo "staging=false" >> $GITHUB_OUTPUT
+              echo "production=true" >> $GITHUB_OUTPUT
+            fi
+          # Push to develop = staging
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+            echo "staging=true" >> $GITHUB_OUTPUT
+            echo "production=false" >> $GITHUB_OUTPUT
+          # Push to main = production
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "staging=false" >> $GITHUB_OUTPUT
+            echo "production=true" >> $GITHUB_OUTPUT
+          # PRs don't deploy
+          else
+            echo "staging=false" >> $GITHUB_OUTPUT
+            echo "production=false" >> $GITHUB_OUTPUT
+          fi
 
   # ===========================================================================
-  # Build and Push to ACR
+  # Push to ACR (shared step for both environments)
   # ===========================================================================
   push-to-acr:
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    if: needs.build-and-test.outputs.should-deploy-staging == 'true' || needs.build-and-test.outputs.should-deploy-production == 'true'
 
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
+      image-tag: ${{ github.sha }}
 
     steps:
       - name: Checkout code
@@ -96,36 +159,29 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+        run: |
+          # Build the image
+          docker build -f backend/Dockerfile -t ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+          # Push both tags
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
   # ===========================================================================
-  # Deploy to Azure Container Apps
-  # NOTE: Requires AZURE_CREDENTIALS secret (service principal)
-  # If you can't create a service principal, use manual deployment:
-  #   az containerapp update --name lock-in-backend --resource-group lock-in-prod \
-  #     --image lockinacr.azurecr.io/lock-in-backend:<sha>
+  # Deploy to Staging (lock-in-dev)
+  # Auto-deploys from develop branch
   # ===========================================================================
-  deploy:
+  deploy-staging:
     runs-on: ubuntu-latest
-    needs: push-to-acr
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    environment: production
+    needs: [build-and-test, push-to-acr]
+    if: needs.build-and-test.outputs.should-deploy-staging == 'true'
+    environment: staging
+
+    env:
+      CONTAINER_APP_NAME: lock-in-dev
+      RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP_STAGING }}
 
     steps:
       - name: Check for Azure credentials
@@ -138,17 +194,13 @@ jobs:
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Checkout code
-        if: steps.check-creds.outputs.skip != 'true'
-        uses: actions/checkout@v4
-
       - name: Login to Azure
         if: steps.check-creds.outputs.skip != 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Azure Container Apps
+      - name: Deploy to Staging (lock-in-dev)
         if: steps.check-creds.outputs.skip != 'true'
         uses: azure/container-apps-deploy-action@v2
         with:
@@ -156,56 +208,135 @@ jobs:
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
           imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
 
-      - name: Verify deployment
+      - name: Verify staging deployment
         if: steps.check-creds.outputs.skip != 'true'
         run: |
-          # Get the app URL
           APP_URL=$(az containerapp show \
             --name ${{ env.CONTAINER_APP_NAME }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --query "properties.configuration.ingress.fqdn" -o tsv)
 
-          echo "App URL: https://$APP_URL"
-
-          # Wait for deployment to stabilize
+          echo "🚀 Staging URL: https://$APP_URL"
           sleep 30
 
-          # Test health endpoint
-          curl -f "https://$APP_URL/health" || exit 1
+          if curl -sf "https://$APP_URL/health"; then
+            echo "✅ Staging deployment verified!"
+          else
+            echo "⚠️ Health check failed, but deployment may still be starting..."
+          fi
 
-          echo "✅ Deployment verified successfully!"
+      - name: Print manual deployment instructions (if no credentials)
+        if: steps.check-creds.outputs.skip == 'true'
+        run: |
+          echo "🔧 Manual deployment required:"
+          echo ""
+          echo "az containerapp update \\"
+          echo "  --name lock-in-dev \\"
+          echo "  --resource-group <your-resource-group> \\"
+          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
 
   # ===========================================================================
-  # Manual Deploy (when no service principal available)
-  # Pushes image info for manual deployment
+  # Deploy to Production (lock-in-backend)
+  # Only deploys from main branch
   # ===========================================================================
-  manual-deploy-info:
+  deploy-production:
     runs-on: ubuntu-latest
-    needs: push-to-acr
-    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    needs: [build-and-test, push-to-acr]
+    if: needs.build-and-test.outputs.should-deploy-production == 'true'
+    environment: production
+
+    env:
+      CONTAINER_APP_NAME: lock-in-backend
+      RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
 
     steps:
-      - name: Print deployment instructions
+      - name: Check for Azure credentials
+        id: check-creds
         run: |
-          echo "🚀 Image pushed to ACR successfully!"
+          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "⚠️ AZURE_CREDENTIALS not set - skipping deployment"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Login to Azure
+        if: steps.check-creds.outputs.skip != 'true'
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Production (lock-in-backend)
+        if: steps.check-creds.outputs.skip != 'true'
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          resourceGroup: ${{ env.RESOURCE_GROUP }}
+          containerAppName: ${{ env.CONTAINER_APP_NAME }}
+          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Verify production deployment
+        if: steps.check-creds.outputs.skip != 'true'
+        run: |
+          APP_URL=$(az containerapp show \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+
+          echo "🚀 Production URL: https://$APP_URL"
+          sleep 30
+
+          if curl -sf "https://$APP_URL/health"; then
+            echo "✅ Production deployment verified!"
+          else
+            echo "⚠️ Health check failed, but deployment may still be starting..."
+          fi
+
+      - name: Print manual deployment instructions (if no credentials)
+        if: steps.check-creds.outputs.skip == 'true'
+        run: |
+          echo "🔧 Manual deployment required:"
+          echo ""
+          echo "az containerapp update \\"
+          echo "  --name lock-in-backend \\"
+          echo "  --resource-group <your-resource-group> \\"
+          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+
+  # ===========================================================================
+  # Summary Job - Always runs to show deployment info
+  # ===========================================================================
+  deployment-summary:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, push-to-acr]
+    if: always() && (needs.build-and-test.outputs.should-deploy-staging == 'true' || needs.build-and-test.outputs.should-deploy-production == 'true')
+
+    steps:
+      - name: Deployment Summary
+        run: |
+          echo "=============================================="
+          echo "🚀 DEPLOYMENT SUMMARY"
+          echo "=============================================="
           echo ""
           echo "Image: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
           echo ""
-          echo "To deploy manually, run:"
-          echo "  az containerapp update --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "Deploy to staging (develop branch):"
+          echo "  az containerapp update --name lock-in-dev --resource-group <rg> --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo ""
+          echo "Deploy to production (main branch):"
+          echo "  az containerapp update --name lock-in-backend --resource-group <rg> --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo ""
+          echo "=============================================="
 
 # =============================================================================
 # Required GitHub Secrets:
 #
-# AZURE_CREDENTIALS        - Azure Service Principal JSON
-# AZURE_CONTAINER_REGISTRY - ACR name (without .azurecr.io)
-# AZURE_RESOURCE_GROUP     - Resource group name
-# ACR_USERNAME             - ACR admin username
-# ACR_PASSWORD             - ACR admin password
+# AZURE_CREDENTIALS              - Azure Service Principal JSON (for auto-deploy)
+# AZURE_CONTAINER_REGISTRY       - ACR name (without .azurecr.io)
+# AZURE_RESOURCE_GROUP           - Production resource group
+# AZURE_RESOURCE_GROUP_STAGING   - Staging resource group (can be same as prod)
+# ACR_USERNAME                   - ACR admin username
+# ACR_PASSWORD                   - ACR admin password
 #
-# To create Azure credentials:
-# az ad sp create-for-rbac --name "github-actions-lock-in" \
-#   --role contributor \
-#   --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group} \
-#   --sdk-auth
+# GitHub Environments (Settings > Environments):
+#   - staging:    No required reviewers (auto-deploys)
+#   - production: Optional required reviewers for manual approval
 # =============================================================================

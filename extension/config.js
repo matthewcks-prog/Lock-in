@@ -16,14 +16,22 @@
         backendUrl: 'http://localhost:3000',
       },
       production: {
-        url: 'https://vtuflatvllpldohhimao.supabase.co',
-        anonKey: 'your-prod-anon-key',
+        url: '',
+        anonKey: '',
         environment: 'production',
         backendUrl: 'https://lock-in-backend.australiaeast.azurecontainerapps.io',
       },
     };
     const supabaseConfig = isProduction ? configByEnv.production : configByEnv.development;
     const missingEnvVars = [];
+    if (!supabaseConfig.url) {
+      missingEnvVars.push(isProduction ? 'VITE_SUPABASE_URL_PROD' : 'VITE_SUPABASE_URL_DEV');
+    }
+    if (!supabaseConfig.anonKey) {
+      missingEnvVars.push(
+        isProduction ? 'VITE_SUPABASE_ANON_KEY_PROD' : 'VITE_SUPABASE_ANON_KEY_DEV',
+      );
+    }
     root.LOCKIN_CONFIG = {
       APP_ENV: appEnv,
       IS_PRODUCTION: isProduction,
@@ -35,7 +43,8 @@
       TOKEN_EXPIRY_BUFFER_MS: 6e4,
       DEBUG_PANOPTO_RESOLVER: !isProduction,
       DEBUG: void 0,
-      SENTRY_DSN: 'https://xxx@xxx.ingest.sentry.io/xxx',
+      SENTRY_DSN:
+        'https://21082d74fe5921d137a1877d77201243@o4510681730777088.ingest.us.sentry.io/4510681770229760',
     };
     if (missingEnvVars.length > 0 && typeof console !== 'undefined') {
       console.warn('[Lock-in] Missing extension env vars:', missingEnvVars);
