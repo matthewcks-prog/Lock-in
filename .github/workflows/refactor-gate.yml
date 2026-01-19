@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Install all dependencies (root + workspaces)
         run: npm ci
@@ -53,6 +54,9 @@ jobs:
 
       - name: Run build
         run: npm run build
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN || '' }}
+          VITE_SENTRY_AUTH_TOKEN: ${{ secrets.VITE_SENTRY_AUTH_TOKEN || '' }}
 
       - name: Run verify-build
         run: npm run verify-build
