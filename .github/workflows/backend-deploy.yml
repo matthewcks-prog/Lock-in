@@ -1,5 +1,5 @@
 # =============================================================================
-# Lock-in Backend - GitHub Actions CI/CD Pipeline
+# Lock-in Backend - GitHub Actions Build & Deploy Pipeline
 # Industry-standard multi-environment deployment (Staging → Production)
 #
 # ENVIRONMENTS:
@@ -7,12 +7,15 @@
 #   - Production: lock-in-backend (Azure Container Apps) - deploys from main
 #
 # WORKFLOW:
-#   1. Push to develop → Tests + Build → Deploy to Staging
-#   2. Create PR: develop → main
-#   3. Merge to main → Tests + Build → Deploy to Production
+#   1. Push to develop → Tests + Build → Push to ACR → Deploy to Staging
+#   2. Create PR: develop → main → Tests + Build only (no deploy)
+#   3. Merge to main → Tests + Build → Push to ACR → Deploy to Production
+#
+# IMPORTANT: Production environment MUST have required reviewers enabled in
+# GitHub Settings > Environments > production > Required reviewers
 # =============================================================================
 
-name: Backend CI/CD
+name: Backend Build & Deploy
 
 on:
   push:
@@ -73,8 +76,37 @@ jobs:
         run: npm test
         continue-on-error: true
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker image
-        run: docker build -f backend/Dockerfile -t ${{ env.IMAGE_NAME }}:test .
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        # Only scan on push events (actual deployments), skip PRs
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:test
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1' # Fail on CRITICAL/HIGH vulnerabilities
+        continue-on-error: false
+
+      - name: Upload Trivy scan results
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
 
       - name: Start test container
         run: |
@@ -83,6 +115,10 @@ jobs:
             -e OPENAI_API_KEY=test-key \
             -e SUPABASE_URL_DEV=https://test.supabase.co \
             -e SUPABASE_SERVICE_ROLE_KEY_DEV=test-key \
+            --health-cmd="curl -f http://localhost:3000/health || exit 1" \
+            --health-interval=10s \
+            --health-timeout=5s \
+            --health-retries=3 \
             ${{ env.IMAGE_NAME }}:test
 
       - name: Wait for container to be healthy
@@ -152,22 +188,45 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Login to Azure Container Registry
-        uses: azure/docker-login@v2
+      - name: Login to Azure
+        uses: azure/login@v2
         with:
-          login-server: ${{ env.REGISTRY_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to Azure Container Registry
+        run: |
+          az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
       - name: Build and push Docker image
-        run: |
-          # Build the image
-          docker build -f backend/Dockerfile -t ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-          docker tag ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: backend/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
 
-          # Push both tags
-          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
   # ===========================================================================
   # Deploy to Staging (lock-in-dev)
@@ -217,13 +276,40 @@ jobs:
             --query "properties.configuration.ingress.fqdn" -o tsv)
 
           echo "🚀 Staging URL: https://$APP_URL"
-          sleep 30
+          echo "APP_URL=https://$APP_URL" >> $GITHUB_ENV
 
-          if curl -sf "https://$APP_URL/health"; then
-            echo "✅ Staging deployment verified!"
-          else
-            echo "⚠️ Health check failed, but deployment may still be starting..."
-          fi
+          # Wait for deployment with exponential backoff
+          max_attempts=10
+          attempt=0
+          wait_time=10
+
+          while [ $attempt -lt $max_attempts ]; do
+            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting ${wait_time}s..."
+            sleep $wait_time
+
+            if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
+              echo "✅ Staging deployment verified!"
+              
+              # Run smoke tests
+              echo "🧪 Running smoke tests..."
+              HEALTH_STATUS=$(curl -s "https://$APP_URL/health" | jq -r '.status // "unknown"')
+              if [ "$HEALTH_STATUS" = "ok" ] || [ "$HEALTH_STATUS" = "healthy" ]; then
+                echo "✅ Smoke tests passed!"
+                exit 0
+              fi
+            fi
+
+            attempt=$((attempt + 1))
+            wait_time=$((wait_time * 2))
+          done
+
+          echo "❌ Health check failed after $max_attempts attempts"
+          echo "📋 Fetching logs..."
+          az containerapp logs show \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --tail 50 || echo "Could not fetch logs"
+          exit 1
 
       - name: Print manual deployment instructions (if no credentials)
         if: steps.check-creds.outputs.skip == 'true'
@@ -239,11 +325,16 @@ jobs:
   # Deploy to Production (lock-in-backend)
   # Only deploys from main branch
   # ===========================================================================
+  # ===========================================================================
+  # Deploy to Production (lock-in-backend)
+  # Only deploys from main branch
+  # REQUIRES: GitHub Environment 'production' with required reviewers enabled
+  # ===========================================================================
   deploy-production:
     runs-on: ubuntu-latest
     needs: [build-and-test, push-to-acr]
     if: needs.build-and-test.outputs.should-deploy-production == 'true'
-    environment: production
+    environment: production # ⚠️ MUST have required reviewers in GitHub Settings
 
     env:
       CONTAINER_APP_NAME: lock-in-backend
@@ -283,13 +374,40 @@ jobs:
             --query "properties.configuration.ingress.fqdn" -o tsv)
 
           echo "🚀 Production URL: https://$APP_URL"
-          sleep 30
+          echo "APP_URL=https://$APP_URL" >> $GITHUB_ENV
 
-          if curl -sf "https://$APP_URL/health"; then
-            echo "✅ Production deployment verified!"
-          else
-            echo "⚠️ Health check failed, but deployment may still be starting..."
-          fi
+          # Wait for deployment with exponential backoff
+          max_attempts=10
+          attempt=0
+          wait_time=10
+
+          while [ $attempt -lt $max_attempts ]; do
+            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting ${wait_time}s..."
+            sleep $wait_time
+
+            if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
+              echo "✅ Production deployment verified!"
+              
+              # Run smoke tests
+              echo "🧪 Running smoke tests..."
+              HEALTH_STATUS=$(curl -s "https://$APP_URL/health" | jq -r '.status // "unknown"')
+              if [ "$HEALTH_STATUS" = "ok" ] || [ "$HEALTH_STATUS" = "healthy" ]; then
+                echo "✅ Smoke tests passed!"
+                exit 0
+              fi
+            fi
+
+            attempt=$((attempt + 1))
+            wait_time=$((wait_time * 2))
+          done
+
+          echo "❌ Health check failed after $max_attempts attempts"
+          echo "📋 Fetching logs..."
+          az containerapp logs show \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --tail 50 || echo "Could not fetch logs"
+          exit 1
 
       - name: Print manual deployment instructions (if no credentials)
         if: steps.check-creds.outputs.skip == 'true'
@@ -330,13 +448,27 @@ jobs:
 # Required GitHub Secrets:
 #
 # AZURE_CREDENTIALS              - Azure Service Principal JSON (for auto-deploy)
-# AZURE_CONTAINER_REGISTRY       - ACR name (without .azurecr.io)
-# AZURE_RESOURCE_GROUP           - Production resource group
-# AZURE_RESOURCE_GROUP_STAGING   - Staging resource group (can be same as prod)
-# ACR_USERNAME                   - ACR admin username
-# ACR_PASSWORD                   - ACR admin password
+#                                  Format: {"clientId":"...","clientSecret":"...",
+#                                          "subscriptionId":"...","tenantId":"..."}
+# AZURE_CONTAINER_REGISTRY       - ACR name (without .azurecr.io suffix)
+# AZURE_RESOURCE_GROUP           - Production resource group name
+# AZURE_RESOURCE_GROUP_STAGING   - Staging resource group name (can be same as prod)
 #
 # GitHub Environments (Settings > Environments):
-#   - staging:    No required reviewers (auto-deploys)
-#   - production: Optional required reviewers for manual approval
+#   - staging:    No required reviewers (auto-deploys from develop)
+#   - production: Optional required reviewers for manual approval (from main)
+#
+# Setup Instructions:
+# 1. Create service principal:
+#    az ad sp create-for-rbac --name "github-actions-lock-in" \
+#      --role contributor \
+#      --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group} \
+#      --sdk-auth
+#
+# 2. Assign ACR push role:
+#    az role assignment create --assignee {client-id} \
+#      --scope /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.ContainerRegistry/registries/{acr-name} \
+#      --role AcrPush
+#
+# 3. Add the output JSON to GitHub Secrets as AZURE_CREDENTIALS
 # =============================================================================
