@@ -1,0 +1,50 @@
+# Pre-push hook - runs full validation before pushing to remote
+# This catches issues before they reach CI, saving time and resources
+
+echo "🔍 Running pre-push checks..."
+
+# Get the current branch
+current_branch=$(git branch --show-current)
+
+# Check if pushing to main directly
+if [ "$current_branch" = "main" ]; then
+  echo "⚠️  Warning: Pushing directly to main branch"
+  echo "   Consider using feature branches and PRs for better code review."
+fi
+
+# Run type checking
+echo "📝 Type checking..."
+npm run type-check || {
+  echo "❌ Type check failed. Fix errors before pushing."
+  exit 1
+}
+
+# Run linting
+echo "🔍 Linting..."
+npm run lint || {
+  echo "❌ Lint check failed. Run 'npm run lint:fix' to auto-fix issues."
+  exit 1
+}
+
+# Run tests
+echo "🧪 Running tests..."
+npm run test || {
+  echo "❌ Tests failed. Fix failing tests before pushing."
+  exit 1
+}
+
+# Run build verification
+echo "🏗️  Building..."
+npm run build || {
+  echo "❌ Build failed. Fix build errors before pushing."
+  exit 1
+}
+
+# Verify build artifacts
+echo "✅ Verifying build..."
+npm run verify-build || {
+  echo "❌ Build verification failed. Check verify-build output."
+  exit 1
+}
+
+echo "✅ All pre-push checks passed!"

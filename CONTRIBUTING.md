@@ -20,6 +20,56 @@ Thank you for your interest in contributing to Lock-in! This document provides g
 
 ## Development Workflow
 
+### Git Workflow (Bulletproof Approach)
+
+We follow a **protected main branch** workflow to ensure code quality:
+
+```
+main (protected) ← Pull Requests only
+  ↑
+  └── feature/your-feature ← Work here
+```
+
+**Workflow:**
+
+1. **Create a feature branch**:
+
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes** (following the rules below)
+
+3. **Run full validation before pushing**:
+
+   ```bash
+   npm run validate   # Format check + type-check + lint + test + build + verify
+   ```
+
+4. **Push and create a PR**:
+
+   ```bash
+   git push origin feature/your-feature-name
+   gh pr create   # or use GitHub web interface
+   ```
+
+5. **Wait for CI checks** to pass, then request review
+
+6. **Merge via PR** (squash or rebase merge recommended)
+
+**Branch Protection Rules:**
+
+- ✅ All PRs require at least 1 approval
+- ✅ CI checks must pass (refactor-gate, tests)
+- ✅ Branch must be up to date before merging
+- ❌ Direct pushes to `main` are blocked
+- ❌ Force pushes to `main` are forbidden
+
+**Pre-push Hook:**
+A pre-push hook automatically runs validation before pushing. If it fails, fix the issues first.
+
 ### Before Making Changes
 
 1. **Check current status**: Review [docs/tracking/STATUS.md](docs/tracking/STATUS.md) for outstanding issues
