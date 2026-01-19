@@ -11,11 +11,12 @@
     "start": "node index.js",
     "start:prod": "NODE_ENV=production node index.js",
     "dev": "nodemon index.js",
+    "build": "echo 'Backend has no build step'",
     "check": "node scripts/check-syntax.js && npm test",
-    "lint": "cd .. && npm run lint -- backend/**/*.js",
-    "lint:fix": "cd .. && npm run lint:fix -- backend/**/*.js",
-    "format": "cd .. && npm run format -- backend/**/*.js",
-    "format:check": "cd .. && npm run format:check -- backend/**/*.js",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "node --test **/*.test.js --test-reporter=spec",
     "test:ci": "node --test **/*.test.js --test-reporter=spec",
     "test:azure": "node verify-azure-embeddings.js",
@@ -47,8 +48,6 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "eslint": "^9.39.2",
-    "nodemon": "^3.0.1",
-    "prettier": "^3.7.4"
+    "nodemon": "^3.0.1"
   }
 }

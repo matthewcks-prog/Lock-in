@@ -24,17 +24,17 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install dependencies (all workspaces)
         run: npm ci
 
       - name: Run type check
         run: npm run type-check
 
-      - name: Run linter
-        run: npm run lint
+      - name: Run linter (all workspaces)
+        run: npm run lint:all
 
-      - name: Run tests
-        run: npm test
+      - name: Run tests (all workspaces)
+        run: npm run test:all
 
       - name: Run tests with coverage
         run: npm run test:coverage

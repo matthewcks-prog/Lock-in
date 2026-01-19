@@ -65,24 +65,20 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
 
-      - name: Install dependencies
-        working-directory: backend
+      - name: Install dependencies (all workspaces)
         run: npm ci
 
       - name: Run backend linting
-        working-directory: backend
-        run: npm run lint
+        run: npm run lint:backend
 
       - name: Run backend tests
-        working-directory: backend
         env:
           NODE_ENV: test
           SUPABASE_URL_DEV: ${{ secrets.SUPABASE_URL_DEV || 'https://example.supabase.test' }}
           SUPABASE_SERVICE_ROLE_KEY_DEV: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-service-role-key' }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-openai-key' }}
-        run: npm run test:ci
+        run: npm run test:backend
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
