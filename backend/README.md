@@ -402,6 +402,33 @@ npm start    # Production server
 
 ## Testing
 
+### Unit Tests
+
+Run all unit tests using Node.js test runner:
+
+```bash
+npm test                    # Run all *.test.js files with spec reporter
+npm run test:ci             # CI-specific test command (same as npm test)
+```
+
+**Test Files:**
+
+- `**/*.test.js` - All unit test files
+- Tests use Node.js built-in test runner (node:test)
+- Mock external dependencies (Supabase, OpenAI)
+
+### Integration Tests & Utilities
+
+Verify Azure OpenAI embeddings configuration:
+
+```bash
+npm run test:azure          # Run verify-azure-embeddings.js
+```
+
+**Note:** `verify-azure-embeddings.js` and similar utility scripts are NOT unit tests. They make actual API calls and are used for manual verification only.
+
+### API Testing
+
 ```bash
 # Health check
 curl http://localhost:3000/health

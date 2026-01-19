@@ -155,6 +155,43 @@ When adding or updating documentation:
 
 ## Adding New Features
 
+### Writing Tests
+
+When adding new code, follow these testing standards:
+
+**Backend Tests:**
+
+- ✅ File name MUST end with `.test.js` (e.g., `myFeature.test.js`)
+- ✅ Place next to the code or in `__tests__/` subdirectory
+- ✅ Use Node.js built-in test runner (`node:test`, `node:assert/strict`)
+- ✅ Mock all external dependencies (Supabase, OpenAI, network, file system)
+- ✅ Set up test environment variables at the top of the file
+- ❌ NEVER name utility scripts `test-*.js` (use `verify-*`, `check-*`, etc.)
+
+**Example:**
+
+```javascript
+// ✅ Good: validation.test.js
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+test('validates email format correctly', () => {
+  assert.strictEqual(validateEmail('test@example.com'), true);
+});
+
+// ❌ Bad: test-email-checker.js (will be picked up by test runner)
+// ✅ Good: verify-email-service.js (utility script)
+```
+
+**Run tests before committing:**
+
+```bash
+npm test          # Root project tests
+cd backend && npm test  # Backend tests
+```
+
+**📚 Detailed guide:** [docs/testing/BACKEND_TESTING.md](docs/testing/BACKEND_TESTING.md)
+
 ### Adding a New Site Integration
 
 1. Create adapter: `/integrations/adapters/newSiteAdapter.ts`

@@ -12,7 +12,11 @@
     "start:prod": "NODE_ENV=production node index.js",
     "dev": "nodemon index.js",
     "check": "node scripts/check-syntax.js && npm test",
-    "test": "node --test",
+    "lint": "eslint . --ext .js --max-warnings 0",
+    "lint:fix": "eslint . --ext .js --fix",
+    "test": "node --test **/*.test.js --test-reporter=spec",
+    "test:ci": "node --test **/*.test.js --test-reporter=spec",
+    "test:azure": "node verify-azure-embeddings.js",
     "docker:build": "cd .. && docker build -f backend/Dockerfile -t lock-in-backend .",
     "docker:run": "docker run -p 3000:3000 --env-file ../.env lock-in-backend"
   },
@@ -41,6 +45,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "eslint": "^8.57.1",
     "nodemon": "^3.0.1"
   }
 }

@@ -230,10 +230,29 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`middleware/uploadMiddleware.js`**
   - Multer-based in-memory upload handler with size and MIME validation for note assets.
 
-### Scripts
+### Scripts & Testing
 
 - **`scripts/check-syntax.js`**
   - Syntax validation for backend root JS files (used by `npm run check`).
+
+- **`scripts/verify-azure-embeddings.js`**
+  - Manual utility to verify Azure OpenAI embeddings configuration (NOT a unit test).
+
+**Test Files:**
+
+- All test files use `.test.js` suffix (e.g., `chatRepository.test.js`, `validation.test.js`)
+- Located next to the code they test or in `__tests__/` subdirectories
+- Use Node.js built-in test runner (`node:test`)
+- Mock external dependencies (Supabase, OpenAI, network)
+- Run via: `npm test` or `npm run test:ci`
+
+**⚠️ Naming Convention:**
+
+- ✅ Unit tests: `*.test.js` (run by test runner)
+- ✅ Utilities: `verify-*`, `check-*`, `setup-*` (NOT `test-*`)
+- ❌ Never use `test-*.js` for utility scripts (will be picked up by test runner)
+
+See [docs/testing/BACKEND_TESTING.md](docs/testing/BACKEND_TESTING.md) for detailed testing guidelines.
 
 ## Key Design Patterns
 
@@ -302,9 +321,33 @@ The system is designed to handle thousands of concurrent users:
 
 ## Testing Strategy
 
-- **Extension**: Unit test utilities and content helpers (`stateStore`, `interactions`, adapters) when wiring tests.
-- **Backend**: Unit test controllers and repositories (mock Supabase/OpenAI).
-- **Integration**: Test full request flow with a test database.
+### Extension
+
+- **Unit test utilities and content helpers** (`stateStore`, `interactions`, adapters) when wiring tests.
+- Test files use `.test.ts` or `.test.js` suffix
+
+### Backend
+
+- **Unit tests**: Test controllers, repositories, and utilities with mocked dependencies
+- **Test runner**: Node.js built-in test runner (`node:test`)
+- **File naming**: All test files MUST end with `.test.js`
+- **Mocking**: Mock Supabase, OpenAI, and other external services
+- **CI/CD**: Tests run on all pushes and PRs via `npm run test:ci`
+
+**⚠️ Critical naming rule:**
+
+- Unit test files: `*.test.js` (e.g., `validation.test.js`)
+- Utility scripts: `verify-*`, `check-*`, `setup-*` (e.g., `verify-azure-embeddings.js`)
+- NEVER use `test-*.js` for non-test scripts (will break CI/CD)
+
+**Documentation:**
+
+- [Backend Testing Guide](docs/testing/BACKEND_TESTING.md) - Comprehensive testing standards
+- [Backend README.md](backend/README.md#testing) - Quick test commands
+
+### Integration
+
+- **Full request flow testing** with a test database (when wiring integration tests)
 
 ## Where to Start Reading
 
