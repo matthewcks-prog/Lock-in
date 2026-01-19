@@ -12,7 +12,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Install dependencies
 # -----------------------------------------------------------------------------
-FROM node:20-alpine AS builder
+FROM node:20.18-alpine AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ RUN npm ci --only=production --ignore-scripts && \
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Minimal runtime image
 # -----------------------------------------------------------------------------
-FROM node:20-alpine
+FROM node:20.18-alpine
 
 # Install FFmpeg as fallback (ffmpeg-static should work, but belt-and-suspenders)
 # Also install curl for health checks

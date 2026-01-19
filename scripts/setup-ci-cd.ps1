@@ -14,19 +14,19 @@
 param(
     [Parameter(Mandatory=$true)]
     [string]$SubscriptionId,
-    
+
     [Parameter(Mandatory=$true)]
     [string]$ResourceGroupProduction,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$ResourceGroupStaging = $ResourceGroupProduction,
-    
+
     [Parameter(Mandatory=$true)]
     [string]$ContainerRegistryName,
-    
+
     [Parameter(Mandatory=$false)]
     [string]$Location = "australiaeast",
-    
+
     [Parameter(Mandatory=$false)]
     [string]$ServicePrincipalName = "github-actions-lock-in"
 )
@@ -163,7 +163,7 @@ if ($LASTEXITCODE -ne 0) {
         --location $Location `
         --sku Standard `
         --admin-enabled false
-    
+
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Created ACR: $ContainerRegistryName"
     } else {
@@ -191,12 +191,12 @@ if ($spCheck -and $LASTEXITCODE -eq 0) {
     Write-Warn "Service Principal already exists: $ServicePrincipalName"
     Write-Host "Fetching existing credentials..."
     $spAppId = $spCheck
-    
+
     # Reset credentials
     $spCredentials = az ad sp credential reset `
         --id $spAppId `
         --query "{clientId: appId, clientSecret: password, tenantId: tenant}" -o json
-    
+
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Reset Service Principal credentials"
     } else {
@@ -206,19 +206,19 @@ if ($spCheck -and $LASTEXITCODE -eq 0) {
 } else {
     # Create new service principal
     Write-Host "Creating new Service Principal..."
-    
+
     # Create with contributor role on resource group
     $spCredentials = az ad sp create-for-rbac `
         --name $ServicePrincipalName `
         --role Contributor `
         --scopes "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupProduction" `
         --query "{clientId: appId, clientSecret: password, tenantId: tenant}" -o json
-    
+
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Failed to create Service Principal"
         exit 1
     }
-    
+
     Write-Success "Created Service Principal: $ServicePrincipalName"
 }
 
@@ -248,7 +248,7 @@ if (-not $acrRoleCheck -or $LASTEXITCODE -ne 0) {
         --assignee $spAppId `
         --scope $acrId `
         --role AcrPush
-    
+
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Assigned AcrPush role"
     } else {
@@ -265,7 +265,7 @@ if ($ResourceGroupStaging -ne $ResourceGroupProduction) {
         --assignee $spAppId `
         --scope "/subscriptions/$SubscriptionId/resourceGroups/$ResourceGroupStaging" `
         --role Contributor 2>&1 | Out-Null
-    
+
     if ($LASTEXITCODE -eq 0) {
         Write-Success "Assigned Contributor role on staging RG"
     } else {

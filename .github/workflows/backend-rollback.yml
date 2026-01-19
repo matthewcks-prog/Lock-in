@@ -65,10 +65,10 @@ jobs:
               --name $CONTAINER_APP_NAME \
               --resource-group $RESOURCE_GROUP \
               --query "[?properties.active==\`true\`].name" -o tsv)
-            
+
             echo "Active revisions:"
             echo "$REVISIONS"
-            
+
             # For now, use 'latest' tag as fallback
             IMAGE_TAG="latest"
             echo "⚠️ Using 'latest' tag. Consider specifying an explicit commit SHA."
@@ -119,12 +119,12 @@ jobs:
 
           while [ $attempt -lt $max_attempts ]; do
             sleep 15
-            
+
             if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
               echo "✅ Rollback successful! Service is healthy."
               exit 0
             fi
-            
+
             attempt=$((attempt + 1))
             echo "⏳ Waiting for service to become healthy ($attempt/$max_attempts)..."
           done

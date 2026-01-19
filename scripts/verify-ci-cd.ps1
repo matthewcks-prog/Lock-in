@@ -9,7 +9,7 @@
 param(
     [Parameter(Mandatory=$false)]
     [string]$SubscriptionId,
-    
+
     [Parameter(Mandatory=$false)]
     [switch]$SkipAzure
 )
@@ -90,17 +90,17 @@ try {
 # =============================================================================
 if ($repoName) {
     Write-Check "GitHub Secrets"
-    
+
     $requiredSecrets = @(
         "AZURE_CREDENTIALS",
         "AZURE_CONTAINER_REGISTRY",
         "AZURE_RESOURCE_GROUP",
         "AZURE_RESOURCE_GROUP_STAGING"
     )
-    
+
     $secretsList = gh secret list --json name 2>&1 | ConvertFrom-Json
     $secretNames = $secretsList | ForEach-Object { $_.name }
-    
+
     foreach ($secret in $requiredSecrets) {
         if ($secretNames -contains $secret) {
             Write-Pass "$secret is set"
@@ -116,13 +116,13 @@ if ($repoName) {
 # =============================================================================
 if ($repoName) {
     Write-Check "GitHub Environments"
-    
+
     $requiredEnvs = @("staging", "production")
-    
+
     try {
         $envsList = gh api "repos/$repoName/environments" 2>&1 | ConvertFrom-Json
         $envNames = $envsList.environments | ForEach-Object { $_.name }
-        
+
         foreach ($env in $requiredEnvs) {
             if ($envNames -contains $env) {
                 Write-Pass "$env environment exists"
@@ -150,13 +150,13 @@ if (-not $SkipAzure) {
         $issuesFound++
         $SkipAzure = $true
     }
-    
+
     if (-not $SkipAzure) {
         Write-Check "Azure authentication"
         $currentAccount = az account show 2>&1 | ConvertFrom-Json
         if ($LASTEXITCODE -eq 0) {
             Write-Pass "Logged in as: $($currentAccount.user.name)"
-            
+
             if ($SubscriptionId) {
                 az account set --subscription $SubscriptionId 2>&1 | Out-Null
                 if ($LASTEXITCODE -eq 0) {
@@ -175,11 +175,11 @@ if (-not $SkipAzure) {
             $SkipAzure = $true
         }
     }
-    
+
     # Check ACR (if we have secrets)
     if (-not $SkipAzure -and $secretNames -contains "AZURE_CONTAINER_REGISTRY") {
         Write-Check "Azure Container Registry"
-        
+
         # Try to get ACR name from secret (won't show value, but we can test if ACR exists)
         try {
             $acrList = az acr list --query "[].name" -o tsv 2>&1
@@ -192,11 +192,11 @@ if (-not $SkipAzure) {
             Write-Warn "Could not list ACRs"
         }
     }
-    
+
     # Check Container Apps
     if (-not $SkipAzure) {
         Write-Check "Container Apps"
-        
+
         $containerApps = az containerapp list --query "[].{name:name, rg:resourceGroup}" -o json 2>&1 | ConvertFrom-Json
         if ($LASTEXITCODE -eq 0 -and $containerApps) {
             foreach ($app in $containerApps) {
@@ -235,18 +235,18 @@ Write-Check "Dockerfile"
 
 if (Test-Path "backend/Dockerfile") {
     Write-Pass "backend/Dockerfile exists"
-    
+
     # Check for best practices
     $dockerfileContent = Get-Content "backend/Dockerfile" -Raw
-    
+
     if ($dockerfileContent -match "FROM.*alpine") {
         Write-Pass "Using Alpine base image (good)"
     }
-    
+
     if ($dockerfileContent -match "USER.*nodejs") {
         Write-Pass "Running as non-root user (good)"
     }
-    
+
     if ($dockerfileContent -match "HEALTHCHECK") {
         Write-Pass "Health check configured (good)"
     }
