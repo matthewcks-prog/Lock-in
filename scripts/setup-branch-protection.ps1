@@ -4,21 +4,33 @@
     Sets up branch protection rules for the Lock-in repository following industry best practices.
 
 .DESCRIPTION
-    This script configures GitHub branch protection rules to ensure:
-    - All changes go through pull requests
+    This script configures GitHub branch protection rules for both main and develop branches:
+    
+    MAIN (Production):
+    - All changes go through pull requests with 1 approval
     - CI checks must pass before merging
-    - Code review is required
-    - Force pushes are prevented
+    - Force pushes prevented
+    - Linear history required
+    
+    DEVELOP (Staging):
+    - All changes go through pull requests (0 required approvals for speed)
+    - CI checks must pass before merging
+    - Force pushes prevented
+    - Linear history required
 
 .NOTES
     Requires: GitHub CLI (gh) authenticated with repo admin access
-    Usage: ./scripts/setup-branch-protection.ps1
+    Usage: 
+        ./scripts/setup-branch-protection.ps1              # Set up both branches
+        ./scripts/setup-branch-protection.ps1 -Branch main # Set up main only
+        ./scripts/setup-branch-protection.ps1 -DryRun      # Preview changes
 #>
 
 param(
     [string]$Owner = "matthewcks-prog",
     [string]$Repo = "Lock-in",
-    [string]$Branch = "main",
+    [ValidateSet("main", "develop", "both")]
+    [string]$Branch = "both",
     [switch]$DryRun
 )
 
@@ -52,117 +64,128 @@ try {
     exit 1
 }
 
-# Define protection rules following industry best practices
-$protectionRules = @{
-    # Require pull request reviews before merging
+# Define protection rules for MAIN (Production) - requires approval
+$mainProtectionRules = @{
     required_pull_request_reviews = @{
-        dismiss_stale_reviews = $true                    # Dismiss approvals when new commits pushed
-        require_code_owner_reviews = $false              # Set to true if you have CODEOWNERS file
-        required_approving_review_count = 1              # At least 1 approval required
-        require_last_push_approval = $true               # Last pusher can't self-approve
+        dismiss_stale_reviews = $true
+        require_code_owner_reviews = $false
+        required_approving_review_count = 1              # Require 1 approval for production
+        require_last_push_approval = $true
     }
-    
-    # Require status checks to pass before merging
     required_status_checks = @{
-        strict = $true                                   # Branch must be up to date before merging
+        strict = $true
         contexts = @(
-            "refactor-gate"                              # Your main CI workflow
-            "test (20.x)"                                # Tests on Node 20
-            "test (22.x)"                                # Tests on Node 22
+            "refactor-gate"
+            "test (20.x)"
+            "test (22.x)"
         )
     }
-    
-    # Enforce rules for administrators too
     enforce_admins = $true
-    
-    # Require signed commits (optional but recommended)
-    required_signatures = $false                         # Set to true if team uses GPG signing
-    
-    # Require linear history (prevents merge commits)
-    required_linear_history = $true                      # Encourages rebase workflow
-    
-    # Allow force pushes - NEVER for main
+    required_signatures = $false
+    required_linear_history = $true
     allow_force_pushes = $false
-    
-    # Allow deletions - NEVER for main
     allow_deletions = $false
-    
-    # Block creation of matching branches
     block_creations = $false
-    
-    # Require conversation resolution before merging
     required_conversation_resolution = $true
-    
-    # Lock branch (for archive branches only)
     lock_branch = $false
-    
-    # Allow fork syncing
     allow_fork_syncing = $true
 }
 
-Write-Host "`n🛡️  Protection rules to apply:" -ForegroundColor Yellow
-Write-Host "   • Require pull request reviews: YES (1 approval)" -ForegroundColor White
-Write-Host "   • Dismiss stale reviews on new commits: YES" -ForegroundColor White
-Write-Host "   • Require status checks (refactor-gate, tests): YES" -ForegroundColor White
-Write-Host "   • Require branch to be up to date: YES" -ForegroundColor White
-Write-Host "   • Enforce for administrators: YES" -ForegroundColor White
-Write-Host "   • Require linear history (rebase): YES" -ForegroundColor White
-Write-Host "   • Allow force pushes: NO" -ForegroundColor White
-Write-Host "   • Allow deletions: NO" -ForegroundColor White
-Write-Host "   • Require conversation resolution: YES" -ForegroundColor White
-
-if ($DryRun) {
-    Write-Host "`n⚠️  DRY RUN - No changes will be made" -ForegroundColor Yellow
-    Write-Host "   Remove -DryRun flag to apply changes" -ForegroundColor Yellow
-    exit 0
+# Define protection rules for DEVELOP (Staging) - no approval required for speed
+$developProtectionRules = @{
+    required_pull_request_reviews = @{
+        dismiss_stale_reviews = $true
+        require_code_owner_reviews = $false
+        required_approving_review_count = 0              # No approval needed for staging
+        require_last_push_approval = $false
+    }
+    required_status_checks = @{
+        strict = $true
+        contexts = @(
+            "refactor-gate"
+            "test (20.x)"
+            "test (22.x)"
+        )
+    }
+    enforce_admins = $false                              # Admins can bypass for hotfixes
+    required_signatures = $false
+    required_linear_history = $true
+    allow_force_pushes = $false
+    allow_deletions = $false
+    block_creations = $false
+    required_conversation_resolution = $false            # Faster iteration on develop
+    lock_branch = $false
+    allow_fork_syncing = $true
 }
 
-Write-Host "`n🚀 Applying branch protection rules..." -ForegroundColor Yellow
-
-# Convert to JSON
-$jsonBody = $protectionRules | ConvertTo-Json -Depth 10 -Compress
-
-try {
-    # Apply protection rules via GitHub API
-    $result = gh api `
-        --method PUT `
-        "repos/$Owner/$Repo/branches/$Branch/protection" `
-        --input - `
-        2>&1 <<< $jsonBody
+function Apply-BranchProtection {
+    param(
+        [string]$BranchName,
+        [hashtable]$Rules,
+        [string]$Description
+    )
     
-    Write-Host "✅ Branch protection applied successfully!" -ForegroundColor Green
-} catch {
-    # Try alternative approach with explicit JSON
-    Write-Host "   Trying alternative API approach..." -ForegroundColor Yellow
+    Write-Host "`n🛡️  Protection rules for '$BranchName' ($Description):" -ForegroundColor Yellow
+    Write-Host "   • Required approvals: $($Rules.required_pull_request_reviews.required_approving_review_count)" -ForegroundColor White
+    Write-Host "   • Require status checks: YES" -ForegroundColor White
+    Write-Host "   • Require branch up to date: YES" -ForegroundColor White
+    Write-Host "   • Enforce for admins: $($Rules.enforce_admins)" -ForegroundColor White
+    Write-Host "   • Allow force pushes: NO" -ForegroundColor White
     
+    if ($DryRun) {
+        Write-Host "   ⚠️  DRY RUN - Skipping..." -ForegroundColor Yellow
+        return
+    }
+    
+    $jsonBody = $Rules | ConvertTo-Json -Depth 10 -Compress
     $jsonFile = [System.IO.Path]::GetTempFileName()
     $jsonBody | Out-File -FilePath $jsonFile -Encoding utf8
     
     try {
         gh api `
             --method PUT `
-            "repos/$Owner/$Repo/branches/$Branch/protection" `
-            --input $jsonFile
+            "repos/$Owner/$Repo/branches/$BranchName/protection" `
+            --input $jsonFile 2>&1 | Out-Null
         
-        Write-Host "✅ Branch protection applied successfully!" -ForegroundColor Green
+        Write-Host "   ✅ Protection applied!" -ForegroundColor Green
+    } catch {
+        Write-Host "   ❌ Failed to apply protection: $_" -ForegroundColor Red
     } finally {
         Remove-Item $jsonFile -ErrorAction SilentlyContinue
     }
 }
 
-Write-Host "`n📋 Verification:" -ForegroundColor Yellow
-try {
-    $protection = gh api "repos/$Owner/$Repo/branches/$Branch/protection" 2>&1 | ConvertFrom-Json
-    Write-Host "✅ Branch protection is now active on '$Branch'" -ForegroundColor Green
-    Write-Host "   Required status checks: $($protection.required_status_checks.contexts -join ', ')" -ForegroundColor White
-    Write-Host "   Required approvals: $($protection.required_pull_request_reviews.required_approving_review_count)" -ForegroundColor White
-} catch {
-    Write-Host "⚠️  Could not verify protection rules. Check GitHub settings manually." -ForegroundColor Yellow
+# Apply protection based on selection
+if ($Branch -eq "both" -or $Branch -eq "main") {
+    Apply-BranchProtection -BranchName "main" -Rules $mainProtectionRules -Description "Production"
 }
 
-Write-Host "`n✨ Done! Your main branch is now protected." -ForegroundColor Cyan
-Write-Host "`n📝 Next steps:" -ForegroundColor Yellow
-Write-Host "   1. Create feature branches for new work: git checkout -b feature/my-feature" -ForegroundColor White
-Write-Host "   2. Push and create PRs: gh pr create" -ForegroundColor White
-Write-Host "   3. Wait for CI checks to pass before merging" -ForegroundColor White
-Write-Host "   4. Consider adding CODEOWNERS file for automatic reviewers" -ForegroundColor White
+if ($Branch -eq "both" -or $Branch -eq "develop") {
+    # First, ensure develop branch exists
+    Write-Host "`n📋 Checking develop branch..." -ForegroundColor Yellow
+    try {
+        gh api "repos/$Owner/$Repo/branches/develop" 2>&1 | Out-Null
+        Write-Host "   ✅ develop branch exists" -ForegroundColor Green
+    } catch {
+        Write-Host "   ⚠️  develop branch doesn't exist yet" -ForegroundColor Yellow
+        Write-Host "   Create it with: git checkout -b develop && git push -u origin develop" -ForegroundColor Yellow
+        if (-not $DryRun) {
+            Write-Host "   Skipping develop branch protection..." -ForegroundColor Yellow
+        }
+    }
+    
+    Apply-BranchProtection -BranchName "develop" -Rules $developProtectionRules -Description "Staging"
+}
+
+if ($DryRun) {
+    Write-Host "`n⚠️  DRY RUN completed - No changes were made" -ForegroundColor Yellow
+    Write-Host "   Remove -DryRun flag to apply changes" -ForegroundColor Yellow
+}
+
+Write-Host "`n✨ Done! Branch protection setup complete." -ForegroundColor Cyan
+Write-Host "`n📝 Workflow:" -ForegroundColor Yellow
+Write-Host "   1. Create feature branch from develop: git checkout develop && git checkout -b feature/xyz" -ForegroundColor White
+Write-Host "   2. Push and create PR to develop: gh pr create --base develop" -ForegroundColor White
+Write-Host "   3. After merge, changes auto-deploy to staging (lock-in-dev)" -ForegroundColor White
+Write-Host "   4. When ready, create PR: develop → main for production deploy" -ForegroundColor White
+Write-Host "`n📖 See ENVIRONMENTS.md for full workflow documentation" -ForegroundColor White
