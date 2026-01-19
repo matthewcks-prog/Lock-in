@@ -8,14 +8,20 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { ChatMessage, UseChatMessagesOptions } from '../types';
-import { isValidUUID, normalizeChatMessage } from '../types';
 
 /**
  * Normalizes API response to ChatMessage array.
  */
-function normalizeMessages(response: any[], mode: UseChatMessagesOptions['mode']): ChatMessage[] {
+function normalizeMessages(response: any[], mode: string): ChatMessage[] {
     if (!Array.isArray(response)) return [];
-    return response.map((message: any) => normalizeChatMessage(message, mode));
+
+    return response.map((message: any) => ({
+        id: message.id || `msg-${Math.random().toString(16).slice(2)}`,
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: message.content || message.output_text || message.input_text || 'Message',
+        timestamp: message.created_at || new Date().toISOString(),
+        mode: message.mode || mode,
+    }));
 }
 
 /**
@@ -49,7 +55,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
             const response = await apiClient.getChatMessages(chatId);
             return normalizeMessages(response, mode);
         },
-        enabled: Boolean(chatId) && Boolean(apiClient?.getChatMessages) && isValidUUID(chatId),
+        enabled: Boolean(chatId) && Boolean(apiClient?.getChatMessages),
         staleTime: 5 * 60 * 1000, // 5 minutes
     });
 

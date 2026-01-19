@@ -27,13 +27,6 @@ import {
   type DeleteNoteAssetParams,
 } from './resources/assetsClient';
 import {
-  createChatAssetsClient,
-  type ChatAsset,
-  type UploadChatAssetParams,
-  type ListChatAssetsParams,
-  type DeleteChatAssetParams,
-} from './resources/chatAssetsClient';
-import {
   createFeedbackClient,
   type SubmitFeedbackParams,
   type FeedbackType,
@@ -52,7 +45,7 @@ export function createApiClient(config: ApiClientConfig) {
   const { apiRequest, getBackendUrl } = fetcher;
 
   const { processText } = createLockinClient(apiRequest);
-  const { createChat, getRecentChats, getChatMessages, deleteChat, generateChatTitle } =
+  const { getRecentChats, getChatMessages, deleteChat, generateChatTitle } =
     createChatsClient(apiRequest);
   const {
     createNote,
@@ -65,14 +58,12 @@ export function createApiClient(config: ApiClientConfig) {
     chatWithNotes,
   } = createNotesClient(apiRequest);
   const { uploadNoteAsset, listNoteAssets, deleteNoteAsset } = createAssetsClient(apiRequest);
-  const { uploadChatAsset, listChatAssets, deleteChatAsset } = createChatAssetsClient(apiRequest);
   const { submitFeedback, listFeedback, getFeedback } = createFeedbackClient(apiRequest);
 
   return {
     apiRequest,
     getBackendUrl,
     processText,
-    createChat,
     getRecentChats,
     getChatMessages,
     deleteChat,
@@ -88,9 +79,6 @@ export function createApiClient(config: ApiClientConfig) {
     uploadNoteAsset,
     listNoteAssets,
     deleteNoteAsset,
-    uploadChatAsset,
-    listChatAssets,
-    deleteChatAsset,
     submitFeedback,
     listFeedback,
     getFeedback,
@@ -109,10 +97,6 @@ export type {
   UploadNoteAssetParams,
   ListNoteAssetsParams,
   DeleteNoteAssetParams,
-  ChatAsset,
-  UploadChatAssetParams,
-  ListChatAssetsParams,
-  DeleteChatAssetParams,
   SubmitFeedbackParams,
   FeedbackType,
   FeedbackStatus,

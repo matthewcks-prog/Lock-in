@@ -6,6 +6,7 @@
   const DEFAULT_MODE = 'explain';
   const DEFAULT_PREFS = {
     preferredLanguage: 'en',
+    difficultyLevel: 'highschool',
   };
 
   function createStateStore({ Storage, Logger }) {

@@ -8,49 +8,6 @@ It exists so future humans and AI agents can understand how data is stored and a
 
 ---
 
-## Environment Separation
-
-Lock-in uses **two separate Supabase projects** for environment isolation:
-
-| Environment | Project Reference | URL | Use Case |
-|-------------|------------------|-----|----------|
-| **Development** | `uszxfuzauetcchwcgufe` | https://uszxfuzauetcchwcgufe.supabase.co | Local dev, staging, testing |
-| **Production** | `vtuflatvllpldohhimao` | https://vtuflatvllpldohhimao.supabase.co | Real users, real data |
-
-**Schema Sync Strategy:**
-
-- Schema migrations are version-controlled in `backend/migrations/`
-- Apply migrations to dev first, test, then apply to prod
-- Use Supabase CLI (`supabase db push`) for migration sync
-- See [docs/setup/LOCAL_SUPABASE_SETUP.md](/docs/setup/LOCAL_SUPABASE_SETUP.md) for local development
-
----
-
-## Database Roles
-
-### Supabase Built-in Roles
-
-| Role | Description | RLS? |
-|------|-------------|------|
-| `authenticator` | Connection pooler role | N/A |
-| `anon` | Anonymous (unauthenticated) requests | Yes |
-| `authenticated` | Authenticated user requests | Yes |
-| `service_role` | Backend API (bypasses RLS) | No |
-
-### Custom MCP Roles (Development Only)
-
-| Role | Description | Permissions | Environment |
-|------|-------------|-------------|-------------|
-| `dev_admin` | MCP AI assistant (full CRUD) | SELECT, INSERT, UPDATE, DELETE on all tables | Dev only |
-
-**Note:** MCP has NO access to production database. All production writes go through the backend API.
-
-**Setup Instructions:**
-- [tools/mcp/docs/SUPABASE_DEV_ADMIN_SETUP.md](/tools/mcp/docs/SUPABASE_DEV_ADMIN_SETUP.md) - Full CRUD for MCP
-- [tools/mcp/docs/SUPABASE_READONLY_SETUP.md](/tools/mcp/docs/SUPABASE_READONLY_SETUP.md) - Read-only for MCP (optional)
-
----
-
 ## Extensions & Schema Configuration
 
 ### pgvector Extension
@@ -262,50 +219,6 @@ CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
 - `created_at` - Upload timestamp
 
 **Usage:** Each record references a file in Supabase Storage. URLs are generated on read using `getPublicUrl(storage_path)`.
-
----
-
-### `chat_message_assets`
-
-Attachments for chat messages (images/documents/code files). Files live in Supabase Storage bucket `chat-assets` using the path `<user_id>/<chat_id>/<asset_id>.<ext>`.
-
-```sql
-CREATE TABLE public.chat_message_assets (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  message_id uuid REFERENCES public.chat_messages(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES auth.users(id),
-  type text NOT NULL CHECK (type IN ('image', 'document', 'code', 'other')),
-  mime_type text NOT NULL,
-  storage_path text NOT NULL,  -- path in Supabase Storage bucket `chat-assets`
-  file_name text,              -- original filename for display
-  file_size integer,           -- size in bytes for validation
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_chat_message_assets_message_id ON public.chat_message_assets(message_id);
-CREATE INDEX idx_chat_message_assets_user_id ON public.chat_message_assets(user_id);
-```
-
-**Fields:**
-
-- `id` - Asset id
-- `message_id` - Parent chat message id (nullable for pending uploads, cascade delete)
-- `user_id` - Owner (FK to `auth.users`)
-- `type` - High-level category (`image`, `document`, `code`, `other`)
-- `mime_type` - Exact MIME type
-- `storage_path` - Path inside the `chat-assets` bucket
-- `file_name` - Original filename for display purposes
-- `file_size` - File size in bytes for validation and display
-- `created_at` - Upload timestamp
-
-**Usage:** Stores file attachments for chat messages. Images are sent to GPT-4o-mini for vision analysis. Documents and code files have their text extracted and included in the prompt context. Asset URLs are generated using signed URLs (private bucket).
-
-**Cleanup:** Orphaned uploads (`message_id IS NULL`) older than 24 hours are deleted by `clean_orphaned_chat_assets()` (scheduled daily).
-
-**RLS Policies:**
-
-- Users can view, insert, and delete their own chat assets
-- Access controlled via `user_id` column
 
 ---
 
@@ -527,8 +440,6 @@ See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
 - `NoteRecord` - Matches `notes` table
 - `NoteAsset` - Frontend domain model for `note_assets` (camelCase: noteId, userId, mimeType, storagePath, createdAt)
 - `NoteAssetType` - Union type: `'image' | 'document' | 'audio' | 'video' | 'other'`
-- `ChatAsset` - Frontend domain model for `chat_message_assets` (defined in `api/resources/chatAssetsClient.ts`)
-- `ChatAssetType` - Union type: `'image' | 'document' | 'code' | 'other'`
 - `FolderRecord` - Matches `folders` table
 - `AIRequestRecord` - Matches `ai_requests` table
 - `FeedbackRecord` - Matches `feedback` table
@@ -543,7 +454,6 @@ See `/core/domain/types.ts` for TypeScript interfaces matching these tables:
 auth.users (Supabase)
   -> chats (1:N)
      -> chat_messages (1:N)
-        -> chat_message_assets (1:N)
   -> notes (1:N)
      -> note_assets (1:N)
   -> folders (1:N)
@@ -591,10 +501,6 @@ CREATE INDEX idx_chat_messages_chat_created ON public.chat_messages(chat_id, cre
 CREATE INDEX idx_note_assets_note_id ON public.note_assets(note_id);
 CREATE INDEX idx_note_assets_user_id ON public.note_assets(user_id);
 
--- Chat assets: Orphan cleanup (pending uploads)
-CREATE INDEX idx_chat_message_assets_orphaned_created_at ON public.chat_message_assets(created_at)
-  WHERE message_id IS NULL;
-
 -- AI requests: Rate limiting + analytics
 CREATE INDEX idx_ai_requests_user_created ON public.ai_requests(user_id, created_at DESC);
 CREATE INDEX idx_ai_requests_created_at ON public.ai_requests(created_at DESC);
@@ -614,11 +520,11 @@ CREATE INDEX idx_transcripts_media_url_norm ON public.transcripts(media_url_norm
 
 ## Row Level Security (RLS) - Applied
 
-All tables have RLS policies ensuring users can only access their own data. Base policies applied December 2024 via `backend/migrations/003_row_level_security.sql`. Additional table-specific RLS policies are defined in their respective migration files.
+All tables have RLS policies ensuring users can only access their own data. Migration applied December 2024 via `backend/migrations/003_row_level_security.sql`.
 
 **Critical**: RLS provides defense-in-depth security. Even if application code has bugs, users cannot access each other's data.
 
-**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `chat_message_assets`, `folders`, `ai_requests`, `feedback`, `transcripts`, `transcript_jobs`, `transcript_job_chunks`
+**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `folders`, `ai_requests`, `transcripts`, `transcript_jobs`, `transcript_job_chunks`
 
 ```sql
 -- Enable RLS on all tables
@@ -644,21 +550,7 @@ CREATE POLICY "Users can delete own notes"
   USING (auth.uid() = user_id);
 ```
 
-**RLS Policy Sources by Table:**
-
-| Table                    | Migration Source                      | Operations               |
-| ------------------------ | ------------------------------------- | ------------------------ |
-| `chats`                  | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `chat_messages`          | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `notes`                  | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `note_assets`            | `001_note_assets.sql`, `003_row_level_security.sql` | SELECT, INSERT, DELETE |
-| `chat_message_assets`    | `010_chat_assets.sql`                 | SELECT, INSERT, DELETE   |
-| `folders`                | `003_row_level_security.sql`          | SELECT, INSERT, UPDATE, DELETE |
-| `ai_requests`            | `003_row_level_security.sql`          | SELECT, INSERT (append-only) |
-| `feedback`               | `009_feedback.sql`                    | SELECT, INSERT           |
-| `transcripts`            | `007_transcripts_hardening.sql`       | SELECT, INSERT, UPDATE, DELETE |
-| `transcript_jobs`        | `006_transcripts.sql`                 | SELECT, INSERT, UPDATE, DELETE |
-| `transcript_job_chunks`  | `007_transcripts_hardening.sql`       | SELECT (via parent job)  |
+Apply similar policies to `chat_messages`, `chats`, `note_assets`, `folders`, and `ai_requests`.
 
 ---
 
@@ -682,8 +574,6 @@ CREATE POLICY "Users can delete own notes"
 | `007_transcripts_hardening.sql`        | Jan 2026 | Transcript job state + cache hardening               |
 | `008_transcript_privacy_hardening.sql` | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking |
 | `009_feedback.sql`                     | Jan 2026 | User feedback table for bug reports/feature requests |
-| `010_chat_assets.sql`                  | Jan 2026 | Chat message attachments table and storage bucket    |
-| `011_chat_assets_cleanup.sql`          | Feb 2026 | Cleanup function for orphaned chat assets            |
 
 ---
 

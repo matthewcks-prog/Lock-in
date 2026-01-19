@@ -4,29 +4,10 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 ## Features
 
-### AI-Powered Learning
 - **Explain**: Get clear, plain-English explanations with concrete examples
 - **Sidebar Interface**: Modern right-hand sidebar with chat history and persistent conversations
-- **Split Layout**: Ctrl/Cmd + select to open, 65/35 split with mobile overlay
+- **Split Layout**: Floating toggle pill, Ctrl/Cmd + select to open, 65/35 split (max ~390px) with mobile overlay
 - **Chat History**: Persistent chat sessions saved to Supabase
-
-### Notes
-- **Rich Text Notes**: Full-featured note editor with formatting (bold, lists, headings)
-- **Autosave**: Notes save automatically as you type
-- **Asset Attachments**: Upload images and files directly into notes
-- **Course Organization**: Notes auto-linked to course and week based on context
-- **Starred Notes**: Mark important notes for quick access
-
-### Transcripts
-- **Video Transcripts**: Extract transcripts from lecture videos (Panopto, Echo360, HTML5)
-- **AI Transcription**: Transcribe videos without captions using AI
-- **Multi-provider Support**: Works with Monash Panopto, Echo360, and standard HTML5 video
-
-### Feedback
-- **In-app Feedback**: Submit bug reports, feature requests, and questions
-- **Auto-captured Context**: Includes page URL, course code, extension version
-
-### Other
 - **Authentication**: Secure user authentication via Supabase
 
 ## Architecture
@@ -84,8 +65,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
    OPENAI_API_KEY=your_openai_api_key_here
    PORT=3000
    DAILY_REQUEST_LIMIT=100
-   CHAT_LIST_LIMIT=20
-   MAX_CHAT_LIST_LIMIT=100
+   CHAT_LIST_LIMIT=5
    ```
 
 4. Start the development server:
@@ -96,51 +76,16 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
    The server will start at `http://localhost:3000`
 
-### 1.5 Database Workflow (Local → Dev → Prod)
-
-This repo uses Supabase CLI migrations as the source of truth. Do not edit
-schemas manually in the Supabase dashboard.
-Local development requires Docker Desktop and the Supabase CLI.
-
-**Local (source of truth):**
-
-```bash
-npm run supabase:start
-npm run supabase:migration:new -- add_feature_name
-```
-
-**Apply migrations to dev/prod:**
-
-```bash
-npm run supabase:push:dev
-npm run supabase:push:prod
-```
-
-**Required env vars (no secrets committed):**
-
-```env
-SUPABASE_ENV=local|dev|prod
-SUPABASE_URL_LOCAL=http://127.0.0.1:54331
-SUPABASE_ANON_KEY_LOCAL=...
-SUPABASE_SERVICE_ROLE_KEY_LOCAL=...
-SUPABASE_URL_DEV=...
-SUPABASE_ANON_KEY_DEV=...
-SUPABASE_SERVICE_ROLE_KEY_DEV=...
-SUPABASE_URL_PROD=...
-SUPABASE_ANON_KEY_PROD=...
-SUPABASE_SERVICE_ROLE_KEY_PROD=...
-SUPABASE_PROJECT_REF_DEV=...
-SUPABASE_PROJECT_REF_PROD=...
-```
-
-See `docs/setup/LOCAL_SUPABASE_SETUP.md` for the full workflow.
-
 ### 2. Chrome Extension Setup
 
-1. Generate `extension/config.js`:
+1. Configure `extension/config.js`:
 
-   ```bash
-   LOCKIN_APP_ENV=local npm run extension:config
+   ```javascript
+   window.LOCKIN_CONFIG = {
+     BACKEND_URL: 'http://localhost:3000',
+     SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
+     SUPABASE_ANON_KEY: 'your-anon-key',
+   };
    ```
 
 2. Open Chrome and navigate to `chrome://extensions/`
@@ -172,6 +117,7 @@ See `docs/setup/LOCAL_SUPABASE_SETUP.md` for the full workflow.
 
 1. Click the Lock-in extension icon in Chrome's toolbar
 2. Adjust your preferred language for translations
+3. Set your difficulty level (High School or First-Year University)
 4. Settings are automatically saved
 
 ## API Endpoints
@@ -186,6 +132,7 @@ Main endpoint for processing text.
 {
   "selection": "The text to process",
   "mode": "explain | general",
+  "difficultyLevel": "highschool | university",
   "chatHistory": [],
   "newUserMessage": "Optional follow-up question",
   "chatId": "optional-existing-chat-id"

@@ -8,7 +8,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type {
-    ChatAttachment,
     ChatMessage,
     ChatHistoryItem,
     UseChatOptions,
@@ -20,19 +19,10 @@ import {
     coerceChatTitle,
     FALLBACK_CHAT_TITLE,
     ACTIVE_CHAT_ID_KEY,
-    normalizeChatMessage,
 } from '../types';
 import { useChatMessages, chatMessagesKeys } from './useChatMessages';
 import { useChatHistory } from './useChatHistory';
 import { useSendMessage } from './useSendMessage';
-
-interface SendChatMessageOptions {
-    source?: 'selection' | 'followup';
-    attachments?: ChatAttachment[];
-    attachmentIds?: string[];
-    selectionOverride?: string;
-    userMessageOverride?: string;
-}
 
 interface UseChatReturn {
     // Current chat state
@@ -44,16 +34,12 @@ interface UseChatReturn {
     // History
     recentChats: ChatHistoryItem[];
     isLoadingHistory: boolean;
-    hasMoreHistory: boolean;
-    isLoadingMoreHistory: boolean;
-    loadMoreHistory: () => Promise<unknown>;
 
     // Actions
-    sendMessage: (message: string, options?: 'selection' | 'followup' | SendChatMessageOptions) => void;
-    startNewChat: (text: string, options?: 'selection' | 'followup' | SendChatMessageOptions) => void;
+    sendMessage: (message: string, source?: 'selection' | 'followup') => void;
+    startNewChat: (text: string, source?: 'selection' | 'followup') => void;
     startBlankChat: () => void;
     selectChat: (item: ChatHistoryItem) => Promise<void>;
-    ensureChatId: (initialMessage?: string) => Promise<string | null>;
 
     // Status
     isSending: boolean;
@@ -63,16 +49,6 @@ interface UseChatReturn {
     // History panel
     isHistoryOpen: boolean;
     setIsHistoryOpen: React.Dispatch<React.SetStateAction<boolean>>;
-}
-
-function coerceSendOptions(
-    options?: 'selection' | 'followup' | SendChatMessageOptions,
-): SendChatMessageOptions {
-    if (!options) return {};
-    if (typeof options === 'string') {
-        return { source: options };
-    }
-    return options;
 }
 
 /**
@@ -96,16 +72,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
     // Track previous selection to avoid re-processing
     const previousSelectionRef = useRef<string | undefined>();
-    const activeChatIdRef = useRef<string | null>(null);
-    const activeHistoryIdRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        activeChatIdRef.current = activeChatId;
-    }, [activeChatId]);
-
-    useEffect(() => {
-        activeHistoryIdRef.current = activeHistoryId;
-    }, [activeHistoryId]);
 
     // Composed hooks
     const {
@@ -121,12 +87,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     const {
         recentChats,
         isLoading: isLoadingHistory,
-        hasMore: hasMoreHistory,
-        loadMore: loadMoreHistory,
-        isFetchingNextPage: isLoadingMoreHistory,
         upsertHistory,
     } = useChatHistory({
         apiClient,
+        limit: 8,
     });
 
     const { sendMessage: sendMessageMutation, isSending } = useSendMessage({
@@ -136,18 +100,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         courseCode,
         onSuccess: (response, resolvedChatId) => {
             const now = new Date().toISOString();
-            const previousChatId = activeChatIdRef.current || activeHistoryIdRef.current;
-            if (previousChatId && previousChatId !== resolvedChatId) {
-                const cachedMessages = queryClient.getQueryData<ChatMessage[]>(
-                    chatMessagesKeys.byId(previousChatId),
-                );
-                if (cachedMessages && cachedMessages.length > 0) {
-                    queryClient.setQueryData(
-                        chatMessagesKeys.byId(resolvedChatId),
-                        cachedMessages,
-                    );
-                }
-            }
             const fallbackTitle = buildInitialChatTitle(response.explanation.slice(0, 50));
             const serverTitle = response.chatTitle;
             const resolvedTitle = serverTitle
@@ -165,7 +117,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                     updatedAt: now,
                     lastMessage: response.explanation,
                 },
-                activeHistoryIdRef.current !== resolvedChatId ? activeHistoryIdRef.current : undefined,
+                activeHistoryId !== resolvedChatId ? activeHistoryId : undefined,
                 titleSource,
             );
         },
@@ -201,43 +153,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         }
     }, [activeChatId, storage]);
 
-    const ensureChatId = useCallback(
-        async (initialMessage?: string): Promise<string | null> => {
-            const existingChatId = activeChatIdRef.current;
-            if (existingChatId && isValidUUID(existingChatId)) {
-                return existingChatId;
-            }
-            if (!apiClient?.createChat) {
-                throw new Error('Chat session is not available');
-            }
-
-            const fallbackTitle = buildInitialChatTitle(initialMessage || '');
-            const chat = await apiClient.createChat({ title: fallbackTitle });
-            if (!chat?.id) {
-                throw new Error('Failed to create chat session');
-            }
-
-            setActiveChatId(chat.id);
-            setActiveHistoryId(chat.id);
-
-            return chat.id;
-        },
-        [apiClient],
-    );
-
     /**
      * Start a new chat with initial message.
      */
     const startNewChat = useCallback(
-        (text: string, options?: 'selection' | 'followup' | SendChatMessageOptions) => {
+        (text: string, source: 'selection' | 'followup' = 'selection') => {
             const trimmed = text.trim();
             if (!trimmed) return;
-            const resolvedOptions = coerceSendOptions(options);
-            const source = resolvedOptions.source || 'selection';
-            const attachments = resolvedOptions.attachments;
-            const attachmentIds = resolvedOptions.attachmentIds;
-            const selectionOverride = resolvedOptions.selectionOverride;
-            const userMessageOverride = resolvedOptions.userMessageOverride;
 
             const now = new Date().toISOString();
             const provisionalChatId = `chat-${Date.now()}`;
@@ -249,7 +171,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 timestamp: now,
                 mode,
                 source,
-                attachments,
             };
 
             // Reset state for new chat
@@ -286,9 +207,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 chatId: null,
                 currentMessages: [userMessage],
                 activeChatId: provisionalChatId,
-                attachmentIds,
-                selectionOverride,
-                userMessageOverride,
             });
         },
         [mode, pageUrl, courseCode, setMessages, upsertHistory, sendMessageMutation],
@@ -298,21 +216,13 @@ export function useChat(options: UseChatOptions): UseChatReturn {
      * Send a message to the current chat (follow-up).
      */
     const sendMessage = useCallback(
-        (text: string, options?: 'selection' | 'followup' | SendChatMessageOptions) => {
+        (text: string, source: 'selection' | 'followup' = 'followup') => {
             const trimmed = text.trim();
             if (!trimmed) return;
-            const resolvedOptions = coerceSendOptions(options);
-            const source = resolvedOptions.source || 'followup';
-            const attachments = resolvedOptions.attachments;
-            const attachmentIds = resolvedOptions.attachmentIds;
-            const selectionOverride = resolvedOptions.selectionOverride;
-            const userMessageOverride = resolvedOptions.userMessageOverride;
 
-            const hasChatContext = Boolean(activeChatId || activeHistoryId);
-
-            // If no active chat context, start a new one
-            if (messages.length === 0 && !hasChatContext) {
-                startNewChat(trimmed, resolvedOptions);
+            // If no active chat, start a new one
+            if (messages.length === 0) {
+                startNewChat(trimmed, source);
                 return;
             }
 
@@ -328,7 +238,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 timestamp: now,
                 mode,
                 source,
-                attachments,
             };
 
             setIsHistoryOpen(false);
@@ -341,10 +250,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             ) || messages;
             const nextMessages = [...currentMessages, userMessage];
 
-            queryClient.setQueryData(
-                chatMessagesKeys.byId(activeChatId || provisionalChatId),
-                nextMessages,
-            );
+            if (activeChatId) {
+                queryClient.setQueryData(chatMessagesKeys.byId(activeChatId), nextMessages);
+            }
 
             // Update history
             upsertHistory(
@@ -368,9 +276,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
                 chatId: activeChatId,
                 currentMessages: nextMessages,
                 activeChatId: activeChatId || provisionalChatId,
-                attachmentIds,
-                selectionOverride,
-                userMessageOverride,
             });
         },
         [
@@ -396,7 +301,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
         setIsHistoryOpen(false);
         setError(null);
-        setActiveChatId(provisionalChatId);
+        setActiveChatId(null);
         setActiveHistoryId(provisionalChatId);
 
         // Clear messages cache for new chat
@@ -429,14 +334,17 @@ export function useChat(options: UseChatOptions): UseChatReturn {
             try {
                 const response = await apiClient.getChatMessages(item.id);
                 if (Array.isArray(response)) {
-                    const normalized: ChatMessage[] = response.map((msg) =>
-                        normalizeChatMessage(msg, mode),
-                    );
+                    const normalized: ChatMessage[] = response.map((msg: any) => ({
+                        id: msg.id || `msg-${Math.random().toString(16).slice(2)}`,
+                        role: msg.role === 'assistant' ? 'assistant' : 'user',
+                        content: msg.content || msg.output_text || msg.input_text || 'Message',
+                        timestamp: msg.created_at || new Date().toISOString(),
+                        mode: msg.mode || mode,
+                    }));
                     setMessages(item.id, normalized);
                 }
-            } catch (err: unknown) {
-                const error = err instanceof Error ? err : new Error('Failed to load chat messages');
-                setError(error);
+            } catch (err: any) {
+                setError(err);
             }
         },
         [apiClient, mode, setMessages],
@@ -464,14 +372,10 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         isLoadingMessages,
         recentChats,
         isLoadingHistory,
-        hasMoreHistory,
-        isLoadingMoreHistory,
-        loadMoreHistory,
         sendMessage,
         startNewChat,
         startBlankChat,
         selectChat,
-        ensureChatId,
         isSending,
         error,
         clearError,

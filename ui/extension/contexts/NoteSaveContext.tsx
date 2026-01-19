@@ -14,7 +14,6 @@ import {
 import type { Note } from '@core/domain/Note';
 import type { NotesService } from '@core/services/notesService';
 import { useNoteSave, type SaveNoteOptions } from '../../hooks/useNoteSave';
-import type { SidebarTabId } from '../sidebar/types';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -41,7 +40,7 @@ interface NoteSaveProviderProps {
   courseCode: string | null;
   upsertNote: (note: Note) => void;
   setSelectedNoteId: (id: string | null) => void;
-  setActiveTab: (tab: SidebarTabId) => void;
+  setActiveTab: (tab: string) => void;
   children: ReactNode;
 }
 

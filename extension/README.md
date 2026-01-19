@@ -89,6 +89,7 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 - Click extension icon to open settings popup
 - Sign in / Sign out via Supabase
 - Choose preferred translation language
+- Set difficulty level
 - Settings sync across devices (Chrome Sync)
 
 ### Feedback System
@@ -104,25 +105,20 @@ Feedback is stored in the database for review via Supabase Studio or a future ad
 
 ## Configuration
 
-### `config.js` (Generated)
+### `config.js`
 
-`extension/config.js` is generated from environment variables:
+All runtime URLs live in `extension/config.js`:
 
-```bash
-# Example: local
-LOCKIN_APP_ENV=local npm run extension:config
+```javascript
+window.LOCKIN_CONFIG = {
+  BACKEND_URL: 'http://localhost:3000',
+  SUPABASE_URL: 'https://YOUR-PROJECT.supabase.co',
+  SUPABASE_ANON_KEY: 'your-anon-key',
+  // SENTRY_DSN is injected at build time via VITE_SENTRY_DSN
+};
 ```
 
-**Required env vars (per environment):**
-
-```env
-BACKEND_URL_LOCAL=http://localhost:3000
-SUPABASE_URL_LOCAL=http://127.0.0.1:54331
-SUPABASE_ANON_KEY_LOCAL=...
-```
-
-Use `LOCKIN_APP_ENV=dev|prod` with matching `BACKEND_URL_DEV/PROD` and
-`SUPABASE_URL_DEV/PROD`, `SUPABASE_ANON_KEY_DEV/PROD`.
+Update these values before loading the extension.
 
 ### Error Tracking (Sentry)
 

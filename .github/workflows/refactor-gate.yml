@@ -20,11 +20,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+<<<<<<< HEAD
       - name: Install backend dependencies
         if: ${{ hashFiles('backend/package-lock.json') != '' }}
         run: npm ci
         working-directory: backend
 
+=======
+>>>>>>> 44d382601408e28a3e4aec0e945b94b431bb5bde
       - name: Run lint
         run: npm run lint
 
@@ -40,6 +43,14 @@ jobs:
       - name: Run verify-build
         run: npm run verify-build
 
+<<<<<<< HEAD
+=======
+      - name: Install backend dependencies
+        if: ${{ hashFiles('backend/package-lock.json') != '' }}
+        run: npm ci
+        working-directory: backend
+
+>>>>>>> 44d382601408e28a3e4aec0e945b94b431bb5bde
       - name: Run backend tests
         run: npm test
         working-directory: backend

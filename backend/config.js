@@ -7,83 +7,6 @@
  */
 
 const path = require('path');
-const chatLimits = require('../core/config/chatLimits.json');
-
-// =============================================================================
-// Environment Selection & Supabase Configuration
-// =============================================================================
-
-const NODE_ENV = process.env.NODE_ENV || 'development';
-const IS_PRODUCTION = NODE_ENV === 'production';
-const IS_DEVELOPMENT = NODE_ENV === 'development';
-const SUPABASE_ENV = (process.env.SUPABASE_ENV || (IS_PRODUCTION ? 'prod' : 'dev')).toLowerCase();
-
-function normalizeSupabaseEnv(value) {
-  if (!value) {
-    return 'dev';
-  }
-  if (value === 'production' || value === 'prod') {
-    return 'prod';
-  }
-  if (value === 'development' || value === 'dev') {
-    return 'dev';
-  }
-  if (value === 'local') {
-    return 'local';
-  }
-  return 'dev';
-}
-
-const EFFECTIVE_SUPABASE_ENV = normalizeSupabaseEnv(SUPABASE_ENV);
-
-/**
- * Get environment-aware Supabase configuration.
- * In production: Uses SUPABASE_URL_PROD and SUPABASE_SERVICE_ROLE_KEY_PROD
- * In development: Uses SUPABASE_URL_DEV and SUPABASE_SERVICE_ROLE_KEY_DEV
- * 
- * Fallback: If environment-specific vars not found, try legacy vars
- * (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) for backward compatibility
- */
-function getSupabaseConfig() {
-  if (EFFECTIVE_SUPABASE_ENV === 'prod') {
-    return {
-      url: process.env.SUPABASE_URL_PROD || process.env.SUPABASE_URL,
-      serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_PROD || process.env.SUPABASE_SERVICE_ROLE_KEY,
-      anonKey: process.env.SUPABASE_ANON_KEY_PROD || process.env.SUPABASE_ANON_KEY,
-      environment: 'production',
-    };
-  }
-
-  if (EFFECTIVE_SUPABASE_ENV === 'local') {
-    return {
-      url: process.env.SUPABASE_URL_LOCAL || process.env.SUPABASE_URL_DEV || process.env.SUPABASE_URL,
-      serviceRoleKey:
-        process.env.SUPABASE_SERVICE_ROLE_KEY_LOCAL ||
-        process.env.SUPABASE_SERVICE_ROLE_KEY_DEV ||
-        process.env.SUPABASE_SERVICE_ROLE_KEY,
-      anonKey: process.env.SUPABASE_ANON_KEY_LOCAL || process.env.SUPABASE_ANON_KEY_DEV || process.env.SUPABASE_ANON_KEY,
-      environment: 'local',
-    };
-  }
-
-  // Development or staging
-  return {
-    url: process.env.SUPABASE_URL_DEV || process.env.SUPABASE_URL,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY_DEV || process.env.SUPABASE_SERVICE_ROLE_KEY,
-    anonKey: process.env.SUPABASE_ANON_KEY_DEV || process.env.SUPABASE_ANON_KEY,
-    environment: 'development',
-  };
-}
-
-const SUPABASE_CONFIG = getSupabaseConfig();
-
-// Validate that Supabase credentials are available
-if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.serviceRoleKey) {
-  console.error(
-    `CRITICAL: Missing Supabase credentials for ${NODE_ENV} environment.`,
-    `Expected: SUPABASE_URL_${EFFECTIVE_SUPABASE_ENV.toUpperCase()} and SUPABASE_SERVICE_ROLE_KEY_${EFFECTIVE_SUPABASE_ENV.toUpperCase()}`
-  );
-}
 
 const PORT = process.env.PORT || 3000;
 
@@ -94,16 +17,8 @@ const MAX_USER_MESSAGE_LENGTH = 1500;
 // Per-user rate limiting (requests per UTC day)
 const DAILY_REQUEST_LIMIT = parseInt(process.env.DAILY_REQUEST_LIMIT, 10) || 100;
 
-function readNumber(value, fallback) {
-  const parsed = parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-// Chat list limits
-const DEFAULT_CHAT_LIST_LIMIT =
-  readNumber(process.env.CHAT_LIST_LIMIT, chatLimits.DEFAULT_CHAT_LIST_LIMIT);
-const MAX_CHAT_LIST_LIMIT =
-  readNumber(process.env.MAX_CHAT_LIST_LIMIT, chatLimits.MAX_CHAT_LIST_LIMIT);
+// Number of chats returned in the sidebar by default``
+const DEFAULT_CHAT_LIST_LIMIT = parseInt(process.env.CHAT_LIST_LIMIT, 10) || 5;
 
 // CORS configuration – in production prefer an explicit allow‑list
 const ALLOWED_ORIGINS = [
@@ -124,16 +39,6 @@ const ALLOWED_ORIGINS = [
 const NOTE_ASSETS_BUCKET = process.env.NOTE_ASSETS_BUCKET || 'note-assets';
 const NOTE_ASSETS_MAX_BYTES = parseInt(process.env.NOTE_ASSETS_MAX_BYTES, 10) || 10 * 1024 * 1024; // 10MB default
 
-// Chat asset uploads
-const CHAT_ASSETS_BUCKET = process.env.CHAT_ASSETS_BUCKET || 'chat-assets';
-const CHAT_ASSETS_MAX_BYTES = parseInt(process.env.CHAT_ASSETS_MAX_BYTES, 10) || 10 * 1024 * 1024; // 10MB default
-const CHAT_ASSET_DAILY_UPLOAD_LIMIT =
-  parseInt(process.env.CHAT_ASSET_DAILY_UPLOAD_LIMIT, 10) || 50;
-const CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT =
-  parseInt(process.env.CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT, 10) || 100 * 1024 * 1024;
-const CHAT_ASSET_SIGNED_URL_TTL_SECONDS =
-  parseInt(process.env.CHAT_ASSET_SIGNED_URL_TTL_SECONDS, 10) || 10 * 60;
-
 // MIME allow-list grouped by asset category for easy extension
 const NOTE_ASSET_MIME_GROUPS = {
   image: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
@@ -148,34 +53,7 @@ const NOTE_ASSET_MIME_GROUPS = {
   other: [],
 };
 
-// Chat assets support additional code file types
-const CHAT_ASSET_MIME_GROUPS = {
-  image: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-  document: [
-    'application/pdf',
-    'text/plain',
-    'text/markdown',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ],
-  code: [
-    'text/javascript',
-    'application/javascript',
-    'text/typescript',
-    'text/x-python',
-    'text/x-java',
-    'text/x-c',
-    'text/x-c++',
-    'text/css',
-    'text/html',
-    'application/json',
-    'text/x-rust',
-    'text/x-go',
-  ],
-  other: [],
-};
-
 const ALLOWED_ASSET_MIME_TYPES = Object.values(NOTE_ASSET_MIME_GROUPS).flat();
-const ALLOWED_CHAT_ASSET_MIME_TYPES = Object.values(CHAT_ASSET_MIME_GROUPS).flat();
 
 // Transcript processing
 const TRANSCRIPTION_MODEL = process.env.OPENAI_TRANSCRIPTION_MODEL || 'whisper-1';
@@ -203,25 +81,12 @@ const TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES =
 const MIME_EXTENSION_MAP = {
   'application/pdf': 'pdf',
   'text/plain': 'txt',
-  'text/markdown': 'md',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/webp': 'webp',
   'image/gif': 'gif',
-  'text/javascript': 'js',
-  'application/javascript': 'js',
-  'text/typescript': 'ts',
-  'text/x-python': 'py',
-  'text/x-java': 'java',
-  'text/x-c': 'c',
-  'text/x-c++': 'cpp',
-  'text/css': 'css',
-  'text/html': 'html',
-  'application/json': 'json',
-  'text/x-rust': 'rs',
-  'text/x-go': 'go',
 };
 
 function isOriginAllowed(origin) {
@@ -236,44 +101,17 @@ function isOriginAllowed(origin) {
 }
 
 module.exports = {
-  // Environment
-  NODE_ENV,
-  IS_PRODUCTION,
-  IS_DEVELOPMENT,
-  SUPABASE_ENV,
-  
-  // Supabase Configuration
-  SUPABASE_CONFIG,
-  SUPABASE_URL: SUPABASE_CONFIG.url,
-  SUPABASE_SERVICE_ROLE_KEY: SUPABASE_CONFIG.serviceRoleKey,
-  SUPABASE_ANON_KEY: SUPABASE_CONFIG.anonKey,
-  
-  // Server
   PORT,
   MAX_SELECTION_LENGTH,
   MAX_USER_MESSAGE_LENGTH,
   DAILY_REQUEST_LIMIT,
   DEFAULT_CHAT_LIST_LIMIT,
-  MAX_CHAT_LIST_LIMIT,
   isOriginAllowed,
-  
-  // Note Assets
   NOTE_ASSETS_BUCKET,
   NOTE_ASSETS_MAX_BYTES,
   NOTE_ASSET_MIME_GROUPS,
   ALLOWED_ASSET_MIME_TYPES,
-  
-  // Chat Assets
-  CHAT_ASSETS_BUCKET,
-  CHAT_ASSETS_MAX_BYTES,
-  CHAT_ASSET_DAILY_UPLOAD_LIMIT,
-  CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT,
-  CHAT_ASSET_SIGNED_URL_TTL_SECONDS,
-  CHAT_ASSET_MIME_GROUPS,
-  ALLOWED_CHAT_ASSET_MIME_TYPES,
   MIME_EXTENSION_MAP,
-  
-  // Transcripts
   TRANSCRIPTION_MODEL,
   TRANSCRIPTION_SEGMENT_MAX_MB,
   TRANSCRIPTION_TEMP_DIR,

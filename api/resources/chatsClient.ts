@@ -1,41 +1,15 @@
 import type { ApiRequest } from '../fetcher';
-import chatLimits from '@core/config/chatLimits.json';
 
 export function createChatsClient(apiRequest: ApiRequest) {
-  interface ChatListResponse {
-    chats: any[];
-    pagination: {
-      hasMore: boolean;
-      nextCursor?: string | null;
-    };
-  }
-
-  async function createChat(params: { title?: string; initialMessage?: string } = {}) {
-    return apiRequest<{
-      id: string;
-      title: string | null;
-      createdAt: string;
-      updatedAt: string;
-      lastMessageAt: string | null;
-    }>('/api/chats', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-  }
-
-  async function getRecentChats(params: { limit?: number; cursor?: string | null } = {}): Promise<ChatListResponse> {
-    const defaultLimit = Number(chatLimits.DEFAULT_CHAT_LIST_LIMIT) || 20;
-    const { limit = defaultLimit, cursor } = params;
+  async function getRecentChats(params: { limit?: number } = {}): Promise<any[]> {
+    const { limit = 10 } = params;
     const queryParams = new URLSearchParams();
     if (limit) {
       queryParams.set('limit', String(limit));
     }
-    if (cursor) {
-      queryParams.set('cursor', String(cursor));
-    }
 
     const endpoint = `/api/chats${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    return apiRequest<ChatListResponse>(endpoint, {
+    return apiRequest<any[]>(endpoint, {
       method: 'GET',
     });
   }
@@ -71,7 +45,6 @@ export function createChatsClient(apiRequest: ApiRequest) {
   }
 
   return {
-    createChat,
     getRecentChats,
     getChatMessages,
     deleteChat,

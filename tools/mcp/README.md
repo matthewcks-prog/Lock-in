@@ -44,9 +44,7 @@ MCP servers enable Cursor AI to interact with the codebase, run commands, query 
 
 6. **Postgres** (`@modelcontextprotocol/server-postgres`)
    - Query Supabase PostgreSQL
-   - **Dev environment only** - No MCP access to production
-   - `dev_admin` user with full CRUD for development
-   - See [docs/SUPABASE_DEV_ADMIN_SETUP.md](docs/SUPABASE_DEV_ADMIN_SETUP.md) for setup
+   - **READ-ONLY by default** (SELECT only)
 
 7. **Context7** (`@modelcontextprotocol/server-context7`)
    - Up-to-date, version-specific documentation for libraries/frameworks
@@ -58,38 +56,24 @@ MCP servers enable Cursor AI to interact with the codebase, run commands, query 
 
 ### MCP Config Location
 
-The main MCP configuration location depends on your IDE:
-
-| IDE | Config Location |
-|-----|----------------|
-| **VS Code** | `.vscode/mcp.json` (copy from `.vscode/mcp.json.template`) |
-| **Cursor** | `.cursor/mcp.json` |
-| **GitHub Copilot** | `.github/copilot/mcp.json` |
+The main MCP configuration is in `.cursor/mcp.json` (or `~/.cursor/mcp.json` depending on Cursor version).
 
 ### Environment Variables
 
-Create `tools/mcp/.env.local` (gitignored) with:
+Create `.env.local` in the repo root with:
 
 ```bash
-# Development Supabase (full CRUD for MCP - dev only)
-# Create dev_admin user: see docs/SUPABASE_DEV_ADMIN_SETUP.md
-LOCKIN_DB_CONNECTION_STRING_DEV=postgresql://dev_admin:[PASSWORD]@db.uszxfuzauetcchwcgufe.supabase.co:5432/postgres
-LOCKIN_DB_MAX_ROWS=1000
-LOCKIN_DB_TIMEOUT_MS=5000
-LOCKIN_DB_READONLY=false
+# Supabase (read-only for MCP, separate from backend service_role)
+SUPABASE_READONLY_CONNECTION_STRING=postgresql://postgres:[READONLY_PASSWORD]@[PROJECT_REF].supabase.co:5432/postgres?sslmode=require
 
-# Development Supabase project
-LOCKIN_SUPABASE_PROJECT_REF_DEV=uszxfuzauetcchwcgufe
-LOCKIN_SUPABASE_URL_DEV=https://uszxfuzauetcchwcgufe.supabase.co
+# Backend (for fetch MCP server)
+BACKEND_URL=http://localhost:3000
 
-# Repository paths
-LOCKIN_REPO_ROOT=C:/Users/matth/Lock-in
+# Extension (for Playwright)
+EXTENSION_PATH=C:\Users\matth\.cursor\worktrees\Lock-in\hmg\extension
 ```
 
-**Important:**
-- **Never** add production credentials to MCP configuration
-- MCP is for development environment only
-- Production database access goes through backend API
+**Note**: On Ubuntu/SSH, use Linux paths for `EXTENSION_PATH`.
 
 ## Security Boundaries
 

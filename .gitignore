@@ -1,9 +1,8 @@
 # Dependencies
 node_modules/
 
-# Environment variables (all .env files contain secrets)
+# Environment variables
 .env
-.env.*
 .env.local
 .env.*.local
 
@@ -20,17 +19,11 @@ Thumbs.db
 desktop.ini
 
 # IDE
+.vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# VS Code (user-specific settings and MCP configs)
-.vscode/*
-!.vscode/mcp.json.template
-!.vscode/extensions.json
-!.vscode/tasks.json
-!.vscode/launch.json
 
 # Cursor IDE (user-specific MCP configs)
 .cursor/mcp.json

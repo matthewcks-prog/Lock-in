@@ -13,6 +13,7 @@ function createStateStore({ Storage, Logger }) {
   const DEFAULT_MODE = 'explain';
   const DEFAULT_PREFS = {
     preferredLanguage: 'en',
+    difficultyLevel: 'highschool',
   };
 
   const log = Logger || { warn: console.warn };
@@ -459,7 +460,7 @@ describe('StateStore', () => {
 
       const snapshot = stateStore.getSnapshot();
       expect(snapshot.sessionPreferences.preferredLanguage).toBe('es');
-      expect(snapshot.sessionPreferences).toEqual({ preferredLanguage: 'es' });
+      expect(snapshot.sessionPreferences.difficultyLevel).toBe('highschool'); // Should preserve other prefs
     });
   });
 

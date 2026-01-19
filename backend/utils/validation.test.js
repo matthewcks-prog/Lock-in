@@ -9,6 +9,7 @@ const {
   VALID_MODES,
   validateMode,
   validateLanguageCode,
+  validateDifficultyLevel,
   validateUUID,
   validateChatHistory,
   validateText,
@@ -74,6 +75,26 @@ test('validateLanguageCode: normalizes uppercase codes', () => {
 
 test('validateLanguageCode: rejects invalid language codes', () => {
   const result = validateLanguageCode('xyz');
+  assert.equal(result.valid, false);
+  assert.ok(result.error);
+});
+
+// ============================================================================
+// validateDifficultyLevel tests
+// ============================================================================
+
+test('validateDifficultyLevel: accepts valid difficulty levels', () => {
+  const validLevels = ['highschool', 'university'];
+
+  for (const level of validLevels) {
+    const result = validateDifficultyLevel(level);
+    assert.equal(result.valid, true);
+    assert.equal(result.normalized, level);
+  }
+});
+
+test('validateDifficultyLevel: rejects invalid difficulty levels', () => {
+  const result = validateDifficultyLevel('invalid');
   assert.equal(result.valid, false);
   assert.ok(result.error);
 });
