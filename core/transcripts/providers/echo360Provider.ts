@@ -1,5 +1,9 @@
 export * from '../types/echo360Types';
-export { extractSectionId, parseSyllabusResponse, fetchVideosFromSyllabus } from '../parsers/echo360Parser';
+export {
+  extractSectionId,
+  parseSyllabusResponse,
+  fetchVideosFromSyllabus,
+} from '../parsers/echo360Parser';
 export {
   extractEcho360Info,
   isEcho360Domain,

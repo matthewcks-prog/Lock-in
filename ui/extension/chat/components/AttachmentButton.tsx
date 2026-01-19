@@ -70,17 +70,15 @@ export function AttachmentButton({
 
       const files = Array.from(fileList);
       const remaining = maxFiles - currentFileCount;
-      
+
       // Limit to remaining slots
-      const validFiles = files
-        .slice(0, remaining)
-        .filter((file) => {
-          if (file.size > MAX_FILE_SIZE) {
-            console.warn(`File ${file.name} exceeds size limit`);
-            return false;
-          }
-          return true;
-        });
+      const validFiles = files.slice(0, remaining).filter((file) => {
+        if (file.size > MAX_FILE_SIZE) {
+          console.warn(`File ${file.name} exceeds size limit`);
+          return false;
+        }
+        return true;
+      });
 
       if (validFiles.length > 0) {
         onFilesSelected(validFiles);
@@ -91,7 +89,7 @@ export function AttachmentButton({
         inputRef.current.value = '';
       }
     },
-    [onFilesSelected, maxFiles, currentFileCount]
+    [onFilesSelected, maxFiles, currentFileCount],
   );
 
   const isAtLimit = currentFileCount >= maxFiles;

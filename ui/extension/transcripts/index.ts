@@ -6,24 +6,20 @@
 
 // Transcript-specific components (wrapping generic video components)
 export {
-    TranscriptVideoListPanel,
-    TranscriptVideoStatus,
-    isAiTranscriptionBusy,
-    getAiStatusLabel,
+  TranscriptVideoListPanel,
+  TranscriptVideoStatus,
+  isAiTranscriptionBusy,
+  getAiStatusLabel,
 } from './components';
 export type {
-    TranscriptVideoListPanelProps,
-    AiTranscriptionUiState,
-    VideoExtractionResult,
-    AiTranscriptionStatus,
+  TranscriptVideoListPanelProps,
+  AiTranscriptionUiState,
+  VideoExtractionResult,
+  AiTranscriptionStatus,
 } from './components';
 
 export { TranscriptMessage } from './TranscriptMessage';
 export { useTranscripts } from './useTranscripts';
 
 // Focused hooks for granular control
-export {
-    useVideoDetection,
-    useTranscriptExtraction,
-    useAiTranscription,
-} from './hooks';
+export { useVideoDetection, useTranscriptExtraction, useAiTranscription } from './hooks';

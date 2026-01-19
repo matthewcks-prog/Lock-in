@@ -16,12 +16,12 @@ import type { ReactNode } from 'react';
  * Props passed to render prop callbacks for video items
  */
 export interface VideoItemRenderProps {
-    /** The video being rendered */
-    video: DetectedVideo;
-    /** Whether this video is currently selected/active */
-    isSelected?: boolean;
-    /** Whether this video item is disabled for interaction */
-    isDisabled?: boolean;
+  /** The video being rendered */
+  video: DetectedVideo;
+  /** Whether this video is currently selected/active */
+  isSelected?: boolean;
+  /** Whether this video item is disabled for interaction */
+  isDisabled?: boolean;
 }
 
 /**

@@ -31,25 +31,25 @@ function MyFeatureVideoListPanel({
       onSelectVideo={onSelectVideo}
       onClose={onClose}
       error={error}
-      
+
       // Customize title and empty message
       title="Select a video for my feature"
       emptyMessage="No videos found on this page."
-      
+
       // Inject feature-specific badges
-      renderItemBadge={({ video }) => 
+      renderItemBadge={({ video }) =>
         hasMyFeatureData(video) && <span className="badge">Ready</span>
       }
-      
+
       // Inject feature-specific actions below each item
       renderItemActions={({ video }) => (
-        <MyFeatureActions 
+        <MyFeatureActions
           video={video}
           state={myFeatureState}
           onAction={onMyFeatureAction}
         />
       )}
-      
+
       // Control which videos are disabled
       isVideoDisabled={(video) => myFeatureState.isBusy}
     />
@@ -68,10 +68,10 @@ function useMyFeature() {
   const detection = useVideoDetection();
   // detection.detectVideos() returns { videos, provider }
   // detection.state has { videos, isDetecting, error, detectionHint }
-  
+
   // Add your feature-specific logic here
   const [myState, setMyState] = useState(...);
-  
+
   return {
     ...detection,
     myState,
@@ -90,7 +90,7 @@ interface VideoListPanelProps {
   videos: DetectedVideo[];
   isLoading: boolean;
   // ... generic props ...
-  
+
   // ❌ These are transcript-specific, don't add here!
   isExtracting: boolean;
   extractingVideoId: string | null;
@@ -114,6 +114,7 @@ interface VideoListPanelProps {
 ## ❌ DON'T: Duplicate Loading/Empty/Error State UI
 
 The generic `VideoListPanel` already handles:
+
 - Loading spinner with "Detecting videos..." message
 - Empty state with customizable message
 - Error display
@@ -169,15 +170,16 @@ ui/extension/
 
 ## Render Props Available
 
-| Prop | Purpose | Example Use |
-|------|---------|-------------|
-| `renderItemBadge` | Badge after video title | "No transcript", "Ready", "Processing" |
-| `renderItemActions` | Actions below video item | AI transcription button, progress bar |
-| `renderItemStatus` | Status icon in action area | Custom spinner, checkmark, error icon |
+| Prop                | Purpose                    | Example Use                            |
+| ------------------- | -------------------------- | -------------------------------------- |
+| `renderItemBadge`   | Badge after video title    | "No transcript", "Ready", "Processing" |
+| `renderItemActions` | Actions below video item   | AI transcription button, progress bar  |
+| `renderItemStatus`  | Status icon in action area | Custom spinner, checkmark, error icon  |
 
 ## When to Modify Generic Components
 
 Only modify `ui/extension/videos/` components if:
+
 1. You're adding a **new render prop** that multiple features need
 2. You're fixing a **bug** in shared behavior
 3. You're adding a **new customization point** (not feature logic)

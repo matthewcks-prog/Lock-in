@@ -12,8 +12,8 @@ export type { VideoListItemProps } from './VideoListItem';
 export { VideoListPanel } from './VideoListPanel';
 export type { VideoListPanelProps } from './VideoListPanel';
 export type {
-    VideoItemRenderProps,
-    VideoItemBadgeRenderer,
-    VideoItemActionRenderer,
-    VideoItemStatusRenderer,
+  VideoItemRenderProps,
+  VideoItemBadgeRenderer,
+  VideoItemActionRenderer,
+  VideoItemStatusRenderer,
 } from './types';

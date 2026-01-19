@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Note, NoteContent, NoteStatus } from '@core/domain/Note';
-import type {
-  CreateNoteInput,
-  NotesService,
-  UpdateNoteInput,
-} from '@core/services/notesService';
+import type { CreateNoteInput, NotesService, UpdateNoteInput } from '@core/services/notesService';
 import { MAX_SAVE_RETRIES, SAVED_RESET_DELAY_MS, SAVE_DEBOUNCE_MS } from './constants';
 import {
   addToOfflineQueue,
@@ -213,7 +209,18 @@ export function useNoteEditorPersistence({
         setStatus('error');
       }
     }
-  }, [defaultCourseCode, defaultSourceUrl, lastSavedFingerprintRef, notesService, noteRef, setActiveNoteId, setError, setNote, setStatus, sourceSelection]);
+  }, [
+    defaultCourseCode,
+    defaultSourceUrl,
+    lastSavedFingerprintRef,
+    notesService,
+    noteRef,
+    setActiveNoteId,
+    setError,
+    setNote,
+    setStatus,
+    sourceSelection,
+  ]);
 
   const scheduleSave = useCallback(() => {
     if (debounceRef.current) {
@@ -282,7 +289,17 @@ export function useNoteEditorPersistence({
     lastSavedFingerprintRef.current = null;
     setStatus('idle');
     setError(null);
-  }, [clientNoteIdRef, defaultCourseCode, defaultSourceUrl, lastSavedFingerprintRef, setActiveNoteId, setError, setNote, setStatus, sourceSelection]);
+  }, [
+    clientNoteIdRef,
+    defaultCourseCode,
+    defaultSourceUrl,
+    lastSavedFingerprintRef,
+    setActiveNoteId,
+    setError,
+    setNote,
+    setStatus,
+    sourceSelection,
+  ]);
 
   const syncOfflineQueue = useCallback(async () => {
     if (!notesService) return;
@@ -379,7 +396,15 @@ export function useNoteEditorPersistence({
     }
 
     setPendingSaveCount(loadOfflineQueue().length);
-  }, [clientNoteIdRef, lastSavedFingerprintRef, notesService, noteRef, setActiveNoteId, setNote, setStatus]);
+  }, [
+    clientNoteIdRef,
+    lastSavedFingerprintRef,
+    notesService,
+    noteRef,
+    setActiveNoteId,
+    setNote,
+    setStatus,
+  ]);
 
   useEffect(() => {
     const handleOnline = () => {

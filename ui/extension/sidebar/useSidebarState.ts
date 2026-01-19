@@ -95,11 +95,9 @@ export function useSidebarState({
 
   useEffect(() => {
     if (!storage || !isNoteIdLoaded) return;
-    storage
-      .set(SELECTED_NOTE_ID_KEY, selectedNoteId)
-      .catch(() => {
-        /* ignore */
-      });
+    storage.set(SELECTED_NOTE_ID_KEY, selectedNoteId).catch(() => {
+      /* ignore */
+    });
   }, [selectedNoteId, storage, isNoteIdLoaded]);
 
   useEffect(() => {

@@ -12,21 +12,21 @@ import type { DetectedVideo } from '@core/transcripts/types';
 // -----------------------------------------------------------------------------
 
 export type AiTranscriptionStatus =
-    | 'idle'
-    | 'starting'
-    | 'uploading'
-    | 'processing'
-    | 'polling'
-    | 'completed'
-    | 'failed'
-    | 'canceled';
+  | 'idle'
+  | 'starting'
+  | 'uploading'
+  | 'processing'
+  | 'polling'
+  | 'completed'
+  | 'failed'
+  | 'canceled';
 
 export interface AiTranscriptionUiState {
-    status: AiTranscriptionStatus;
-    video: DetectedVideo | null;
-    progressMessage?: string | null;
-    progressPercent?: number | null;
-    error?: string | null;
+  status: AiTranscriptionStatus;
+  video: DetectedVideo | null;
+  progressMessage?: string | null;
+  progressPercent?: number | null;
+  error?: string | null;
 }
 
 // -----------------------------------------------------------------------------
@@ -34,10 +34,10 @@ export interface AiTranscriptionUiState {
 // -----------------------------------------------------------------------------
 
 export interface VideoExtractionResult {
-    success: boolean;
-    error?: string;
-    errorCode?: string;
-    aiTranscriptionAvailable?: boolean;
+  success: boolean;
+  error?: string;
+  errorCode?: string;
+  aiTranscriptionAvailable?: boolean;
 }
 
 // -----------------------------------------------------------------------------
@@ -45,31 +45,31 @@ export interface VideoExtractionResult {
 // -----------------------------------------------------------------------------
 
 export function isAiTranscriptionBusy(status: AiTranscriptionStatus): boolean {
-    return (
-        status === 'starting' ||
-        status === 'uploading' ||
-        status === 'processing' ||
-        status === 'polling'
-    );
+  return (
+    status === 'starting' ||
+    status === 'uploading' ||
+    status === 'processing' ||
+    status === 'polling'
+  );
 }
 
 export function getAiStatusLabel(status: AiTranscriptionStatus): string {
-    switch (status) {
-        case 'starting':
-            return 'Preparing AI transcription';
-        case 'uploading':
-            return 'Uploading media';
-        case 'processing':
-            return 'Processing audio';
-        case 'polling':
-            return 'Transcribing';
-        case 'completed':
-            return 'Transcript ready';
-        case 'failed':
-            return 'AI transcription failed';
-        case 'canceled':
-            return 'Transcription canceled';
-        default:
-            return 'AI transcription';
-    }
+  switch (status) {
+    case 'starting':
+      return 'Preparing AI transcription';
+    case 'uploading':
+      return 'Uploading media';
+    case 'processing':
+      return 'Processing audio';
+    case 'polling':
+      return 'Transcribing';
+    case 'completed':
+      return 'Transcript ready';
+    case 'failed':
+      return 'AI transcription failed';
+    case 'canceled':
+      return 'Transcription canceled';
+    default:
+      return 'AI transcription';
+  }
 }

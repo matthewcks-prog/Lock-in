@@ -84,18 +84,14 @@ export function TranscriptVideoListPanel({
       isVideoDisabled={(video) => {
         // Disable if another video is extracting or AI is busy on a different video
         const isThisExtracting = isExtracting && extractingVideoId === video.id;
-        const isAnotherExtracting =
-          isExtracting && extractingVideoId !== video.id;
+        const isAnotherExtracting = isExtracting && extractingVideoId !== video.id;
         return isAnotherExtracting || (isAiBusy && !isThisExtracting);
       }}
       renderItemBadge={({ video }) => {
         // Show "No transcript" badge for videos without captions
         const result = extractionResults[video.id];
-        const noCaptions =
-          result && !result.success && result.errorCode === 'NO_CAPTIONS';
-        return noCaptions ? (
-          <span className="lockin-video-item-badge">No transcript</span>
-        ) : null;
+        const noCaptions = result && !result.success && result.errorCode === 'NO_CAPTIONS';
+        return noCaptions ? <span className="lockin-video-item-badge">No transcript</span> : null;
       }}
       renderItemActions={({ video }) => (
         <TranscriptVideoStatus

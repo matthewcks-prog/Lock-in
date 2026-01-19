@@ -175,11 +175,7 @@ export function NotesPanel({
       {deleteError && (
         <div className="lockin-notes-error">
           {deleteError}
-          <button
-            type="button"
-            className="lockin-notes-error-dismiss"
-            onClick={clearDeleteError}
-          >
+          <button type="button" className="lockin-notes-error-dismiss" onClick={clearDeleteError}>
             A-
           </button>
         </div>

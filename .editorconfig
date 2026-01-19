@@ -1,0 +1,38 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# Top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+# Code files
+[*.{js,mjs,cjs,ts,tsx,jsx,json,css,scss,html,yml,yaml,md}]
+indent_style = space
+indent_size = 2
+
+# SQL files
+[*.sql]
+indent_style = space
+indent_size = 2
+
+# PowerShell scripts (Windows line endings)
+[*.ps1]
+end_of_line = crlf
+
+# Markdown files (allow trailing spaces for line breaks)
+[*.md]
+trim_trailing_whitespace = false
+
+# Package files
+[package.json]
+indent_style = space
+indent_size = 2
+
+# Make files
+[Makefile]
+indent_style = tab

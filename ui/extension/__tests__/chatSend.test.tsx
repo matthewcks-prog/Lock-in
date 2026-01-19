@@ -123,7 +123,9 @@ describe('LockInSidebar chat send reliability', () => {
       await flushPromises(2);
     });
 
-    const textarea = document.querySelector('.lockin-chat-input-field') as HTMLTextAreaElement | null;
+    const textarea = document.querySelector(
+      '.lockin-chat-input-field',
+    ) as HTMLTextAreaElement | null;
     expect(textarea).not.toBeNull();
 
     await act(async () => {
@@ -175,7 +177,9 @@ describe('LockInSidebar chat send reliability', () => {
       await flushPromises(2);
     });
 
-    const textarea = document.querySelector('.lockin-chat-input-field') as HTMLTextAreaElement | null;
+    const textarea = document.querySelector(
+      '.lockin-chat-input-field',
+    ) as HTMLTextAreaElement | null;
     expect(textarea).not.toBeNull();
 
     await act(async () => {

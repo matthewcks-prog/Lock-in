@@ -32,10 +32,7 @@ export interface StorageInterface {
    * Listen for storage changes
    */
   onChanged<T = unknown>(
-    callback: (
-      changes: Record<string, { oldValue?: T; newValue?: T }>,
-      areaName: string,
-    ) => void,
+    callback: (changes: Record<string, { oldValue?: T; newValue?: T }>, areaName: string) => void,
   ): () => void;
 }
 

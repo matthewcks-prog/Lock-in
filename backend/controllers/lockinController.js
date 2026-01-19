@@ -216,7 +216,9 @@ async function handleLockinRequest(req, res) {
 
     const userId = req.user?.id;
     const userInputText =
-      trimmedUserMessage || trimmedSelection || (hasAttachmentIds ? ATTACHMENT_ONLY_TITLE_SEED : '');
+      trimmedUserMessage ||
+      trimmedSelection ||
+      (hasAttachmentIds ? ATTACHMENT_ONLY_TITLE_SEED : '');
     const initialTitle = buildInitialChatTitle(userInputText || '');
     const firstUserMessage = extractFirstUserMessage(sanitizedHistory);
     const initialTitleFromHistory = buildInitialChatTitle(firstUserMessage || userInputText || '');
@@ -267,7 +269,8 @@ async function handleLockinRequest(req, res) {
       const processedAttachments = [];
       const linkedAssetIds = [];
       if (Array.isArray(attachments) && attachments.length > 0) {
-        for (const assetId of attachments.slice(0, 5)) { // Limit to 5 attachments
+        for (const assetId of attachments.slice(0, 5)) {
+          // Limit to 5 attachments
           // Validate asset ID format
           const assetIdValidation = validateUUID(assetId);
           if (!assetIdValidation.valid) continue;

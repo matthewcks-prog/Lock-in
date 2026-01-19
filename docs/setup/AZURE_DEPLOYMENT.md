@@ -8,10 +8,10 @@ This guide walks through deploying the Lock-in backend to Azure Container Apps w
 
 Lock-in uses **two separate Supabase projects** for environment isolation:
 
-| Environment | Supabase Project | Use Case |
-|-------------|-----------------|----------|
+| Environment     | Supabase Project       | Use Case                    |
+| --------------- | ---------------------- | --------------------------- |
 | **Development** | `uszxfuzauetcchwcgufe` | Local dev, staging, testing |
-| **Production** | `vtuflatvllpldohhimao` | Real users, real data |
+| **Production**  | `vtuflatvllpldohhimao` | Real users, real data       |
 
 **Key Principles:**
 
@@ -23,6 +23,7 @@ Lock-in uses **two separate Supabase projects** for environment isolation:
 **Backend Configuration:**
 
 The backend automatically selects the correct Supabase project based on `NODE_ENV`:
+
 - `NODE_ENV=development` → Uses `SUPABASE_URL_DEV`, `SUPABASE_SERVICE_ROLE_KEY_DEV`
 - `NODE_ENV=production` → Uses `SUPABASE_URL_PROD`, `SUPABASE_SERVICE_ROLE_KEY_PROD`
 
@@ -87,16 +88,19 @@ In Supabase Dashboard → Storage:
 Create an Azure OpenAI resource and deployments for the models used by Lock-in:
 
 **Required deployments:**
+
 - `gpt-4o-mini` (chat)
 - `text-embedding-3-small` (embeddings)
 - `whisper-1` (transcription)
 
 **Portal (recommended):**
+
 1. Create an Azure OpenAI resource in your target region.
 2. Open the resource and create deployments for the three models above.
 3. Record the deployment names you choose (used in env vars).
 
 **CLI (example):**
+
 ```bash
 OPENAI_RG="lock-in-prod"
 OPENAI_NAME="lock-in-openai"
@@ -148,37 +152,37 @@ Collect these values for **EACH ENVIRONMENT**:
 
 **Development Supabase (uszxfuzauetcchwcgufe):**
 
-| Variable                    | Where to Get It                                        |
-| --------------------------- | ------------------------------------------------------ |
-| `SUPABASE_URL_DEV`          | Supabase Dashboard → Settings → API (dev project)     |
-| `SUPABASE_ANON_KEY_DEV`     | Supabase Dashboard → Settings → API (anon key)        |
+| Variable                        | Where to Get It                                        |
+| ------------------------------- | ------------------------------------------------------ |
+| `SUPABASE_URL_DEV`              | Supabase Dashboard → Settings → API (dev project)      |
+| `SUPABASE_ANON_KEY_DEV`         | Supabase Dashboard → Settings → API (anon key)         |
 | `SUPABASE_SERVICE_ROLE_KEY_DEV` | Supabase Dashboard → Settings → API (service_role key) |
 
 **Production Supabase (vtuflatvllpldohhimao):**
 
-| Variable                    | Where to Get It                                        |
-| --------------------------- | ------------------------------------------------------ |
-| `SUPABASE_URL_PROD`         | Supabase Dashboard → Settings → API (prod project)    |
-| `SUPABASE_ANON_KEY_PROD`    | Supabase Dashboard → Settings → API (anon key)        |
+| Variable                         | Where to Get It                                        |
+| -------------------------------- | ------------------------------------------------------ |
+| `SUPABASE_URL_PROD`              | Supabase Dashboard → Settings → API (prod project)     |
+| `SUPABASE_ANON_KEY_PROD`         | Supabase Dashboard → Settings → API (anon key)         |
 | `SUPABASE_SERVICE_ROLE_KEY_PROD` | Supabase Dashboard → Settings → API (service_role key) |
 
 **Azure OpenAI (primary provider):**
 
-| Variable                             | Where to Get It                                           |
-| ------------------------------------ | --------------------------------------------------------- |
-| `AZURE_OPENAI_API_KEY`               | Azure OpenAI resource → Keys and Endpoint                 |
-| `AZURE_OPENAI_ENDPOINT`              | Azure OpenAI resource → Keys and Endpoint                 |
-| `AZURE_OPENAI_API_VERSION`           | Use `2024-02-01` unless your resource requires a newer API |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT`        | Deployment name for `gpt-4o-mini`                         |
-| `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`  | Deployment name for `text-embedding-3-small`              |
-| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Deployment name for `whisper-1`                         |
+| Variable                                | Where to Get It                                            |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `AZURE_OPENAI_API_KEY`                  | Azure OpenAI resource → Keys and Endpoint                  |
+| `AZURE_OPENAI_ENDPOINT`                 | Azure OpenAI resource → Keys and Endpoint                  |
+| `AZURE_OPENAI_API_VERSION`              | Use `2024-02-01` unless your resource requires a newer API |
+| `AZURE_OPENAI_CHAT_DEPLOYMENT`          | Deployment name for `gpt-4o-mini`                          |
+| `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`    | Deployment name for `text-embedding-3-small`               |
+| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Deployment name for `whisper-1`                            |
 
 **Shared Credentials:**
 
-| Variable                    | Where to Get It                                        |
-| --------------------------- | ------------------------------------------------------ |
-| `OPENAI_API_KEY`            | https://platform.openai.com/api-keys (fallback only)   |
-| `SENTRY_DSN`                | Sentry Dashboard → Project → Settings → Client Keys    |
+| Variable         | Where to Get It                                      |
+| ---------------- | ---------------------------------------------------- |
+| `OPENAI_API_KEY` | https://platform.openai.com/api-keys (fallback only) |
+| `SENTRY_DSN`     | Sentry Dashboard → Project → Settings → Client Keys  |
 
 ---
 

@@ -5,4 +5,8 @@
  */
 
 export { FeedbackModal, type FeedbackModalProps } from './FeedbackModal';
-export { useFeedbackForm, type UseFeedbackFormOptions, type UseFeedbackFormResult } from './hooks/useFeedbackForm';
+export {
+  useFeedbackForm,
+  type UseFeedbackFormOptions,
+  type UseFeedbackFormResult,
+} from './hooks/useFeedbackForm';

@@ -5,6 +5,7 @@ This directory contains organized documentation for the Lock-in project. Documen
 ## Structure
 
 ### 📐 Architecture & Design
+
 **Location:** `docs/architecture/`
 
 Stable architecture documentation and system design:
@@ -13,6 +14,7 @@ Stable architecture documentation and system design:
 - **[REPO_MAP.md](architecture/REPO_MAP.md)** - Repository structure map and entrypoints
 
 ### 🚀 Setup & Deployment
+
 **Location:** `docs/setup/`
 
 Setup guides and deployment documentation:
@@ -21,16 +23,19 @@ Setup guides and deployment documentation:
 - **[LOCAL_SUPABASE_SETUP.md](setup/LOCAL_SUPABASE_SETUP.md)** - Local Supabase CLI setup guide
 
 ### 🎯 Features
+
 **Location:** `docs/features/`
 
 Feature-specific documentation organized by feature area:
 
 #### Transcripts
+
 - **[REVIEW.md](features/transcripts/REVIEW.md)** - Transcript feature code review
 - **[SYSTEM_MAP.md](features/transcripts/SYSTEM_MAP.md)** - Transcript system architecture map
 - **[TROUBLESHOOTING.md](features/transcripts/TROUBLESHOOTING.md)** - Transcript extraction troubleshooting guide
 
 ### 🧪 Testing
+
 **Location:** `docs/testing/`
 
 Testing documentation and checklists:
@@ -38,6 +43,7 @@ Testing documentation and checklists:
 - **[SMOKE_CHECKLIST.md](testing/SMOKE_CHECKLIST.md)** - Manual smoke test checklist
 
 ### 📊 Tracking
+
 **Location:** `docs/tracking/`
 
 Living documentation that tracks project status and progress:
@@ -47,6 +53,7 @@ Living documentation that tracks project status and progress:
 - **[PROMPT_LOG.md](tracking/PROMPT_LOG.md)** - Log of refactoring prompts and outcomes
 
 ### 📦 Archive
+
 **Location:** `docs/archive/`
 
 Historical documentation and audits:
@@ -65,39 +72,48 @@ For high-level project documentation, see the root directory:
 ## Documentation Hierarchy
 
 **Stable Contracts** (rarely change):
+
 - `/AGENTS.md`
 - `docs/architecture/ARCHITECTURE.md`
 
 **Living Snapshots** (updated frequently):
+
 - `docs/tracking/STATUS.md`
 - `CODE_OVERVIEW.md`
 
 **Navigation Maps**:
+
 - `docs/architecture/REPO_MAP.md`
 
 **Feature Documentation**:
+
 - Organized by feature in `docs/features/`
 
 **Setup Guides**:
+
 - Organized in `docs/setup/`
 
 ## Quick Links
 
 ### Getting Started
+
 - [Project README](../README.md) - Start here for overview
 - [Local Supabase Setup](setup/LOCAL_SUPABASE_SETUP.md) - Local development setup
 - [Architecture Overview](architecture/ARCHITECTURE.md) - System architecture
 
 ### Development
+
 - [AGENTS.md](../AGENTS.md) - Development guidelines and rules
 - [Status](tracking/STATUS.md) - Current project status
 - [Refactor Plan](tracking/REFACTOR_PLAN.md) - Planned improvements
 
 ### Features
+
 - [Transcript System](features/transcripts/SYSTEM_MAP.md) - Transcript architecture
 - [Transcript Troubleshooting](features/transcripts/TROUBLESHOOTING.md) - Common issues
 
 ### Deployment
+
 - [Azure Deployment](setup/AZURE_DEPLOYMENT.md) - Production deployment guide
 
 ## Contributing

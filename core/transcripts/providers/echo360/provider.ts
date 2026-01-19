@@ -3,17 +3,22 @@ import type { TranscriptProviderV2 } from '../../providerRegistry';
 import type { AsyncFetcher } from '../../fetchers/types';
 import { parseWebVtt } from '../../webvttParser';
 import { log } from '../../utils/echo360Logger';
+import { DEFAULT_TIMEOUT_MS, fetchWithRetry, isTimeoutError } from '../../utils/echo360Network';
 import {
-  DEFAULT_TIMEOUT_MS,
-  fetchWithRetry,
-  isTimeoutError,
-} from '../../utils/echo360Network';
-import { asRecord, extractSectionId, fetchVideosFromSyllabus, getUniqueKey } from '../../parsers/echo360Parser';
+  asRecord,
+  extractSectionId,
+  fetchVideosFromSyllabus,
+  getUniqueKey,
+} from '../../parsers/echo360Parser';
 import { detectEcho360Videos, findMatchingSyllabusVideo, mergeSyllabusMetadata } from './detection';
 import { resolveEcho360Info } from './resolveInfo';
 import { buildTranscriptFileUrl, buildTranscriptUrl } from './urlBuilders';
 import { isEcho360SectionPage, isEcho360Url } from './urlUtils';
-import { buildTranscriptResult, cleanText, normalizeEcho360TranscriptJson } from './transcriptParsing';
+import {
+  buildTranscriptResult,
+  cleanText,
+  normalizeEcho360TranscriptJson,
+} from './transcriptParsing';
 
 function createRequestId(): string {
   return `echo360-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -89,13 +94,13 @@ export class Echo360Provider implements TranscriptProviderV2 {
     const mergedVideos =
       syllabusVideos.length > 0
         ? syncVideos.map((video) => {
-          const match = findMatchingSyllabusVideo(video, syllabusVideos, requestId);
-          if (match) {
-            matchedCount += 1;
-            return mergeSyllabusMetadata(video, match);
-          }
-          return video;
-        })
+            const match = findMatchingSyllabusVideo(video, syllabusVideos, requestId);
+            if (match) {
+              matchedCount += 1;
+              return mergeSyllabusMetadata(video, match);
+            }
+            return video;
+          })
         : syncVideos;
 
     if (syllabusVideos.length > 0) {
@@ -120,11 +125,11 @@ export class Echo360Provider implements TranscriptProviderV2 {
       const resolved = await resolveEcho360Info(video.embedUrl, fetcher, requestId);
       const updated: DetectedVideo = resolved?.mediaId
         ? {
-          ...video,
-          echoMediaId: resolved.mediaId,
-          echoLessonId: resolved.lessonId || video.echoLessonId,
-          echoBaseUrl: resolved.baseUrl || video.echoBaseUrl,
-        }
+            ...video,
+            echoMediaId: resolved.mediaId,
+            echoLessonId: resolved.lessonId || video.echoLessonId,
+            echoBaseUrl: resolved.baseUrl || video.echoBaseUrl,
+          }
         : video;
       const key =
         getUniqueKey(updated.echoMediaId ?? null, updated.echoLessonId ?? null) || updated.id;

@@ -525,11 +525,11 @@ supabase db reset
 
 ## Environment Comparison
 
-| Environment | Database | URL | Use Case |
-|-------------|----------|-----|----------|
-| **Local** | Local Docker | `localhost:54321` | Offline dev, schema changes, testing |
-| **Dev/Staging** | `uszxfuzauetcchwcgufe` | `https://uszxfuzauetcchwcgufe.supabase.co` | Team testing, integration tests |
-| **Production** | `vtuflatvllpldohhimao` | `https://vtuflatvllpldohhimao.supabase.co` | Real users, real data |
+| Environment     | Database               | URL                                        | Use Case                             |
+| --------------- | ---------------------- | ------------------------------------------ | ------------------------------------ |
+| **Local**       | Local Docker           | `localhost:54321`                          | Offline dev, schema changes, testing |
+| **Dev/Staging** | `uszxfuzauetcchwcgufe` | `https://uszxfuzauetcchwcgufe.supabase.co` | Team testing, integration tests      |
+| **Production**  | `vtuflatvllpldohhimao` | `https://vtuflatvllpldohhimao.supabase.co` | Real users, real data                |
 
 **Best Practice:**
 

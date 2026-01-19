@@ -7,9 +7,9 @@
 
 export { TranscriptVideoListPanel } from './TranscriptVideoListPanel';
 export type {
-    TranscriptVideoListPanelProps,
-    AiTranscriptionUiState,
-    VideoExtractionResult,
+  TranscriptVideoListPanelProps,
+  AiTranscriptionUiState,
+  VideoExtractionResult,
 } from './TranscriptVideoListPanel';
 export { TranscriptVideoStatus } from './TranscriptVideoStatus';
 export type { AiTranscriptionStatus } from './types';

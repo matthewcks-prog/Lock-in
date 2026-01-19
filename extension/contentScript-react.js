@@ -18,7 +18,6 @@ if (typeof window !== 'undefined' && window.LockInSentry) {
   window.LockInSentry.initSentry('content');
 }
 
-
 const Runtime = window.LockInContent || {};
 const Logger = Runtime.logger ||
   window.LockInLogger || {

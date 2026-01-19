@@ -52,10 +52,7 @@ export function VideoListItem({
   );
 
   return (
-    <div
-      className={`lockin-video-item ${isSelected ? 'is-extracting' : ''}`}
-      role="listitem"
-    >
+    <div className={`lockin-video-item ${isSelected ? 'is-extracting' : ''}`} role="listitem">
       <button
         className="lockin-video-item-main"
         onClick={onSelect}

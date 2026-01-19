@@ -103,17 +103,20 @@ This is a living overview of the current codebase. Update it whenever files move
 **Architecture**: Decoupled generic video selection UI from feature-specific logic using render props pattern.
 
 **Generic video components** (`ui/extension/videos/`):
+
 - **`VideoListPanel.tsx`** - Generic panel with loading, empty, error, auth-required states
 - **`VideoListItem.tsx`** - Generic selectable video item with render props for customization
 - **`ProviderBadge.tsx`** - Badge showing video provider (Panopto, Echo360, HTML5, etc.)
 - **`types.ts`** - Shared types for render props (`VideoItemBadgeRenderer`, `VideoItemActionRenderer`, etc.)
 
 **Transcript-specific wrappers** (`ui/extension/transcripts/components/`):
+
 - **`TranscriptVideoListPanel.tsx`** - Wraps `VideoListPanel` with transcript extraction and AI transcription features
 - **`TranscriptVideoStatus.tsx`** - AI transcription progress, errors, "Transcribe with AI" action
 - **`types.ts`** - Transcript-specific types (`AiTranscriptionUiState`, `VideoExtractionResult`)
 
 **Transcript hooks** (`ui/extension/transcripts/hooks/`):
+
 - **`useVideoDetection.ts`** - Video detection logic with retry for delayed players
 - **`useTranscriptExtraction.ts`** - Transcript extraction state management
 - **`useAiTranscription.ts`** - AI transcription with progress polling

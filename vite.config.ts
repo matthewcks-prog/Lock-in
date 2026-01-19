@@ -16,10 +16,7 @@ export default defineConfig(({ mode }) => {
 
   // Only upload source maps in production builds when Sentry auth is configured
   const shouldUploadSourceMaps =
-    mode === 'production' &&
-    env.SENTRY_AUTH_TOKEN &&
-    env.SENTRY_ORG &&
-    env.SENTRY_PROJECT;
+    mode === 'production' && env.SENTRY_AUTH_TOKEN && env.SENTRY_ORG && env.SENTRY_PROJECT;
 
   // Use production JSX runtime for builds (avoids jsxDEV not a function error)
   const isDev = mode === 'development';

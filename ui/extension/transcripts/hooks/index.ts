@@ -9,8 +9,8 @@ export type { VideoDetectionState, UseVideoDetectionResult } from './useVideoDet
 
 export { useTranscriptExtraction } from './useTranscriptExtraction';
 export type {
-    TranscriptExtractionState,
-    UseTranscriptExtractionResult,
+  TranscriptExtractionState,
+  UseTranscriptExtractionResult,
 } from './useTranscriptExtraction';
 
 export { useAiTranscription } from './useAiTranscription';

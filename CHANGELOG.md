@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
 - Documentation reorganization: Organized docs into logical folders (architecture, setup, features, testing, tracking, archive)
 - CONTRIBUTING.md: Contributor guidelines
 - CHANGELOG.md: Version history tracking
 - docs/README.md: Documentation index and navigation
 
 ### Changed
+
 - Reorganized documentation structure for better maintainability
 - Renamed DATABASE.MD to DATABASE.md (lowercase extension)
 - Updated all internal documentation references to reflect new structure
@@ -21,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-01-XX
 
 ### Added
+
 - Initial project structure
 - Chrome extension with sidebar UI
 - AI-powered text explanation
@@ -32,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Local Supabase setup guide
 
 ### Documentation
+
 - AGENTS.md: Development guidelines
 - CODE_OVERVIEW.md: Codebase snapshot
 - DATABASE.md: Schema documentation
@@ -46,25 +50,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [Version] - YYYY-MM-DD
 
 #### Added
+
 - New features
 
 #### Changed
+
 - Changes to existing functionality
 
 #### Deprecated
+
 - Soon-to-be removed features
 
 #### Removed
+
 - Removed features
 
 #### Fixed
+
 - Bug fixes
 
 #### Security
+
 - Security improvements
 
 ---
 
 For detailed change history, see:
+
 - [docs/tracking/PROMPT_LOG.md](docs/tracking/PROMPT_LOG.md) - Refactoring prompts and outcomes
 - [docs/tracking/STATUS.md](docs/tracking/STATUS.md) - Current status and recent changes

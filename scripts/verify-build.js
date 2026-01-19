@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Verify Build Script
- * 
+ *
  * Validates that the Chrome extension build output contains all required files
  * and has the correct structure. This runs after `npm run build` to catch
  * build issues before deployment or testing.
@@ -22,7 +22,7 @@ const colors = {
   green: '\x1b[32m',
   red: '\x1b[31m',
   yellow: '\x1b[33m',
-  reset: '\x1b[0m'
+  reset: '\x1b[0m',
 };
 
 function log(message, color = colors.reset) {
@@ -56,7 +56,10 @@ const buildOutputs = [
   { path: join(extensionDir, 'dist', 'libs', 'initApi.js'), desc: 'API initialization lib' },
   { path: join(extensionDir, 'dist', 'libs', 'contentLibs.js'), desc: 'Content libraries' },
   { path: join(extensionDir, 'dist', 'libs', 'webvttParser.js'), desc: 'WebVTT parser lib' },
-  { path: join(extensionDir, 'dist', 'libs', 'transcriptProviders.js'), desc: 'Transcript providers lib' },
+  {
+    path: join(extensionDir, 'dist', 'libs', 'transcriptProviders.js'),
+    desc: 'Transcript providers lib',
+  },
 ];
 
 console.log('\n🔍 Verifying Chrome Extension Build...\n');

@@ -12,17 +12,17 @@ services:
       dockerfile: backend/Dockerfile
     container_name: lock-in-backend
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       # Environment selection (always development for local Docker)
       - NODE_ENV=development
       - PORT=3000
-      
+
       # Development Supabase ONLY (never mix dev/prod in local env)
       - SUPABASE_URL_DEV=${SUPABASE_URL_DEV}
       - SUPABASE_SERVICE_ROLE_KEY_DEV=${SUPABASE_SERVICE_ROLE_KEY_DEV}
       - SUPABASE_ANON_KEY_DEV=${SUPABASE_ANON_KEY_DEV:-}
-      
+
       # Azure OpenAI (primary)
       - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-}
       - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-}
@@ -37,13 +37,13 @@ services:
       - OPENAI_MODEL=${OPENAI_MODEL:-}
       - OPENAI_EMBEDDINGS_MODEL=${OPENAI_EMBEDDINGS_MODEL:-}
       - OPENAI_TRANSCRIPTION_MODEL=${OPENAI_TRANSCRIPTION_MODEL:-}
-      
+
       # Sentry (optional)
       - SENTRY_DSN=${SENTRY_DSN:-}
-      
+
       # Transcription
       - TRANSCRIPTION_TEMP_DIR=/tmp/transcripts
-      
+
       # Rate limiting (optional overrides)
       - DAILY_REQUEST_LIMIT=${DAILY_REQUEST_LIMIT:-100}
       - TRANSCRIPT_DAILY_JOB_LIMIT=${TRANSCRIPT_DAILY_JOB_LIMIT:-20}
@@ -52,7 +52,7 @@ services:
       # Mount temp volume for transcription jobs (optional, container has ephemeral storage)
       - transcripts-temp:/tmp/transcripts
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 30s
       timeout: 5s
       retries: 3
@@ -74,7 +74,7 @@ volumes:
 
 # =============================================================================
 # Usage:
-# 
+#
 # 1. Create backend/.env file with DEVELOPMENT credentials:
 #
 #    NODE_ENV=development

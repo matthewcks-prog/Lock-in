@@ -15,8 +15,4 @@ export { TranscriptToolContent } from './TranscriptToolContent';
 export { TOOLS, getToolById, getEnabledTools } from './registry';
 
 // Types
-export type {
-    ToolDefinition,
-    ToolContentProps,
-    ToolType,
-} from './types';
+export type { ToolDefinition, ToolContentProps, ToolType } from './types';

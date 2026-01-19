@@ -14,7 +14,6 @@ import { initSentry } from '../../extension/src/sentry';
 // This runs early before the React app renders to catch all errors
 initSentry('sidebar');
 
-
 export interface SidebarInstance {
   root: Root;
   unmount: () => void;

@@ -77,10 +77,12 @@ async function listAssetsForChat(chatId, userId) {
   // Join with chat_messages to get assets for all messages in the chat
   const { data, error } = await supabase
     .from('chat_message_assets')
-    .select(`
+    .select(
+      `
       *,
       chat_messages!inner(chat_id)
-    `)
+    `,
+    )
     .eq('user_id', userId)
     .eq('chat_messages.chat_id', chatId)
     .order('created_at', { ascending: true });

@@ -30,9 +30,7 @@ describe('LockInUI global surface', () => {
     document.body.innerHTML = '';
   });
 
-  it(
-    'attaches a stable LockInUI object on window with exact keys',
-    async () => {
+  it('attaches a stable LockInUI object on window with exact keys', async () => {
     await import('../index');
 
     const lockInUI = testWindow.LockInUI;
@@ -42,9 +40,7 @@ describe('LockInUI global surface', () => {
     );
     expect(typeof lockInUI?.createLockInSidebar).toBe('function');
     expect(typeof lockInUI?.LockInSidebar).toBe('function');
-    },
-    15000,
-  );
+  }, 15000);
 
   it('exposes a callable sidebar factory that returns the expected instance contract', async () => {
     await import('../index');

@@ -247,10 +247,7 @@ async function getAssetTextContent(assetId, userId) {
       console.error('Failed to extract PDF content:', error);
       textContent = '[PDF text extraction failed]';
     }
-  } else if (
-    asset.mime_type.startsWith('text/') ||
-    asset.mime_type === 'application/json'
-  ) {
+  } else if (asset.mime_type.startsWith('text/') || asset.mime_type === 'application/json') {
     // Plain text files
     textContent = Buffer.from(buffer).toString('utf-8');
   } else {

@@ -61,10 +61,7 @@ export const chromeStorage: StorageInterface = {
   },
 
   onChanged<T = unknown>(
-    callback: (
-      changes: Record<string, { oldValue?: T; newValue?: T }>,
-      areaName: string,
-    ) => void,
+    callback: (changes: Record<string, { oldValue?: T; newValue?: T }>, areaName: string) => void,
   ): () => void {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
@@ -144,10 +141,7 @@ export const chromeLocalStorage: StorageInterface = {
   },
 
   onChanged<T = unknown>(
-    callback: (
-      changes: Record<string, { oldValue?: T; newValue?: T }>,
-      areaName: string,
-    ) => void,
+    callback: (changes: Record<string, { oldValue?: T; newValue?: T }>, areaName: string) => void,
   ): () => void {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },

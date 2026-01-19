@@ -101,7 +101,6 @@ function updateAuthModeUI() {
   }
 
   const btnText = authSubmitButton.querySelector('.btn-text');
-  
 
   // Show/hide forgot password link
   if (forgotPasswordLink) {
@@ -119,10 +118,10 @@ function updateAuthModeUI() {
 
 function setAuthLoading(isLoading) {
   if (!authSubmitButton) return;
-  
+
   const btnText = authSubmitButton.querySelector('.btn-text');
   const btnSpinner = authSubmitButton.querySelector('.btn-spinner');
-  
+
   if (isLoading) {
     authSubmitButton.disabled = true;
     authSubmitButton.classList.add('loading');
@@ -193,7 +192,7 @@ function initAccordions() {
       const section = header.getAttribute('data-section');
       const content = document.getElementById(`${section}-content`);
       const isExpanded = header.getAttribute('aria-expanded') === 'true';
-      
+
       // Toggle current section
       header.setAttribute('aria-expanded', !isExpanded);
       if (content) {
@@ -205,43 +204,43 @@ function initAccordions() {
 
 function initPasswordToggle() {
   if (!passwordToggle || !authPasswordInput) return;
-  
+
   const eyeOpen = passwordToggle.querySelector('.eye-open');
   const eyeClosed = passwordToggle.querySelector('.eye-closed');
-  
+
   passwordToggle.addEventListener('click', () => {
     const isPassword = authPasswordInput.type === 'password';
     authPasswordInput.type = isPassword ? 'text' : 'password';
-    
+
     if (eyeOpen && eyeClosed) {
       eyeOpen.style.display = isPassword ? 'none' : 'block';
       eyeClosed.style.display = isPassword ? 'block' : 'none';
     }
-    
+
     passwordToggle.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
   });
 }
 
 function initForgotPassword() {
   if (!forgotPasswordLink) return;
-  
+
   forgotPasswordLink.addEventListener('click', async () => {
     const email = authEmailInput?.value?.trim();
-    
+
     if (!email) {
       setAuthMessage('Enter your email address first', 'error');
       authEmailInput?.focus();
       return;
     }
-    
+
     if (!window.LockInAuth?.resetPassword) {
       setAuthMessage('Password reset is not available. Contact support.', 'error');
       return;
     }
-    
+
     disableAuthInputs();
     setAuthMessage('Sending reset email...', 'success');
-    
+
     try {
       await window.LockInAuth.resetPassword(email);
       setAuthMessage('Check your email for a password reset link.', 'success');
@@ -293,10 +292,10 @@ function initAuthSection() {
 
     disableAuthInputs();
     setAuthLoading(true);
-    
+
     const statusMsg = currentAuthMode === 'signup' ? 'Creating account...' : 'Signing you in...';
     setAuthMessage(statusMsg, 'success');
-    
+
     try {
       if (currentAuthMode === 'login') {
         await window.LockInAuth.signInWithEmail(email, password);
@@ -304,7 +303,7 @@ function initAuthSection() {
         await window.LockInAuth.signUpWithEmail(email, password);
       }
       setAuthMessage("You're signed in. Highlight text to start!", 'success');
-      
+
       if (authPasswordInput) {
         authPasswordInput.value = '';
       }
@@ -383,7 +382,7 @@ async function initPrivacySection() {
       await chrome.storage.sync.set({ [TELEMETRY_OPT_OUT_KEY]: !toggle.checked });
       showStatus(
         toggle.checked ? 'Error reporting enabled' : 'Error reporting disabled',
-        'success'
+        'success',
       );
     } catch (error) {
       console.error('Failed to save telemetry preference:', error);

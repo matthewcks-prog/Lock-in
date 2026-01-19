@@ -16,23 +16,23 @@ export type ChatMessageRole = 'user' | 'assistant';
 export type ChatAttachmentKind = 'image' | 'document' | 'code' | 'other';
 
 export interface ChatAttachment {
-    kind: ChatAttachmentKind;
-    mime: string;
-    name: string;
-    dataUrl?: string;
-    url?: string;
+  kind: ChatAttachmentKind;
+  mime: string;
+  name: string;
+  dataUrl?: string;
+  url?: string;
 }
 
 export interface ChatMessage {
-    id: string;
-    role: ChatMessageRole;
-    content: string;
-    timestamp: string;
-    mode?: StudyMode;
-    source?: 'selection' | 'followup';
-    isPending?: boolean;
-    isError?: boolean;
-    attachments?: ChatAttachment[];
+  id: string;
+  role: ChatMessageRole;
+  content: string;
+  timestamp: string;
+  mode?: StudyMode;
+  source?: 'selection' | 'followup';
+  isPending?: boolean;
+  isError?: boolean;
+  attachments?: ChatAttachment[];
 }
 
 // =============================================================================
@@ -40,10 +40,10 @@ export interface ChatMessage {
 // =============================================================================
 
 export interface ChatHistoryItem {
-    id: string;
-    title: string;
-    updatedAt: string;
-    lastMessage?: string;
+  id: string;
+  title: string;
+  updatedAt: string;
+  lastMessage?: string;
 }
 
 export type HistoryTitleSource = 'local' | 'server';
@@ -53,26 +53,26 @@ export type HistoryTitleSource = 'local' | 'server';
 // =============================================================================
 
 export interface SendMessageParams {
-    /** The message content to send */
-    message: string;
-    /** Current study mode */
-    mode: StudyMode;
-    /** Source of the message */
-    source: 'selection' | 'followup';
-    /** Current page URL for context */
-    pageUrl?: string;
-    /** Course code if available */
-    courseCode?: string;
-    /** Existing chat ID if continuing conversation */
-    chatId?: string | null;
-    /** Chat history for context */
-    chatHistory?: Array<{ role: string; content: string }>;
+  /** The message content to send */
+  message: string;
+  /** Current study mode */
+  mode: StudyMode;
+  /** Source of the message */
+  source: 'selection' | 'followup';
+  /** Current page URL for context */
+  pageUrl?: string;
+  /** Course code if available */
+  courseCode?: string;
+  /** Existing chat ID if continuing conversation */
+  chatId?: string | null;
+  /** Chat history for context */
+  chatHistory?: Array<{ role: string; content: string }>;
 }
 
 export interface ChatApiResponse {
-    explanation: string;
-    chatId?: string;
-    chatTitle?: string;
+  explanation: string;
+  chatId?: string;
+  chatTitle?: string;
 }
 
 // =============================================================================
@@ -80,41 +80,41 @@ export interface ChatApiResponse {
 // =============================================================================
 
 export interface UseChatOptions {
-    /** API client for backend calls */
-    apiClient: any | null;
-    /** Storage adapter for persistence */
-    storage?: {
-        get: (key: string) => Promise<any>;
-        set: (key: string, value: any) => Promise<void>;
-    };
-    /** Current study mode */
-    mode: StudyMode;
-    /** Current page URL */
-    pageUrl: string;
-    /** Course code if available */
-    courseCode: string | null;
-    /** Selected text from page (triggers new chat) */
-    selectedText?: string;
+  /** API client for backend calls */
+  apiClient: any | null;
+  /** Storage adapter for persistence */
+  storage?: {
+    get: (key: string) => Promise<any>;
+    set: (key: string, value: any) => Promise<void>;
+  };
+  /** Current study mode */
+  mode: StudyMode;
+  /** Current page URL */
+  pageUrl: string;
+  /** Course code if available */
+  courseCode: string | null;
+  /** Selected text from page (triggers new chat) */
+  selectedText?: string;
 }
 
 export interface UseChatMessagesOptions {
-    apiClient: any | null;
-    chatId: string | null;
-    mode: StudyMode;
+  apiClient: any | null;
+  chatId: string | null;
+  mode: StudyMode;
 }
 
 export interface UseChatHistoryOptions {
-    apiClient: any | null;
-    limit?: number;
+  apiClient: any | null;
+  limit?: number;
 }
 
 export interface UseSendMessageOptions {
-    apiClient: any | null;
-    mode: StudyMode;
-    pageUrl: string;
-    courseCode: string | null;
-    onSuccess?: (response: ChatApiResponse, chatId: string) => void;
-    onError?: (error: Error) => void;
+  apiClient: any | null;
+  mode: StudyMode;
+  pageUrl: string;
+  courseCode: string | null;
+  onSuccess?: (response: ChatApiResponse, chatId: string) => void;
+  onError?: (error: Error) => void;
 }
 
 // =============================================================================
@@ -131,87 +131,86 @@ export const ACTIVE_CHAT_ID_KEY = 'lockin_sidebar_activeChatId';
 // =============================================================================
 
 export function isValidUUID(value: string | null | undefined): boolean {
-    if (!value) return false;
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 export function normalizeSpaces(text: string): string {
-    return text.replace(/\s+/g, ' ').trim();
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 export function clampChatTitle(text = ''): string {
-    const normalized = normalizeSpaces(text);
-    if (!normalized) return '';
+  const normalized = normalizeSpaces(text);
+  if (!normalized) return '';
 
-    const limitedWords = normalized.split(' ').slice(0, CHAT_TITLE_MAX_WORDS).join(' ').trim();
+  const limitedWords = normalized.split(' ').slice(0, CHAT_TITLE_MAX_WORDS).join(' ').trim();
 
-    if (limitedWords.length <= CHAT_TITLE_MAX_LENGTH) {
-        return limitedWords;
-    }
+  if (limitedWords.length <= CHAT_TITLE_MAX_LENGTH) {
+    return limitedWords;
+  }
 
-    return limitedWords.slice(0, CHAT_TITLE_MAX_LENGTH).trim();
+  return limitedWords.slice(0, CHAT_TITLE_MAX_LENGTH).trim();
 }
 
 export function coerceChatTitle(candidate?: string | null, fallback?: string): string {
-    const normalizedCandidate = clampChatTitle(candidate || '');
-    if (normalizedCandidate) return normalizedCandidate;
+  const normalizedCandidate = clampChatTitle(candidate || '');
+  if (normalizedCandidate) return normalizedCandidate;
 
-    const normalizedFallback = clampChatTitle(fallback || '');
-    return normalizedFallback || FALLBACK_CHAT_TITLE;
+  const normalizedFallback = clampChatTitle(fallback || '');
+  return normalizedFallback || FALLBACK_CHAT_TITLE;
 }
 
 export function buildInitialChatTitle(text: string): string {
-    return coerceChatTitle(text, FALLBACK_CHAT_TITLE);
+  return coerceChatTitle(text, FALLBACK_CHAT_TITLE);
 }
 
 export function relativeTimeLabel(iso: string | null | undefined): string {
-    if (!iso) return 'just now';
-    const date = new Date(iso);
-    if (Number.isNaN(date.getTime())) return 'just now';
-    const delta = Date.now() - date.getTime();
-    const minutes = Math.round(delta / 60000);
-    if (minutes <= 1) return 'just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.round(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.round(hours / 24);
-    return `${days}d ago`;
+  if (!iso) return 'just now';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'just now';
+  const delta = Date.now() - date.getTime();
+  const minutes = Math.round(delta / 60000);
+  if (minutes <= 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
 }
 
 export function normalizeChatAttachment(raw: any): ChatAttachment | null {
-    if (!raw) return null;
+  if (!raw) return null;
 
-    const kind = (raw.kind || raw.type || 'other') as ChatAttachmentKind;
-    const mime = raw.mime || raw.mimeType || raw.mime_type || '';
-    const name = raw.name || raw.fileName || raw.file_name || 'Attachment';
-    const dataUrl = raw.dataUrl;
-    const url = raw.url;
+  const kind = (raw.kind || raw.type || 'other') as ChatAttachmentKind;
+  const mime = raw.mime || raw.mimeType || raw.mime_type || '';
+  const name = raw.name || raw.fileName || raw.file_name || 'Attachment';
+  const dataUrl = raw.dataUrl;
+  const url = raw.url;
 
-    return {
-        kind,
-        mime,
-        name,
-        dataUrl: typeof dataUrl === 'string' ? dataUrl : undefined,
-        url: typeof url === 'string' ? url : undefined,
-    };
+  return {
+    kind,
+    mime,
+    name,
+    dataUrl: typeof dataUrl === 'string' ? dataUrl : undefined,
+    url: typeof url === 'string' ? url : undefined,
+  };
 }
 
 export function normalizeChatMessage(raw: any, mode: StudyMode): ChatMessage {
-    const attachments = Array.isArray(raw?.attachments)
-        ? raw.attachments
-              .map(normalizeChatAttachment)
-              .filter(
-                  (attachment: ChatAttachment | null): attachment is ChatAttachment =>
-                      Boolean(attachment),
-              )
-        : undefined;
+  const attachments = Array.isArray(raw?.attachments)
+    ? raw.attachments
+        .map(normalizeChatAttachment)
+        .filter((attachment: ChatAttachment | null): attachment is ChatAttachment =>
+          Boolean(attachment),
+        )
+    : undefined;
 
-    return {
-        id: raw?.id || `msg-${Math.random().toString(16).slice(2)}`,
-        role: raw?.role === 'assistant' ? 'assistant' : 'user',
-        content: raw?.content || raw?.output_text || raw?.input_text || 'Message',
-        timestamp: raw?.created_at || new Date().toISOString(),
-        mode: raw?.mode || mode,
-        attachments,
-    };
+  return {
+    id: raw?.id || `msg-${Math.random().toString(16).slice(2)}`,
+    role: raw?.role === 'assistant' ? 'assistant' : 'user',
+    content: raw?.content || raw?.output_text || raw?.input_text || 'Message',
+    timestamp: raw?.created_at || new Date().toISOString(),
+    mode: raw?.mode || mode,
+    attachments,
+  };
 }

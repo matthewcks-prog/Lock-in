@@ -83,11 +83,7 @@ function downloadFile(filename: string, content: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-export function TranscriptMessage({
-  transcript,
-  videoTitle,
-  saveNote,
-}: TranscriptMessageProps) {
+export function TranscriptMessage({ transcript, videoTitle, saveNote }: TranscriptMessageProps) {
   const handleDownloadTxt = useCallback(() => {
     const content = formatAsPlainText(transcript, videoTitle);
     const safeTitle = videoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();

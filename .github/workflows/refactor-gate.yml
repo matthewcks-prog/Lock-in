@@ -38,6 +38,9 @@ jobs:
           echo "SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'dummy-key' }}" >> backend/.env
           echo "SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'dummy-key' }}" >> backend/.env
 
+      - name: Check code formatting
+        run: npm run format:check
+
       - name: Run lint
         run: npm run lint
 

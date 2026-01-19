@@ -24,10 +24,12 @@ export function createChatsClient(apiRequest: ApiRequest) {
     return validateChatRecord(raw, 'createChat');
   }
 
-  async function getRecentChats(params: {
-    limit?: number;
-    cursor?: string | null;
-  } = {}): Promise<ChatListResponse> {
+  async function getRecentChats(
+    params: {
+      limit?: number;
+      cursor?: string | null;
+    } = {},
+  ): Promise<ChatListResponse> {
     const defaultLimit = Number(chatLimits.DEFAULT_CHAT_LIST_LIMIT) || 20;
     const { limit = defaultLimit, cursor } = params;
     const queryParams = new URLSearchParams();

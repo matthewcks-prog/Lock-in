@@ -83,7 +83,9 @@ export function NotesListView({
               isDeleting={isDeleting === item.id}
               onSelect={() => onSelectNote(item.id || null)}
               onToggleStar={(event) => item.id && onToggleStar(item.id, event)}
-              onDeleteNote={(event) => item.id && onDeleteNote(item.id, item.title || 'Untitled', event)}
+              onDeleteNote={(event) =>
+                item.id && onDeleteNote(item.id, item.title || 'Untitled', event)
+              }
             />
           ))
         )}

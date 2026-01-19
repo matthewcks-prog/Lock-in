@@ -70,4 +70,3 @@ export function hasHtmlParsingSupport(fetcher: AsyncFetcher): fetcher is Enhance
     typeof fetcher.extractPanoptoInfoFromHtml === 'function'
   );
 }
-

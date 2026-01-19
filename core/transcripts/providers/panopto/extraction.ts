@@ -96,9 +96,9 @@ export function extractPanoptoMediaUrl(html: string): string | null {
     }
   }
 
-  const urlKeys = Array.from(
-    html.matchAll(/"(\w+Url|Url\w+)"\s*:\s*"([^"]+)"/g),
-  ).map((match) => match[1]);
+  const urlKeys = Array.from(html.matchAll(/"(\w+Url|Url\w+)"\s*:\s*"([^"]+)"/g)).map(
+    (match) => match[1],
+  );
 
   if (urlKeys.length > 0) {
     console.log('[Panopto] Found URL-like keys in HTML:', urlKeys.slice(0, 10).join(', '));

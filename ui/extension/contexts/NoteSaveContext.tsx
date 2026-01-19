@@ -5,12 +5,7 @@
  * Follows the ToolContext.tsx pattern for consistency.
  */
 
-import {
-  createContext,
-  useContext,
-  useMemo,
-  type ReactNode,
-} from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { Note } from '@core/domain/Note';
 import type { NotesService } from '@core/services/notesService';
 import { useNoteSave, type SaveNoteOptions } from '../../hooks/useNoteSave';

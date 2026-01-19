@@ -73,13 +73,7 @@ export interface VideoListPanelProps {
 /**
  * Auth required prompt for providers needing sign-in
  */
-function AuthRequiredPrompt({
-  provider,
-  signInUrl,
-}: {
-  provider: string;
-  signInUrl: string;
-}) {
+function AuthRequiredPrompt({ provider, signInUrl }: { provider: string; signInUrl: string }) {
   const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
 
   const handleSignIn = () => {
@@ -91,16 +85,10 @@ function AuthRequiredPrompt({
       <p className="lockin-video-auth-message">
         Please sign in to {providerName} to view recordings.
       </p>
-      <button
-        className="lockin-video-auth-button"
-        onClick={handleSignIn}
-        type="button"
-      >
+      <button className="lockin-video-auth-button" onClick={handleSignIn} type="button">
         Open {providerName} Sign In
       </button>
-      <p className="lockin-video-auth-hint">
-        After signing in, close this panel and try again.
-      </p>
+      <p className="lockin-video-auth-hint">After signing in, close this panel and try again.</p>
     </div>
   );
 }
@@ -149,10 +137,7 @@ export function VideoListPanel({
             <span>Detecting videos...</span>
           </div>
         ) : authRequired ? (
-          <AuthRequiredPrompt
-            provider={authRequired.provider}
-            signInUrl={authRequired.signInUrl}
-          />
+          <AuthRequiredPrompt provider={authRequired.provider} signInUrl={authRequired.signInUrl} />
         ) : showError ? (
           <div className="lockin-video-list-error">
             <p>{error}</p>
@@ -161,9 +146,7 @@ export function VideoListPanel({
           <div className="lockin-video-list-empty">
             <p>{emptyMessage}</p>
             <p className="lockin-video-list-hint">{supportedProviders}</p>
-            {detectionHint && (
-              <p className="lockin-video-list-hint">{detectionHint}</p>
-            )}
+            {detectionHint && <p className="lockin-video-list-hint">{detectionHint}</p>}
           </div>
         ) : (
           <div className="lockin-video-list" role="list">

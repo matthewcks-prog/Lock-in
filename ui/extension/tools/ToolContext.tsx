@@ -6,14 +6,7 @@
  * inside the tool component, not here.
  */
 
-import {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  useMemo,
-  type ReactNode,
-} from 'react';
+import { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { getToolById } from './registry';
 
 // -----------------------------------------------------------------------------

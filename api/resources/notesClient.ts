@@ -1,9 +1,5 @@
 import type { ApiRequest, ApiRequestOptions } from '../fetcher';
-import {
-  validateNoteRecord,
-  validateNoteRecords,
-  validateNotesChatResponse,
-} from '../validation';
+import { validateNoteRecord, validateNoteRecords, validateNotesChatResponse } from '../validation';
 
 export interface ListNotesParams {
   sourceUrl?: string;
@@ -90,10 +86,7 @@ export function createNotesClient(apiRequest: ApiRequest) {
     return validateNoteRecord(raw, 'toggleNoteStar');
   }
 
-  async function setNoteStar(
-    noteId: string,
-    isStarred: boolean,
-  ): Promise<Record<string, unknown>> {
+  async function setNoteStar(noteId: string, isStarred: boolean): Promise<Record<string, unknown>> {
     if (!noteId) {
       throw new Error('noteId is required to set star');
     }

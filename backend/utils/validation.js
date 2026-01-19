@@ -66,7 +66,6 @@ function validateLanguageCode(code) {
   return { valid: true, normalized };
 }
 
-
 /**
  * Validate UUID
  * @param {*} id - ID to validate

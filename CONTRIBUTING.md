@@ -30,12 +30,12 @@ Thank you for your interest in contributing to Lock-in! This document provides g
 
 1. **Create a feature branch**: `git checkout -b feature/your-feature-name`
 2. **Follow the core loop**: Capture → Understand → Distil → Organise → Act
-3. **Respect separation**: 
+3. **Respect separation**:
    - Extension code in `/extension`
    - Shared code in `/core` and `/api` (NO Chrome APIs)
    - Site-specific logic in `/integrations/adapters`
 4. **Write tests**: Add tests for new functionality
-5. **Update documentation**: 
+5. **Update documentation**:
    - Update `CODE_OVERVIEW.md` if file structure changes
    - Update `DATABASE.md` if schema changes
    - Update relevant docs in `docs/` folder
@@ -62,7 +62,7 @@ See [AGENTS.md](AGENTS.md) for detailed coding rules.
 1. **Ensure all checks pass**: `npm run check`
 2. **Update CHANGELOG.md**: Add entry for your changes
 3. **Write clear commit messages**: Follow conventional commits format
-4. **Create a pull request**: 
+4. **Create a pull request**:
    - Describe what changed and why
    - Reference related issues
    - Include screenshots for UI changes

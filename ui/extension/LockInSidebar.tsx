@@ -175,7 +175,9 @@ function LockInSidebarContent({
           />
         )}
 
-        {activeTab === TOOL_TAB_ID && <ToolSection activeToolId={activeToolId} onClose={closeTool} />}
+        {activeTab === TOOL_TAB_ID && (
+          <ToolSection activeToolId={activeToolId} onClose={closeTool} />
+        )}
 
         {/* Privacy disclosure notice - shown on first use */}
         <PrivacyNotice />

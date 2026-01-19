@@ -99,7 +99,10 @@ export function validateNoteRecords(value: unknown, field = 'notes'): RecordValu
   return list.map((item, index) => validateNoteRecord(item, `${field}[${index}]`));
 }
 
-export function validateNotesChatResponse(value: unknown, field = 'notesChat'): {
+export function validateNotesChatResponse(
+  value: unknown,
+  field = 'notesChat',
+): {
   answer: string;
   usedNotes: RecordValue[];
 } {
@@ -136,7 +139,10 @@ export function validateChatRecord(value: unknown, field = 'chat'): RecordValue 
   return record;
 }
 
-export function validateChatListResponse(value: unknown, field = 'chatList'): {
+export function validateChatListResponse(
+  value: unknown,
+  field = 'chatList',
+): {
   chats: RecordValue[];
   pagination: { hasMore: boolean; nextCursor?: string | null };
 } {
@@ -182,7 +188,10 @@ export function validateChatMessages(value: unknown, field = 'chatMessages'): Re
   });
 }
 
-export function validateChatTitleResponse(value: unknown, field = 'chatTitle'): {
+export function validateChatTitleResponse(
+  value: unknown,
+  field = 'chatTitle',
+): {
   chatId: string;
   title: string;
 } {

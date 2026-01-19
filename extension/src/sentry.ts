@@ -56,7 +56,9 @@ const MAX_STRING_LENGTH = 500;
 
 // Detect if we're in a service worker (background) or window context
 const isServiceWorker =
-  typeof self !== 'undefined' && typeof window === 'undefined' && 'ServiceWorkerGlobalScope' in self;
+  typeof self !== 'undefined' &&
+  typeof window === 'undefined' &&
+  'ServiceWorkerGlobalScope' in self;
 
 // Get the global context (window or self)
 const globalContext: typeof globalThis = isServiceWorker
@@ -481,8 +483,7 @@ function setupErrorListeners(): void {
       return;
     }
 
-    const error =
-      event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+    const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
 
     sentryClient.captureException(error);
   });

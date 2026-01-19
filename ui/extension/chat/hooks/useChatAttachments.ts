@@ -27,7 +27,7 @@ interface UseChatAttachmentsReturn {
     id: string,
     status: PendingAttachment['status'],
     assetId?: string,
-    error?: string
+    error?: string,
   ) => void;
   /** Get asset IDs for uploaded attachments */
   getUploadedAssetIds: () => string[];
@@ -43,11 +43,11 @@ function generateId(): string {
 }
 
 export function useChatAttachments(
-  options: UseChatAttachmentsOptions = {}
+  options: UseChatAttachmentsOptions = {},
 ): UseChatAttachmentsReturn {
   const { maxAttachments = 5 } = options;
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
-  
+
   // Track preview URLs for cleanup
   const previewUrlsRef = useRef<Set<string>>(new Set());
 
@@ -66,34 +66,32 @@ export function useChatAttachments(
         const remaining = maxAttachments - prev.length;
         if (remaining <= 0) return prev;
 
-        const newAttachments: PendingAttachment[] = files
-          .slice(0, remaining)
-          .map((file) => {
-            // Create preview URL for images
-            let previewUrl: string | undefined;
-            if (file.type.startsWith('image/')) {
-              previewUrl = URL.createObjectURL(file);
-              previewUrlsRef.current.add(previewUrl);
-            }
+        const newAttachments: PendingAttachment[] = files.slice(0, remaining).map((file) => {
+          // Create preview URL for images
+          let previewUrl: string | undefined;
+          if (file.type.startsWith('image/')) {
+            previewUrl = URL.createObjectURL(file);
+            previewUrlsRef.current.add(previewUrl);
+          }
 
-            return {
-              id: generateId(),
-              file,
-              previewUrl,
-              status: 'pending' as const,
-            };
-          });
+          return {
+            id: generateId(),
+            file,
+            previewUrl,
+            status: 'pending' as const,
+          };
+        });
 
         return [...prev, ...newAttachments];
       });
     },
-    [maxAttachments]
+    [maxAttachments],
   );
 
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => {
       const attachment = prev.find((a) => a.id === id);
-      
+
       // Cleanup preview URL
       if (attachment?.previewUrl) {
         URL.revokeObjectURL(attachment.previewUrl);
@@ -118,27 +116,16 @@ export function useChatAttachments(
   }, []);
 
   const setAttachmentStatus = useCallback(
-    (
-      id: string,
-      status: PendingAttachment['status'],
-      assetId?: string,
-      error?: string
-    ) => {
+    (id: string, status: PendingAttachment['status'], assetId?: string, error?: string) => {
       setAttachments((prev) =>
-        prev.map((a) =>
-          a.id === id
-            ? { ...a, status, assetId: assetId || a.assetId, error }
-            : a
-        )
+        prev.map((a) => (a.id === id ? { ...a, status, assetId: assetId || a.assetId, error } : a)),
       );
     },
-    []
+    [],
   );
 
   const getUploadedAssetIds = useCallback((): string[] => {
-    return attachments
-      .filter((a) => a.status === 'uploaded' && a.assetId)
-      .map((a) => a.assetId!);
+    return attachments.filter((a) => a.status === 'uploaded' && a.assetId).map((a) => a.assetId!);
   }, [attachments]);
 
   const isUploading = attachments.some((a) => a.status === 'uploading');

@@ -25,6 +25,13 @@
       "@shared/ui/*": ["shared/ui/*"]
     }
   },
-  "include": ["core/**/*", "api/**/*", "ui/**/*", "integrations/**/*", "extension/**/*.ts", "types/**/*.d.ts"],
+  "include": [
+    "core/**/*",
+    "api/**/*",
+    "ui/**/*",
+    "integrations/**/*",
+    "extension/**/*.ts",
+    "types/**/*.d.ts"
+  ],
   "exclude": ["node_modules", "backend"]
 }
