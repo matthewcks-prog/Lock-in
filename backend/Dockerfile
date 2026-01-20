@@ -12,6 +12,9 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Install dependencies
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - Install dependencies
+# -----------------------------------------------------------------------------
 FROM node:20.18-alpine AS builder
 
 WORKDIR /app
@@ -27,6 +30,10 @@ COPY backend/package*.json ./backend/
 # This ensures all workspace dependencies are resolved correctly
 ENV NODE_ENV=production
 RUN npm ci --omit=dev --ignore-scripts
+
+# Create backend/node_modules directory to ensure COPY command in next stage never fails
+# (Module hoisting might mean this directory is empty or non-existent otherwise)
+RUN mkdir -p backend/node_modules
 
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Minimal runtime image
@@ -45,13 +52,14 @@ WORKDIR /app
 
 # Copy hoisted node_modules from builder
 COPY --from=builder /app/node_modules ./node_modules
+# Copy nested backend node_modules (if any exist)
+COPY --from=builder /app/backend/node_modules ./backend/node_modules
 
-# Copy backend application code
-COPY backend/ ./
+# Copy backend application code to /app/backend (Preserve monorepo structure)
+COPY backend/ ./backend/
 
-# Copy required core config files (backend imports ../core/config/chatLimits.json)
-# We place them relative to WORKDIR so the import path works
-COPY core/config/chatLimits.json ../core/config/chatLimits.json
+# Copy required core config files
+COPY core/config/chatLimits.json ./core/config/chatLimits.json
 
 # Create temp directory for transcription jobs
 RUN mkdir -p /tmp/transcripts && \
@@ -77,4 +85,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
 # Start the application
-CMD ["node", "index.js"]
+CMD ["node", "backend/index.js"]
