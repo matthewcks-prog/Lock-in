@@ -45,7 +45,7 @@
     "pdf-parse": "^1.1.1",
     "pino": "^10.2.0",
     "pino-http": "^11.0.0",
-    "uuid": "^13.0.0"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
