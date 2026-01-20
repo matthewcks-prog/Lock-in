@@ -68,11 +68,11 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
-      - name: Validate lockfile sync
-        run: npm ls --depth=0 || exit 1
-
       - name: Install dependencies (all workspaces)
         run: npm ci
+
+      - name: Validate lockfile sync
+        run: npm ls --depth=0 || exit 1
 
       - name: Run backend linting
         run: npm run lint:backend
