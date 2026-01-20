@@ -47,10 +47,10 @@ env:
 
 jobs:
   # ===========================================================================
-  # Build and Test
-  # Runs on all pushes and PRs
+  # Build Docker Image and Deploy
+  # Quality checks handled by quality-gate.yml workflow
   # ===========================================================================
-  build-and-test:
+  build-and-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -73,17 +73,6 @@ jobs:
 
       - name: Validate lockfile sync
         run: npm ls --depth=0 || exit 1
-
-      - name: Run backend linting
-        run: npm run lint:backend
-
-      - name: Run backend tests
-        env:
-          NODE_ENV: test
-          SUPABASE_URL_DEV: ${{ secrets.SUPABASE_URL_DEV || 'https://example.supabase.test' }}
-          SUPABASE_SERVICE_ROLE_KEY_DEV: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-service-role-key' }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-openai-key' }}
-        run: npm run test:backend
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -189,8 +178,8 @@ jobs:
   # ===========================================================================
   push-to-acr:
     runs-on: ubuntu-latest
-    needs: build-and-test
-    if: needs.build-and-test.outputs.should-deploy-staging == 'true' || needs.build-and-test.outputs.should-deploy-production == 'true'
+    needs: build-and-deploy
+    if: needs.build-and-deploy.outputs.should-deploy-staging == 'true' || needs.build-and-deploy.outputs.should-deploy-production == 'true'
 
     outputs:
       image-tag: ${{ github.sha }}
@@ -245,8 +234,8 @@ jobs:
   # ===========================================================================
   deploy-staging:
     runs-on: ubuntu-latest
-    needs: [build-and-test, push-to-acr]
-    if: needs.build-and-test.outputs.should-deploy-staging == 'true'
+    needs: [build-and-deploy, push-to-acr]
+    if: needs.build-and-deploy.outputs.should-deploy-staging == 'true'
     environment: staging
 
     env:
@@ -343,8 +332,8 @@ jobs:
   # ===========================================================================
   deploy-production:
     runs-on: ubuntu-latest
-    needs: [build-and-test, push-to-acr]
-    if: needs.build-and-test.outputs.should-deploy-production == 'true'
+    needs: [build-and-deploy, push-to-acr]
+    if: needs.build-and-deploy.outputs.should-deploy-production == 'true'
     environment: production # ⚠️ MUST have required reviewers in GitHub Settings
 
     env:
@@ -435,8 +424,8 @@ jobs:
   # ===========================================================================
   deployment-summary:
     runs-on: ubuntu-latest
-    needs: [build-and-test, push-to-acr]
-    if: always() && (needs.build-and-test.outputs.should-deploy-staging == 'true' || needs.build-and-test.outputs.should-deploy-production == 'true')
+    needs: [build-and-deploy, push-to-acr]
+    if: always() && (needs.build-and-deploy.outputs.should-deploy-staging == 'true' || needs.build-and-deploy.outputs.should-deploy-production == 'true')
 
     steps:
       - name: Deployment Summary

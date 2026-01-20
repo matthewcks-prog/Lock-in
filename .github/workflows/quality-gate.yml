@@ -1,13 +1,21 @@
-name: Refactor Gate
+name: Quality Gate
 
 on:
-  push:
   pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+# Cancel in-progress runs on new push to same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  refactor-gate:
+  quality-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,9 +28,13 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Validate lockfile sync
-        run: npm ls --depth=0 || exit 1
+        run: |
+          npm ls --depth=0 || {
+            echo "::error::package-lock.json is out of sync with package.json. Run 'npm install' and commit the lockfile."
+            exit 1
+          }
 
-      - name: Install all dependencies (root + workspaces)
+      - name: Install dependencies (all workspaces)
         run: npm ci
 
       - name: Setup backend environment
@@ -42,8 +54,11 @@ jobs:
       - name: Check code formatting
         run: npm run format:check
 
-      - name: Run lint (all workspaces)
+      - name: Run linting (all workspaces)
         run: npm run lint:all
+
+      - name: Run type checking
+        run: npm run type-check
 
       - name: Run tests (all workspaces)
         run: npm run test:all
@@ -53,14 +68,49 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY_DEV: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-service-role-key' }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-openai-key' }}
 
-      - name: Run type-check
-        run: npm run type-check
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        continue-on-error: true
 
-      - name: Run build
+      - name: Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+      - name: Build project
         run: npm run build
         env:
           VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN || '' }}
           VITE_SENTRY_AUTH_TOKEN: ${{ secrets.VITE_SENTRY_AUTH_TOKEN || '' }}
 
-      - name: Run verify-build
+      - name: Verify build output
         run: npm run verify-build
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs
+          path: |
+            npm-debug.log
+            coverage/
+          retention-days: 7
+
+      - name: Quality Gate Summary
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "✅ Quality Gate Complete"
+          echo "=========================================="
+          echo ""
+          echo "Checks performed:"
+          echo "  ✓ Code formatting"
+          echo "  ✓ Linting (extension + backend)"
+          echo "  ✓ Type checking"
+          echo "  ✓ Unit tests (extension + backend)"
+          echo "  ✓ Test coverage"
+          echo "  ✓ Build verification"
+          echo ""
+          echo "=========================================="

@@ -29,11 +29,10 @@ Lock-in uses **GitHub Actions** for automated build, test, and deployment. The p
 │ 1. Checkout code                    │  │ 1. Checkout code                 │
 │ 2. Setup Node.js + cache            │  │ 2. Setup Node.js + cache         │
 │ 3. Install dependencies (npm ci)    │  │ 3. Install dependencies (npm ci) │
-│ 4. Run unit tests                   │  │ 4. Run unit tests                │
-│ 5. Build Docker image (BuildKit)    │  │ 5. Build Docker image (BuildKit) │
-│ 6. Security scan (Trivy) ⚠️         │  │ 6. Security scan (Trivy) ⚠️      │
-│ 7. Start test container             │  │ 7. Start test container          │
-│ 8. Health check + smoke tests       │  │ 8. Health check + smoke tests    │
+│ 4. Build Docker image (BuildKit)    │  │ 4. Build Docker image (BuildKit) │
+│ 5. Security scan (Trivy) ⚠️         │  │ 5. Security scan (Trivy) ⚠️      │
+│ 6. Start test container             │  │ 6. Start test container          │
+│ 7. Health check + smoke tests       │  │ 7. Health check + smoke tests    │
 └─────────────────┬───────────────────┘  └───────┬──────────────────────────┘
                   │                              │
                   │ if push (not PR)             │ if push (not PR)
@@ -104,26 +103,51 @@ on:
 - **Pull Request** → Build and test only (no push to ACR, no deploy)
 - **Manual dispatch** → Build → Push to ACR → Deploy to specified environment
 
-### Tests (`test.yml`)
+### Quality Gate (`quality-gate.yml`)
 
-Runs on all pushes and PRs to main/develop. Tests multiple Node.js versions (20.x, 22.x).
+**Triggers:**
 
-### Refactor Gate (`refactor-gate.yml`)
+```yaml
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+```
 
-Runs on all pushes and PRs. Enforces code quality (lint, format, type-check, build verification).
+**Purpose:** Single source of truth for all quality checks. Runs on PRs and pushes to protected branches only (NOT on feature branches).
+
+**Checks performed:**
+
+1. Code formatting (`npm run format:check`)
+2. Linting all workspaces (`npm run lint:all`)
+3. Type checking (`npm run type-check`)
+4. Unit tests with coverage (`npm run test:all`, `npm run test:coverage`)
+5. Build verification (`npm run build`, `npm run verify-build`)
+
+**Key features:**
+
+- Single Node version (20.x) for faster CI
+- Concurrency control (cancels in-progress runs on new PR push)
+- Uploads coverage artifacts and failure logs
+- Industry best practice: Run quality checks ONCE, not on every feature branch push
 
 ## Jobs Explained
 
-### 1. `build-and-test`
+### Backend Deploy Workflow
 
-**Purpose**: Build and test the backend, create Docker image, run security scan.
+### 1. `build-and-deploy`
+
+**Purpose**: Build Docker image, run security scan, and deploy to Azure.
+
+**Note**: Linting and tests are handled by `quality-gate.yml` to avoid duplication.
 
 **Steps:**
 
 1. **Checkout code** - Get latest code
 2. **Setup Node.js** - Install Node 20 with npm cache
-3. **Install dependencies** - `npm ci` in backend/
-4. **Run tests** - Backend unit tests
+3. **Install dependencies** - `npm ci` for all workspaces
+4. **Validate lockfile** - Ensure package-lock.json is in sync
 5. **Build Docker image** - Use BuildKit with GitHub Actions cache
 6. **Security scan** - Trivy vulnerability scanner (**now fails on CRITICAL/HIGH**)
 7. **Start test container** - Run Docker image locally

@@ -51,12 +51,11 @@ gh workflow run backend-rollback.yml -f environment=production -f image_tag=<com
 
 ## GitHub Actions Workflows
 
-| Workflow               | File                   | Purpose                   |
-| ---------------------- | ---------------------- | ------------------------- |
-| Backend Build & Deploy | `backend-deploy.yml`   | Build, test, and deploy   |
-| Backend Rollback       | `backend-rollback.yml` | Emergency rollback        |
-| Tests                  | `test.yml`             | Run tests on all branches |
-| Refactor Gate          | `refactor-gate.yml`    | Pre-merge quality checks  |
+| Workflow               | File                   | Purpose                        |
+| ---------------------- | ---------------------- | ------------------------------ |
+| Backend Build & Deploy | `backend-deploy.yml`   | Build Docker image and deploy  |
+| Backend Rollback       | `backend-rollback.yml` | Emergency rollback             |
+| Quality Gate           | `quality-gate.yml`     | Lint, test, format, type-check |
 
 ## Required GitHub Secrets
 
