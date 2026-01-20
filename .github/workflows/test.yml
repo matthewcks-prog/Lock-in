@@ -9,10 +9,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
       matrix:
         node-version: [20.x, 22.x]
+      fail-fast: false
 
     steps:
       - name: Checkout code
@@ -24,6 +26,13 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
           cache-dependency-path: package-lock.json
+
+      - name: Validate lockfile sync
+        run: |
+          npm ls --depth=0 || {
+            echo "::error::package-lock.json is out of sync with package.json. Run 'npm install' and commit the lockfile."
+            exit 1
+          }
 
       - name: Install dependencies (all workspaces)
         run: npm ci
@@ -47,4 +56,14 @@ jobs:
         with:
           name: coverage-${{ matrix.node-version }}
           path: coverage/
+          retention-days: 7
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs-${{ matrix.node-version }}
+          path: |
+            npm-debug.log
+            coverage/
           retention-days: 7
