@@ -16,13 +16,17 @@ FROM node:20.18-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files first for better layer caching
-COPY backend/package*.json ./
+# Copy root workspace files (CRITICAL for npm workspaces)
+# npm workspaces requires the root package.json and package-lock.json
+COPY package*.json ./
 
-# Install production dependencies only
-# Use npm ci for deterministic builds
-RUN npm ci --only=production --ignore-scripts && \
-    npm cache clean --force
+# Copy backend workspace package files
+COPY backend/package*.json ./backend/
+
+# Install dependencies from root (hoisted structure)
+# This ensures all workspace dependencies are resolved correctly
+ENV NODE_ENV=production
+RUN npm ci --omit=dev --ignore-scripts
 
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Minimal runtime image
@@ -39,7 +43,7 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Copy node_modules from builder stage
+# Copy hoisted node_modules from builder
 COPY --from=builder /app/node_modules ./node_modules
 
 # Copy backend application code
