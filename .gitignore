@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 
+# Workspace lock files (only root should have package-lock.json)
+backend/package-lock.json
+**/package-lock.json
+!package-lock.json
+
 # Environment variables
 # All .env files should be ignored to prevent accidental secret commits
 .env

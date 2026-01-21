@@ -107,14 +107,14 @@ Git normalization rules:
 
 ## CI/CD Integration
 
-The GitHub Actions workflow (`refactor-gate.yml`) includes a formatting check step:
+The GitHub Actions workflow (`quality-gate.yml`) includes a formatting check step:
 
 ```yaml
 - name: Check code formatting
   run: npm run format:check
 ```
 
-This ensures all code merged to main is properly formatted.
+This ensures all code merged to main and develop is properly formatted.
 
 ## Common Issues
 

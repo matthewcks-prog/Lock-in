@@ -40,6 +40,7 @@ Feature-specific documentation organized by feature area:
 
 Testing documentation and checklists:
 
+- **[BACKEND_TESTING.md](testing/BACKEND_TESTING.md)** - Backend testing standards and conventions
 - **[SMOKE_CHECKLIST.md](testing/SMOKE_CHECKLIST.md)** - Manual smoke test checklist
 
 ### 📊 Tracking

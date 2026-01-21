@@ -1,0 +1,146 @@
+# =============================================================================
+# Lock-in Backend - Emergency Rollback Workflow
+# =============================================================================
+
+name: Backend Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to rollback'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Docker image tag to rollback to (commit SHA or "previous")'
+        required: true
+        default: 'previous'
+
+env:
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  REGISTRY_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io
+  IMAGE_NAME: lock-in-backend
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Validate inputs
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            echo "⚠️ ROLLING BACK PRODUCTION - This is a critical operation!"
+            echo "Environment: production"
+            echo "Container App: lock-in-backend"
+          else
+            echo "Rolling back staging environment"
+            echo "Environment: staging"
+            echo "Container App: lock-in-dev"
+          fi
+          echo "Target image tag: ${{ github.event.inputs.image_tag }}"
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get previous image tag
+        id: get-image
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            CONTAINER_APP_NAME="lock-in-backend"
+            RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP }}"
+          else
+            CONTAINER_APP_NAME="lock-in-dev"
+            RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP_STAGING }}"
+          fi
+
+          if [ "${{ github.event.inputs.image_tag }}" = "previous" ]; then
+            # Get the revision history
+            REVISIONS=$(az containerapp revision list \
+              --name $CONTAINER_APP_NAME \
+              --resource-group $RESOURCE_GROUP \
+              --query "[?properties.active==\`true\`].name" -o tsv)
+
+            echo "Active revisions:"
+            echo "$REVISIONS"
+
+            # For now, use 'latest' tag as fallback
+            IMAGE_TAG="latest"
+            echo "⚠️ Using 'latest' tag. Consider specifying an explicit commit SHA."
+          else
+            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
+          fi
+
+          IMAGE_URL="${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+          echo "image-url=${IMAGE_URL}" >> $GITHUB_OUTPUT
+          echo "📦 Target image: ${IMAGE_URL}"
+
+      - name: Perform rollback
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            CONTAINER_APP_NAME="lock-in-backend"
+            RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP }}"
+          else
+            CONTAINER_APP_NAME="lock-in-dev"
+            RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP_STAGING }}"
+          fi
+
+          echo "🔄 Rolling back $CONTAINER_APP_NAME..."
+
+          az containerapp update \
+            --name $CONTAINER_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --image ${{ steps.get-image.outputs.image-url }}
+
+      - name: Verify rollback
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            CONTAINER_APP_NAME="lock-in-backend"
+            RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP }}"
+          else
+            CONTAINER_APP_NAME="lock-in-dev"
+            RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP_STAGING }}"
+          fi
+
+          APP_URL=$(az containerapp show \
+            --name $CONTAINER_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+
+          echo "🔍 Verifying rollback at https://$APP_URL"
+
+          max_attempts=10
+          attempt=0
+
+          while [ $attempt -lt $max_attempts ]; do
+            sleep 15
+
+            if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
+              echo "✅ Rollback successful! Service is healthy."
+              exit 0
+            fi
+
+            attempt=$((attempt + 1))
+            echo "⏳ Waiting for service to become healthy ($attempt/$max_attempts)..."
+          done
+
+          echo "❌ Health check failed after rollback"
+          az containerapp logs show \
+            --name $CONTAINER_APP_NAME \
+            --resource-group $RESOURCE_GROUP \
+            --tail 50
+          exit 1
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ ROLLBACK FAILED"
+          echo "Manual intervention required!"
+          echo ""
+          echo "Check the Azure Portal or run:"
+          echo "az containerapp revision list --name <app-name> --resource-group <rg>"

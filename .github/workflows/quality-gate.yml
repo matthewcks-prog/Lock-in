@@ -1,0 +1,109 @@
+name: Quality Gate
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+# Cancel in-progress runs on new push to same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies (all workspaces)
+        run: npm ci
+
+      - name: Setup backend environment
+        run: |
+          echo "NODE_ENV=test" >> backend/.env
+          echo "AZURE_OPENAI_API_KEY=${{ secrets.AZURE_OPENAI_API_KEY }}" >> backend/.env
+          echo "AZURE_OPENAI_ENDPOINT=${{ secrets.AZURE_OPENAI_ENDPOINT }}" >> backend/.env
+          echo "AZURE_OPENAI_API_VERSION=${{ secrets.AZURE_OPENAI_API_VERSION || '2024-02-01' }}" >> backend/.env
+          echo "AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT=${{ secrets.AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT }}" >> backend/.env
+          echo "AZURE_OPENAI_CHAT_DEPLOYMENT=${{ secrets.AZURE_OPENAI_CHAT_DEPLOYMENT || 'gpt-4o-mini' }}" >> backend/.env
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || '' }}" >> backend/.env
+          echo "OPENAI_EMBEDDINGS_MODEL=${{ secrets.OPENAI_EMBEDDINGS_MODEL || 'text-embedding-3-small' }}" >> backend/.env
+          echo "SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://example.supabase.co' }}" >> backend/.env
+          echo "SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'dummy-key' }}" >> backend/.env
+          echo "SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'dummy-key' }}" >> backend/.env
+
+      - name: Check code formatting
+        run: npm run format:check
+
+      - name: Run linting (all workspaces)
+        run: npm run lint:all
+
+      - name: Run type checking
+        run: npm run type-check
+
+      - name: Run tests (all workspaces)
+        run: npm run test:all
+        env:
+          NODE_ENV: test
+          SUPABASE_URL_DEV: ${{ secrets.SUPABASE_URL_DEV || 'https://example.supabase.test' }}
+          SUPABASE_SERVICE_ROLE_KEY_DEV: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-service-role-key' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-openai-key' }}
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+        continue-on-error: true
+
+      - name: Upload coverage to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+      - name: Build project
+        run: npm run build
+        env:
+          VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN || '' }}
+          VITE_SENTRY_AUTH_TOKEN: ${{ secrets.VITE_SENTRY_AUTH_TOKEN || '' }}
+
+      - name: Verify build output
+        run: npm run verify-build
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-logs
+          path: |
+            npm-debug.log
+            coverage/
+          retention-days: 7
+
+      - name: Quality Gate Summary
+        if: always()
+        run: |
+          echo "=========================================="
+          echo "✅ Quality Gate Complete"
+          echo "=========================================="
+          echo ""
+          echo "Checks performed:"
+          echo "  ✓ Code formatting"
+          echo "  ✓ Linting (extension + backend)"
+          echo "  ✓ Type checking"
+          echo "  ✓ Unit tests (extension + backend)"
+          echo "  ✓ Test coverage"
+          echo "  ✓ Build verification"
+          echo ""
+          echo "=========================================="

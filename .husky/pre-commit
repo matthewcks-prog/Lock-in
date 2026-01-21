@@ -1,1 +1,27 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🎨 Running pre-commit checks (formatting & linting)..."
+
+# Validate lockfile sync (prevent CI failures)
+echo "🔒 Validating package-lock.json sync..."
+if ! npm ls --depth=0 >/dev/null 2>&1; then
+  echo "❌ package-lock.json is out of sync with package.json!"
+  echo "   Run 'npm install' to fix this before committing."
+  exit 1
+fi
+echo "✅ Lockfile is in sync"
+
+# Run lint-staged (will format and lint staged files)
 npx lint-staged
+
+# Get exit code
+status=$?
+
+if [ $status -ne 0 ]; then
+  echo "❌ Pre-commit checks failed. Please review and fix the issues."
+  exit 1
+fi
+
+echo "✅ Pre-commit checks passed!"
+exit 0

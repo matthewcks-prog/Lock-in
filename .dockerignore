@@ -9,6 +9,8 @@
 # Include only what's needed for backend
 !backend/
 !core/config/chatLimits.json
+!package.json
+!package-lock.json
 
 # Exclude from backend
 backend/node_modules

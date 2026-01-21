@@ -8,12 +8,13 @@ Thank you for your interest in contributing to Lock-in! This document provides g
    - [README.md](README.md) - Project overview
    - [AGENTS.md](AGENTS.md) - Development guidelines and architecture rules
    - [ENVIRONMENTS.md](ENVIRONMENTS.md) - Environment setup and deployment workflow
+   - [docs/MONOREPO.md](docs/MONOREPO.md) - Monorepo architecture and workspace management
    - [docs/README.md](docs/README.md) - Documentation structure
 
 2. **Set up your development environment**:
    - Follow [docs/setup/LOCAL_SUPABASE_SETUP.md](docs/setup/LOCAL_SUPABASE_SETUP.md) for local development
    - Ensure you have Node.js 18+ installed
-   - Install dependencies: `npm install`
+   - Install dependencies: `npm install` (installs all workspaces)
 
 3. **Understand the architecture**:
    - Review [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) for system design
@@ -60,7 +61,7 @@ feature/your-feature       ← Your feature branches
 3. **Run full validation before pushing**:
 
    ```bash
-   npm run prepush   # type-check + lint + test + build + verify
+   npm run prepush   # type-check + lint:all + test:all + build + verify
    ```
 
 4. **Push and create PR to develop**:
@@ -120,11 +121,26 @@ See [AGENTS.md](AGENTS.md) for detailed coding rules.
 
 ### Testing
 
-- Run tests: `npm run test`
+- Run tests: `npm run test` (extension tests)
+- Run backend tests: `npm run test:backend`
+- Run all tests: `npm run test:all`
 - Type check: `npm run type-check`
-- Lint: `npm run lint`
+- Lint extension: `npm run lint`
+- Lint backend: `npm run lint:backend`
+- Lint all: `npm run lint:all`
 - Build: `npm run build`
-- Full check: `npm run check`
+- Full check: `npm run check` (runs all quality gates)
+
+**Run tests before committing**:
+
+```bash
+# Run all tests (extension + backend)
+npm run test:all
+
+# Or individually
+npm test              # Extension tests
+npm run test:backend  # Backend tests
+```
 
 ### Submitting Changes
 
@@ -154,6 +170,43 @@ When adding or updating documentation:
 4. **Follow naming**: Use lowercase `.md` extension, descriptive names
 
 ## Adding New Features
+
+### Writing Tests
+
+When adding new code, follow these testing standards:
+
+**Backend Tests:**
+
+- ✅ File name MUST end with `.test.js` (e.g., `myFeature.test.js`)
+- ✅ Place next to the code or in `__tests__/` subdirectory
+- ✅ Use Node.js built-in test runner (`node:test`, `node:assert/strict`)
+- ✅ Mock all external dependencies (Supabase, OpenAI, network, file system)
+- ✅ Set up test environment variables at the top of the file
+- ❌ NEVER name utility scripts `test-*.js` (use `verify-*`, `check-*`, etc.)
+
+**Example:**
+
+```javascript
+// ✅ Good: validation.test.js
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+test('validates email format correctly', () => {
+  assert.strictEqual(validateEmail('test@example.com'), true);
+});
+
+// ❌ Bad: test-email-checker.js (will be picked up by test runner)
+// ✅ Good: verify-email-service.js (utility script)
+```
+
+**Run tests before committing:**
+
+```bash
+npm test          # Root project tests
+cd backend && npm test  # Backend tests
+```
+
+**📚 Detailed guide:** [docs/testing/BACKEND_TESTING.md](docs/testing/BACKEND_TESTING.md)
 
 ### Adding a New Site Integration
 

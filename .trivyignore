@@ -1,0 +1,31 @@
+# Trivy Ignore File
+
+# This file lists CVEs that are known but cannot be fixed immediately
+
+# Format: CVE-ID or vulnerability ID per line
+
+#
+
+# IMPORTANT: Each ignored vulnerability should have:
+
+# 1. A comment explaining why it's ignored
+
+# 2. A link to the tracking issue or upstream fix
+
+# 3. An expiration date for review
+
+#
+
+# Best Practice: Review this file monthly and remove fixed vulnerabilities
+
+# Alpine base image vulnerabilities - waiting for upstream fixes
+
+# These are in the base OS, not our code or direct dependencies
+
+# Review: 2026-02-20
+
+# Add specific CVEs here as needed after reviewing Trivy reports
+
+# Example format:
+
+# CVE-2024-12345 # Brief description - expires 2026-02-01
