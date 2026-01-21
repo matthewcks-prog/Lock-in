@@ -3,7 +3,8 @@ $ErrorActionPreference = "Stop"
 # Configuration
 $SubscriptionId = "473adbd3-1a70-4074-aa01-5451673d058b"
 $TenantId = "ef7a487a-77ca-410a-803d-e426b62a587f"
-$ResourceGroup = "lock-in-dev"
+$ResourceGroup = "lock-in-dev"     # Staging Resource Group
+$ResourceGroupProd = "lock-in-dev" # Production Resource Group (Default to same, update if different)
 $AcrName = "lockinacr"
 $IdentityName = "lock-in-identity"
 $GithubOrg = "matthewcks-prog"
@@ -40,13 +41,6 @@ $GhObject = "repo:$GithubOrg/$GithubRepo"
 function Add-FedCred {
     param($Name, $Subject)
     Write-Host "   Setting credential: $Name..."
-    $params = @{
-        name = $Name
-        issuer = "https://token.actions.githubusercontent.com"
-        subject = $Subject
-        description = "GitHub Actions $Name"
-        audiences = @("api://AzureADTokenExchange")
-    } | ConvertTo-Json -Compress
 
     # Use az identity federated-credential create
     az identity federated-credential create --identity-name $IdentityName --resource-group $ResourceGroup --name $Name --issuer "https://token.actions.githubusercontent.com" --subject $Subject --audiences "api://AzureADTokenExchange" 2>$null | Out-Null
@@ -58,18 +52,31 @@ Add-FedCred -Name "github-deploy-pr" -Subject "$GhObject`::pull_request"
 
 # 4. Set GitHub Secrets
 Write-Host "`n4. Setting GitHub Secrets..."
+
 Write-Host "   Setting AZURE_CLIENT_ID..."
 $ClientId | gh secret set AZURE_CLIENT_ID
 
-# Tenant/Sub might already be set but good to ensure
 Write-Host "   Setting AZURE_TENANT_ID..."
 $TenantId | gh secret set AZURE_TENANT_ID
 
 Write-Host "   Setting AZURE_SUBSCRIPTION_ID..."
 $SubscriptionId | gh secret set AZURE_SUBSCRIPTION_ID
 
+Write-Host "   Setting AZURE_CONTAINER_REGISTRY..."
+$AcrName | gh secret set AZURE_CONTAINER_REGISTRY
+
+Write-Host "   Setting AZURE_RESOURCE_GROUP_STAGING..."
+$ResourceGroup | gh secret set AZURE_RESOURCE_GROUP_STAGING
+
+Write-Host "   Setting AZURE_RESOURCE_GROUP..."
+$ResourceGroupProd | gh secret set AZURE_RESOURCE_GROUP
+
 # Remove potentially conflicting old secret
 Write-Host "   Removing old AZURE_CREDENTIALS..."
-gh secret delete AZURE_CREDENTIALS 2>$null
+try {
+    gh secret delete AZURE_CREDENTIALS 2>$null
+} catch {
+    Write-Host "   (AZURE_CREDENTIALS not found, skipping removal)" -ForegroundColor DarkGray
+}
 
 Write-Host "`n✅ Setup Complete! You can now run the workflow."
