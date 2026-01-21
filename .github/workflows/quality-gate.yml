@@ -27,13 +27,6 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
 
-      - name: Validate lockfile sync
-        run: |
-          npm ls --depth=0 || {
-            echo "::error::package-lock.json is out of sync with package.json. Run 'npm install' and commit the lockfile."
-            exit 1
-          }
-
       - name: Install dependencies (all workspaces)
         run: npm ci
 

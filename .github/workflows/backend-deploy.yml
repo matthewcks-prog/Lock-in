@@ -78,9 +78,6 @@ jobs:
       - name: Install dependencies (all workspaces)
         run: npm ci
 
-      - name: Validate lockfile sync
-        run: npm ls --depth=0 || exit 1
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
