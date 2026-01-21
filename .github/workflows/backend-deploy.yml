@@ -40,7 +40,14 @@ on:
           - staging
           - production
 
+permissions:
+  id-token: write
+  contents: read
+
 env:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
   REGISTRY_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}.azurecr.io
   IMAGE_NAME: lock-in-backend
@@ -191,7 +198,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to Azure Container Registry
         run: |
@@ -246,9 +255,9 @@ jobs:
       - name: Check for Azure credentials
         id: check-creds
         run: |
-          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+          if [ -z "${{ secrets.AZURE_CLIENT_ID }}" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "⚠️ AZURE_CREDENTIALS not set - skipping deployment"
+            echo "⚠️ AZURE_CLIENT_ID not set - skipping deployment"
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
@@ -257,7 +266,9 @@ jobs:
         if: steps.check-creds.outputs.skip != 'true'
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Staging (lock-in-dev)
         if: steps.check-creds.outputs.skip != 'true'
@@ -344,9 +355,9 @@ jobs:
       - name: Check for Azure credentials
         id: check-creds
         run: |
-          if [ -z "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+          if [ -z "${{ secrets.AZURE_CLIENT_ID }}" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "⚠️ AZURE_CREDENTIALS not set - skipping deployment"
+            echo "⚠️ AZURE_CLIENT_ID not set - skipping deployment"
           else
             echo "skip=false" >> $GITHUB_OUTPUT
           fi
@@ -355,7 +366,9 @@ jobs:
         if: steps.check-creds.outputs.skip != 'true'
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy to Production (lock-in-backend)
         if: steps.check-creds.outputs.skip != 'true'
