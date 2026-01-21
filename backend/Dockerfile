@@ -65,7 +65,7 @@ COPY core/config/chatLimits.json ./core/config/chatLimits.json
 RUN mkdir -p /tmp/transcripts && \
     chown -R nodejs:nodejs /tmp/transcripts && \
     chown -R nodejs:nodejs /app && \
-    chown -R nodejs:nodejs /core
+    chown -R nodejs:nodejs ./core
 
 # Switch to non-root user
 USER nodejs
