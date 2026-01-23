@@ -1,5 +1,7 @@
 # Transcript Extraction Troubleshooting Guide
 
+**Note:** This document is retained for legacy links. The canonical guide lives at `docs/features/transcripts/TROUBLESHOOTING.md`.
+
 This guide helps diagnose and resolve issues with transcript extraction from video platforms (Panopto, Echo360, HTML5).
 
 ## Quick Diagnosis
@@ -21,7 +23,7 @@ Look for these patterns in console logs:
 ```
 [Lock-in Transcript:Panopto] Error: ...
 [Lock-in Transcript:Echo360] Error: ...
-[Lock-in] extractPanoptoTranscript error: ...
+[Lock-in BG] Transcript extraction failed: ...
 [Lock-in] Fetching (attempt X/4): ...
 [Lock-in] Response status: XXX ...
 ```
@@ -350,7 +352,7 @@ If issues persist:
    - Browser version
 
 2. **Check Known Issues**:
-   - Review `docs/STATUS.md` for recent changes
+   - Review `docs/tracking/STATUS.md` for recent changes
    - Check `TRANSCRIPT_FIX_SUMMARY.md` for recent fixes
 
 3. **Report Issue**:

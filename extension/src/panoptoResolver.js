@@ -3,7 +3,13 @@
 
   const NetworkUtils =
     typeof self !== 'undefined' && self.LockInNetworkUtils ? self.LockInNetworkUtils : null;
-  const { fetchWithRetry, fetchWithCredentials, fetchHtmlWithRedirectInfo } = NetworkUtils || {};
+  const { fetchWithRetry, fetchWithCredentials } = NetworkUtils || {};
+  const TranscriptProviders =
+    typeof self !== 'undefined' && self.LockInTranscriptProviders
+      ? self.LockInTranscriptProviders
+      : null;
+  const { buildPanoptoEmbedUrl, buildPanoptoViewerUrl, extractPanoptoInfo } =
+    TranscriptProviders || {};
 
   function getConfigValue(key, fallback) {
     if (typeof self === 'undefined' || !self.LOCKIN_CONFIG) {
@@ -11,31 +17,6 @@
     }
     const value = self.LOCKIN_CONFIG[key];
     return value === undefined || value === null || value === '' ? fallback : value;
-  }
-
-  /**
-   * Extract CaptionUrl from Panopto embed HTML
-   */
-  function extractCaptionVttUrl(html) {
-    const patterns = [
-      /"CaptionUrl"\s*:\s*\[\s*"([^"]+)"/i,
-      /"CaptionUrl"\s*:\s*"([^"]+)"/i,
-      /"Captions"\s*:\s*\[\s*\{[^}]*"Url"\s*:\s*"([^"]+)"/i,
-      /"Captions"\s*:\s*\[\s*\{[^}]*"VttUrl"\s*:\s*"([^"]+)"/i,
-      /"Captions"\s*:\s*\[\s*\{[^}]*"CaptionUrl"\s*:\s*"([^"]+)"/i,
-      /"TranscriptUrl"\s*:\s*"([^"]+)"/i,
-      /((?:https?:)?\/\/[^"'\s]+GetCaptionVTT\.ashx\?[^"'\s]+)/i,
-      /((?:\/)?Panopto\/Pages\/Transcription\/GetCaptionVTT\.ashx\?[^"'\s]+)/i,
-    ];
-
-    for (const pattern of patterns) {
-      const match = html.match(pattern);
-      if (match && match[1]) {
-        return decodeEscapedUrl(match[1]);
-      }
-    }
-
-    return null;
   }
 
   /**
@@ -53,70 +34,6 @@
       .replace(/&#x3D;/gi, '=')
       .replace(/&#39;/g, "'")
       .trim();
-  }
-
-  function resolveCaptionUrl(captionUrl, baseUrl) {
-    const decoded = decodeEscapedUrl(captionUrl);
-    try {
-      return new URL(decoded, baseUrl).toString();
-    } catch {
-      return decoded;
-    }
-  }
-
-  function extractPanoptoInfoFromHtml(html, baseUrl) {
-    const candidates = new Set();
-    const urlMatches = html.match(/(?:https?:)?\/\/[^\s"'<>]+/gi) || [];
-    const escapedMatches = html.match(/https?:\\\/\\\/[^\s"'<>]+/gi) || [];
-    const encodedMatches = html.match(/https?%3A%2F%2F[^\s"'<>]+/gi) || [];
-
-    [...urlMatches, ...escapedMatches, ...encodedMatches].forEach((match) => {
-      if (match.toLowerCase().includes('panopto')) {
-        candidates.add(match);
-      }
-    });
-
-    for (const candidate of candidates) {
-      const normalized = normalizePanoptoCandidateUrl(candidate, baseUrl);
-      if (normalized) {
-        const info = extractPanoptoInfoFromUrl(normalized);
-        if (info) return { info, url: normalized };
-        try {
-          const decoded = decodeURIComponent(normalized);
-          if (decoded !== normalized) {
-            const decodedInfo = extractPanoptoInfoFromUrl(decoded);
-            if (decodedInfo) return { info: decodedInfo, url: decoded };
-          }
-        } catch {
-          // Ignore decode errors
-        }
-      }
-    }
-
-    return null;
-  }
-
-  async function resolvePanoptoInfoFromWrapperUrl(url) {
-    try {
-      const { html, finalUrl } = await fetchHtmlWithRedirectInfo(url);
-      const directInfo = extractPanoptoInfoFromUrl(finalUrl);
-      if (directInfo) {
-        return { info: directInfo, authRequired: false, finalUrl };
-      }
-
-      const fromHtml = extractPanoptoInfoFromHtml(html, finalUrl || url);
-      if (fromHtml) {
-        return { info: fromHtml.info, authRequired: false, finalUrl: fromHtml.url };
-      }
-
-      return { info: null, authRequired: false, finalUrl };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message === 'AUTH_REQUIRED') {
-        return { info: null, authRequired: true };
-      }
-      return { info: null, authRequired: false };
-    }
   }
 
   // Panopto Media Resolver (V2)
@@ -179,49 +96,6 @@
       error: (step, data) => log('error', step, data, true),
       isDebugEnabled: () => debugEnabled,
     };
-  }
-
-  function extractPanoptoInfoFromUrl(url) {
-    if (!url) return null;
-    const match = url.match(
-      /https?:\/\/([^/]+)\/Panopto\/Pages\/(?:Embed|Viewer)\.aspx\?.*\bid=([a-f0-9-]+)/i,
-    );
-    if (match) {
-      return { tenant: match[1], deliveryId: match[2] };
-    }
-
-    try {
-      const urlObj = new URL(url);
-      const host = urlObj.hostname;
-      if (!host.includes('panopto')) return null;
-      const id = urlObj.searchParams.get('id');
-      if (id) {
-        return { tenant: host, deliveryId: id };
-      }
-    } catch {
-      // Ignore parse errors
-    }
-
-    try {
-      const decoded = decodeURIComponent(url);
-      if (decoded !== url) {
-        return extractPanoptoInfoFromUrl(decoded);
-      }
-    } catch {
-      // Ignore decode errors
-    }
-
-    return null;
-  }
-
-  function buildPanoptoViewerUrl(tenant, deliveryId) {
-    if (!tenant || !deliveryId) return null;
-    return `https://${tenant}/Panopto/Pages/Viewer.aspx?id=${encodeURIComponent(deliveryId)}`;
-  }
-
-  function buildPanoptoEmbedUrl(tenant, deliveryId) {
-    if (!tenant || !deliveryId) return null;
-    return `https://${tenant}/Panopto/Pages/Embed.aspx?id=${encodeURIComponent(deliveryId)}`;
   }
 
   function buildPanoptoPodcastDownloadUrl(tenant, deliveryId) {
@@ -727,6 +601,18 @@
 
   const PanoptoMediaResolver = {
     async resolve({ tenant, deliveryId, viewerUrl, embedUrl, tabId, jobId }) {
+      if (
+        typeof extractPanoptoInfo !== 'function' ||
+        typeof buildPanoptoViewerUrl !== 'function' ||
+        typeof buildPanoptoEmbedUrl !== 'function'
+      ) {
+        return {
+          ok: false,
+          errorCode: 'NOT_AVAILABLE',
+          message: 'Panopto helpers are unavailable.',
+        };
+      }
+
       const resolvedJobId = jobId || `panopto-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const debugEnabled = isPanoptoResolverDebugEnabled();
       const logger = createPanoptoResolverLogger(resolvedJobId, debugEnabled);
@@ -742,7 +628,7 @@
       let resolvedEmbedUrl = embedUrl;
 
       if (!resolvedViewerUrl || !resolvedTenant || !resolvedDeliveryId) {
-        const info = extractPanoptoInfoFromUrl(embedUrl || viewerUrl);
+        const info = extractPanoptoInfo(embedUrl || viewerUrl || '');
         if (info) {
           resolvedTenant = resolvedTenant || info.tenant;
           resolvedDeliveryId = resolvedDeliveryId || info.deliveryId;
@@ -949,13 +835,6 @@
 
   if (typeof self !== 'undefined') {
     self.LockInPanoptoResolver = {
-      extractCaptionVttUrl,
-      resolveCaptionUrl,
-      extractPanoptoInfoFromHtml,
-      resolvePanoptoInfoFromWrapperUrl,
-      extractPanoptoInfoFromUrl,
-      buildPanoptoViewerUrl,
-      buildPanoptoEmbedUrl,
       PanoptoMediaResolver,
     };
   }

@@ -14,6 +14,7 @@ export {
   PanoptoProvider,
   createPanoptoProvider,
   extractCaptionVttUrl,
+  extractPanoptoInfoFromHtml,
   extractPanoptoMediaUrl,
   extractDeliveryId,
   extractTenantDomain,
@@ -21,6 +22,7 @@ export {
   buildPanoptoEmbedUrl,
   buildPanoptoViewerUrl,
   normalizePanoptoEmbedUrl,
+  resolvePanoptoInfoFromWrapperUrl,
   detectPanoptoFromLinks,
   detectPanoptoFromRedirect,
   isPanoptoUrl,
@@ -28,6 +30,7 @@ export {
   isLmsRedirectPage,
   type PanoptoInfo,
 } from './providers/panoptoProvider';
+export { Html5Provider, createHtml5Provider } from './providers/html5Provider';
 export {
   Echo360Provider,
   createEcho360Provider,

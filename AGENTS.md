@@ -1,4 +1,4 @@
-# Lock-in Project AGENTS.md
+﻿# Lock-in Project AGENTS.md
 
 ## Project Overview
 
@@ -12,13 +12,13 @@
 
 Every feature should reinforce this loop:
 
-1. **Capture** → Highlight text / video / assignment spec
-2. **Understand** → Explain / summarise
-3. **Distil** → Turn that into a note, flashcard, or todo
-4. **Organise** → Auto-bucket by unit, week, topic (course metadata)
-5. **Act** → Show upcoming tasks, revision items, questions
+1. **Capture** â†’ Highlight text / video / assignment spec
+2. **Understand** â†’ Explain / summarise
+3. **Distil** â†’ Turn that into a note, flashcard, or todo
+4. **Organise** â†’ Auto-bucket by unit, week, topic (course metadata)
+5. **Act** â†’ Show upcoming tasks, revision items, questions
 
-**When making changes, ask**: Does this support the loop? Does it make capture → understand → distil → organise → act easier?
+**When making changes, ask**: Does this support the loop? Does it make capture â†’ understand â†’ distil â†’ organise â†’ act easier?
 
 ---
 
@@ -66,16 +66,16 @@ Both share:
 ### Separation of Concerns
 
 ```
-/extension     → Chrome-specific code only (manifest, background, content script injection)
-  /dist/ui     → Built output: React sidebar bundle (source in /ui/extension)
-  /dist/libs   → Built outputs: initApi/contentLibs/webvttParser bundles
-/ui           → UI source (shared hooks + extension UI source)
-/ui/extension → Source: Extension-only React components for the sidebar widget
-/core          → Business logic, domain models (NO Chrome dependencies)
-/integrations  → Site-specific adapters (Moodle, Edstem, etc.)
-/api           → Backend API client (NO Chrome dependencies)
-/web           → Future: web app React/Next.js app (full pages and dashboards)
-/shared/ui     → Optional: Low-level UI kit (Button, Card, TextInput, etc.) - basic components only
+/extension     â†’ Chrome-specific code only (manifest, background, content script injection)
+  /dist/ui     â†’ Built output: React sidebar bundle (source in /ui/extension)
+  /dist/libs   â†’ Built outputs: initApi/contentLibs/webvttParser bundles
+/ui           â†’ UI source (shared hooks + extension UI source)
+/ui/extension â†’ Source: Extension-only React components for the sidebar widget
+/core          â†’ Business logic, domain models (NO Chrome dependencies)
+/integrations  â†’ Site-specific adapters (Moodle, Edstem, etc.)
+/api           â†’ Backend API client (NO Chrome dependencies)
+/web           â†’ Future: web app React/Next.js app (full pages and dashboards)
+/shared/ui     â†’ Optional: Low-level UI kit (Button, Card, TextInput, etc.) - basic components only
 ```
 
 **Rule**: If code in `/core` or `/api` needs Chrome APIs, you're doing it wrong. Extract Chrome-specific parts to `/extension`. The extension UI source (`/ui/extension`) is Chrome-specific and will not be reused by the web app.
@@ -118,8 +118,8 @@ To add a new site integration:
   - `/ui/extension` - Source: Sidebar widget React components (extension-specific, not shared)
   - `/extension/dist/ui` - Built output: React sidebar bundle (built from `/ui/extension`)
   - `/extension/dist/libs` - Built output: initApi/contentLibs/webvttParser bundles (built from `/extension/src`)
-  - `chromeStorage` wraps `chrome.storage` → calls shared storage interface
-  - `chromeMessaging` wraps `chrome.runtime.sendMessage` → calls shared messaging interface
+  - `chromeStorage` wraps `chrome.storage` â†’ calls shared storage interface
+  - `chromeMessaging` wraps `chrome.runtime.sendMessage` â†’ calls shared messaging interface
 
 - **Core code** (`/core`, `/api`): Pure JavaScript/TypeScript, no Chrome APIs
   - Can be reused by web app without modification
@@ -145,6 +145,39 @@ To add a new site integration:
 - **Components are small and focused** (single responsibility)
 
 **DO NOT** build HTML strings in JavaScript. Use JSX/TSX.
+
+### 6. Transcript Source of Truth
+
+- **All transcript detection/extraction logic lives in `/core/transcripts/providers/**`\*\*
+- `/extension/background.js` is routing + `ExtensionFetcher` only (CORS/credentials)
+- **DO NOT** add provider-specific parsing/extraction logic in `/extension`
+- If a provider needs new logic, add it to core + tests
+
+### 7. Core Environment Purity
+
+- `/core` and `/api` must be safe to import in Node/SSR
+- **No direct use of** `window`, `document`, `navigator`, or `chrome` in `/core` or `/api`
+- Pass browser objects as parameters or move code to `/extension` or `/ui`
+
+### 8. Network Reliability + Retry Policy
+
+- **All outbound HTTP calls must use a shared retry/timeout wrapper**
+- Extension: use `extension/src/networkUtils.js` (or its TS wrapper)
+- API client: use `api/fetcher.ts`
+- Backend server: use `backend/providers/withFallback.js` or a shared retry helper (no ad-hoc fetches in controllers)
+
+### 9. Scalability Guardrails
+
+- **Do not store cross-request or cross-user state in memory** (jobs, rate limits, idempotency, locks)
+- Use Supabase/DB/Redis or durable storage for shared state
+- Background/service worker memory may hold per-tab ephemeral state only
+
+### 10. Documentation Placement + Link Integrity
+
+- Only `README.md`, `LICENSE`, and `AGENTS.md` live at repo root
+- All other docs belong under `docs/` (use appropriate subfolders)
+- When moving/renaming docs, update `docs/README.md`, `docs/architecture/REPO_MAP.md`, and any links
+- Ensure `docs/tracking/STATUS.md` exists and stays current
 
 ---
 
@@ -178,7 +211,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
    - Determine if changes impact architecture, database, or documented behaviors
 
 3. **Make code changes**
-   - Follow the core loop: Capture → Understand → Distil → Organise → Act
+   - Follow the core loop: Capture â†’ Understand â†’ Distil â†’ Organise â†’ Act
    - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
    - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
    - Single widget: Don't duplicate the sidebar component
@@ -197,7 +230,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 
 ### When Adding Features
 
-- Follow the core loop: Capture → Understand → Distil → Organise → Act
+- Follow the core loop: Capture â†’ Understand â†’ Distil â†’ Organise â†’ Act
 - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
 - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
 - Single widget: Don't duplicate the sidebar component
@@ -219,8 +252,13 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - [ ] Are types defined in `/core/domain/types.ts`?
 - [ ] Is state managed properly (React hooks or TanStack Query)?
 - [ ] Are components small and focused?
-- [ ] If adding new database tables → Updated `DATABASE.md`?
-- [ ] If changing file structure → Updated `CODE_OVERVIEW.md`?
+- [ ] Is transcript extraction logic only in `/core/transcripts/providers/**`?
+- [ ] Are `/core` and `/api` free of DOM/Chrome globals?
+- [ ] Do network calls use shared retry/timeout wrappers?
+- [ ] Is shared state persisted (no in-memory jobs/rate limits)?
+- [ ] Are docs placed under `docs/` with links updated?
+- [ ] If adding new database tables â†’ Updated `DATABASE.md`?
+- [ ] If changing file structure â†’ Updated `CODE_OVERVIEW.md`?
 
 ---
 

@@ -11,5 +11,10 @@ export {
   type PanoptoInfo,
 } from './panopto/urlUtils';
 export { detectPanoptoFromLinks, detectPanoptoFromRedirect } from './panopto/linkDetection';
-export { extractCaptionVttUrl, extractPanoptoMediaUrl } from './panopto/extraction';
+export {
+  extractCaptionVttUrl,
+  extractPanoptoInfoFromHtml,
+  extractPanoptoMediaUrl,
+  resolvePanoptoInfoFromWrapperUrl,
+} from './panopto/extraction';
 export { PanoptoProvider, createPanoptoProvider } from './panopto/provider';

@@ -1,9 +1,12 @@
 import type { DetectedVideo } from '../../types';
+import type { AsyncFetcher, EnhancedAsyncFetcher } from '../../fetchers/types';
+import { hasRedirectSupport } from '../../fetchers/types';
 import {
   buildPanoptoEmbedUrl,
   buildPanoptoViewerUrl,
   extractPanoptoInfo,
   normalizePanoptoEmbedUrl,
+  type PanoptoInfo,
 } from './urlUtils';
 
 function decodeEscapedUrl(value: string): string {
@@ -18,6 +21,51 @@ function decodeEscapedUrl(value: string): string {
     .replace(/&#x3D;/gi, '=')
     .replace(/&#39;/g, "'")
     .trim();
+}
+
+function normalizePanoptoCandidateUrl(candidate: string, baseUrl: string): string | null {
+  const decoded = decodeEscapedUrl(candidate);
+  if (!decoded || decoded.startsWith('javascript:')) return null;
+  const withProtocol = decoded.startsWith('//') ? `https:${decoded}` : decoded;
+  try {
+    return new URL(withProtocol, baseUrl).toString();
+  } catch {
+    return withProtocol;
+  }
+}
+
+export function extractPanoptoInfoFromHtml(
+  html: string,
+  baseUrl: string,
+): { info: PanoptoInfo; url: string } | null {
+  const candidates = new Set<string>();
+  const urlMatches = html.match(/(?:https?:)?\/\/[^\s"'<>]+/gi) || [];
+  const escapedMatches = html.match(/https?:\\\/\\\/[^\s"'<>]+/gi) || [];
+  const encodedMatches = html.match(/https?%3A%2F%2F[^\s"'<>]+/gi) || [];
+
+  for (const match of [...urlMatches, ...escapedMatches, ...encodedMatches]) {
+    if (!match.toLowerCase().includes('panopto')) continue;
+    candidates.add(match);
+  }
+
+  for (const candidate of candidates) {
+    const normalized = normalizePanoptoCandidateUrl(candidate, baseUrl);
+    if (normalized) {
+      const info = extractPanoptoInfo(normalized);
+      if (info) return { info, url: normalized };
+      try {
+        const decoded = decodeURIComponent(normalized);
+        if (decoded !== normalized) {
+          const decodedInfo = extractPanoptoInfo(decoded);
+          if (decodedInfo) return { info: decodedInfo, url: decoded };
+        }
+      } catch {
+        // Ignore decode errors
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -113,6 +161,42 @@ export function extractPanoptoMediaUrl(html: string): string | null {
   console.warn('[Panopto] No media URL found for AI transcription');
 
   return null;
+}
+
+export async function resolvePanoptoInfoFromWrapperUrl(
+  url: string,
+  fetcher: AsyncFetcher | EnhancedAsyncFetcher,
+): Promise<{ info: PanoptoInfo | null; authRequired: boolean; finalUrl?: string }> {
+  try {
+    let html = '';
+    let finalUrl = url;
+
+    if (hasRedirectSupport(fetcher) && fetcher.fetchHtmlWithRedirectInfo) {
+      const result = await fetcher.fetchHtmlWithRedirectInfo(url);
+      html = result.html;
+      finalUrl = result.finalUrl || url;
+    } else {
+      html = await fetcher.fetchWithCredentials(url);
+    }
+
+    const directInfo = extractPanoptoInfo(finalUrl);
+    if (directInfo) {
+      return { info: directInfo, authRequired: false, finalUrl };
+    }
+
+    const fromHtml = extractPanoptoInfoFromHtml(html, finalUrl || url);
+    if (fromHtml) {
+      return { info: fromHtml.info, authRequired: false, finalUrl: fromHtml.url };
+    }
+
+    return { info: null, authRequired: false, finalUrl };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === 'AUTH_REQUIRED') {
+      return { info: null, authRequired: true };
+    }
+    return { info: null, authRequired: false };
+  }
 }
 
 export function resolvePanoptoEmbedUrl(video: DetectedVideo): string {

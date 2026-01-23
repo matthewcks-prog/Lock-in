@@ -1,123 +1,188 @@
-# Refactor Plan (Audit Refresh)
+﻿# Refactor Plan (Quality Audit 2026-01-23)
 
-Last updated: 2026-01-18
+Last updated: 2026-01-23
 
-This plan is based on direct repository inspection. Items are prioritized for stability and scalability and grouped into phased work. Use the acceptance criteria to verify completion before moving on.
+This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to reflect work already completed and the remaining backlog. Phases are ordered by risk reduction, scalability, and architectural alignment. Use the acceptance criteria to verify completion before moving to the next phase.
 
 ---
 
-## Phase 0 — Safety + Correctness (blockers before feature work)
+## Phase 0 -- Completed Foundations (DONE)
 
-- [x] **Remove hardcoded Supabase anon keys from the extension bundle**
-  - **Problem:** `extension/config.js` embeds Supabase anon keys in source, which makes rotation and environment separation brittle.
-  - **Files/areas:** `extension/config.js`, build-time env injection (Vite defines), extension build pipeline.
-  - **Proposed change:** Move anon keys to build-time environment variables with explicit dev/prod defaults in `.env`/`.env.example`; ensure `config.js` reads from injected constants only.
-  - **Acceptance criteria:** No Supabase keys committed in the extension bundle; keys load from build-time env for both dev/prod builds; dev instructions updated.
-  - **Risk/migration:** Requires coordinating build pipeline updates and extension deployment scripts.
-  - **Confidence:** HIGH.
+- [x] **Restore status + doc link integrity**
+  - **Problem:** `docs/tracking/STATUS.md` missing; REPO_MAP + troubleshooting links stale.
+  - **Outcome:** `docs/tracking/STATUS.md` restored; REPO_MAP updated; legacy troubleshooting marked non-canonical.
+  - **Acceptance criteria:** `docs/tracking/STATUS.md` exists; doc links resolve; canonical transcript troubleshooting is under `docs/features/transcripts/`.
 
-- [x] **Add runtime validation at API boundaries**
-  - **Problem:** API responses are cast to `T` without validation, risking runtime exceptions and hidden contract drift.
-  - **Files/areas:** `api/fetcher.ts`, resource clients under `api/resources/`, domain types in `core/domain/`.
-  - **Proposed change:** Introduce lightweight schema validation (e.g., zod) for critical responses or implement per-client type guards; return validated types or throw `ValidationError` with context.
-  - **Acceptance criteria:** Critical endpoints (notes, chats, assets) have schema validation; invalid payloads are surfaced as `ValidationError` with details.
-  - **Risk/migration:** Requires touchpoints across API clients and tests; avoid breaking response shapes.
-  - **Confidence:** MED.
+- [x] **Remove hardcoded Supabase keys from extension bundle**
+  - **Problem:** Extension config embedded anon keys.
+  - **Outcome:** Keys moved to build-time env; bundle no longer ships keys.
+  - **Acceptance criteria:** No anon keys committed in extension output; dev/prod builds load env-injected values.
+
+- [x] **Add API response validation**
+  - **Problem:** API responses were cast to `T` without validation.
+  - **Outcome:** Validation/type guards added for critical endpoints.
+  - **Acceptance criteria:** Invalid payloads surface as typed errors; tests cover validation.
 
 - [x] **Tighten storage interface typing**
-  - **Problem:** `StorageInterface` and `LocalStorageInterface` use `any`, propagating untyped data across core/extension code.
-  - **Files/areas:** `core/storage/storageInterface.ts`, storage wrappers in `extension/` and usage sites.
-  - **Proposed change:** Replace `any` with generics and explicit change record types (`Record<string, { oldValue?: unknown; newValue?: unknown }>`); update callers accordingly.
-  - **Acceptance criteria:** No `any` in storage interface definitions; storage change callbacks typed; build passes.
-  - **Risk/migration:** Might require small refactors in storage consumers.
-  - **Confidence:** HIGH.
+  - **Problem:** Storage interfaces used `any`.
+  - **Outcome:** Storage typing moved to generics and explicit change record shapes.
+  - **Acceptance criteria:** Storage interfaces compile without `any` usage.
+
+- [x] **Split oversized notes editor modules**
+  - **Problem:** Notes editor and hooks exceeded 500-1100 lines.
+  - **Outcome:** Notes editor modules decomposed into focused subcomponents/hooks.
+  - **Acceptance criteria:** Editor modules are cohesive and independently testable.
+
+- [x] **Split transcript providers/parsers**
+  - **Problem:** Providers/parsers blended detection/extraction/parsing.
+  - **Outcome:** Providers reduced to composition layers with helper modules.
+  - **Acceptance criteria:** Provider files stay small and tests continue to pass.
+
+- [x] **Coverage thresholds + CI enforcement**
+  - **Problem:** Coverage could regress silently.
+  - **Outcome:** Baseline coverage thresholds added in `vitest.config.ts`; CI coverage step enforced.
+  - **Acceptance criteria:** `npm run test:coverage` passes locally; CI fails on coverage regression.
+
+- [x] **Structured logging in backend runtime paths**
+  - **Problem:** `console.log` used in runtime services.
+  - **Outcome:** `backend/services/transcriptsService.js` and `backend/sentry.js` log via observability logger.
+  - **Acceptance criteria:** No direct `console.log`/`console.error` in backend runtime paths.
+
+- [x] **Targeted notes/chat test coverage**
+  - **Problem:** Critical UI paths lacked coverage.
+  - **Outcome:** Notes list hook tests and chat send empty-guard test added.
+  - **Acceptance criteria:** Regression tests cover notes list load/rollback and chat send guard.
+
+- [x] **Align extension JSX runtime in Vite builds**
+  - **Problem:** Local builds could emit `jsxDEV` calls while bundling the production runtime, causing `jsxDEV is not a function` crashes.
+  - **Outcome:** Vite UI build now forces `NODE_ENV` to match mode and sets `esbuild.jsxDev` by mode to keep JSX transform/runtime aligned.
+  - **Acceptance criteria:** Production builds avoid `jsxDEV` calls; dev builds use a matching dev runtime.
 
 ---
 
-## Phase 1 – Structure + Scalability
+## Phase 1 -- Transcript Single Source of Truth (P0)
 
-- [x] **Decompose oversized UI/editor modules**
-  - **Problem:** Several UI files exceed 500–1100 lines, increasing coupling and making regression risk high.
-  - **Files/areas:**
-    - `ui/extension/notes/NoteEditor.tsx` (~1140 lines)
-    - `ui/hooks/useNoteEditor.ts` (~703 lines)
-    - `ui/extension/notes/NotesPanel.tsx` (~556 lines)
-  - **Proposed change:** Extract focused subcomponents/hooks (toolbar, plugins, autosave, offline queue, conflict resolution, list item components) and keep orchestrators <200–250 lines.
-  - **Acceptance criteria:** Each module is split into small, testable units; primary files under 250 lines; no behavior regressions in editor/notes flows.
-  - **Risk/migration:** Requires careful refactor around Lexical editor state and hooks.
-  - **Confidence:** MED.
+**Goal:** Eliminate duplicate transcript extraction logic and enforce `/core/transcripts/providers/**` as the sole source of truth.
 
-- [x] **Split transcript providers and parsers**
-  - **Problem:** Transcript providers/parsers are oversized and blend detection, extraction, parsing, and mapping logic.
-  - **Files/areas:**
-    - `core/transcripts/providers/echo360Provider.ts` (~1074 lines)
-    - `core/transcripts/providers/panoptoProvider.ts` (~765 lines)
-    - `core/transcripts/parsers/echo360Parser.ts` (~517 lines)
-    - `core/transcripts/videoDetection.ts` (~475 lines)
-  - **Proposed change:** Separate detection/extraction/parser/helpers per provider; reduce provider files to composition layers.
-  - **Acceptance criteria:** Provider files <250 lines, extraction logic isolated, tests continue to pass.
-  - **Risk/migration:** Medium refactor cost; ensure provider registry remains unchanged.
-  - **Confidence:** MED.
+- [x] **Consolidate extraction flow into core providers**
+  - **Problem:** Logic duplicated across `extension/background.js`, `transcriptHandler.ts`, `panoptoResolver.js`, and providers.
+  - **Work:**
+    - Move any extraction/parsing logic out of extension/background into core providers.
+    - Make `background.js` fetcher + routing only.
+    - Remove legacy extraction paths in `transcriptHandler.ts` and `panoptoResolver.js` after parity is achieved.
+  - **Acceptance criteria:** Extension uses provider registry + fetcher only; no duplicate extraction logic outside `/core/transcripts/providers/**`.
+
+- [x] **Consolidate Panopto helpers**
+  - **Problem:** Helpers duplicated across core and extension.
+  - **Work:** Route all Panopto URL parsing/extraction via core provider utilities.
+  - **Acceptance criteria:** Panopto extraction helpers exist only in core provider modules.
+
+- [x] **Add provider selection + fetcher error tests**
+  - **Problem:** Behavior changes can regress silently.
+  - **Work:** Add tests that validate provider selection and fetcher error handling.
+  - **Acceptance criteria:** Tests prove correct provider selection and resilient fetcher error behavior.
 
 ---
 
-## Phase 2 — Quality + Testing + Observability
+## Phase 2 -- Scalability + Reliability (P0/P1)
 
-- [ ] **Introduce coverage targets and enforce them in CI**
-  - **Problem:** `vitest.config.ts` does not define coverage thresholds; coverage can regress silently.
-  - **Files/areas:** `vitest.config.ts`, test scripts/CI gate.
-  - **Proposed change:** Add coverage thresholds by folder (e.g., `ui/hooks` and `ui/extension`), enforce in CI.
-  - **Acceptance criteria:** Coverage thresholds configured; CI fails on regression; reporting documented.
-  - **Risk/migration:** Might require adding tests to satisfy thresholds.
-  - **Confidence:** HIGH.
+**Goal:** Remove in-memory cross-request state and make transcript processing durable across instances.
 
-- [ ] **Expand hook/component tests around notes and chat**
-  - **Problem:** Coverage is incomplete for high-traffic UI paths (notes editor, list, chat send/stream).
-  - **Files/areas:** `ui/hooks`, `ui/extension/notes`, `ui/extension/chat`.
-  - **Proposed change:** Add focused tests for autosave, offline queue, conflict handling, note list filtering, and chat send/stream logic.
-  - **Acceptance criteria:** Tests cover critical flows and edge cases; failures reproduce fixed regressions.
-  - **Risk/migration:** Moderate; requires robust fixtures/mocks.
-  - **Confidence:** MED.
+- [ ] **Replace in-memory job tracking and rate limiting**
+  - **Problem:** `ACTIVE_JOBS`, `UPLOAD_RATE_WINDOWS`, `createIdempotencyStore` are in-memory.
+  - **Work:** Persist job state + rate limits in DB/Redis/queue.
+  - **Acceptance criteria:** No cross-request state stored in memory; multi-instance safe.
 
-- [ ] **Replace ad-hoc console logging in backend services**
-  - **Problem:** `console.log` is used in backend services/sentry setup, reducing structured observability and log hygiene.
-  - **Files/areas:** `backend/services/transcriptsService.js`, `backend/sentry.js`.
-  - **Proposed change:** Route logging through existing logger/observability utilities with log levels and metadata.
-  - **Acceptance criteria:** No direct `console.log` in backend runtime paths; logs emit structured metadata.
-  - **Risk/migration:** Low.
-  - **Confidence:** HIGH.
+- [ ] **Durable transcript storage + job processing**
+  - **Problem:** Transcript chunks stored on local filesystem; not durable.
+  - **Work:** Move to object storage (Azure Blob/S3) and/or a dedicated worker queue.
+  - **Acceptance criteria:** Job resume/retry works across restarts; no local-only chunk dependency.
+
+- [ ] **Large media handling improvements**
+  - **Problem:** Base64 chunking can spike memory/CPU on large files.
+  - **Work:** Streamed uploads where possible; enforce chunk sizing and backpressure.
+  - **Acceptance criteria:** Large media uploads do not block UI thread; memory spikes reduced.
 
 ---
 
-## Phase 3 — Deferred / Optional (non-blocking)
+## Phase 3 -- Core Purity + Testability (P1)
 
-- [x] **OpenAI provider finalization** (COMPLETED 2026-01-19)
-  - **Solution:** Refactored to use dedicated provider factories with proper checks:
-    - Chat: OpenAI only (no Azure quota for students)
-    - Embeddings: Azure (primary) → OpenAI (fallback) - uses `isAzureEmbeddingsEnabled()`
-    - Transcription: Azure Speech (primary) → OpenAI Whisper (fallback)
-  - **Files updated:**
-    - Created: `backend/services/embeddings.js`
-    - Updated: `backend/providers/llmProviderFactory.js` (simplified to OpenAI-only)
-    - Updated: `backend/services/transcriptsService.js` (uses transcription.js)
-    - Updated: Controllers to use embeddings.js service
-    - Removed: Legacy embedText() and transcribeAudioFile() from openaiClient.js
-  - **Verification:** All tests pass, build succeeds (`npm run check` ✅)
-  - **Documentation:** Updated `docs/AI_SERVICES_ARCHITECTURE.md` with complete architecture
-  - **Confidence:** HIGH.
+**Goal:** Ensure `/core` and `/api` are Node/SSR safe and testable.
 
-- [ ] **Deployment/infra cleanup** (DEFERRED)
-  - **Problem:** Azure deployment scripts and URLs are placeholders pending infra finalization.
-  - **Files/areas:** `scripts/`, `backend/README.md`, `extension/config.js`.
-  - **Proposed change:** Confirm target infra and finalize URLs/env defaults.
-  - **Acceptance criteria:** Deployment scripts and docs are accurate; no TODO placeholders.
-  - **Risk/migration:** Depends on infrastructure decisions.
-  - **Confidence:** LOW.
+- [ ] **Remove DOM usage from core**
+  - **Problem:** `core/utils/textUtils.ts` uses `document.createElement`.
+  - **Work:** Move DOM-dependent logic to UI/extension or provide pure utilities.
+  - **Acceptance criteria:** `/core` imports succeed in Node without DOM globals.
+
+- [ ] **Eliminate module-load side effects**
+  - **Problem:** Listeners/timers/config parse on import make testing hard.
+  - **Work:** Refactor to explicit initialization functions with dependency injection.
+  - **Acceptance criteria:** Modules are inert on import; behavior only on explicit init.
+
+- [ ] **Dependency injection for globals**
+  - **Problem:** Hard dependencies on `fetch`, `chrome`, `window`, env at import time.
+  - **Work:** Inject fetch/storage/env into modules; add lightweight interfaces.
+  - **Acceptance criteria:** Tests can stub dependencies without global hacks.
 
 ---
 
-## Checklist for progress
+## Phase 4 -- Network Reliability + Retry Policy (P1)
 
-- [ ] Each phase has an owner and scope defined.
-- [ ] Keep `npm run check` green after each task.
+**Goal:** Standardize retry/timeout behavior across extension + backend.
+
+- [ ] **Single shared retry/timeout wrapper**
+  - **Problem:** Retry logic split between `networkUtils.js` and ad-hoc fetch calls.
+  - **Work:** Consolidate to one wrapper used by background/auth/transcripts flows.
+  - **Acceptance criteria:** No raw fetches in critical paths without wrapper; consistent timeout + retry policy.
+
+---
+
+## Phase 5 -- Documentation Consolidation + Structure (P2)
+
+**Goal:** Remove doc duplication, fix placement, and align with docs-only rule.
+
+- [ ] **Resolve docs/achieve typo + archive legacy audits**
+  - Move `docs/achieve/` content into `docs/archive/` and correct naming.
+
+- [ ] **Remove duplicated docs + establish canonical sources**
+  - Transcript troubleshooting: keep `docs/features/transcripts/TROUBLESHOOTING.md` as canonical.
+  - Deployment: consolidate under `docs/deployment/` (per `AUDIT_SUMMARY.md`).
+  - Environment setup: merge overlapping setup docs into `docs/deployment/ENVIRONMENTS.md` or a single canonical guide.
+
+- [ ] **Root docs policy decision**
+  - Decide whether `CODE_OVERVIEW.md`, `DATABASE.md`, etc. remain at root or move into `docs/`.
+  - Update `ARCHITECTURE.md`, `REPO_MAP.md`, and `docs/README.md` to match the chosen policy.
+
+- [] **Whole repo**
+  - Make sure no other doc contain inconsistencies and there are only one single sourcec of truth which is consistent.
+  - Delete old legacy docs not needed.
+  - Ensure .md files follows a well organised structure in case in the future aditional .md files needs to be added.
+
+- [ ] **CI link integrity check**
+  - Add a lightweight CI step to detect broken doc links.
+
+---
+
+## Phase 6 -- Cohesion-Driven Module Splits (P2)
+
+**Goal:** Apply responsibility/cohesion/testability/boundary rules to split high-risk files.
+
+- [ ] **Extension background + transcript handler**
+  - Target: `extension/background.js`, `extension/src/transcripts/transcriptHandler.ts`.
+  - Split by responsibility (routing vs extraction vs networking), keep background as wiring only.
+
+- [ ] **Backend controllers/services**
+  - Target: `backend/controllers/*.js`, `backend/services/*.js`, `backend/openaiClient.js`.
+  - Split by workflow boundaries and dependency injection.
+
+- [ ] **Large UI modules**
+  - Target: `ui/extension/notes/*`, `ui/extension/chat/*`, `ui/extension/sidebar/*`.
+  - Split by cohesive subcomponents/hooks; ensure test coverage for extracted units.
+
+---
+
+## Progress checklist
+
+- [ ] Keep `npm run validate` green after each phase.
 - [ ] Update `docs/tracking/PROMPT_LOG.md` for each refactor-prep session.
+- [ ] Update `docs/tracking/STATUS.md` when phase focus changes.

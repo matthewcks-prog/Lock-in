@@ -29,11 +29,6 @@ try {
 
 // Other shared libraries
 try {
-  importScripts('dist/libs/webvttParser.js');
-} catch (e) {
-  console.warn('Lock-in: Failed to import webvttParser.js:', e);
-}
-try {
   importScripts('dist/libs/transcriptProviders.js');
 } catch (e) {
   console.warn('Lock-in: Failed to import transcriptProviders.js:', e);
@@ -52,8 +47,6 @@ try {
 // Import messaging system (available via global in service worker)
 const Messaging = typeof self !== 'undefined' && self.LockInMessaging ? self.LockInMessaging : null;
 
-// Get shared VTT parser
-const WebVtt = typeof self !== 'undefined' && self.LockInWebVtt ? self.LockInWebVtt : null;
 const TranscriptProviders =
   typeof self !== 'undefined' && self.LockInTranscriptProviders
     ? self.LockInTranscriptProviders
@@ -62,316 +55,69 @@ const NetworkUtils =
   typeof self !== 'undefined' && self.LockInNetworkUtils ? self.LockInNetworkUtils : null;
 const PanoptoResolver =
   typeof self !== 'undefined' && self.LockInPanoptoResolver ? self.LockInPanoptoResolver : null;
-const { fetchWithRetry, fetchWithCredentials, fetchVttContent, fetchHtmlWithRedirectInfo } =
-  NetworkUtils || {};
+const { fetchWithRetry, fetchWithCredentials, fetchHtmlWithRedirectInfo } = NetworkUtils || {};
+const { PanoptoMediaResolver } = PanoptoResolver || {};
 const {
-  extractCaptionVttUrl,
-  resolveCaptionUrl,
+  buildPanoptoEmbedUrl,
+  extractPanoptoInfo,
   extractPanoptoInfoFromHtml,
   resolvePanoptoInfoFromWrapperUrl,
-  extractPanoptoInfoFromUrl,
-  buildPanoptoViewerUrl,
-  buildPanoptoEmbedUrl,
-  PanoptoMediaResolver,
-} = PanoptoResolver || {};
+} = TranscriptProviders || {};
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Transcript Extraction Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// Transcript Provider Registry
 
-/**
- * Parse WebVTT content into structured segments
- * Uses shared parser from dist/libs/webvttParser.js if available, otherwise fallback
- */
-function parseWebVtt(vttContent) {
-  if (WebVtt && typeof WebVtt.parseWebVtt === 'function') {
-    return WebVtt.parseWebVtt(vttContent);
+let transcriptProvidersReady = false;
+
+function registerTranscriptProviders() {
+  if (transcriptProvidersReady) return;
+  if (!TranscriptProviders || typeof TranscriptProviders.getProviderRegistry !== 'function') {
+    transcriptProvidersReady = true;
+    return;
   }
-  // Fallback: minimal parser in case shared lib not loaded
-  console.warn('Lock-in: Using fallback VTT parser');
-  const lines = vttContent.split(/\r?\n/);
-  const segments = [];
-  const textParts = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('WEBVTT') && !trimmed.includes('-->')) {
-      textParts.push(trimmed);
+
+  const registry = TranscriptProviders.getProviderRegistry();
+  const register =
+    typeof TranscriptProviders.registerProvider === 'function'
+      ? (provider) => TranscriptProviders.registerProvider(provider)
+      : registry && typeof registry.register === 'function'
+        ? (provider) => registry.register(provider)
+        : null;
+
+  if (!register) {
+    transcriptProvidersReady = true;
+    return;
+  }
+
+  const providerClasses = [
+    TranscriptProviders.PanoptoProvider,
+    TranscriptProviders.Echo360Provider,
+    TranscriptProviders.Html5Provider,
+  ];
+
+  providerClasses.forEach((Provider) => {
+    if (typeof Provider === 'function') {
+      register(new Provider());
     }
-  }
-  return {
-    plainText: textParts.join(' '),
-    segments,
-    durationMs: 0,
-  };
-}
-
-/**
- * Extract transcript from a Panopto video
- */
-async function extractPanoptoTranscript(video) {
-  console.log('[Lock-in] extractPanoptoTranscript starting for:', {
-    id: video.id,
-    title: video.title,
-    embedUrl: video.embedUrl,
   });
 
-  try {
-    // Validate video embedUrl
-    if (!video.embedUrl) {
-      console.error('[Lock-in] No embedUrl provided for Panopto video');
-      return {
-        success: false,
-        error: 'No video URL provided',
-        errorCode: 'INVALID_VIDEO',
-        aiTranscriptionAvailable: true,
-      };
-    }
-
-    const candidateUrls = [];
-    if (video.panoptoTenant && video.id) {
-      candidateUrls.push(
-        buildPanoptoEmbedUrl(video.panoptoTenant, video.id),
-        buildPanoptoViewerUrl(video.panoptoTenant, video.id),
-      );
-    }
-
-    const directInfo = extractPanoptoInfoFromUrl(video.embedUrl);
-    if (directInfo) {
-      candidateUrls.push(
-        buildPanoptoEmbedUrl(directInfo.tenant, directInfo.deliveryId),
-        buildPanoptoViewerUrl(directInfo.tenant, directInfo.deliveryId),
-      );
-    }
-
-    candidateUrls.push(video.embedUrl);
-    const pendingUrls = Array.from(new Set(candidateUrls.filter(Boolean)));
-    const visitedUrls = new Set();
-    let anyFetched = false;
-    let primaryError = null;
-
-    const enqueueCandidate = (candidate) => {
-      if (!candidate) return;
-      if (visitedUrls.has(candidate)) return;
-      if (pendingUrls.includes(candidate)) return;
-      pendingUrls.push(candidate);
-    };
-
-    const extractFromUrl = async (url) => {
-      console.log('[Lock-in] Fetching Panopto HTML:', url.substring(0, 120));
-      const { html, finalUrl } = await fetchHtmlWithRedirectInfo(url);
-      anyFetched = true;
-
-      const captionUrl = extractCaptionVttUrl(html);
-      if (!captionUrl) {
-        const resolvedInfo = extractPanoptoInfoFromUrl(finalUrl);
-        const fromHtml = extractPanoptoInfoFromHtml(html, finalUrl || url);
-        const info = resolvedInfo || fromHtml?.info;
-
-        if (fromHtml?.url) {
-          enqueueCandidate(fromHtml.url);
-        }
-        if (info) {
-          enqueueCandidate(buildPanoptoEmbedUrl(info.tenant, info.deliveryId));
-          enqueueCandidate(buildPanoptoViewerUrl(info.tenant, info.deliveryId));
-        }
-        return null;
-      }
-
-      console.log('[Lock-in] Caption URL found:', captionUrl.substring(0, 100));
-      const resolvedCaptionUrl = resolveCaptionUrl(captionUrl, finalUrl || url);
-
-      console.log('[Lock-in] Fetching VTT content...');
-      const vttContent = await fetchVttContent(resolvedCaptionUrl);
-
-      console.log('[Lock-in] Parsing VTT content...');
-      const transcript = parseWebVtt(vttContent);
-
-      if (transcript.segments.length === 0) {
-        console.warn('[Lock-in] Parsed transcript has no segments');
-        return {
-          success: false,
-          error: 'Caption file is empty or could not be parsed',
-          errorCode: 'PARSE_ERROR',
-          aiTranscriptionAvailable: true,
-        };
-      }
-
-      console.log('[Lock-in] Transcript extracted successfully:', {
-        segments: transcript.segments.length,
-        plainTextLength: transcript.plainText?.length || 0,
-        durationMs: transcript.durationMs,
-      });
-
-      return { success: true, transcript };
-    };
-
-    while (pendingUrls.length > 0) {
-      const url = pendingUrls.shift();
-      if (!url || visitedUrls.has(url)) continue;
-      visitedUrls.add(url);
-
-      try {
-        const result = await extractFromUrl(url);
-        if (result) {
-          return result;
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        if (message === 'AUTH_REQUIRED') {
-          throw error;
-        }
-        if (!primaryError) {
-          primaryError = error;
-        }
-      }
-    }
-
-    if (!anyFetched && primaryError) {
-      throw primaryError;
-    }
-
-    return {
-      success: false,
-      error: 'No captions available for this video',
-      errorCode: 'NO_CAPTIONS',
-      aiTranscriptionAvailable: true,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('[Lock-in] extractPanoptoTranscript error:', message, error);
-
-    // Auth error
-    if (message === 'AUTH_REQUIRED') {
-      return {
-        success: false,
-        error: 'Authentication required. Please log in to Panopto.',
-        errorCode: 'AUTH_REQUIRED',
-        aiTranscriptionAvailable: true,
-      };
-    }
-
-    // Timeout error
-    if (message.includes('timeout') || message.includes('AbortError')) {
-      return {
-        success: false,
-        error: 'Request timeout. The server took too long to respond.',
-        errorCode: 'TIMEOUT',
-        aiTranscriptionAvailable: true,
-      };
-    }
-
-    // Network/CORS errors
-    if (
-      message.includes('Failed to fetch') ||
-      message.includes('NetworkError') ||
-      message.includes('CORS') ||
-      message.includes('Network request failed')
-    ) {
-      console.error('[Lock-in] Network error details:', {
-        message,
-        embedUrl: video.embedUrl,
-        error: error.toString(),
-      });
-      return {
-        success: false,
-        error:
-          "Network error. Please check your internet connection and ensure you're logged into Panopto.",
-        errorCode: 'NETWORK_ERROR',
-        aiTranscriptionAvailable: true,
-      };
-    }
-
-    // Generic error
-    return {
-      success: false,
-      error: `Failed to extract transcript: ${message}`,
-      errorCode: 'PARSE_ERROR',
-      aiTranscriptionAvailable: true,
-    };
-  }
+  transcriptProvidersReady = true;
 }
 
-/**
- * Extract transcript from an HTML5 video using track URLs
- */
-async function extractHtml5Transcript(video) {
-  console.log('[Lock-in BG] extractHtml5Transcript called for video:', video.id, video.title);
-  const tracks = Array.isArray(video.trackUrls) ? video.trackUrls : [];
-  console.log(
-    '[Lock-in BG] Track URLs found:',
-    tracks.length,
-    tracks.map((t) => t?.src),
-  );
-
-  if (tracks.length === 0) {
-    console.log('[Lock-in BG] No caption tracks available for HTML5 video');
-    return {
-      success: false,
-      error: 'No captions found',
-      errorCode: 'NO_CAPTIONS',
-      aiTranscriptionAvailable: true,
-    };
+function getProviderForVideo(video) {
+  if (!TranscriptProviders || typeof TranscriptProviders.getProviderRegistry !== 'function') {
+    return null;
   }
 
-  let lastError = null;
-
-  for (const track of tracks) {
-    if (!track || !track.src) continue;
-    try {
-      const vttContent = await fetchVttContent(track.src);
-      const transcript = parseWebVtt(vttContent);
-
-      if (transcript.segments.length > 0) {
-        return { success: true, transcript };
-      }
-
-      lastError = {
-        error: 'Caption file is empty or could not be parsed',
-        errorCode: 'PARSE_ERROR',
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-
-      if (message === 'AUTH_REQUIRED') {
-        return {
-          success: false,
-          error: 'Authentication required to access captions.',
-          errorCode: 'AUTH_REQUIRED',
-          aiTranscriptionAvailable: true,
-        };
-      }
-
-      if (message.includes('Failed to fetch') || message.includes('NetworkError')) {
-        lastError = {
-          error: 'Captions could not be fetched due to browser restrictions or network errors.',
-          errorCode: 'NOT_AVAILABLE',
-        };
-      } else {
-        lastError = {
-          error: `Failed to fetch captions: ${message}`,
-          errorCode: 'NOT_AVAILABLE',
-        };
-      }
-    }
+  const registry = TranscriptProviders.getProviderRegistry();
+  if (!registry || typeof registry.getAll !== 'function') {
+    return null;
   }
 
-  if (lastError) {
-    return {
-      success: false,
-      error: lastError.error,
-      errorCode: lastError.errorCode,
-      aiTranscriptionAvailable: true,
-    };
-  }
-
-  return {
-    success: false,
-    error: 'No captions found',
-    errorCode: 'NO_CAPTIONS',
-    aiTranscriptionAvailable: true,
-  };
+  const providers = registry.getAll();
+  return providers.find((provider) => provider.provider === video.provider) || null;
 }
-// ─────────────────────────────────────────────────────────────────────────────
+
 // Extension Fetcher (Chrome-specific implementation)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -410,6 +156,9 @@ class ExtensionFetcher {
    * Pure function - delegates to existing helper
    */
   extractPanoptoInfoFromHtml(html, baseUrl) {
+    if (typeof extractPanoptoInfoFromHtml !== 'function') {
+      return null;
+    }
     return extractPanoptoInfoFromHtml(html, baseUrl);
   }
 }
@@ -429,95 +178,46 @@ async function handleTranscriptExtraction(video) {
     };
   }
 
-  switch (video.provider) {
-    case 'panopto': {
-      console.log('[Lock-in BG] Handling Panopto video');
+  if (!TranscriptProviders) {
+    return {
+      success: false,
+      error: 'Transcript providers are not available',
+      errorCode: 'NOT_AVAILABLE',
+      aiTranscriptionAvailable: true,
+    };
+  }
 
-      const Provider =
-        (TranscriptProviders && TranscriptProviders.PanoptoProvider) ||
-        (typeof self !== 'undefined' && self.PanoptoProvider
-          ? self.PanoptoProvider.PanoptoProvider || self.PanoptoProvider
-          : null);
+  registerTranscriptProviders();
+  const provider = getProviderForVideo(video);
+  if (!provider || typeof provider.extractTranscript !== 'function') {
+    return {
+      success: false,
+      error: `Unsupported video provider: ${video.provider}`,
+      errorCode: 'NOT_AVAILABLE',
+      aiTranscriptionAvailable: true,
+    };
+  }
 
-      if (Provider) {
-        try {
-          const provider = new Provider();
-          const fetcher = new ExtensionFetcher();
-          const result = await provider.extractTranscript(video, fetcher);
-          console.log('[Lock-in BG] Panopto result (via provider):', result.success);
-          return result;
-        } catch (error) {
-          console.warn('[Lock-in BG] Provider extraction failed, using legacy:', error);
-          // Fall through to legacy function
-        }
-      }
-
-      // Legacy extraction (preserved for backward compatibility)
-      const result = await extractPanoptoTranscript(video);
-      console.log('[Lock-in BG] Panopto result (legacy):', result.success);
-      return result;
-    }
-    case 'echo360': {
-      console.log('[Lock-in BG] Handling Echo360 video', {
-        videoId: video.id,
-        embedUrl: video.embedUrl,
-        lessonId: video.echoLessonId,
-        mediaId: video.echoMediaId,
-        baseUrl: video.echoBaseUrl,
-        title: video.title,
-      });
-      if (TranscriptProviders && TranscriptProviders.Echo360Provider) {
-        try {
-          const provider = new TranscriptProviders.Echo360Provider();
-          const fetcher = new ExtensionFetcher();
-          console.log('[Lock-in BG] Echo360 provider created, starting extraction');
-          const result = await provider.extractTranscript(video, fetcher);
-          console.log('[Lock-in BG] Echo360 extraction completed', {
-            success: result.success,
-            error: result.error,
-            errorCode: result.errorCode,
-            hasTranscript: !!result.transcript,
-            transcriptSegments: result.transcript?.segments?.length,
-            transcriptChars: result.transcript?.plainText?.length,
-          });
-          return result;
-        } catch (error) {
-          console.error('[Lock-in BG] Echo360 provider extraction failed:', {
-            error: error?.message,
-            stack: error?.stack,
-            errorObject: error,
-            videoId: video.id,
-            embedUrl: video.embedUrl,
-          });
-          return {
-            success: false,
-            error: 'Failed to extract Echo360 transcript',
-            errorCode: 'NOT_AVAILABLE',
-            aiTranscriptionAvailable: true,
-          };
-        }
-      }
-      console.warn('[Lock-in BG] Echo360 provider is not available');
-      return {
-        success: false,
-        error: 'Echo360 provider is not available',
-        errorCode: 'NOT_AVAILABLE',
-        aiTranscriptionAvailable: true,
-      };
-    }
-    case 'html5': {
-      console.log('[Lock-in BG] Handling HTML5 video');
-      const result = await extractHtml5Transcript(video);
-      console.log('[Lock-in BG] HTML5 result:', result.success);
-      return result;
-    }
-    default:
-      return {
-        success: false,
-        error: `Unsupported video provider: ${video.provider}`,
-        errorCode: 'NOT_AVAILABLE',
-        aiTranscriptionAvailable: true,
-      };
+  try {
+    const fetcher = new ExtensionFetcher();
+    const result = await provider.extractTranscript(video, fetcher);
+    console.log('[Lock-in BG] Transcript extraction completed', {
+      provider: provider.provider,
+      success: result.success,
+      errorCode: result.errorCode,
+      hasTranscript: !!result.transcript,
+      transcriptSegments: result.transcript?.segments?.length,
+    });
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[Lock-in BG] Transcript extraction failed:', message);
+    return {
+      success: false,
+      error: message || 'Failed to extract transcript',
+      errorCode: 'NOT_AVAILABLE',
+      aiTranscriptionAvailable: true,
+    };
   }
 }
 
@@ -638,12 +338,13 @@ async function handlePanoptoMediaUrlFetch(video, options = {}) {
 
     if (video.panoptoTenant && video.id) {
       resolvedInfo = { tenant: video.panoptoTenant, deliveryId: video.id };
-    } else if (video.embedUrl) {
-      resolvedInfo = extractPanoptoInfoFromUrl(video.embedUrl);
+    } else if (video.embedUrl && typeof extractPanoptoInfo === 'function') {
+      resolvedInfo = extractPanoptoInfo(video.embedUrl);
     }
 
-    if (!resolvedInfo && video.embedUrl) {
-      const resolved = await resolvePanoptoInfoFromWrapperUrl(video.embedUrl);
+    if (!resolvedInfo && video.embedUrl && typeof resolvePanoptoInfoFromWrapperUrl === 'function') {
+      const fetcher = new ExtensionFetcher();
+      const resolved = await resolvePanoptoInfoFromWrapperUrl(video.embedUrl, fetcher);
       if (resolved.authRequired) {
         return {
           success: false,
@@ -658,6 +359,14 @@ async function handlePanoptoMediaUrlFetch(video, options = {}) {
       return {
         success: false,
         error: 'Could not resolve this Panopto link. Open the video once and try again.',
+        errorCode: 'NOT_AVAILABLE',
+      };
+    }
+
+    if (typeof buildPanoptoEmbedUrl !== 'function') {
+      return {
+        success: false,
+        error: 'Panopto helpers are not available.',
         errorCode: 'NOT_AVAILABLE',
       };
     }

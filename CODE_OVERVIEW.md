@@ -88,12 +88,13 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`core/transcripts/fetchers/types.ts`** - Fetcher interfaces (AsyncFetcher, EnhancedAsyncFetcher) and type guards. No Chrome dependencies.
 - **`core/transcripts/providers/panoptoProvider.ts`** - Thin entrypoint; implementation split across `core/transcripts/providers/panopto/` (URL utils, link detection, extraction, provider).
 - **`core/transcripts/providers/echo360Provider.ts`** - Thin entrypoint; implementation split across `core/transcripts/providers/echo360/` (URL helpers, detection, transcript parsing, resolver, provider).
+- **`core/transcripts/providers/html5Provider.ts`** - HTML5 track caption extraction provider (track URLs).
 - **`core/transcripts/videoDetection.ts`** - Thin entrypoint for video detection; modules live under `core/transcripts/videoDetection/` (context helpers, Panopto iframe detection, HTML5 detection, sync aggregator).
 - **`core/transcripts/providerRegistry.ts`** - Provider registry and TranscriptProviderV2 interface
-- **`extension/dist/libs/transcriptProviders.js`** - Bundled transcript providers for background usage (loaded via `importScripts`).
-- **`extension/src/networkUtils.js`** - Background fetch helpers (retry, credentials, VTT/HTML fetch, redirect tracking) used by transcript helpers.
-- **`extension/src/panoptoResolver.js`** - Panopto extraction helpers + PanoptoMediaResolver for AI media URL resolution.
-- **`extension/background.js`** - ExtensionFetcher class (Chrome-specific CORS/credentials) + message routing. Delegates extraction to providers via fetcher, and wires Panopto transcript + media URL resolution via the shared background helpers.
+- **`extension/dist/libs/transcriptProviders.js`** - Bundled transcript providers + registry + Panopto helpers for background usage (loaded via `importScripts`).
+- **`extension/src/networkUtils.js`** - Background fetch helpers (retry, credentials, HTML fetch, redirect tracking) used by ExtensionFetcher and PanoptoMediaResolver.
+- **`extension/src/panoptoResolver.js`** - PanoptoMediaResolver for AI media URL resolution; uses core Panopto helpers.
+- **`extension/background.js`** - ExtensionFetcher class (Chrome-specific CORS/credentials) + message routing. Delegates extraction to core providers via registry and wires AI media URL resolution via PanoptoMediaResolver.
 - **AI fallback**: `useTranscripts.ts` triggers `FETCH_PANOPTO_MEDIA_URL` when captions are missing, then `TRANSCRIBE_MEDIA_AI` streams media to backend transcript jobs.
 
 **Key pattern**: Business logic (extraction algorithm) in `/core/transcripts/providers/`. Chrome-specific fetching in `/extension/background.js` (ExtensionFetcher). Providers depend on fetcher interface, enabling testing and future web app reuse.

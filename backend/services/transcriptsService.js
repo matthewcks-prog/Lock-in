@@ -13,17 +13,18 @@ const {
   TRANSCRIPT_JOB_TTL_MINUTES,
   TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES,
 } = require('../config');
+const { logger } = require('../observability');
 
 // Industry best practice: Use ffmpeg-static for bundled FFmpeg binary
 // This eliminates PATH issues across all platforms
 let ffmpegPath;
 try {
   ffmpegPath = require('ffmpeg-static');
-  console.log('[Transcripts] Using bundled FFmpeg from ffmpeg-static');
+  logger.info('[Transcripts] Using bundled FFmpeg from ffmpeg-static');
 } catch {
   // Fallback to system FFmpeg if ffmpeg-static not installed
   ffmpegPath = 'ffmpeg';
-  console.log('[Transcripts] ffmpeg-static not found, using system FFmpeg');
+  logger.warn('[Transcripts] ffmpeg-static not found, using system FFmpeg');
 }
 
 // Check if ffmpeg is available on startup
@@ -38,13 +39,13 @@ function checkFfmpegAvailable() {
 
 const FFMPEG_AVAILABLE = checkFfmpegAvailable();
 if (!FFMPEG_AVAILABLE) {
-  console.warn(
+  logger.warn(
     '[Transcripts] WARNING: FFmpeg not available. AI transcription will not work.\n' +
       '  The bundled ffmpeg-static should work automatically.\n' +
       '  If issues persist, try: npm install ffmpeg-static (in backend folder)',
   );
 } else {
-  console.log('[Transcripts] FFmpeg is available and ready');
+  logger.info('[Transcripts] FFmpeg is available and ready');
 }
 
 const ACTIVE_JOBS = new Map();
@@ -236,13 +237,13 @@ async function splitAudioIfNeeded(audioPath, jobDir, state) {
   // For small files (< 20MB), no need to split
   const SMALL_FILE_THRESHOLD = 20 * 1024 * 1024;
   if (stats.size <= SMALL_FILE_THRESHOLD) {
-    console.log(
+    logger.info(
       `[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(1)}MB - no splitting needed`,
     );
     return [{ path: audioPath, startMs: 0 }];
   }
 
-  console.log(
+  logger.info(
     `[Transcripts] File size ${(stats.size / 1024 / 1024).toFixed(
       1,
     )}MB - splitting into ${SEGMENT_DURATION_SECONDS / 60} minute segments`,
@@ -283,7 +284,7 @@ async function splitAudioIfNeeded(audioPath, jobDir, state) {
       startMs: index * SEGMENT_DURATION_SECONDS * 1000,
     }));
 
-  console.log(`[Transcripts] Created ${segments.length} segments for transcription`);
+  logger.info(`[Transcripts] Created ${segments.length} segments for transcription`);
   return segments;
 }
 
@@ -340,7 +341,7 @@ async function cleanupJobFiles(jobId) {
   try {
     await fs.promises.rm(dir, { recursive: true, force: true });
   } catch (error) {
-    console.warn('[Transcripts] Failed to clean up job files:', error);
+    logger.warn({ err: error }, '[Transcripts] Failed to clean up job files');
   }
 }
 
@@ -423,7 +424,7 @@ async function cancelTranscriptProcessing(jobId) {
     try {
       state.currentProcess.kill('SIGKILL');
     } catch (error) {
-      console.warn('[Transcripts] Failed to kill ffmpeg process:', error);
+      logger.warn({ err: error }, '[Transcripts] Failed to kill ffmpeg process');
     }
   }
   await cleanupJobFiles(jobId);
@@ -444,7 +445,7 @@ async function reapStaleTranscriptJobs() {
     try {
       await cancelTranscriptProcessing(job.id);
     } catch (error) {
-      console.warn('[Transcripts] Failed to cancel stale job process:', error);
+      logger.warn({ err: error }, '[Transcripts] Failed to cancel stale job process');
     }
 
     try {
@@ -457,7 +458,7 @@ async function reapStaleTranscriptJobs() {
         },
       });
     } catch (error) {
-      console.warn('[Transcripts] Failed to mark stale job:', error);
+      logger.warn({ err: error }, '[Transcripts] Failed to mark stale job');
     }
   }
 
@@ -471,12 +472,12 @@ function startTranscriptJobReaper() {
   const intervalMs = Math.max(1, TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES) * 60 * 1000;
 
   reapStaleTranscriptJobs().catch((error) => {
-    console.warn('[Transcripts] Initial job reaper run failed:', error);
+    logger.warn({ err: error }, '[Transcripts] Initial job reaper run failed');
   });
 
   reaperInterval = setInterval(() => {
     reapStaleTranscriptJobs().catch((error) => {
-      console.warn('[Transcripts] Job reaper run failed:', error);
+      logger.warn({ err: error }, '[Transcripts] Job reaper run failed');
     });
   }, intervalMs);
 
