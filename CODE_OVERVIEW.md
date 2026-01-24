@@ -241,8 +241,14 @@ This is a living overview of the current codebase. Update it whenever files move
 
 ### Scripts & Testing
 
+- **`setup_uami.ps1`**
+  - Configures GitHub Actions OIDC with a user-assigned managed identity and sets required secrets.
+
 - **`scripts/check-syntax.js`**
   - Syntax validation for backend root JS files (used by `npm run check`).
+
+- **`scripts/verify-ci-cd.ps1`**
+  - Validates GitHub/Azure CI/CD configuration (secrets, environments, resources).
 
 - **`scripts/verify-azure-embeddings.js`**
   - Manual utility to verify Azure OpenAI embeddings configuration (NOT a unit test).

@@ -68,7 +68,7 @@ curl -v https://$APP_URL/health
 **What it does:**
 
 1. Validates inputs and shows warning for production
-2. Logs into Azure with Service Principal
+2. Logs into Azure with OIDC (managed identity)
 3. If `image_tag` is `previous`, retrieves the last active revision (falls back to `latest` tag)
 4. Updates Container App with the specified image
 5. Verifies rollback with health check (10 retries, exponential backoff)

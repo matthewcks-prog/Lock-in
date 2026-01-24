@@ -14,11 +14,13 @@ This folder contains all deployment and CI/CD documentation for Lock-in.
 ### First-Time Setup
 
 ```powershell
-# Setup Azure resources and GitHub secrets
-.\scripts\setup-ci-cd.ps1 `
-  -SubscriptionId "your-subscription-id" `
-  -ResourceGroupProduction "lock-in-prod" `
-  -ContainerRegistryName "lockincr"
+# Provision Azure resources (if needed)
+.\scripts\azure-setup.ps1 `
+  -ResourceGroup "lock-in-prod" `
+  -Location "australiaeast"
+
+# Configure OIDC + GitHub secrets (edit config values at top of script if needed)
+.\setup_uami.ps1
 
 # Verify configuration
 .\scripts\verify-ci-cd.ps1
@@ -63,7 +65,9 @@ Configure these in GitHub Settings > Secrets and variables > Actions:
 
 | Secret                         | Description                    | Required For    |
 | ------------------------------ | ------------------------------ | --------------- |
-| `AZURE_CREDENTIALS`            | Service Principal JSON         | All deployments |
+| `AZURE_CLIENT_ID`              | Managed identity client ID     | All deployments |
+| `AZURE_TENANT_ID`              | Azure AD tenant ID             | All deployments |
+| `AZURE_SUBSCRIPTION_ID`        | Azure subscription ID          | All deployments |
 | `AZURE_CONTAINER_REGISTRY`     | ACR name (without .azurecr.io) | All deployments |
 | `AZURE_RESOURCE_GROUP`         | Production resource group      | Production      |
 | `AZURE_RESOURCE_GROUP_STAGING` | Staging resource group         | Staging         |

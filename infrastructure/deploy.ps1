@@ -19,6 +19,21 @@ param(
     [string]$ContainerImage = "lockinacr.azurecr.io/lock-in-backend:latest",
 
     [Parameter(Mandatory=$false)]
+    [string]$KeyVaultName = "lock-in-kv",
+
+    [Parameter(Mandatory=$false)]
+    [string]$StagingResourceGroup = "lock-in-dev",
+
+    [Parameter(Mandatory=$false)]
+    [string]$ProductionResourceGroup = "lock-in-prod",
+
+    [Parameter(Mandatory=$false)]
+    [string]$StagingRuntimeIdentityId = "/subscriptions/473adbd3-1a70-4074-aa01-5451673d058b/resourcegroups/lock-in-dev/providers/microsoft.managedidentity/userassignedidentities/id-github-actions-lock-in",
+
+    [Parameter(Mandatory=$false)]
+    [string]$ProductionRuntimeIdentityId = "/subscriptions/473adbd3-1a70-4074-aa01-5451673d058b/resourcegroups/lock-in-dev/providers/microsoft.managedidentity/userassignedidentities/id-github-actions-lock-in",
+
+    [Parameter(Mandatory=$false)]
     [switch]$WhatIf,
 
     [Parameter(Mandatory=$false)]
@@ -31,8 +46,8 @@ $ErrorActionPreference = "Stop"
 # Configuration
 # =============================================================================
 $ResourceGroupMap = @{
-    "staging" = "lock-in-dev"
-    "production" = "lock-in-prod"
+    "staging" = $StagingResourceGroup
+    "production" = $ProductionResourceGroup
 }
 
 $ResourceGroup = $ResourceGroupMap[$Environment]
@@ -87,7 +102,9 @@ function Test-BicepTemplate {
         az deployment group validate `
             --resource-group $ResourceGroup `
             --template-file $TemplateFile `
-            --parameters environment=$Environment containerImage=$ContainerImage `
+            --parameters environment=$Environment containerImage=$ContainerImage keyVaultName=$KeyVaultName `
+            --parameters stagingResourceGroup=$StagingResourceGroup productionResourceGroup=$ProductionResourceGroup `
+            --parameters stagingRuntimeIdentityId=$StagingRuntimeIdentityId productionRuntimeIdentityId=$ProductionRuntimeIdentityId `
             --output none
 
         Write-Host "  OK Template validation passed" -ForegroundColor Green
@@ -107,7 +124,9 @@ function Show-WhatIfChanges {
     az deployment group what-if `
         --resource-group $ResourceGroup `
         --template-file $TemplateFile `
-        --parameters environment=$Environment containerImage=$ContainerImage
+        --parameters environment=$Environment containerImage=$ContainerImage keyVaultName=$KeyVaultName `
+        --parameters stagingResourceGroup=$StagingResourceGroup productionResourceGroup=$ProductionResourceGroup `
+        --parameters stagingRuntimeIdentityId=$StagingRuntimeIdentityId productionRuntimeIdentityId=$ProductionRuntimeIdentityId
 
     Write-Host ""
 }
@@ -136,7 +155,9 @@ function Start-Deployment {
         --name $deploymentName `
         --resource-group $ResourceGroup `
         --template-file $TemplateFile `
-        --parameters environment=$Environment containerImage=$ContainerImage `
+        --parameters environment=$Environment containerImage=$ContainerImage keyVaultName=$KeyVaultName `
+        --parameters stagingResourceGroup=$StagingResourceGroup productionResourceGroup=$ProductionResourceGroup `
+        --parameters stagingRuntimeIdentityId=$StagingRuntimeIdentityId productionRuntimeIdentityId=$ProductionRuntimeIdentityId `
         --output json | ConvertFrom-Json
 
     if ($LASTEXITCODE -ne 0) {

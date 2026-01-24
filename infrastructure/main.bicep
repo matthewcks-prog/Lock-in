@@ -48,6 +48,18 @@ param memorySize string = '1.0Gi'
 @description('Key Vault name containing secrets')
 param keyVaultName string = 'lock-in-kv'
 
+@description('Staging resource group name')
+param stagingResourceGroup string = 'lock-in-dev'
+
+@description('Production resource group name')
+param productionResourceGroup string = 'lock-in-prod'
+
+@description('Runtime managed identity resource ID for staging')
+param stagingRuntimeIdentityId string = '/subscriptions/473adbd3-1a70-4074-aa01-5451673d058b/resourcegroups/lock-in-dev/providers/microsoft.managedidentity/userassignedidentities/id-github-actions-lock-in'
+
+@description('Runtime managed identity resource ID for production')
+param productionRuntimeIdentityId string = '/subscriptions/473adbd3-1a70-4074-aa01-5451673d058b/resourcegroups/lock-in-dev/providers/microsoft.managedidentity/userassignedidentities/id-github-actions-lock-in'
+
 @description('Project name for resource naming')
 param projectName string = 'lock-in'
 
@@ -58,22 +70,24 @@ var environmentConfig = {
   staging: {
     containerAppName: 'lock-in-dev'
     environmentName: 'lock-in-env'  // Existing environment
-    resourceGroup: 'lock-in-dev'
+    resourceGroup: stagingResourceGroup
     logAnalyticsName: 'lock-in-backend-logs'
+    runtimeIdentityId: stagingRuntimeIdentityId
     nodeEnv: 'development'
   }
   production: {
     containerAppName: 'lock-in-backend'
     environmentName: 'lock-in-env'  // Existing environment
-    resourceGroup: 'lock-in-prod'
+    resourceGroup: productionResourceGroup
     logAnalyticsName: 'lock-in-backend-logs'
+    runtimeIdentityId: productionRuntimeIdentityId
     nodeEnv: 'production'
   }
 }
 
 var config = environmentConfig[environment]
 var acrLoginServer = 'lockinacr.azurecr.io'
-var userAssignedIdentityId = '/subscriptions/473adbd3-1a70-4074-aa01-5451673d058b/resourcegroups/lock-in-dev/providers/microsoft.managedidentity/userassignedidentities/id-github-actions-lock-in'
+var runtimeIdentityId = config.runtimeIdentityId
 
 // Resource tags for governance and cost tracking
 var commonTags = {
@@ -112,7 +126,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${userAssignedIdentityId}': {}
+      '${runtimeIdentityId}': {}
     }
   }
   properties: {
@@ -127,37 +141,37 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
         {
           name: 'azure-openai-api-key'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/AZURE-OPENAI-API-KEY'
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
         {
           name: 'azure-openai-endpoint'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/AZURE-OPENAI-ENDPOINT'
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
         {
           name: 'openai-api-key'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/OPENAI-API-KEY'
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
         {
           name: 'supabase-url'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/SUPABASE-URL-${toUpper(environment == 'production' ? 'PROD' : 'DEV')}'
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
         {
           name: 'supabase-anon-key'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/SUPABASE-ANON-KEY-${toUpper(environment == 'production' ? 'PROD' : 'DEV')}'
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
         {
           name: 'supabase-service-role-key'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/SUPABASE-SERVICE-ROLE-KEY-${toUpper(environment == 'production' ? 'PROD' : 'DEV')}'
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
         {
           name: 'sentry-dsn'
           keyVaultUrl: '${keyVault.properties.vaultUri}secrets/SENTRY-DSN'
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
       ]
 
@@ -197,7 +211,7 @@ resource containerApp 'Microsoft.App/containerApps@2023-05-01' = {
       registries: [
         {
           server: acrLoginServer
-          identity: userAssignedIdentityId
+          identity: runtimeIdentityId
         }
       ]
 

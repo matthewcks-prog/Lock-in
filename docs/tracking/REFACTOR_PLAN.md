@@ -58,6 +58,16 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
   - **Outcome:** Vite UI build now forces `NODE_ENV` to match mode and sets `esbuild.jsxDev` by mode to keep JSX transform/runtime aligned.
   - **Acceptance criteria:** Production builds avoid `jsxDEV` calls; dev builds use a matching dev runtime.
 
+- [x] **Harden CI/CD environment setup + deployment verification**
+  - **Problem:** `setup_uami.ps1` attempted environment creation without checking GitHub auth/admin access; deployment verification could wait for hours and hang on missing ingress.
+  - **Outcome:** Environment creation is idempotent with auth/admin checks and guidance; staging/production verification uses bounded backoff with per-request timeouts and fails fast on missing FQDNs. Runtime identity permissions are scoped to AcrPull + Key Vault secrets get/list only.
+  - **Acceptance criteria:** `setup_uami.ps1` skips or creates environments cleanly and enforces runtime least privilege; deployment verification exits within 10 minutes with actionable logs.
+
+- [x] **Parameterize infra for environment split**
+  - **Problem:** Bicep and infra scripts hardcoded runtime identity and resource group names, making production separation error-prone.
+  - **Outcome:** Added staging/production parameters for resource groups and runtime identity IDs in `infrastructure/main.bicep`; `deploy.ps1` and `validate.ps1` accept overrides while preserving staging defaults.
+  - **Acceptance criteria:** Staging deploys unchanged by default; production can be configured via parameters without code edits.
+
 ---
 
 ## Phase 1 -- Transcript Single Source of Truth (P0)
@@ -170,6 +180,10 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
 
 **Goal:** Remove doc duplication, fix placement, and align with docs-only rule.
 
+- [x] **Remove legacy CI/CD auth artifacts**
+  - **Outcome:** Removed deprecated SP-based setup scripts and duplicate Azure deployment doc; updated workflows/docs to OIDC managed identity and environment-scoped federated credentials.
+  - **Acceptance criteria:** No `AZURE_CREDENTIALS` usage; rollback workflow uses OIDC; Azure deployment docs point to `docs/deployment/AZURE.md`.
+
 - [ ] **Resolve docs/achieve typo + archive legacy audits**
   - Move `docs/achieve/` content into `docs/archive/` and correct naming.
 
@@ -185,7 +199,7 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
 - [] **Whole repo**
   - Make sure no doc contain inconsistencies and there are only one single source of truth which is consistent.Follow what you think is the recommended approach and refactor code if needed.
   - Delete old legacy docs not needed.
-  - Ensure .md files follows a well organised structure in case in the future aditional .md files needs to be added.
+  - Ensure .md files follows a well organised structure in case in the future aditional .md files needs to be added. Update/Merge/Delete/Create if needed.
 
 - [ ] **CI link integrity check**
   - Add a lightweight CI step to detect broken doc links.

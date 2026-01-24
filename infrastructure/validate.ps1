@@ -12,7 +12,16 @@ param(
     [string]$Environment = "staging",
 
     [Parameter(Mandatory=$false)]
-    [string]$SubscriptionId = "473adbd3-1a70-4074-aa01-5451673d058b"
+    [string]$SubscriptionId = "473adbd3-1a70-4074-aa01-5451673d058b",
+
+    [Parameter(Mandatory=$false)]
+    [string]$KeyVaultName = "lock-in-kv",
+
+    [Parameter(Mandatory=$false)]
+    [string]$StagingResourceGroup = "lock-in-dev",
+
+    [Parameter(Mandatory=$false)]
+    [string]$ProductionResourceGroup = "lock-in-prod"
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,8 +30,8 @@ $ErrorActionPreference = "Stop"
 # Configuration
 # =============================================================================
 $ResourceGroupMap = @{
-    "staging" = "lock-in-dev"
-    "production" = "lock-in-prod"
+    "staging" = $StagingResourceGroup
+    "production" = $ProductionResourceGroup
 }
 
 $ContainerAppMap = @{
@@ -185,7 +194,7 @@ function Test-KeyVaultAccess {
     Write-Host "🔐 Validating Key Vault access..." -ForegroundColor Cyan
 
     try {
-        $keyVaultName = "lock-in-kv"
+        $keyVaultName = $KeyVaultName
 
         # Check if Key Vault exists
         $kv = az keyvault show --name $keyVaultName | ConvertFrom-Json

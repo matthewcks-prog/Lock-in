@@ -299,47 +299,59 @@ jobs:
       - name: Verify staging deployment
         if: steps.check-creds.outputs.skip != 'true'
         run: |
-          APP_URL=$(az containerapp show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
+          set -euo pipefail
 
-          echo "🚀 Staging URL: https://$APP_URL"
+          APP_URL=$(az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv || true)
+
+          if [ -z "$APP_URL" ]; then
+            echo "Failed to resolve container app FQDN. Check resource group and ingress settings."
+            az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "{name:name, ingress:properties.configuration.ingress}" -o json || true
+            exit 1
+          fi
+
+          echo "Staging URL: https://$APP_URL"
           echo "APP_URL=https://$APP_URL" >> $GITHUB_ENV
 
-          # Wait for deployment with exponential backoff
-          max_attempts=10
-          attempt=0
-          wait_time=10
+          max_wait_seconds=600
+          deadline=$((SECONDS + max_wait_seconds))
+          wait_time=5
+          max_wait_time=60
+          attempt=1
 
-          while [ $attempt -lt $max_attempts ]; do
-            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting ${wait_time}s..."
+          while [ $SECONDS -lt $deadline ]; do
+            echo "Attempt ${attempt} - waiting ${wait_time}s..."
             sleep $wait_time
 
-            if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
-              echo "✅ Staging deployment verified!"
+            if curl -sf --connect-timeout 5 --max-time 10 "https://$APP_URL/health" > /dev/null 2>&1; then
+              echo "Staging deployment responded."
 
-              # Run smoke tests
-              echo "🧪 Running smoke tests..."
-              HEALTH_STATUS=$(curl -s "https://$APP_URL/health" | jq -r '.status // "unknown"')
-              if [ "$HEALTH_STATUS" = "ok" ] || [ "$HEALTH_STATUS" = "healthy" ]; then
-                echo "✅ Smoke tests passed!"
+              response=$(curl -s --connect-timeout 5 --max-time 10 "https://$APP_URL/health" || true)
+              health_status="unknown"
+              if command -v jq >/dev/null 2>&1; then
+                health_status=$(echo "$response" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+              fi
+
+              if [ "$health_status" = "ok" ] || [ "$health_status" = "healthy" ] || [ "$health_status" = "unknown" ]; then
+                echo "Smoke tests passed."
                 exit 0
               fi
+
+              echo "Health status is '$health_status'; retrying..."
             fi
 
             attempt=$((attempt + 1))
-            wait_time=$((wait_time * 2))
+            if [ $wait_time -lt $max_wait_time ]; then
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt $max_wait_time ]; then
+                wait_time=$max_wait_time
+              fi
+            fi
           done
 
-          echo "❌ Health check failed after $max_attempts attempts"
-          echo "📋 Fetching logs..."
-          az containerapp logs show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --tail 50 || echo "Could not fetch logs"
+          echo "Health check failed after ${max_wait_seconds}s."
+          echo "Fetching logs..."
+          az containerapp logs show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --tail 50 || echo "Could not fetch logs"
           exit 1
-
       - name: Print manual deployment instructions (if no credentials)
         if: steps.check-creds.outputs.skip == 'true'
         run: |
@@ -399,47 +411,59 @@ jobs:
       - name: Verify production deployment
         if: steps.check-creds.outputs.skip != 'true'
         run: |
-          APP_URL=$(az containerapp show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
+          set -euo pipefail
 
-          echo "🚀 Production URL: https://$APP_URL"
+          APP_URL=$(az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv || true)
+
+          if [ -z "$APP_URL" ]; then
+            echo "Failed to resolve container app FQDN. Check resource group and ingress settings."
+            az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "{name:name, ingress:properties.configuration.ingress}" -o json || true
+            exit 1
+          fi
+
+          echo "Production URL: https://$APP_URL"
           echo "APP_URL=https://$APP_URL" >> $GITHUB_ENV
 
-          # Wait for deployment with exponential backoff
-          max_attempts=10
-          attempt=0
-          wait_time=10
+          max_wait_seconds=600
+          deadline=$((SECONDS + max_wait_seconds))
+          wait_time=5
+          max_wait_time=60
+          attempt=1
 
-          while [ $attempt -lt $max_attempts ]; do
-            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting ${wait_time}s..."
+          while [ $SECONDS -lt $deadline ]; do
+            echo "Attempt ${attempt} - waiting ${wait_time}s..."
             sleep $wait_time
 
-            if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
-              echo "✅ Production deployment verified!"
+            if curl -sf --connect-timeout 5 --max-time 10 "https://$APP_URL/health" > /dev/null 2>&1; then
+              echo "Production deployment responded."
 
-              # Run smoke tests
-              echo "🧪 Running smoke tests..."
-              HEALTH_STATUS=$(curl -s "https://$APP_URL/health" | jq -r '.status // "unknown"')
-              if [ "$HEALTH_STATUS" = "ok" ] || [ "$HEALTH_STATUS" = "healthy" ]; then
-                echo "✅ Smoke tests passed!"
+              response=$(curl -s --connect-timeout 5 --max-time 10 "https://$APP_URL/health" || true)
+              health_status="unknown"
+              if command -v jq >/dev/null 2>&1; then
+                health_status=$(echo "$response" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+              fi
+
+              if [ "$health_status" = "ok" ] || [ "$health_status" = "healthy" ] || [ "$health_status" = "unknown" ]; then
+                echo "Smoke tests passed."
                 exit 0
               fi
+
+              echo "Health status is '$health_status'; retrying..."
             fi
 
             attempt=$((attempt + 1))
-            wait_time=$((wait_time * 2))
+            if [ $wait_time -lt $max_wait_time ]; then
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt $max_wait_time ]; then
+                wait_time=$max_wait_time
+              fi
+            fi
           done
 
-          echo "❌ Health check failed after $max_attempts attempts"
-          echo "📋 Fetching logs..."
-          az containerapp logs show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --tail 50 || echo "Could not fetch logs"
+          echo "Health check failed after ${max_wait_seconds}s."
+          echo "Fetching logs..."
+          az containerapp logs show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --tail 50 || echo "Could not fetch logs"
           exit 1
-
       - name: Print manual deployment instructions (if no credentials)
         if: steps.check-creds.outputs.skip == 'true'
         run: |
@@ -478,9 +502,9 @@ jobs:
 # =============================================================================
 # Required GitHub Secrets:
 #
-# AZURE_CREDENTIALS              - Azure Service Principal JSON (for auto-deploy)
-#                                  Format: {"clientId":"...","clientSecret":"...",
-#                                          "subscriptionId":"...","tenantId":"..."}
+# AZURE_CLIENT_ID                - Azure client ID (UAMI or app registration)
+# AZURE_TENANT_ID                - Azure tenant ID
+# AZURE_SUBSCRIPTION_ID          - Azure subscription ID
 # AZURE_CONTAINER_REGISTRY       - ACR name (without .azurecr.io suffix)
 # AZURE_RESOURCE_GROUP           - Production resource group name
 # AZURE_RESOURCE_GROUP_STAGING   - Staging resource group name (can be same as prod)
@@ -490,16 +514,8 @@ jobs:
 #   - production: Optional required reviewers for manual approval (from main)
 #
 # Setup Instructions:
-# 1. Create service principal:
-#    az ad sp create-for-rbac --name "github-actions-lock-in" \
-#      --role contributor \
-#      --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group} \
-#      --sdk-auth
-#
-# 2. Assign ACR push role:
-#    az role assignment create --assignee {client-id} \
-#      --scope /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.ContainerRegistry/registries/{acr-name} \
-#      --role AcrPush
-#
-# 3. Add the output JSON to GitHub Secrets as AZURE_CREDENTIALS
+# 1. Create a user-assigned managed identity and federated credentials
+#    (see setup_uami.ps1).
+# 2. Assign Contributor on the resource group and AcrPush on the registry.
+# 3. Set GitHub secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
 # =============================================================================

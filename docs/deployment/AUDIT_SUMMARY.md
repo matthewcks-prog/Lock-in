@@ -225,7 +225,7 @@ The workflow performs **3 main stages**:
 
 - Runs on: Push to develop or main (not PRs)
 - Actions:
-  - Login to Azure with Service Principal
+  - Login to Azure with OIDC (managed identity)
   - Login to ACR
   - Build and push Docker image
   - Tag with commit SHA and `latest`
@@ -275,7 +275,7 @@ The workflow performs **3 main stages**:
 
 ### Security
 
-- ✅ **Service Principal authentication** (not ACR admin credentials)
+- ✅ **OIDC authentication** (managed identity, no client secrets)
 - ✅ **Security scanning enforced** (fail on CRITICAL/HIGH vulnerabilities)
 - ✅ **Production requires approval** (GitHub Environment protection)
 - ✅ **Secrets in GitHub Secrets** (not in code)

@@ -40,7 +40,7 @@ Lock-in uses **GitHub Actions** for automated build, test, and deployment. The p
 ┌─────────────────▼───────────────────┐  ┌───────▼──────────────────────────┐
 │       PUSH TO ACR (develop)         │  │    PUSH TO ACR (main)            │
 ├─────────────────────────────────────┤  ├──────────────────────────────────┤
-│ 1. Login to Azure (Service Principal)│ │ 1. Login to Azure (SP)           │
+│ 1. Login to Azure (OIDC)│ │ 1. Login to Azure (OIDC)           │
 │ 2. az acr login                      │ │ 2. az acr login                  │
 │ 3. Setup Docker Buildx              │  │ 3. Setup Docker Buildx           │
 │ 4. Build + push image               │  │ 4. Build + push image            │
@@ -54,8 +54,8 @@ Lock-in uses **GitHub Actions** for automated build, test, and deployment. The p
 │         Environment: staging        │  │  (lock-in-backend)               │
 │         No reviewers required       │  │  Environment: production         │
 ├─────────────────────────────────────┤  │  ⚠️ Reviewers: REQUIRED         │
-│ 1. Check AZURE_CREDENTIALS          │  ├──────────────────────────────────┤
-│ 2. Login to Azure                   │  │ 1. Check AZURE_CREDENTIALS       │
+│ 1. Check OIDC secrets          │  ├──────────────────────────────────┤
+│ 2. Login to Azure                   │  │ 1. Check OIDC secrets       │
 │ 3. Deploy to Container App          │  │ 2. Login to Azure                │
 │ 4. Wait for deployment              │  │ 3. Deploy to Container App       │
 │ 5. Health check (retry with exp    │  │ 4. Wait for deployment           │
@@ -165,7 +165,7 @@ on:
 
 **Steps:**
 
-1. **Login to Azure** - Using Service Principal
+1. **Login to Azure** - Using OIDC
 2. **Login to ACR** - `az acr login`
 3. **Setup Docker Buildx** - Multi-platform support
 4. **Cache Docker layers** - GitHub Actions cache (not local cache)
@@ -175,7 +175,7 @@ on:
 
 - `image-tag`: Commit SHA used for deployment
 
-**Authentication**: Uses `AZURE_CREDENTIALS` secret (Service Principal JSON).
+**Authentication**: Uses OIDC secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`.
 
 ### 3. `deploy-staging`
 
@@ -188,8 +188,8 @@ on:
 
 **Steps:**
 
-1. **Check credentials** - Skip if `AZURE_CREDENTIALS` missing
-2. **Login to Azure** - Using Service Principal
+1. **Check credentials** - Skip if `AZURE_CLIENT_ID` missing
+2. **Login to Azure** - Using OIDC
 3. **Deploy to Container App** - Update image to new SHA
 4. **Verify deployment** - Health check with exponential backoff (10 attempts, 10s → 5120s)
 5. **Run smoke tests** - Verify `/health` returns `ok` or `healthy`
@@ -212,35 +212,37 @@ on:
 
 **Purpose**: Always runs to show deployment summary and manual commands.
 
-Useful when `AZURE_CREDENTIALS` is not set and deployment is skipped.
+Useful when OIDC secrets are not set and deployment is skipped.
 
 ## Authentication & Secrets
 
-### Service Principal Setup
+### OIDC Setup
 
-```bash
-# Create Service Principal
-az ad sp create-for-rbac --name "github-actions-lock-in" \
-  --role contributor \
-  --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group} \
-  --sdk-auth
-
-# Assign ACR push role
-az role assignment create --assignee {client-id} \
-  --scope /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.ContainerRegistry/registries/{acr-name} \
-  --role AcrPush
+```powershell
+# From repo root (edit config values at top if needed)
+.\setup_uami.ps1
 ```
+
+This configures federated credentials for:
+
+- `refs/heads/main`
+- `refs/heads/develop`
+- `pull_request`
+- `environment:staging`
+- `environment:production`
 
 ### Required GitHub Secrets
 
 Add these in GitHub Settings > Secrets and variables > Actions:
 
-| Secret                         | Format                             | Example                                                                           |
-| ------------------------------ | ---------------------------------- | --------------------------------------------------------------------------------- |
-| `AZURE_CREDENTIALS`            | JSON (Service Principal)           | `{"clientId":"...","clientSecret":"...","subscriptionId":"...","tenantId":"..."}` |
-| `AZURE_CONTAINER_REGISTRY`     | String (ACR name, no .azurecr.io)  | `lockincr`                                                                        |
-| `AZURE_RESOURCE_GROUP`         | String (production resource group) | `lock-in-prod`                                                                    |
-| `AZURE_RESOURCE_GROUP_STAGING` | String (staging resource group)    | `lock-in-staging`                                                                 |
+| Secret                         | Format                             | Example                    |
+| ------------------------------ | ---------------------------------- | -------------------------- |
+| `AZURE_CLIENT_ID`              | OIDC client ID                     | Managed identity client ID |
+| `AZURE_TENANT_ID`              | OIDC tenant ID                     | Azure AD tenant ID         |
+| `AZURE_SUBSCRIPTION_ID`        | Azure subscription ID              | Subscription ID            |
+| `AZURE_CONTAINER_REGISTRY`     | String (ACR name, no .azurecr.io)  | `lockincr`                 |
+| `AZURE_RESOURCE_GROUP`         | String (production resource group) | `lock-in-prod`             |
+| `AZURE_RESOURCE_GROUP_STAGING` | String (staging resource group)    | `lock-in-staging`          |
 
 ## GitHub Environments
 
@@ -352,9 +354,9 @@ az acr repository show \
 
 **Solution:**
 
-1. Verify `AZURE_CREDENTIALS` secret is correct JSON format
-2. Verify Service Principal has `AcrPush` role on the registry
-3. Check Service Principal hasn't expired: `az ad sp show --id <client-id>`
+1. Verify `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` secrets are set
+2. Verify managed identity has `AcrPush` role on the registry
+3. Check federated credentials match repo/environment subjects
 
 ### Manual Deployment Skipped
 
@@ -362,9 +364,9 @@ az acr repository show \
 
 **Solution:**
 
-`AZURE_CREDENTIALS` secret is missing. Either:
+OIDC secrets are missing. Either:
 
-1. Add the secret (recommended): See "Service Principal Setup" above
+1. Add the secrets (recommended): See "OIDC Setup" above
 2. Deploy manually: Use the printed `az containerapp update` command
 
 ## Best Practices
@@ -382,8 +384,8 @@ az acr repository show \
 
 ### Security
 
-- ✅ Use Service Principal authentication (not ACR admin credentials)
-- ✅ Rotate Service Principal secrets regularly
+- ✅ Use OIDC with managed identity authentication (not ACR admin credentials)
+- ✅ Review federated credentials and role assignments regularly
 - ✅ Enable required reviewers for production
 - ✅ Monitor Trivy scan results
 - ✅ Keep dependencies updated
