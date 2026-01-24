@@ -377,7 +377,7 @@ async function handleLockinRequest(req, res) {
     };
 
     const responsePayload = idempotencyKey
-      ? await idempotencyStore.run(idempotencyKey, runLockinFlow)
+      ? await idempotencyStore.run(idempotencyKey, userId, runLockinFlow)
       : await runLockinFlow();
 
     return res.json(responsePayload);

@@ -1,5 +1,6 @@
 export const API_CLIENT_EXPECTED_KEYS = [
   'apiRequest',
+  'cacheTranscript',
   'chatWithNotes',
   'createChat',
   'createNote',

@@ -41,6 +41,12 @@ import {
   type FeedbackContext,
   type FeedbackRecord,
 } from './resources/feedbackClient';
+import {
+  createTranscriptsClient,
+  type CacheTranscriptParams,
+  type TranscriptCacheMeta,
+  type TranscriptCacheResponse,
+} from './resources/transcriptsClient';
 
 export interface ApiClientConfig {
   backendUrl: string;
@@ -67,6 +73,7 @@ export function createApiClient(config: ApiClientConfig) {
   const { uploadNoteAsset, listNoteAssets, deleteNoteAsset } = createAssetsClient(apiRequest);
   const { uploadChatAsset, listChatAssets, deleteChatAsset } = createChatAssetsClient(apiRequest);
   const { submitFeedback, listFeedback, getFeedback } = createFeedbackClient(apiRequest);
+  const { cacheTranscript } = createTranscriptsClient(apiRequest);
 
   return {
     apiRequest,
@@ -94,6 +101,7 @@ export function createApiClient(config: ApiClientConfig) {
     submitFeedback,
     listFeedback,
     getFeedback,
+    cacheTranscript,
   };
 }
 
@@ -118,4 +126,7 @@ export type {
   FeedbackStatus,
   FeedbackContext,
   FeedbackRecord,
+  CacheTranscriptParams,
+  TranscriptCacheMeta,
+  TranscriptCacheResponse,
 };

@@ -466,6 +466,11 @@ CREATE TABLE public.transcript_jobs (
   error text,
   expected_total_chunks integer,
   bytes_received bigint NOT NULL DEFAULT 0,
+  language_hint text,
+  max_minutes integer,
+  processing_started_at timestamptz,
+  processing_heartbeat_at timestamptz,
+  processing_worker_id text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT transcript_jobs_pkey PRIMARY KEY (id)
@@ -485,6 +490,11 @@ CREATE TABLE public.transcript_jobs (
 - `error` - Failure reason when `status = error`
 - `expected_total_chunks` - Total chunks expected for completion
 - `bytes_received` - Total bytes received across unique chunks
+- `language_hint` - Optional language hint for transcription (e.g., `en`)
+- `max_minutes` - Optional max duration override in minutes for processing
+- `processing_started_at` - When processing began (worker claim)
+- `processing_heartbeat_at` - Last heartbeat timestamp for processing worker
+- `processing_worker_id` - Worker instance identifier handling processing
 - `created_at` - Job creation time
 - `updated_at` - Last status update
 
@@ -515,7 +525,68 @@ CREATE TABLE public.transcript_job_chunks (
 
 **Usage:** Enforces idempotent uploads and validates completeness before processing.
 
+**Storage:** Chunk binaries live in Supabase Storage bucket `transcript-jobs` with paths:
+`<user_id>/<job_id>/chunk-000001.bin` (zero-padded indices for lexical ordering).
+RLS policies allow users to read their own objects only within a 48-hour access window; backend service role bypasses this for processing/cleanup.
+
 **Access:** RLS enforced via parent job ownership (`transcript_jobs.user_id`).
+
+---
+
+### `transcript_upload_windows`
+
+Per-user per-minute upload windows used to enforce transcript chunk rate limits.
+
+```sql
+CREATE TABLE public.transcript_upload_windows (
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  window_start timestamptz NOT NULL,
+  bytes bigint NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT transcript_upload_windows_pkey PRIMARY KEY (user_id, window_start)
+);
+```
+
+**Fields:**
+
+- `user_id` - Owner (FK to `auth.users`)
+- `window_start` - UTC start of the 1-minute window
+- `bytes` - Total bytes uploaded within the window
+- `created_at` - Window record creation time
+- `updated_at` - Last update time
+
+**Usage:** Backing store for per-minute transcript upload throttling (atomic updates via RPC).
+
+---
+
+### `idempotency_keys`
+
+Short-lived idempotency keys used to deduplicate Lock-in chat requests.
+
+```sql
+CREATE TABLE public.idempotency_keys (
+  idempotency_key text PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES auth.users(id),
+  status text NOT NULL DEFAULT 'in_progress',
+  response jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL
+);
+```
+
+**Fields:**
+
+- `idempotency_key` - Client-supplied deduplication key
+- `user_id` - Owner (FK to `auth.users`)
+- `status` - `in_progress` | `completed` | `failed`
+- `response` - Cached JSON response for completed requests
+- `created_at` - Creation time
+- `updated_at` - Last update time
+- `expires_at` - TTL expiration time (short-lived)
+
+**Usage:** Prevents duplicate AI requests across retries or network timeouts.
 
 ---
 
@@ -550,9 +621,11 @@ auth.users (Supabase)
   -> folders (1:N)
   -> ai_requests (1:N)
   -> feedback (1:N)
+  -> idempotency_keys (1:N)
   -> transcripts (1:N)
   -> transcript_jobs (1:N)
       -> transcript_job_chunks (1:N)
+  -> transcript_upload_windows (1:N)
 ```
 
 **Note:** Currently no explicit relationship between `notes` and `folders`. Organization is done via `course_code` and `tags`.
@@ -672,19 +745,20 @@ CREATE POLICY "Users can delete own notes"
 
 ### Applied Migrations
 
-| Migration                              | Date     | Description                                          |
-| -------------------------------------- | -------- | ---------------------------------------------------- |
-| `001_note_assets.sql`                  | Dec 2024 | Note assets table for file attachments               |
-| `002_performance_indexes.sql`          | Dec 2024 | Performance indexes for all tables                   |
-| `003_row_level_security.sql`           | Dec 2024 | RLS policies for data isolation                      |
-| `004_vector_extension_schema.sql`      | Dec 2024 | Fix pgvector after moving to extensions schema       |
-| `005_starred_notes.sql`                | Dec 2024 | Add is_starred column for favoriting notes           |
-| `006_transcripts.sql`                  | Dec 2025 | Transcript jobs + transcript cache tables            |
-| `007_transcripts_hardening.sql`        | Jan 2026 | Transcript job state + cache hardening               |
-| `008_transcript_privacy_hardening.sql` | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking |
-| `009_feedback.sql`                     | Jan 2026 | User feedback table for bug reports/feature requests |
-| `010_chat_assets.sql`                  | Jan 2026 | Chat message attachments table and storage bucket    |
-| `011_chat_assets_cleanup.sql`          | Feb 2026 | Cleanup function for orphaned chat assets            |
+| Migration                               | Date     | Description                                                      |
+| --------------------------------------- | -------- | ---------------------------------------------------------------- |
+| `001_note_assets.sql`                   | Dec 2024 | Note assets table for file attachments                           |
+| `002_performance_indexes.sql`           | Dec 2024 | Performance indexes for all tables                               |
+| `003_row_level_security.sql`            | Dec 2024 | RLS policies for data isolation                                  |
+| `004_vector_extension_schema.sql`       | Dec 2024 | Fix pgvector after moving to extensions schema                   |
+| `005_starred_notes.sql`                 | Dec 2024 | Add is_starred column for favoriting notes                       |
+| `006_transcripts.sql`                   | Dec 2025 | Transcript jobs + transcript cache tables                        |
+| `007_transcripts_hardening.sql`         | Jan 2026 | Transcript job state + cache hardening                           |
+| `008_transcript_privacy_hardening.sql`  | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking             |
+| `009_feedback.sql`                      | Jan 2026 | User feedback table for bug reports/feature requests             |
+| `010_chat_assets.sql`                   | Jan 2026 | Chat message attachments table and storage bucket                |
+| `011_chat_assets_cleanup.sql`           | Feb 2026 | Cleanup function for orphaned chat assets                        |
+| `012_transcript_storage_and_limits.sql` | Feb 2026 | Transcript processing metadata, upload windows, idempotency keys |
 
 ---
 
@@ -698,6 +772,7 @@ CREATE POLICY "Users can delete own notes"
 - Transcripts expire after 90 days (automatic deletion)
 - Failed jobs deleted after 7 days
 - Only normalized URLs kept for cache lookups (fingerprint-based)
+- Raw upload chunks stored in Supabase Storage (`transcript-jobs`) are deleted after a short grace period (default 48h) with a hard TTL (default 7 days)
 
 **User Consent:**
 

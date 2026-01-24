@@ -79,6 +79,8 @@
 ### Storage / Caching
 
 - No persistent transcript cache in the extension (stored in React state only).
+- Feature actions (note save today; chat/quiz when wired) call `POST /api/transcripts/cache` via `useTranscriptCache`.
+- Backend persists cached transcripts in `transcripts` keyed by fingerprint for durability.
 - Session storage is scoped to `lockin_session_${tabId}` in background.
 
 ---

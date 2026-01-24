@@ -1,8 +1,15 @@
 const fs = require('fs');
 const path = require('path');
+const { randomUUID } = require('crypto');
 const { spawn, execSync } = require('child_process');
 const { transcribeAudioFile } = require('./transcription');
 const {
+  claimTranscriptJobForProcessing,
+  deleteTranscriptJobChunks,
+  getTranscriptJob,
+  listTranscriptJobChunkIndices,
+  listTranscriptJobsByHeartbeatBefore,
+  listTranscriptJobsCreatedBefore,
   updateTranscriptJob,
   upsertTranscriptCache,
   listTranscriptJobsByStatusBefore,
@@ -10,10 +17,19 @@ const {
 const {
   TRANSCRIPTION_SEGMENT_MAX_MB,
   TRANSCRIPTION_TEMP_DIR,
+  TRANSCRIPT_CHUNK_RETENTION_HOURS,
+  TRANSCRIPT_CHUNK_HARD_TTL_DAYS,
   TRANSCRIPT_JOB_TTL_MINUTES,
   TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES,
+  TRANSCRIPT_PROCESSING_HEARTBEAT_INTERVAL_SECONDS,
+  TRANSCRIPT_PROCESSING_STALE_MINUTES,
 } = require('../config');
 const { logger } = require('../observability');
+const {
+  downloadTranscriptChunk,
+  removeTranscriptChunks,
+  uploadTranscriptChunk,
+} = require('./transcriptStorage');
 
 // Industry best practice: Use ffmpeg-static for bundled FFmpeg binary
 // This eliminates PATH issues across all platforms
@@ -48,7 +64,7 @@ if (!FFMPEG_AVAILABLE) {
   logger.info('[Transcripts] FFmpeg is available and ready');
 }
 
-const ACTIVE_JOBS = new Map();
+const WORKER_ID = randomUUID();
 
 // Industry best practice: Use MP3 format for Whisper API
 // MP3 at 64kbps mono is ~480KB/min vs WAV at ~1.92MB/min (4x smaller)
@@ -59,36 +75,19 @@ function getJobDir(jobId) {
   return path.join(TRANSCRIPTION_TEMP_DIR, jobId);
 }
 
-function getChunksDir(jobId) {
-  return path.join(getJobDir(jobId), 'chunks');
-}
-
-function getChunkFilename(chunkIndex) {
-  const safeIndex = Number.isFinite(chunkIndex) ? chunkIndex : 0;
-  const padded = String(safeIndex).padStart(6, '0');
-  return `chunk-${padded}.bin`;
-}
-
-function getChunkPath(jobId, chunkIndex) {
-  return path.join(getChunksDir(jobId), getChunkFilename(chunkIndex));
-}
-
 async function ensureJobDir(jobId) {
   const dir = getJobDir(jobId);
   await fs.promises.mkdir(dir, { recursive: true });
   return dir;
 }
 
-function getJobState(jobId) {
-  if (!ACTIVE_JOBS.has(jobId)) {
-    ACTIVE_JOBS.set(jobId, {
-      cancelRequested: false,
-      currentProcess: null,
-      uploadPath: null,
-      processing: false,
-    });
-  }
-  return ACTIVE_JOBS.get(jobId);
+function createProcessingState(job) {
+  return {
+    jobId: job.id,
+    userId: job.user_id,
+    cancelRequested: false,
+    currentProcess: null,
+  };
 }
 
 function ensureNotCanceled(state) {
@@ -97,6 +96,74 @@ function ensureNotCanceled(state) {
     error.code = 'CANCELED';
     throw error;
   }
+}
+
+function coerceNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function normalizeProcessingOptions(job, options) {
+  const fallbackLanguage = typeof job?.language_hint === 'string' ? job.language_hint : null;
+  const fallbackMaxMinutes = coerceNumber(job?.max_minutes);
+  const maxMinutes = Number.isFinite(options?.maxMinutes) ? options.maxMinutes : fallbackMaxMinutes;
+
+  return {
+    languageHint:
+      typeof options?.languageHint === 'string' ? options.languageHint : fallbackLanguage,
+    maxMinutes,
+  };
+}
+
+function startProcessingMonitor(state) {
+  const intervalMs = Math.max(1, TRANSCRIPT_PROCESSING_HEARTBEAT_INTERVAL_SECONDS) * 1000;
+  let running = false;
+
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const job = await getTranscriptJob({ jobId: state.jobId, userId: state.userId });
+      if (!job) return;
+
+      if (job.status === 'canceled') {
+        state.cancelRequested = true;
+        if (state.currentProcess) {
+          try {
+            state.currentProcess.kill('SIGKILL');
+          } catch (error) {
+            logger.warn({ err: error }, '[Transcripts] Failed to kill ffmpeg process');
+          }
+        }
+        return;
+      }
+
+      await updateTranscriptJob({
+        jobId: state.jobId,
+        userId: state.userId,
+        updates: {
+          processing_heartbeat_at: new Date().toISOString(),
+          processing_worker_id: WORKER_ID,
+        },
+      });
+    } catch (error) {
+      logger.warn({ err: error }, '[Transcripts] Processing heartbeat failed');
+    } finally {
+      running = false;
+    }
+  };
+
+  tick().catch((error) => {
+    logger.warn({ err: error }, '[Transcripts] Initial processing heartbeat failed');
+  });
+
+  const timer = setInterval(() => {
+    tick().catch((error) => {
+      logger.warn({ err: error }, '[Transcripts] Processing heartbeat failed');
+    });
+  }, intervalMs);
+
+  return () => clearInterval(timer);
 }
 
 function runFfmpeg(args, state) {
@@ -139,38 +206,32 @@ function runFfmpeg(args, state) {
   });
 }
 
-async function appendTranscriptChunk(jobId, chunk, chunkIndex) {
-  const state = getJobState(jobId);
-  const jobDir = await ensureJobDir(jobId);
-  const chunksDir = getChunksDir(jobId);
-  await fs.promises.mkdir(chunksDir, { recursive: true });
-  const chunkPath = getChunkPath(jobId, chunkIndex);
-
-  if (!fs.existsSync(chunkPath)) {
-    await fs.promises.writeFile(chunkPath, chunk);
+async function appendTranscriptChunk({ jobId, userId, chunk, chunkIndex }) {
+  if (!userId) {
+    throw new Error('Transcript chunk upload requires userId');
   }
+  await uploadTranscriptChunk({ userId, jobId, chunkIndex, chunk });
+  return { jobId, chunkIndex };
+}
 
-  state.uploadPath = path.join(jobDir, 'media.bin');
-  return chunkPath;
+async function writeStreamChunk(writeStream, chunk) {
+  if (!writeStream.write(chunk)) {
+    await new Promise((resolve) => writeStream.once('drain', resolve));
+  }
 }
 
 async function assembleUploadFromChunks(job, jobDir, state) {
   ensureNotCanceled(state);
-  const chunksDir = getChunksDir(job.id);
   const uploadPath = path.join(jobDir, 'media.bin');
+  const chunkIndices = await listTranscriptJobChunkIndices(job.id);
 
-  const files = await fs.promises.readdir(chunksDir);
-  const chunkFiles = files
-    .filter((file) => file.startsWith('chunk-') && file.endsWith('.bin'))
-    .sort();
-
-  if (chunkFiles.length === 0) {
+  if (chunkIndices.length === 0) {
     throw new Error('Uploaded media not found for this job');
   }
 
   if (job.expected_total_chunks) {
     const expectedCount = Number(job.expected_total_chunks);
-    if (chunkFiles.length !== expectedCount) {
+    if (chunkIndices.length !== expectedCount) {
       throw new Error('Uploaded chunks are incomplete');
     }
   }
@@ -178,14 +239,14 @@ async function assembleUploadFromChunks(job, jobDir, state) {
   const writeStream = fs.createWriteStream(uploadPath);
 
   try {
-    for (const file of chunkFiles) {
+    for (const chunkIndex of chunkIndices) {
       ensureNotCanceled(state);
-      await new Promise((resolve, reject) => {
-        const readStream = fs.createReadStream(path.join(chunksDir, file));
-        readStream.on('error', reject);
-        readStream.on('end', resolve);
-        readStream.pipe(writeStream, { end: false });
+      const chunk = await downloadTranscriptChunk({
+        userId: job.user_id,
+        jobId: job.id,
+        chunkIndex,
       });
+      await writeStreamChunk(writeStream, chunk);
     }
   } finally {
     writeStream.end();
@@ -348,12 +409,12 @@ async function cleanupJobFiles(jobId) {
 async function processTranscriptJob(job, options, state) {
   const jobDir = await ensureJobDir(job.id);
   const uploadPath = await assembleUploadFromChunks(job, jobDir, state);
-  state.uploadPath = uploadPath;
+  const effectiveOptions = normalizeProcessingOptions(job, options);
 
-  if (options?.maxMinutes && job.duration_ms) {
-    const maxMs = options.maxMinutes * 60 * 1000;
+  if (effectiveOptions.maxMinutes && job.duration_ms) {
+    const maxMs = effectiveOptions.maxMinutes * 60 * 1000;
     if (job.duration_ms > maxMs) {
-      throw new Error(`Video exceeds ${options.maxMinutes} minute limit`);
+      throw new Error(`Video exceeds ${effectiveOptions.maxMinutes} minute limit`);
     }
   }
 
@@ -361,7 +422,7 @@ async function processTranscriptJob(job, options, state) {
   await convertToAudio(uploadPath, audioPath, state);
 
   const segments = await splitAudioIfNeeded(audioPath, jobDir, state);
-  const transcript = await transcribeSegments(segments, options, state);
+  const transcript = await transcribeSegments(segments, effectiveOptions, state);
   ensureNotCanceled(state);
 
   // Redact media URL for privacy (remove session tokens, auth params)
@@ -387,51 +448,132 @@ async function processTranscriptJob(job, options, state) {
   });
 
   await cleanupJobFiles(job.id);
-  ACTIVE_JOBS.delete(job.id);
 }
 
 async function startTranscriptProcessing(job, options) {
-  const state = getJobState(job.id);
-  if (state.processing) return;
-  state.processing = true;
+  const staleMinutes = Math.max(1, TRANSCRIPT_PROCESSING_STALE_MINUTES);
+  const staleBefore = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
+  const claimedJob = await claimTranscriptJobForProcessing({
+    jobId: job.id,
+    workerId: WORKER_ID,
+    staleBefore,
+  });
 
-  processTranscriptJob(job, options, state)
+  if (!claimedJob) {
+    logger.info({ jobId: job.id }, '[Transcripts] Job already claimed by another worker');
+    return;
+  }
+
+  const state = createProcessingState(claimedJob);
+  const stopMonitor = startProcessingMonitor(state);
+
+  processTranscriptJob(claimedJob, options, state)
     .catch(async (error) => {
       const message = error instanceof Error ? error.message : String(error);
       const canceled = message === 'CANCELED' || state.cancelRequested;
 
       await updateTranscriptJob({
-        jobId: job.id,
-        userId: job.user_id,
+        jobId: claimedJob.id,
+        userId: claimedJob.user_id,
         updates: {
           status: canceled ? 'canceled' : 'error',
           error: canceled ? 'Canceled' : message,
         },
       });
 
-      await cleanupJobFiles(job.id);
-      ACTIVE_JOBS.delete(job.id);
+      await cleanupJobFiles(claimedJob.id);
     })
     .finally(() => {
-      state.processing = false;
+      stopMonitor();
     });
 }
 
-async function cancelTranscriptProcessing(jobId) {
-  const state = getJobState(jobId);
-  state.cancelRequested = true;
-  if (state.currentProcess) {
+async function cleanupTranscriptChunksForJob(job, reason) {
+  if (!job?.id || !job?.user_id) return { removed: 0 };
+  const chunkIndices = await listTranscriptJobChunkIndices(job.id);
+  if (chunkIndices.length === 0) return { removed: 0 };
+
+  const batchSize = 100;
+  let removed = 0;
+
+  for (let i = 0; i < chunkIndices.length; i += batchSize) {
+    const batch = chunkIndices.slice(i, i + batchSize);
+    await removeTranscriptChunks({ userId: job.user_id, jobId: job.id, chunkIndices: batch });
+    removed += batch.length;
+  }
+
+  await deleteTranscriptJobChunks(job.id);
+  logger.info({ jobId: job.id, removed, reason }, '[Transcripts] Cleaned up transcript job chunks');
+
+  return { removed };
+}
+
+async function cleanupCompletedTranscriptChunks() {
+  const retentionMs = Math.max(1, TRANSCRIPT_CHUNK_RETENTION_HOURS) * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - retentionMs).toISOString();
+  const jobs = await listTranscriptJobsByStatusBefore({
+    statuses: ['done', 'error', 'canceled'],
+    updatedBefore: cutoff,
+  });
+
+  for (const job of jobs) {
     try {
-      state.currentProcess.kill('SIGKILL');
+      await cleanupTranscriptChunksForJob(job, 'retention');
     } catch (error) {
-      logger.warn({ err: error }, '[Transcripts] Failed to kill ffmpeg process');
+      logger.warn({ err: error }, '[Transcripts] Failed to clean retained job chunks');
     }
   }
-  await cleanupJobFiles(jobId);
-  ACTIVE_JOBS.delete(jobId);
+
+  return jobs.length;
+}
+
+async function cleanupExpiredTranscriptChunks() {
+  const ttlMs = Math.max(1, TRANSCRIPT_CHUNK_HARD_TTL_DAYS) * 24 * 60 * 60 * 1000;
+  const cutoff = new Date(Date.now() - ttlMs).toISOString();
+  const jobs = await listTranscriptJobsCreatedBefore({ createdBefore: cutoff });
+
+  for (const job of jobs) {
+    try {
+      const result = await cleanupTranscriptChunksForJob(job, 'hard-ttl');
+      if (
+        result.removed > 0 &&
+        ['created', 'uploading', 'uploaded', 'processing'].includes(job.status)
+      ) {
+        await updateTranscriptJob({
+          jobId: job.id,
+          userId: job.user_id,
+          updates: { status: 'error', error: 'Job exceeded retention TTL' },
+        });
+      }
+    } catch (error) {
+      logger.warn({ err: error }, '[Transcripts] Failed to clean expired job chunks');
+    }
+  }
+
+  return jobs.length;
+}
+
+async function resumeStaleTranscriptJobs() {
+  const staleMinutes = Math.max(1, TRANSCRIPT_PROCESSING_STALE_MINUTES);
+  const staleBefore = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
+  const staleJobs = await listTranscriptJobsByHeartbeatBefore({
+    statuses: ['processing'],
+    heartbeatBefore: staleBefore,
+  });
+
+  for (const job of staleJobs) {
+    try {
+      await startTranscriptProcessing(job);
+    } catch (error) {
+      logger.warn({ err: error }, '[Transcripts] Failed to resume stale job');
+    }
+  }
+
+  return staleJobs.length;
 }
 
 async function reapStaleTranscriptJobs() {
+  const resumed = await resumeStaleTranscriptJobs();
   const ttlMs = Math.max(1, TRANSCRIPT_JOB_TTL_MINUTES) * 60 * 1000;
   const cutoff = new Date(Date.now() - ttlMs).toISOString();
   const staleJobs = await listTranscriptJobsByStatusBefore({
@@ -439,15 +581,7 @@ async function reapStaleTranscriptJobs() {
     updatedBefore: cutoff,
   });
 
-  if (staleJobs.length === 0) return { reaped: 0 };
-
   for (const job of staleJobs) {
-    try {
-      await cancelTranscriptProcessing(job.id);
-    } catch (error) {
-      logger.warn({ err: error }, '[Transcripts] Failed to cancel stale job process');
-    }
-
     try {
       await updateTranscriptJob({
         jobId: job.id,
@@ -457,12 +591,21 @@ async function reapStaleTranscriptJobs() {
           error: 'Job expired before completion',
         },
       });
+      await cleanupJobFiles(job.id);
     } catch (error) {
       logger.warn({ err: error }, '[Transcripts] Failed to mark stale job');
     }
   }
 
-  return { reaped: staleJobs.length };
+  const cleaned = await cleanupCompletedTranscriptChunks();
+  const hardCleaned = await cleanupExpiredTranscriptChunks();
+
+  return {
+    reaped: staleJobs.length,
+    resumed,
+    cleaned,
+    hardCleaned,
+  };
 }
 
 // Track the reaper interval for graceful shutdown
@@ -494,7 +637,6 @@ function stopTranscriptJobReaper() {
 module.exports = {
   appendTranscriptChunk,
   startTranscriptProcessing,
-  cancelTranscriptProcessing,
   reapStaleTranscriptJobs,
   startTranscriptJobReaper,
   stopTranscriptJobReaper,

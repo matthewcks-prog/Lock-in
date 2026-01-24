@@ -5,13 +5,16 @@
  */
 
 import { useCallback } from 'react';
-import type { TranscriptResult, TranscriptSegment } from '../../../core/transcripts/types';
+import type { DetectedVideo, TranscriptResult, TranscriptSegment } from '@core/transcripts/types';
 import type { SaveNoteOptions } from '../../hooks/useNoteSave';
 import type { Note } from '@core/domain/Note';
+import { useTranscriptCacheContext } from '../contexts/TranscriptCacheContext';
 
 interface TranscriptMessageProps {
   /** The transcript data */
   transcript: TranscriptResult;
+  /** Video metadata for caching */
+  video: DetectedVideo;
   /** Video title for display */
   videoTitle: string;
   /** Save note function from context */
@@ -83,7 +86,14 @@ function downloadFile(filename: string, content: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-export function TranscriptMessage({ transcript, videoTitle, saveNote }: TranscriptMessageProps) {
+export function TranscriptMessage({
+  transcript,
+  video,
+  videoTitle,
+  saveNote,
+}: TranscriptMessageProps) {
+  const { cacheTranscript } = useTranscriptCacheContext();
+
   const handleDownloadTxt = useCallback(() => {
     const content = formatAsPlainText(transcript, videoTitle);
     const safeTitle = videoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -97,6 +107,9 @@ export function TranscriptMessage({ transcript, videoTitle, saveNote }: Transcri
   }, [transcript.segments, videoTitle]);
 
   const handleSaveNote = useCallback(async () => {
+    cacheTranscript({ transcript, video }).catch((error) => {
+      console.error('Failed to cache transcript:', error);
+    });
     const noteContent = `# Transcript: ${videoTitle}\n\n${transcript.plainText}`;
     try {
       await saveNote({
@@ -112,7 +125,7 @@ export function TranscriptMessage({ transcript, videoTitle, saveNote }: Transcri
     } catch (error) {
       console.error('Failed to save note:', error);
     }
-  }, [transcript.plainText, videoTitle, saveNote]);
+  }, [cacheTranscript, transcript, video, videoTitle, saveNote]);
 
   return (
     <div className="lockin-transcript-message">

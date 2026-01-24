@@ -16,4 +16,7 @@ export type {
 export { useAiTranscription } from './useAiTranscription';
 export type { UseAiTranscriptionResult } from './useAiTranscription';
 
+export { useTranscriptCache } from './useTranscriptCache';
+export type { TranscriptCacheInput, TranscriptCacheState } from './useTranscriptCache';
+
 export * from './types';

@@ -65,6 +65,12 @@ function createStubRepo(state) {
       const maxIndex = count ? Math.max(...indices) : null;
       return { count, minIndex, maxIndex };
     },
+    async deleteTranscriptJobChunk() {
+      return null;
+    },
+    async consumeTranscriptUploadBytes() {
+      return { allowed: true, remaining: 0, retryAfterSeconds: 0 };
+    },
   };
 }
 
@@ -75,9 +81,6 @@ function createStubService(flags) {
     },
     startTranscriptProcessing() {
       flags.started = true;
-    },
-    async cancelTranscriptProcessing() {
-      flags.canceled = true;
     },
   };
 }
@@ -268,7 +271,7 @@ test('rejects chunk uploads after cancel', async () => {
 
 test('cancel mid-processing stops job', async () => {
   const state = createRepoState();
-  const flags = { started: false, canceled: false };
+  const flags = { started: false };
   const repo = createStubRepo(state);
   const service = createStubService(flags);
   const { controller, restore } = loadController({ repo, service });
@@ -286,7 +289,6 @@ test('cancel mid-processing stops job', async () => {
     await controller.cancelJob(createReq({ userId: 'user-1', jobId: 'job-4', body: {} }), res);
 
     assert.equal(state.jobs.get('job-4').status, 'canceled');
-    assert.equal(flags.canceled, true);
   } finally {
     restore();
   }

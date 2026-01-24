@@ -417,13 +417,152 @@ function getSessionStorageKey() {
   return getConfigValue('SESSION_STORAGE_KEY', 'lockinSupabaseSession');
 }
 
+function getSupabaseUrl() {
+  return getConfigValue('SUPABASE_URL', '');
+}
+
+function getSupabaseAnonKey() {
+  return getConfigValue('SUPABASE_ANON_KEY', '');
+}
+
+function getTokenExpiryBufferMs() {
+  const raw = getConfigValue('TOKEN_EXPIRY_BUFFER_MS', 60000);
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 60000;
+}
+
+async function storageGet(key) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.storage.sync.get([key], (result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve(result || {});
+        }
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function storageSet(data) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.storage.sync.set(data, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function storageRemove(key) {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.storage.sync.remove(key, () => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else {
+          resolve();
+        }
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function normalizeStoredSession(session) {
+  if (!session || typeof session !== 'object') return null;
+  return {
+    accessToken: session.accessToken || session.access_token || null,
+    refreshToken: session.refreshToken || session.refresh_token || null,
+    expiresAt: Number(session.expiresAt || session.expires_at || 0),
+    tokenType: session.tokenType || session.token_type || 'bearer',
+    user: session.user || null,
+  };
+}
+
+async function refreshAccessToken(session) {
+  const supabaseUrl = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
+  if (!supabaseUrl || !anonKey || !session?.refreshToken) {
+    return null;
+  }
+
+  const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ refresh_token: session.refreshToken }),
+  });
+
+  if (!response.ok) {
+    await storageRemove(getSessionStorageKey());
+    return null;
+  }
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    console.error('[Lock-in] Failed to parse refresh token response:', error);
+    return null;
+  }
+
+  if (!payload?.access_token) {
+    return null;
+  }
+
+  const expiresIn = Number(payload.expires_in) || 3600;
+  const nextSession = {
+    accessToken: payload.access_token,
+    refreshToken: payload.refresh_token || session.refreshToken,
+    expiresAt: Date.now() + expiresIn * 1000,
+    tokenType: payload.token_type || session.tokenType || 'bearer',
+    user: payload.user || session.user || null,
+  };
+
+  await storageSet({ [getSessionStorageKey()]: nextSession });
+  return nextSession.accessToken;
+}
+
+let refreshInFlight = null;
+
 async function getAuthToken() {
   const key = getSessionStorageKey();
   try {
-    const result = await chrome.storage.sync.get([key]);
-    const session = result[key];
-    if (!session) return null;
-    return session.accessToken || session.access_token || null;
+    const result = await storageGet(key);
+    const session = normalizeStoredSession(result[key]);
+    if (!session?.accessToken) return null;
+
+    const bufferMs = getTokenExpiryBufferMs();
+    const expiresAt = session.expiresAt || 0;
+    if (expiresAt && expiresAt - bufferMs > Date.now()) {
+      return session.accessToken;
+    }
+
+    if (!session.refreshToken) {
+      return null;
+    }
+
+    if (!refreshInFlight) {
+      refreshInFlight = refreshAccessToken(session).finally(() => {
+        refreshInFlight = null;
+      });
+    }
+
+    const refreshed = await refreshInFlight;
+    return refreshed || null;
   } catch (error) {
     console.error('[Lock-in] Failed to read auth session:', error);
     return null;
@@ -741,31 +880,42 @@ async function fetchMediaViaContentScript({ tabId, mediaUrl, jobId, requestId, o
 /**
  * Handle MEDIA_CHUNK messages from content script
  */
-function handleMediaChunkMessage(message) {
+async function handleMediaChunkMessage(message) {
   const { requestId, chunkIndex, chunkData, chunkSize, isLast } = message.payload || {};
 
   const handler = pendingMediaChunks.get(requestId);
   if (!handler) {
     console.warn('[Lock-in BG] Received chunk for unknown request:', requestId);
-    return;
+    return { received: false, error: 'UNKNOWN_REQUEST' };
   }
 
   console.log('[Lock-in BG] Received chunk:', chunkIndex, 'size:', chunkSize, 'isLast:', isLast);
 
-  // Convert base64 to Uint8Array
-  const chunkBytes = base64ToArrayBuffer(chunkData);
+  let chunkBytes = null;
+  if (chunkData instanceof ArrayBuffer) {
+    chunkBytes = new Uint8Array(chunkData);
+  } else if (ArrayBuffer.isView(chunkData)) {
+    chunkBytes = new Uint8Array(chunkData.buffer, chunkData.byteOffset, chunkData.byteLength);
+  } else if (typeof chunkData === 'string') {
+    // Backward compatibility for legacy base64 payloads
+    chunkBytes = base64ToArrayBuffer(chunkData);
+  }
 
-  // Call the chunk handler
-  handler
-    .onChunk(chunkBytes, chunkIndex, isLast)
-    .then(() => {
-      if (isLast) {
-        handler.resolve({ success: true });
-      }
-    })
-    .catch((error) => {
-      handler.reject(error);
-    });
+  if (chunkSize > 0 && (!chunkBytes || chunkBytes.length === 0)) {
+    const error = new Error('Missing media chunk payload');
+    handler.reject(error);
+    throw error;
+  }
+
+  if (chunkBytes && chunkBytes.length > 0) {
+    await handler.onChunk(chunkBytes, chunkIndex, isLast);
+  }
+
+  if (isLast) {
+    handler.resolve({ success: true });
+  }
+
+  return { received: true };
 }
 
 async function uploadMediaInChunks({
@@ -1610,8 +1760,7 @@ async function handleMessage(message, sender) {
 
       case 'MEDIA_CHUNK': {
         // Handle media chunks from content script
-        handleMediaChunkMessage(message);
-        return { received: true };
+        return handleMediaChunkMessage(message);
       }
 
       case 'LIST_ACTIVE_TRANSCRIPT_JOBS': {

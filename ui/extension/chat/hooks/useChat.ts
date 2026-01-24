@@ -14,6 +14,7 @@ import type {
   UseChatOptions,
   HistoryTitleSource,
 } from '../types';
+import type { TranscriptCacheInput } from '../../transcripts/hooks/useTranscriptCache';
 import {
   isValidUUID,
   buildInitialChatTitle,
@@ -32,6 +33,7 @@ interface SendChatMessageOptions {
   attachmentIds?: string[];
   selectionOverride?: string;
   userMessageOverride?: string;
+  transcriptContext?: TranscriptCacheInput;
 }
 
 interface UseChatReturn {
@@ -238,6 +240,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       const attachmentIds = resolvedOptions.attachmentIds;
       const selectionOverride = resolvedOptions.selectionOverride;
       const userMessageOverride = resolvedOptions.userMessageOverride;
+      const transcriptContext = resolvedOptions.transcriptContext;
 
       const now = new Date().toISOString();
       const provisionalChatId = `chat-${Date.now()}`;
@@ -289,6 +292,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         attachmentIds,
         selectionOverride,
         userMessageOverride,
+        transcriptContext,
       });
     },
     [mode, pageUrl, courseCode, setMessages, upsertHistory, sendMessageMutation],
@@ -307,6 +311,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       const attachmentIds = resolvedOptions.attachmentIds;
       const selectionOverride = resolvedOptions.selectionOverride;
       const userMessageOverride = resolvedOptions.userMessageOverride;
+      const transcriptContext = resolvedOptions.transcriptContext;
 
       const hasChatContext = Boolean(activeChatId || activeHistoryId);
 
@@ -372,6 +377,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         attachmentIds,
         selectionOverride,
         userMessageOverride,
+        transcriptContext,
       });
     },
     [

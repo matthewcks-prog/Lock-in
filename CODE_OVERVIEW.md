@@ -69,7 +69,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`dist/libs/initApi.js` + `/api` (TS)**
   - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/src/initApi.ts`).
-  - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets/chatAssets/feedback), and `api/client.ts` composes them to keep the same public method bag.
+  - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets/chatAssets/feedback/transcripts), and `api/client.ts` composes them to keep the same public method bag.
 
 - **`src/` (TypeScript source)**
   - `initApi.ts` - Entry point for bundled API/auth clients
@@ -96,6 +96,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`extension/src/panoptoResolver.js`** - PanoptoMediaResolver for AI media URL resolution; uses core Panopto helpers.
 - **`extension/background.js`** - ExtensionFetcher class (Chrome-specific CORS/credentials) + message routing. Delegates extraction to core providers via registry and wires AI media URL resolution via PanoptoMediaResolver.
 - **AI fallback**: `useTranscripts.ts` triggers `FETCH_PANOPTO_MEDIA_URL` when captions are missing, then `TRANSCRIBE_MEDIA_AI` streams media to backend transcript jobs.
+- **Backend durability**: Transcript job chunks live in Supabase Storage bucket `transcript-jobs` and are processed via heartbeat-based job claims for multi-instance recovery.
 
 **Key pattern**: Business logic (extraction algorithm) in `/core/transcripts/providers/`. Chrome-specific fetching in `/extension/background.js` (ExtensionFetcher). Providers depend on fetcher interface, enabling testing and future web app reuse.
 
@@ -121,7 +122,8 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`useVideoDetection.ts`** - Video detection logic with retry for delayed players
 - **`useTranscriptExtraction.ts`** - Transcript extraction state management
 - **`useAiTranscription.ts`** - AI transcription with progress polling
-- **`useTranscripts.ts`** - Composition hook combining the above three
+- **`useTranscriptCache.ts`** - Caches extracted transcripts to the backend on feature use
+- **`useTranscripts.ts`** - Composition hook combining the above hooks
 
 **Key pattern**: Generic components handle shared concerns (loading states, video list, selection). Feature-specific code injects custom UI via render props (`renderItemBadge`, `renderItemActions`, `renderItemStatus`). This enables reuse for future features (e.g., "Key Takeaways", "Quiz Me") that need video selection.
 
@@ -157,7 +159,7 @@ This is a living overview of the current codebase. Update it whenever files move
   - Authenticated routes for notes CRUD, search, note chat, and note asset upload/list/delete.
 
 - **`routes/transcriptsRoutes.js`**
-  - Authenticated routes for transcript job creation, chunk upload, finalize, cancel, and status polling.
+  - Authenticated routes for transcript caching plus job creation, chunk upload, finalize, cancel, and status polling.
 
 - **`controllers/lockinController.js`**
   - Handlers for AI processing, chat listing/deletion, chat messages, and chat title generation (OpenAI summarization + persistence).
@@ -180,7 +182,7 @@ This is a living overview of the current codebase. Update it whenever files move
   - Provides `getAssetForVision()` to fetch base64-encoded images for AI processing.
 
 - **`controllers/transcriptsController.js`**
-  - Transcript job lifecycle handlers (create, upload chunks, finalize, cancel, status) with quota enforcement and chunk integrity checks.
+  - Transcript cache and job lifecycle handlers (create, upload chunks, finalize, cancel, status) with quota enforcement and chunk integrity checks.
 
 ### Data Layer
 
@@ -197,7 +199,7 @@ This is a living overview of the current codebase. Update it whenever files move
   - Data access for the `chat_message_assets` table (create/list/get/delete/link).
 
 - **`transcriptsRepository.js`**
-  - Data access for per-user transcript cache, transcript job records, and chunk tracking.
+  - Data access for per-user transcript cache, transcript job records, chunk tracking, and upload rate windows.
 
 - **`supabaseClient.js`**
   - Configured Supabase client instance used across the data layer.
@@ -205,7 +207,13 @@ This is a living overview of the current codebase. Update it whenever files move
 ### Services
 
 - **`services/transcriptsService.js`**
-  - Handles ffmpeg audio extraction, segmentation, OpenAI STT, job cleanup/cancellation, and stale job reaping.
+  - Handles ffmpeg audio extraction, segmentation, STT, processing heartbeats, and transcript job cleanup/recovery.
+
+- **`services/transcriptCacheService.js`**
+  - Validates and upserts transcript cache entries from extension feature actions.
+
+- **`services/transcriptStorage.js`**
+  - Supabase Storage wrapper for transcript job chunks (`transcript-jobs` bucket).
 
 ### Providers
 
@@ -266,7 +274,7 @@ See [docs/testing/BACKEND_TESTING.md](docs/testing/BACKEND_TESTING.md) for detai
 5. **API abstraction**: Shared `/api` TypeScript client is bundled into `dist/libs/initApi.js` and exposed as `window.LockInAPI/LockInAuth`.
 6. **Notes architecture**: Note domain types live in `core/domain/Note.ts`, backend calls are wrapped by `core/services/notesService.ts` (writes `content_json`/`editor_version`, lazy-migrates legacy HTML), autosave/editing flows run through `useNoteEditor` (composed from `ui/hooks/noteEditor/` helpers) and `useNotesList`, and the Lexical editor UI is split across `ui/extension/notes/NoteEditor.tsx` + `ui/extension/notes/editor/` (toolbar/plugins) with the notes list UI under `ui/extension/notes/panel/`.
 7. **Notes filtering**: The backend fetches ALL user notes (no server-side filtering by course/page). Client-side filtering in `NotesPanel.tsx` handles "This course", "All notes", and "Starred" filters. This ensures users can see all their notes regardless of which page/course they're currently viewing, and filters update dynamically as they navigate.
-8. **Transcript extraction**: Captions-first flow for Panopto/Echo360/HTML5. Panopto caption URLs are extracted from embed HTML; Echo360 uses JSON transcript endpoint (primary) with VTT/TXT fallback, and integrates with syllabus API for section pages. If captions are missing, `PanoptoMediaResolver` resolves podcast/download URLs (viewer/embed HTML + MAIN-world probe + range validation) and the background AI pipeline uploads media to the backend. UI shows the video list and exposes AI fallback when captions are unavailable.
+8. **Transcript extraction**: Captions-first flow for Panopto/Echo360/HTML5. Panopto caption URLs are extracted from embed HTML; Echo360 uses JSON transcript endpoint (primary) with VTT/TXT fallback, and integrates with syllabus API for section pages. If captions are missing, `PanoptoMediaResolver` resolves podcast/download URLs (viewer/embed HTML + MAIN-world probe + range validation) and the background AI pipeline uploads media to the backend. Feature actions cache transcripts via `POST /api/transcripts/cache` to avoid ephemeral losses. UI shows the video list and exposes AI fallback when captions are unavailable.
 9. **Cross-tab sync**: `useCrossTabSync` uses `chrome.storage.local` as a lightweight event bus to refresh notes/chat state across tabs without duplicating feature-specific wiring.
 10. **Error Tracking (Sentry)**: Uses browser extension pattern with isolated `BrowserClient` + `Scope` (not `Sentry.init()`) per [Sentry best practices](https://docs.sentry.io/platforms/javascript/best-practices/browser-extensions/). Located in `extension/src/sentry.ts`, initialized in sidebar bundle. Captures errors via `scope.captureException()`. Privacy-focused: request bodies, auth headers, and query params are stripped; user context is not attached to error events. DSN configured in `extension/config.js` via `VITE_SENTRY_DSN` at build time.
 11. **Feedback System**: Structured user feedback via `FeedbackModal` in sidebar. Backend at `POST /api/feedback`, types in `core/domain/types.ts` and `api/resources/feedbackClient.ts`, stored in `feedback` table with RLS.
@@ -313,6 +321,7 @@ The system is designed to handle thousands of concurrent users:
 - **Database indexes**: Applied via `migrations/002_performance_indexes.sql` - composite indexes on all tables for common query patterns.
 - **Row Level Security**: Applied via `migrations/003_row_level_security.sql` - all tables have RLS policies enforcing user data isolation.
 - **Input validation**: UUID format validation, content length limits (50k chars), tag limits (20 tags).
+- **Idempotency + upload throttling**: `idempotency_keys` and `transcript_upload_windows` keep retries and uploads durable across instances.
 
 ## Security Considerations
 

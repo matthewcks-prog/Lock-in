@@ -1,6 +1,6 @@
 ﻿# Refactor Plan (Quality Audit 2026-01-23)
 
-Last updated: 2026-01-23
+Last updated: 2026-01-25
 
 This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to reflect work already completed and the remaining backlog. Phases are ordered by risk reduction, scalability, and architectural alignment. Use the acceptance criteria to verify completion before moving to the next phase.
 
@@ -88,20 +88,46 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
 
 **Goal:** Remove in-memory cross-request state and make transcript processing durable across instances.
 
-- [ ] **Replace in-memory job tracking and rate limiting**
+- [x] **Replace in-memory job tracking and rate limiting**
   - **Problem:** `ACTIVE_JOBS`, `UPLOAD_RATE_WINDOWS`, `createIdempotencyStore` are in-memory.
   - **Work:** Persist job state + rate limits in DB/Redis/queue.
   - **Acceptance criteria:** No cross-request state stored in memory; multi-instance safe.
 
-- [ ] **Durable transcript storage + job processing**
+- [x] **Durable transcript storage + job processing**
   - **Problem:** Transcript chunks stored on local filesystem; not durable.
-  - **Work:** Move to object storage (Azure Blob/S3) and/or a dedicated worker queue.
+  - **Work:** Use a dedicated Supabase Storage bucket for raw chunks, with very short retention:
+    Bucket: transcript-jobs (private).
+    For e.g (You can ammend if you have a better way).
+    Path: <user_id>/<job_id>/<chunk_index>.bin or <user_id>/<job_id>.webm if you merge chunks server-side.
+    Add a column storage_path (or similar) to transcript_jobs if you need a pointer.
+    Retention:
+    Delete raw blobs immediately after transcript status becomes done + a small grace period (e.g. 24–72h for retry/debug).
+    Hard TTL on blobs via a scheduled job (or storage lifecycle): delete anything older than, say, 7 days regardless of status.
+    Worker behavior:
+    Job status + chunks live in transcript_jobs / transcript_job_chunks (already durable).
+    Worker resumes by:
+    Looking up job + chunk indices in Supabase.
+    Reading missing or all chunks from the storage bucket.
+    No dependency on any local filesystem.
+    Access control:
+    Keep bucket private and allow authenticated users to read their own objects only within a short access window (e.g., 48h).
   - **Acceptance criteria:** Job resume/retry works across restarts; no local-only chunk dependency.
 
-- [ ] **Large media handling improvements**
+- [x] **Large media handling improvements**
   - **Problem:** Base64 chunking can spike memory/CPU on large files.
   - **Work:** Streamed uploads where possible; enforce chunk sizing and backpressure.
   - **Acceptance criteria:** Large media uploads do not block UI thread; memory spikes reduced.
+
+- [x] **External transcript cache endpoint + UI hook**
+  - **Problem:** External-provider transcripts could be lost between sessions.
+  - **Work:** Add `/api/transcripts/cache` service/controller/route and `useTranscriptCache` hook to persist transcripts on feature actions.
+  - **Acceptance criteria:** Transcript cache records are upserted when features call the cache hook.
+
+- [x] **Docs consistency**
+  - Make sure CODE_OVERVIEW.md,DATABASE.md, AGENTS.md or any other docs are consistent with what is implemented and updated.
+
+- [x] **No feature breaks or regression**
+  - Ensure npm run validate still passes. Add more tests if needed.
 
 ---
 
@@ -123,6 +149,9 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
   - **Problem:** Hard dependencies on `fetch`, `chrome`, `window`, env at import time.
   - **Work:** Inject fetch/storage/env into modules; add lightweight interfaces.
   - **Acceptance criteria:** Tests can stub dependencies without global hacks.
+
+- [ ] **No feature breaks or regression**
+  - Ensure npm run validate still passes. Add more tests if needed.
 
 ---
 
@@ -154,7 +183,7 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
   - Update `ARCHITECTURE.md`, `REPO_MAP.md`, and `docs/README.md` to match the chosen policy.
 
 - [] **Whole repo**
-  - Make sure no other doc contain inconsistencies and there are only one single sourcec of truth which is consistent.
+  - Make sure no doc contain inconsistencies and there are only one single source of truth which is consistent.Follow what you think is the recommended approach and refactor code if needed.
   - Delete old legacy docs not needed.
   - Ensure .md files follows a well organised structure in case in the future aditional .md files needs to be added.
 
