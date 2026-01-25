@@ -15,16 +15,11 @@ import {
 describe('textUtils', () => {
   describe('escapeHtml', () => {
     it('should escape HTML special characters', () => {
-      // Note: jsdom's textContent/innerHTML behavior may differ from browser
-      // Test that dangerous characters are escaped
       expect(escapeHtml("<script>alert('xss')</script>")).toContain('&lt;script&gt;');
       expect(escapeHtml("<script>alert('xss')</script>")).toContain('&lt;/script&gt;');
       expect(escapeHtml('Hello & World')).toBe('Hello &amp; World');
-      // In jsdom, double quotes in textContent aren't escaped in innerHTML
-      // Test that the function works and returns a string
-      const quoted = escapeHtml('Quote "test"');
-      expect(typeof quoted).toBe('string');
-      expect(quoted).toContain('test');
+      expect(escapeHtml('Quote "test"')).toBe('Quote &quot;test&quot;');
+      expect(escapeHtml("Quote 'test'")).toBe('Quote &#39;test&#39;');
     });
 
     it('should return empty string for non-string input', () => {

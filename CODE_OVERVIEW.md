@@ -70,6 +70,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`dist/libs/initApi.js` + `/api` (TS)**
   - Bundled TypeScript API/auth clients that expose `window.LockInAPI` and `window.LockInAuth` (source in `/api` and `extension/src/initApi.ts`).
   - API client is layered: `api/fetcher.ts` contains retry/abort/optimistic-locking/error parsing logic, resource clients live in `api/resources/` (lockin/chats/notes/assets/chatAssets/feedback/transcripts), and `api/client.ts` composes them to keep the same public method bag.
+  - Auth/API clients accept injected `fetch` implementations (initApi passes global fetch) to keep `/api` Node/SSR-safe and testable without global stubs.
 
 - **`src/` (TypeScript source)**
   - `initApi.ts` - Entry point for bundled API/auth clients
@@ -314,6 +315,7 @@ The system is designed to handle thousands of concurrent users:
 ### Logging (`/core/utils/logger.ts`)
 
 - **Centralized logging**: Shared logger for core/api modules with level gating via `LOCKIN_CONFIG.DEBUG` (and optional `LOCKIN_CONFIG.LOG_LEVEL`).
+- **Injected config**: Optional logger options allow a custom config provider/console for SSR and tests without relying on global config.
 
 ### Note Editor (`/ui/hooks/useNoteEditor.ts`)
 

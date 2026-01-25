@@ -7,6 +7,11 @@ export interface Logger {
   error: (...args: unknown[]) => void;
 }
 
+export interface LoggerOptions {
+  configProvider?: () => Record<string, unknown> | undefined;
+  console?: Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
+}
+
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 10,
   info: 20,
@@ -14,8 +19,12 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-function resolveLogLevel(): LogLevel {
-  const config = (globalThis as { LOCKIN_CONFIG?: Record<string, unknown> }).LOCKIN_CONFIG;
+function getDefaultConfig(): Record<string, unknown> | undefined {
+  return (globalThis as { LOCKIN_CONFIG?: Record<string, unknown> }).LOCKIN_CONFIG;
+}
+
+function resolveLogLevel(configProvider?: LoggerOptions['configProvider']): LogLevel {
+  const config = (configProvider || getDefaultConfig)();
   const level = typeof config?.LOG_LEVEL === 'string' ? config.LOG_LEVEL.toLowerCase() : null;
   const debug = config?.DEBUG === true || config?.DEBUG === 'true';
 
@@ -26,32 +35,34 @@ function resolveLogLevel(): LogLevel {
   return debug ? 'debug' : 'info';
 }
 
-function isEnabled(level: LogLevel): boolean {
-  return LOG_LEVELS[level] >= LOG_LEVELS[resolveLogLevel()];
+function isEnabled(level: LogLevel, configProvider?: LoggerOptions['configProvider']): boolean {
+  return LOG_LEVELS[level] >= LOG_LEVELS[resolveLogLevel(configProvider)];
 }
 
-export function createLogger(scope?: string): Logger {
+export function createLogger(scope?: string, options: LoggerOptions = {}): Logger {
   const prefix = scope ? `[Lock-in:${scope}]` : '[Lock-in]';
+  const configProvider = options.configProvider;
+  const consoleRef = options.console ?? console;
 
   return {
     debug(...args: unknown[]) {
-      if (isEnabled('debug')) {
-        console.debug(prefix, ...args);
+      if (isEnabled('debug', configProvider)) {
+        consoleRef.debug(prefix, ...args);
       }
     },
     info(...args: unknown[]) {
-      if (isEnabled('info')) {
-        console.info(prefix, ...args);
+      if (isEnabled('info', configProvider)) {
+        consoleRef.info(prefix, ...args);
       }
     },
     warn(...args: unknown[]) {
-      if (isEnabled('warn')) {
-        console.warn(prefix, ...args);
+      if (isEnabled('warn', configProvider)) {
+        consoleRef.warn(prefix, ...args);
       }
     },
     error(...args: unknown[]) {
-      if (isEnabled('error')) {
-        console.error(prefix, ...args);
+      if (isEnabled('error', configProvider)) {
+        consoleRef.error(prefix, ...args);
       }
     },
   };

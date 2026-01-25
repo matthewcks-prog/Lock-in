@@ -1,7 +1,7 @@
 import type { ApiClient } from '../../api/client';
 import type { Note, NoteAsset, NoteContent, NoteContentVersion, NoteType } from '../domain/Note.ts';
 import { AppError, ErrorCodes } from '../errors';
-import { createLogger } from '../utils/logger';
+import { createLogger, type Logger } from '../utils/logger';
 import { sanitizeUrl } from '../utils/urlSanitizer';
 
 export interface CreateNoteInput {
@@ -47,14 +47,16 @@ export interface NotesService {
   deleteAsset(assetId: string): Promise<void>;
 }
 
+export interface NotesServiceDependencies {
+  logger?: Logger;
+}
+
 const DEFAULT_CONTENT: NoteContent = {
   version: 'lexical_v1',
   editorState: null,
   legacyHtml: null,
   plainText: '',
 };
-
-const logger = createLogger('NotesService');
 
 function isJson(value: unknown): boolean {
   return typeof value === 'object' && value !== null;
@@ -264,7 +266,11 @@ function ensureService(apiClient: ApiClient | null | undefined): asserts apiClie
   }
 }
 
-export function createNotesService(apiClient: ApiClient | null | undefined): NotesService {
+export function createNotesService(
+  apiClient: ApiClient | null | undefined,
+  deps: NotesServiceDependencies = {},
+): NotesService {
+  const logger = deps.logger ?? createLogger('NotesService');
   async function listNotes(
     params: {
       courseCode?: string | null;

@@ -19,6 +19,7 @@ const {
 const { cacheExternalTranscript } = require('../services/transcriptCacheService');
 const {
   TRANSCRIPT_DAILY_JOB_LIMIT,
+  TRANSCRIPT_CHUNK_MAX_BYTES,
   TRANSCRIPT_MAX_CONCURRENT_JOBS,
   TRANSCRIPT_MAX_TOTAL_BYTES,
   TRANSCRIPT_MAX_DURATION_MINUTES,
@@ -209,6 +210,11 @@ async function uploadChunk(req, res) {
   }
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     throw new ValidationError('Chunk payload is required', 'chunk');
+  }
+  if (Number.isFinite(TRANSCRIPT_CHUNK_MAX_BYTES) && req.body.length > TRANSCRIPT_CHUNK_MAX_BYTES) {
+    throw new AppError('Chunk exceeds maximum allowed size.', 'TRANSCRIPT_CHUNK_TOO_LARGE', 413, {
+      maxBytes: TRANSCRIPT_CHUNK_MAX_BYTES,
+    });
   }
   if (chunkIndex === null) {
     throw new ValidationError('Chunk index header is required', 'x-chunk-index');

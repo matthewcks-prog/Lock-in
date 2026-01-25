@@ -60,6 +60,8 @@ extension/libs/
 # Chrome Extension (packed)
 *.crx
 *.pem
+extension/config.js
+extension/config.js.map
 
 # Temporary files
 tmp/

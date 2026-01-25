@@ -1,4 +1,4 @@
-﻿# Refactor Plan (Quality Audit 2026-01-23)
+# Refactor Plan (Quality Audit 2026-01-23)
 
 Last updated: 2026-01-25
 
@@ -125,7 +125,7 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
 
 - [x] **Large media handling improvements**
   - **Problem:** Base64 chunking can spike memory/CPU on large files.
-  - **Work:** Streamed uploads where possible; enforce chunk sizing and backpressure.
+  - **Work:** Streamed uploads where possible; enforce chunk sizing and backpressure; add server-side chunk size guard + rate-limit tests.
   - **Acceptance criteria:** Large media uploads do not block UI thread; memory spikes reduced.
 
 - [x] **External transcript cache endpoint + UI hook**
@@ -145,22 +145,22 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
 
 **Goal:** Ensure `/core` and `/api` are Node/SSR safe and testable.
 
-- [ ] **Remove DOM usage from core**
+- [x] **Remove DOM usage from core**
   - **Problem:** `core/utils/textUtils.ts` uses `document.createElement`.
   - **Work:** Move DOM-dependent logic to UI/extension or provide pure utilities.
   - **Acceptance criteria:** `/core` imports succeed in Node without DOM globals.
 
-- [ ] **Eliminate module-load side effects**
+- [x] **Eliminate module-load side effects**
   - **Problem:** Listeners/timers/config parse on import make testing hard.
   - **Work:** Refactor to explicit initialization functions with dependency injection.
   - **Acceptance criteria:** Modules are inert on import; behavior only on explicit init.
 
-- [ ] **Dependency injection for globals**
+- [x] **Dependency injection for globals**
   - **Problem:** Hard dependencies on `fetch`, `chrome`, `window`, env at import time.
   - **Work:** Inject fetch/storage/env into modules; add lightweight interfaces.
   - **Acceptance criteria:** Tests can stub dependencies without global hacks.
 
-- [ ] **No feature breaks or regression**
+- [x] **No feature breaks or regression**
   - Ensure npm run validate still passes. Add more tests if needed.
 
 ---
@@ -173,6 +173,13 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
   - **Problem:** Retry logic split between `networkUtils.js` and ad-hoc fetch calls.
   - **Work:** Consolidate to one wrapper used by background/auth/transcripts flows.
   - **Acceptance criteria:** No raw fetches in critical paths without wrapper; consistent timeout + retry policy.
+
+  - Key Advice for your implementation:
+    Don't delete mediaFetcher.js logic blindly: I noticed mediaFetcher.js has very specific logic for handling "manual" redirects (Moodle -> CDN) and "same-origin" vs "omit" credentials. A generic wrapper might break this.
+    Solution: Your standardized wrapper should accept a config object that allows disabling default behaviors (like followRedirects: false) so specialised callers can still use the retry machinery without losing their custom logic.
+    Make it Universal: Ensure
+    background.js, transcriptHandler.ts, and your Backend all import the same logic (or equivalent logic).
+    If there is a better solution you propose feel free to do it, these were just my observations, but i want my code to really be scalable, reliable and bulletproof.
 
 ---
 

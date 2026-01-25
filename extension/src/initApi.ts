@@ -42,6 +42,7 @@ export function getConfig(): LockInConfig {
  */
 export function initAuthClient(): AuthClient {
   const config = getConfig();
+  const fetcher = typeof globalThis.fetch === 'function' ? globalThis.fetch : undefined;
   return createAuthClient(
     {
       supabaseUrl: config.supabaseUrl,
@@ -50,6 +51,7 @@ export function initAuthClient(): AuthClient {
       tokenExpiryBufferMs: config.tokenExpiryBufferMs,
     },
     chromeStorage,
+    { fetcher },
   );
 }
 
@@ -58,9 +60,11 @@ export function initAuthClient(): AuthClient {
  */
 export function initApiClient(authClient: AuthClient): ApiClient {
   const config = getConfig();
+  const fetcher = typeof globalThis.fetch === 'function' ? globalThis.fetch : undefined;
   return createApiClient({
     backendUrl: config.backendUrl,
     authClient,
+    fetcher,
   });
 }
 
