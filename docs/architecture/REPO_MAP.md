@@ -1,6 +1,6 @@
 # Repository Map
 
-Purpose: Quick orientation for humans/AI. For current implementation details, see `CODE_OVERVIEW.md`.
+Purpose: Quick orientation for humans/AI. For current implementation details, see `docs/reference/CODE_OVERVIEW.md`.
 
 ## Tree (max 4 levels)
 
@@ -25,17 +25,16 @@ ui/
 shared/
   ui/components/ (Button, Card, ConfirmDialog, Toast, TextInput, Tabs)
 docs/
-  README.md, AI_SERVICES_ARCHITECTURE.md, CI_CHECKLIST.md, MONOREPO.md
-  TRANSCRIPT_TROUBLESHOOTING.md (legacy; canonical in docs/features/transcripts/TROUBLESHOOTING.md)
-  architecture/ (ARCHITECTURE.md, REPO_MAP.md)
+  README.md
+  architecture/ (ARCHITECTURE.md, REPO_MAP.md, AI_SERVICES_ARCHITECTURE.md, MONOREPO.md)
+  reference/ (CODE_OVERVIEW.md, DATABASE.md, CHANGELOG.md, CONTRIBUTING.md)
   tracking/ (STATUS.md, REFACTOR_PLAN.md, PROMPT_LOG.md, AI_SERVICES_REFACTOR_2026-01-19.md)
   testing/ (SMOKE_CHECKLIST.md, BACKEND_TESTING.md)
   features/
     transcripts/ (REVIEW.md, SYSTEM_MAP.md, TROUBLESHOOTING.md)
-  setup/ (LOCAL_SUPABASE_SETUP.md, ENVIRONMENT_SETUP.md, ENV_QUICK_REFERENCE.md, ENV_SECURITY_FIXES.md, CODE_FORMATTING.md)
-  deployment/ (AUDIT_SUMMARY.md, AZURE.md, CICD.md, DEPLOYMENT_CHECK.md, DEPLOYMENT_REVIEW.md, ENVIRONMENTS.md, FIX_DEPLOYMENT_ISSUE.md, README.md, ROLLBACK.md)
-  archive/ (QUALITY_AUDIT_2025-12-16.md)
-  achieve/ (legacy; typo - audit doc)
+  setup/ (LOCAL_SUPABASE_SETUP.md, CODE_FORMATTING.md)
+  deployment/ (README.md, ENVIRONMENTS.md, AZURE.md, CICD.md, CI_CHECKLIST.md, DEPLOYMENT_CHECK.md, DEPLOYMENT_REVIEW.md, FIX_DEPLOYMENT_ISSUE.md, ROLLBACK.md, AUDIT_SUMMARY.md)
+  archive/ (QUALITY_AUDIT_2025-12-16.md, QUALITY_AUDIT_2026-01-19.md, QUALITY_AUDIT_2026-01-23.md, WORKFLOW_REVIEW_SUMMARY_2026-01-22.md)
 tools/
   mcp/ (MCP server setup, configs, scripts for AI assistant tooling)
 ```
@@ -72,8 +71,8 @@ tools/
 ## Tests & Guardrails
 
 - Unit tests: `core/utils/__tests__/`, `integrations/adapters/__tests__/` (vitest, jsdom).
-- Guardrail commands: `npm run lint`, `npm run test`, `npm run type-check`, `npm run build`, `npm run verify-build`.
-- Manual: see `docs/testing/SMOKE_CHECKLIST.md` (run §1 for build/load sanity).
+- Guardrail commands: `npm run docs:check-links`, `npm run lint`, `npm run test`, `npm run type-check`, `npm run build`, `npm run verify-build`, `npm run validate`.
+- Manual: see `docs/testing/SMOKE_CHECKLIST.md` at `../testing/SMOKE_CHECKLIST.md` (run §1 for build/load sanity).
 
 ## MCP Tooling
 

@@ -17,7 +17,7 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
    cp .env.example .env
 
    # Edit .env with your credentials
-   # See docs/setup/ENVIRONMENT_SETUP.md for full guide
+   # See docs/deployment/ENVIRONMENTS.md for full guide
    ```
 
    **Minimum required:**
@@ -31,10 +31,11 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
    AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o-mini
    ```
 
-   📚 **Full documentation:**
-   - [Environment Setup Guide](../docs/setup/ENVIRONMENT_SETUP.md) - Comprehensive setup instructions
-   - [Quick Reference](../docs/setup/ENV_QUICK_REFERENCE.md) - Cheat sheet
-   - [Migration Checklist](./MIGRATION_CHECKLIST.md) - Upgrade from legacy .env
+Full documentation:
+
+- [Environment Guide](../docs/deployment/ENVIRONMENTS.md) - Canonical environment strategy
+- [Local Supabase Setup](../docs/setup/LOCAL_SUPABASE_SETUP.md) - Local database workflow
+- [Migration Checklist](./MIGRATION_CHECKLIST.md) - Upgrade from legacy .env
 
 3. **Run development server:**
 
@@ -310,25 +311,22 @@ Answer questions using the user's notes as context (Retrieval-Augmented Generati
 
 ## Environment Variables
 
-| Variable                                | Description                           | Default                |
-| --------------------------------------- | ------------------------------------- | ---------------------- |
-| `AZURE_OPENAI_API_KEY`                  | Azure OpenAI API key (primary)        | -                      |
-| `AZURE_OPENAI_ENDPOINT`                 | Azure OpenAI endpoint (primary)       | -                      |
-| `AZURE_OPENAI_API_VERSION`              | Azure OpenAI API version              | 2024-02-01             |
-| `AZURE_OPENAI_CHAT_DEPLOYMENT`          | Azure chat deployment name            | gpt-4o-mini            |
-| `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`    | Azure embeddings deployment name      | text-embedding-3-small |
-| `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT` | Azure transcription deployment name   | whisper-1              |
-| `OPENAI_API_KEY`                        | OpenAI API key (fallback)             | -                      |
-| `OPENAI_FALLBACK_ENABLED`               | Enable OpenAI fallback                | true when key set      |
-| `OPENAI_MODEL`                          | OpenAI chat model (fallback)          | gpt-4o-mini            |
-| `OPENAI_EMBEDDINGS_MODEL`               | OpenAI embeddings model (fallback)    | text-embedding-3-small |
-| `OPENAI_TRANSCRIPTION_MODEL`            | OpenAI transcription model (fallback) | whisper-1              |
-| `SUPABASE_URL`                          | Supabase project URL (required)       | -                      |
-| `SUPABASE_SERVICE_ROLE_KEY`             | Supabase service role key (required)  | -                      |
-| `PORT`                                  | Server port                           | 3000                   |
-| `DAILY_REQUEST_LIMIT`                   | Requests per user per day             | 100                    |
-| `CHAT_LIST_LIMIT`                       | Default chat list size                | 20                     |
-| `MAX_CHAT_LIST_LIMIT`                   | Maximum chat list size                | 100                    |
+| Variable                         | Description                               | Notes                                                    |
+| -------------------------------- | ----------------------------------------- | -------------------------------------------------------- |
+| `NODE_ENV`                       | Environment selection                     | `production` uses `*_PROD`; any other value uses `*_DEV` |
+| `SUPABASE_URL_DEV`               | Supabase URL for dev/staging              | Required when `NODE_ENV != production`                   |
+| `SUPABASE_SERVICE_ROLE_KEY_DEV`  | Supabase service role key for dev/staging | Required when `NODE_ENV != production`                   |
+| `SUPABASE_ANON_KEY_DEV`          | Supabase anon key for dev/staging         | Optional                                                 |
+| `SUPABASE_URL_PROD`              | Supabase URL for production               | Required when `NODE_ENV = production`                    |
+| `SUPABASE_SERVICE_ROLE_KEY_PROD` | Supabase service role key for production  | Required when `NODE_ENV = production`                    |
+| `SUPABASE_ANON_KEY_PROD`         | Supabase anon key for production          | Optional                                                 |
+| `AZURE_OPENAI_API_KEY`           | Azure OpenAI API key                      | Required unless `OPENAI_API_KEY` is set                  |
+| `AZURE_OPENAI_ENDPOINT`          | Azure OpenAI endpoint                     | Required with `AZURE_OPENAI_API_KEY`                     |
+| `OPENAI_API_KEY`                 | OpenAI API key                            | Satisfies the AI provider requirement on its own         |
+| `PORT`                           | Server port                               | Default `3000`                                           |
+| `DAILY_REQUEST_LIMIT`            | Per-user daily request limit              | Default `100`                                            |
+
+For the full variable list and defaults, see `backend/.env.example` and `docs/deployment/ENVIRONMENTS.md`.
 
 ## Database Schema
 

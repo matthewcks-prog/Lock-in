@@ -53,7 +53,7 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 - **Active** content script (legacy `contentScript.js` removed)
 - Thin orchestrator only: detect site adapter, extract context, and mount React sidebar bundle from `/extension/dist/ui`
 - Delegates to helpers in `extension/content/` for page context, state store, sidebar host, session restore, and interactions
-- Handles Chrome-specific events (text selection, Ctrl/Cmd modifier, Escape close)
+- Handles Chrome-specific events (context menu prefill messages, Escape close)
 - Applies body class `lockin-sidebar-open` so the injected `#lockin-page-wrapper` reserves space for the sidebar; a MutationObserver keeps new body nodes inside the wrapper; mobile overlays instead of resizing
 - **DO NOT** contain:
   - Business logic (use `/core/services`)
@@ -62,7 +62,7 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 
 ### `content/`
 
-- `pageContext.js` (adapter + page context; bundled from `pageContext.ts` importing `/integrations`), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (selection + Escape).
+- `pageContext.js` (adapter + page context; bundled from `pageContext.ts` importing `/integrations`), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (Escape handling).
 - Extend functionality by adding focused helpers here instead of inflating `contentScript-react.js`.
 - Rebuild `pageContext.js` when adapters/page context logic change: `node_modules/.bin/esbuild extension/content/pageContext.ts --bundle --format=iife --platform=browser --target=es2018 --global-name=LockInPageContext --outfile=extension/content/pageContext.js`.
 
@@ -132,7 +132,8 @@ ReactDOM.render(
 );
 
 // 4. Handle Chrome-specific events
-document.addEventListener('mouseup', handleTextSelection);
+Messaging.onMessage(handlePrefillRequest);
+document.addEventListener('keydown', handleEscapeClose);
 ```
 
 **Keep it simple. Delegate everything else.**

@@ -9,7 +9,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 **Data Flow:**
 
-1. User highlights text (Ctrl/Cmd + select) -> extension captures selection.
+1. User highlights text and uses the context menu -> extension opens the sidebar with prefilled input.
 2. Extension builds payload (mode, text, user/session info, chat state).
 3. Request goes to backend (`/api/lockin` and related chat endpoints).
 4. Backend validates/authenticates, calls OpenAI, stores/loads chat, returns JSON.
@@ -34,10 +34,10 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`content/` helpers**
   - `pageContext.js` (adapter + page context resolution, imports `/integrations` bundle with fallback inference).
-  - `stateStore.js` (sidebar/selection/mode state + storage sync).
+  - `stateStore.js` (sidebar/prefill/mode state + storage sync).
   - `sidebarHost.js` (mounts/upgrades React sidebar, injects the page wrapper used for layout shifts, and keeps new body nodes inside it).
   - `sessionManager.js` (tab ID + session restore/clear).
-  - `interactions.js` (selection + Escape handlers).
+  - `interactions.js` (Escape handlers).
 
 - **`background.js`**
   - Service worker for background tasks, context menus, and session routing.
@@ -268,7 +268,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - ✅ Utilities: `verify-*`, `check-*`, `setup-*` (NOT `test-*`)
 - ❌ Never use `test-*.js` for utility scripts (will be picked up by test runner)
 
-See [docs/testing/BACKEND_TESTING.md](docs/testing/BACKEND_TESTING.md) for detailed testing guidelines.
+See [docs/testing/BACKEND_TESTING.md](../testing/BACKEND_TESTING.md) for detailed testing guidelines.
 
 ## Key Design Patterns
 
@@ -360,8 +360,8 @@ The system is designed to handle thousands of concurrent users:
 
 **Documentation:**
 
-- [Backend Testing Guide](docs/testing/BACKEND_TESTING.md) - Comprehensive testing standards
-- [Backend README.md](backend/README.md#testing) - Quick test commands
+- [Backend Testing Guide](../testing/BACKEND_TESTING.md) - Comprehensive testing standards
+- [Backend README.md](../../backend/README.md#testing) - Quick test commands
 
 ### Integration
 

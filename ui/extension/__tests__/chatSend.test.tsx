@@ -253,4 +253,62 @@ describe('LockInSidebar chat send reliability', () => {
     const combinedText = [errorBanner?.textContent || '', ...bubbleTexts].join(' ');
     expect(combinedText).toContain("You're sending too fast - try again in 3s.");
   });
+
+  it('does not show save note button on error messages', async () => {
+    const apiClient = createApiClientStub({
+      processText: vi.fn().mockRejectedValue(new Error('Please sign in to continue')),
+      getRecentChats: vi.fn().mockResolvedValue({
+        chats: [],
+        pagination: { hasMore: false, nextCursor: null },
+      }),
+    });
+    const storage = createStorageStub();
+
+    await act(async () => {
+      root.render(
+        <LockInSidebar
+          apiClient={apiClient}
+          isOpen={true}
+          onToggle={vi.fn()}
+          currentMode="explain"
+          storage={storage}
+        />,
+      );
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    const textarea = document.querySelector(
+      '.lockin-chat-input-field',
+    ) as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      if (textarea) {
+        setTextareaValue(textarea, 'Hello');
+      }
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    const sendButton = document.querySelector('.lockin-send-btn') as HTMLButtonElement | null;
+    expect(sendButton).not.toBeNull();
+
+    await act(async () => {
+      sendButton?.click();
+    });
+    await act(async () => {
+      await flushPromises(4);
+    });
+
+    // Verify error message is shown in a bubble with error styling
+    const errorBubbles = document.querySelectorAll('.lockin-chat-msg-error');
+    expect(errorBubbles.length).toBeGreaterThan(0);
+
+    // Verify NO save note button is present for error messages
+    const saveNoteButtons = document.querySelectorAll('.lockin-chat-save-note-btn');
+    expect(saveNoteButtons.length).toBe(0);
+  });
 });

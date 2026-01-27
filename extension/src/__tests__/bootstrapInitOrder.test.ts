@@ -63,7 +63,7 @@ function createContentHelpers() {
   const state = {
     isSidebarOpen: false,
     currentMode: 'explain',
-    cachedSelection: '',
+    pendingPrefill: '',
     currentActiveTab: 'chat',
   };
 

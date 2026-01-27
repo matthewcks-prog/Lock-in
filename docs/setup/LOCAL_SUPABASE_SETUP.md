@@ -568,8 +568,8 @@ supabase db reset
 - [Supabase CLI Reference](https://supabase.com/docs/guides/cli)
 - [Local Development Guide](https://supabase.com/docs/guides/cli/local-development)
 - [Database Migrations](https://supabase.com/docs/guides/cli/migrations)
-- [Lock-in DATABASE.md](/DATABASE.md) - Schema documentation
-- [Lock-in MCP Setup](./README.md) - MCP configuration
+- [Lock-in DATABASE.md](../reference/DATABASE.md) - Schema documentation
+- [Lock-in MCP Setup](../../tools/mcp/README.md) - MCP configuration
 
 ---
 

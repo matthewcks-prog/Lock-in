@@ -339,7 +339,7 @@ SELECT * FROM notes;
 
 - [tools/mcp/README.md](../README.md) - MCP server setup and configuration
 - [tools/mcp/docs/SUPABASE_READONLY_SETUP.md](./SUPABASE_READONLY_SETUP.md) - Read-only user setup
-- [DATABASE.md](/DATABASE.md) - Lock-in database schema and RLS policies
+- [DATABASE.md](../../../docs/reference/DATABASE.md) - Lock-in database schema and RLS policies
 - [docs/architecture/ARCHITECTURE.md](/docs/architecture/ARCHITECTURE.md) - Environment separation strategy
 
 ---

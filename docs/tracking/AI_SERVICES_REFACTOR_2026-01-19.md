@@ -61,7 +61,7 @@ Implemented **provider factory pattern** with proper separation of concerns:
 
 ### Documentation Updated:
 
-- ✅ `docs/AI_SERVICES_ARCHITECTURE.md` - Complete architecture documentation
+- ✅ `docs/architecture/AI_SERVICES_ARCHITECTURE.md` - Complete architecture documentation
 - ✅ `docs/tracking/REFACTOR_PLAN.md` - Marked Phase 3 OpenAI provider item as complete
 
 ---
@@ -212,8 +212,8 @@ AZURE_SPEECH_REGION=australiaeast
 
 ## Related Issues
 
-- [REFACTOR_PLAN.md Phase 3](../docs/tracking/REFACTOR_PLAN.md) - OpenAI provider finalization
-- [AI_SERVICES_ARCHITECTURE.md](../docs/AI_SERVICES_ARCHITECTURE.md) - Complete architecture documentation
+- [REFACTOR_PLAN.md Phase 3](./REFACTOR_PLAN.md) - OpenAI provider finalization
+- [AI_SERVICES_ARCHITECTURE.md](../architecture/AI_SERVICES_ARCHITECTURE.md) - Complete architecture documentation
 
 ---
 

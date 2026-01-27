@@ -7,7 +7,7 @@ const { supabase } = require('../supabaseClient');
  *
  * Scalability features:
  * - Optimistic locking via updated_at for conflict detection
- * - Proper indexing recommendations in DATABASE.md
+ * - Proper indexing recommendations in docs/reference/DATABASE.md
  * - Efficient queries with proper filtering
  */
 

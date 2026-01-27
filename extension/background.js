@@ -1824,16 +1824,15 @@ chrome.runtime.onInstalled.addListener(() => {
 // Handle context menu clicks
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === 'lockin-process' && info.selectionText) {
-    // Send message to content script to show the mode selector
+    const tabId = tab?.id;
+    if (typeof tabId !== 'number') return;
     chrome.tabs
-      .sendMessage(tab.id, {
-        type: 'SHOW_MODE_SELECTOR',
-        payload: {
-          text: info.selectionText,
-        },
+      .sendMessage(tabId, {
+        type: 'PREFILL_CHAT_INPUT',
+        payload: { text: info.selectionText },
       })
       .catch((error) => {
-        console.error('Lock-in: Failed to send message to content script:', error);
+        console.error('Lock-in: Failed to send prefill message:', error);
       });
   }
 });

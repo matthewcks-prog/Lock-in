@@ -198,4 +198,4 @@ SUPABASE_URL_DEV=https://...
 
 ---
 
-**Need help?** Check [docs/setup/ENVIRONMENT_SETUP.md](../docs/setup/ENVIRONMENT_SETUP.md) for full guide.
+**Need help?** Check [docs/deployment/ENVIRONMENTS.md](../docs/deployment/ENVIRONMENTS.md) for the canonical guide.

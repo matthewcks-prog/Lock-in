@@ -1,6 +1,6 @@
 # Architecture
 
-Purpose: Stable guardrails for how Lock-in is structured. Implementation details and current snapshots live in `CODE_OVERVIEW.md` and `docs/tracking/STATUS.md`.
+Purpose: Stable guardrails for how Lock-in is structured. Implementation details and current snapshots live in `docs/reference/CODE_OVERVIEW.md` and `docs/tracking/STATUS.md`.
 
 ## Surfaces
 
@@ -35,6 +35,6 @@ Purpose: Stable guardrails for how Lock-in is structured. Implementation details
 
 ## Where to Look for Details
 
-- **Current snapshot**: `CODE_OVERVIEW.md`.
+- **Current snapshot**: `docs/reference/CODE_OVERVIEW.md`.
 - **In-flight status**: `docs/tracking/STATUS.md`.
 - **Refactor/guardrail tracking**: `docs/tracking/REFACTOR_PLAN.md` + `docs/tracking/PROMPT_LOG.md`.

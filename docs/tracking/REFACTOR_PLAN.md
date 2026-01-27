@@ -1,8 +1,8 @@
 # Refactor Plan (Quality Audit 2026-01-23)
 
-Last updated: 2026-01-25
+Last updated: 2026-01-27
 
-This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to reflect work already completed and the remaining backlog. Phases are ordered by risk reduction, scalability, and architectural alignment. Use the acceptance criteria to verify completion before moving to the next phase.
+This plan is derived from `docs/archive/QUALITY_AUDIT_2026-01-23.md`, updated to reflect work already completed and the remaining backlog. Phases are ordered by risk reduction, scalability, and architectural alignment. Use the acceptance criteria to verify completion before moving to the next phase.
 
 ---
 
@@ -191,25 +191,30 @@ This plan is derived from `docs/achieve/QUALITY_AUDIT_2026-23-01.md`, updated to
   - **Outcome:** Removed deprecated SP-based setup scripts and duplicate Azure deployment doc; updated workflows/docs to OIDC managed identity and environment-scoped federated credentials.
   - **Acceptance criteria:** No `AZURE_CREDENTIALS` usage; rollback workflow uses OIDC; Azure deployment docs point to `docs/deployment/AZURE.md`.
 
-- [ ] **Resolve docs/achieve typo + archive legacy audits**
-  - Move `docs/achieve/` content into `docs/archive/` and correct naming.
+- [x] **Resolve docs/achieve typo + archive legacy audits**
+  - **Outcome:** Moved `docs/achieve/*` into `docs/archive/` with corrected date naming:
+    `QUALITY_AUDIT_2026-01-19.md` and `QUALITY_AUDIT_2026-01-23.md`.
+  - **Acceptance criteria:** No canonical references point to `docs/achieve/`.
 
-- [ ] **Remove duplicated docs + establish canonical sources**
-  - Transcript troubleshooting: keep `docs/features/transcripts/TROUBLESHOOTING.md` as canonical.
-  - Deployment: consolidate under `docs/deployment/` (per `AUDIT_SUMMARY.md`).
-  - Environment setup: merge overlapping setup docs into `docs/deployment/ENVIRONMENTS.md` or a single canonical guide.
+- [x] **Remove duplicated docs + establish canonical sources**
+  - Transcript troubleshooting: canonical docs live under `docs/features/transcripts/`.
+  - Deployment: deployment and environment guidance is centralized under `docs/deployment/`.
+  - Environment setup: canonical guidance is `docs/deployment/ENVIRONMENTS.md`.
 
-- [ ] **Root docs policy decision**
-  - Decide whether `CODE_OVERVIEW.md`, `DATABASE.md`, etc. remain at root or move into `docs/`.
-  - Update `ARCHITECTURE.md`, `REPO_MAP.md`, and `docs/README.md` to match the chosen policy.
+- [x] **Root docs policy decision**
+  - **Policy:** Root contains only `AGENTS.md`, `README.md`, and `LICENSE`.
+  - **Outcome:** Moved root docs into `docs/reference/` and archived legacy reviews.
+  - **Acceptance criteria:** `docs/architecture/ARCHITECTURE.md`, `docs/architecture/REPO_MAP.md`, and `docs/README.md` reflect the chosen policy.
 
-- [] **Whole repo**
-  - Make sure no doc contain inconsistencies and there are only one single source of truth which is consistent.Follow what you think is the recommended approach and refactor code if needed.
-  - Delete old legacy docs not needed.
-  - Ensure .md files follows a well organised structure in case in the future aditional .md files needs to be added. Update/Merge/Delete/Create if needed.
+- [x] **Whole repo**
+  - Consolidated documentation into canonical locations.
+  - Standardized reference docs under `docs/reference/` and archives under `docs/archive/`.
+  - Aligned environment files and templates: sanitized `.env` and clarified `.env.example` and `.env.example.local`.
+  - Verified doc link integrity locally with `npm run docs:check-links`.
 
-- [ ] **CI link integrity check**
-  - Add a lightweight CI step to detect broken doc links.
+- [x] **CI link integrity check**
+  - **Outcome:** Added `scripts/check-doc-links.mjs`, a `docs:check-links` npm script, and a CI step in `.github/workflows/quality-gate.yml`.
+  - **Acceptance criteria:** CI fails fast on broken local doc links.
 
 ---
 

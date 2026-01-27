@@ -274,8 +274,8 @@ backend/
 ## Resources
 
 - [Node.js Test Runner Docs](https://nodejs.org/docs/latest/api/test.html)
-- [Backend README.md](../backend/README.md#testing) - Quick test commands
-- [Backend Testing Section in CODE_OVERVIEW.md](../CODE_OVERVIEW.md#testing-strategy)
+- [Backend README.md](../../backend/README.md#testing) - Quick test commands
+- [Backend Testing Section in CODE_OVERVIEW.md](../reference/CODE_OVERVIEW.md#testing-strategy)
 
 ## Questions?
 

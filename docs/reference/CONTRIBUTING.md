@@ -5,20 +5,20 @@ Thank you for your interest in contributing to Lock-in! This document provides g
 ## Getting Started
 
 1. **Read the documentation**:
-   - [README.md](README.md) - Project overview
-   - [AGENTS.md](AGENTS.md) - Development guidelines and architecture rules
-   - [ENVIRONMENTS.md](ENVIRONMENTS.md) - Environment setup and deployment workflow
-   - [docs/MONOREPO.md](docs/MONOREPO.md) - Monorepo architecture and workspace management
-   - [docs/README.md](docs/README.md) - Documentation structure
+   - [README.md](../../README.md) - Project overview
+   - [AGENTS.md](../../AGENTS.md) - Development guidelines and architecture rules
+   - [ENVIRONMENTS.md](../deployment/ENVIRONMENTS.md) - Environment setup and deployment workflow
+   - [docs/MONOREPO.md](../architecture/MONOREPO.md) - Monorepo architecture and workspace management
+   - [docs/README.md](../README.md) - Documentation structure
 
 2. **Set up your development environment**:
-   - Follow [docs/setup/LOCAL_SUPABASE_SETUP.md](docs/setup/LOCAL_SUPABASE_SETUP.md) for local development
+   - Follow [docs/setup/LOCAL_SUPABASE_SETUP.md](../setup/LOCAL_SUPABASE_SETUP.md) for local development
    - Ensure you have Node.js 18+ installed
    - Install dependencies: `npm install` (installs all workspaces)
 
 3. **Understand the architecture**:
-   - Review [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md) for system design
-   - Check [CODE_OVERVIEW.md](CODE_OVERVIEW.md) for implementation details
+   - Review [docs/architecture/ARCHITECTURE.md](../architecture/ARCHITECTURE.md) for system design
+   - Check [CODE_OVERVIEW.md](./CODE_OVERVIEW.md) for implementation details
 
 ## Development Workflow
 
@@ -44,7 +44,7 @@ feature/your-feature       ← Your feature branches
 | `main` | Production | `lock-in-backend` |
 | `develop` | Staging | `lock-in-dev` |
 
-**Full workflow details**: See [ENVIRONMENTS.md](ENVIRONMENTS.md)
+**Full workflow details**: See [ENVIRONMENTS.md](../deployment/ENVIRONMENTS.md)
 
 **Quick Workflow:**
 
@@ -92,9 +92,9 @@ A pre-push hook automatically runs validation before pushing. If it fails, fix t
 
 ### Before Making Changes
 
-1. **Check current status**: Review [docs/tracking/STATUS.md](docs/tracking/STATUS.md) for outstanding issues
-2. **Review refactor plan**: Check [docs/tracking/REFACTOR_PLAN.md](docs/tracking/REFACTOR_PLAN.md) for planned improvements
-3. **Follow coding rules**: See [AGENTS.md](AGENTS.md) for architecture boundaries and coding standards
+1. **Check current status**: Review [docs/tracking/STATUS.md](../tracking/STATUS.md) for outstanding issues
+2. **Review refactor plan**: Check [docs/tracking/REFACTOR_PLAN.md](../tracking/REFACTOR_PLAN.md) for planned improvements
+3. **Follow coding rules**: See [AGENTS.md](../../AGENTS.md) for architecture boundaries and coding standards
 
 ### Making Changes
 
@@ -106,9 +106,9 @@ A pre-push hook automatically runs validation before pushing. If it fails, fix t
    - Site-specific logic in `/integrations/adapters`
 4. **Write tests**: Add tests for new functionality
 5. **Update documentation**:
-   - Update `CODE_OVERVIEW.md` if file structure changes
-   - Update `DATABASE.md` if schema changes
-   - Update relevant docs in `docs/` folder
+   - Update `docs/reference/CODE_OVERVIEW.md` if file structure changes
+   - Update `docs/reference/DATABASE.md` if schema changes
+   - Update relevant docs in `docs/` folders
 
 ### Code Style
 
@@ -117,7 +117,7 @@ A pre-push hook automatically runs validation before pushing. If it fails, fix t
 - **Clean**: Keep files <200 lines, single responsibility
 - **D.R.Y**: Extract shared logic to `/core` hooks or services
 
-See [AGENTS.md](AGENTS.md) for detailed coding rules.
+See [AGENTS.md](../../AGENTS.md) for detailed coding rules.
 
 ### Testing
 
@@ -145,7 +145,7 @@ npm run test:backend  # Backend tests
 ### Submitting Changes
 
 1. **Ensure all checks pass**: `npm run check`
-2. **Update CHANGELOG.md**: Add entry for your changes
+2. **Update docs/reference/CHANGELOG.md**: Add entry for your changes
 3. **Write clear commit messages**: Follow conventional commits format
 4. **Create a pull request**:
    - Describe what changed and why
@@ -162,6 +162,7 @@ When adding or updating documentation:
    - Feature docs: `docs/features/[feature-name]/`
    - Testing: `docs/testing/`
    - Tracking: `docs/tracking/`
+   - Reference docs: `docs/reference/`
 
 2. **Update docs/README.md**: Add entry to relevant section
 
@@ -206,7 +207,7 @@ npm test          # Root project tests
 cd backend && npm test  # Backend tests
 ```
 
-**📚 Detailed guide:** [docs/testing/BACKEND_TESTING.md](docs/testing/BACKEND_TESTING.md)
+**📚 Detailed guide:** [docs/testing/BACKEND_TESTING.md](../testing/BACKEND_TESTING.md)
 
 ### Adding a New Site Integration
 
@@ -232,8 +233,8 @@ cd backend && npm test  # Backend tests
 
 ## Questions?
 
-- Check [AGENTS.md](AGENTS.md) for development guidelines
-- Review [docs/tracking/STATUS.md](docs/tracking/STATUS.md) for current status
+- Check [AGENTS.md](../../AGENTS.md) for development guidelines
+- Review [docs/tracking/STATUS.md](../tracking/STATUS.md) for current status
 - Ask in issues or discussions
 
 ## Code of Conduct

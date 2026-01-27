@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ApiClient } from '@api/client';
 import type { StudyMode } from '@core/domain/types';
 import {
@@ -23,7 +23,8 @@ interface ChatSectionProps {
   mode: StudyMode;
   pageUrl: string;
   courseCode: string | null;
-  selectedText?: string;
+  pendingPrefill?: string;
+  onClearPrefill?: () => void;
   isOpen: boolean;
   isActive: boolean;
 }
@@ -60,7 +61,8 @@ export function ChatSection({
   mode,
   pageUrl,
   courseCode,
-  selectedText,
+  pendingPrefill,
+  onClearPrefill,
   isOpen,
   isActive,
 }: ChatSectionProps) {
@@ -85,7 +87,6 @@ export function ChatSection({
     mode,
     pageUrl,
     courseCode,
-    selectedText,
   });
 
   const {
@@ -98,6 +99,7 @@ export function ChatSection({
   } = useChatAttachments({ maxAttachments: 5 });
 
   const [composerError, setComposerError] = useState<string | null>(null);
+  const prefillSourceRef = useRef(false);
   const hasPendingAttachments = pendingAttachments.length > 0;
 
   const uploadAttachments = useCallback(
@@ -168,8 +170,11 @@ export function ChatSection({
       }
 
       const displayMessage = hasText ? trimmed : 'Sent attachments';
+      const source = prefillSourceRef.current && hasText ? 'selection' : 'followup';
+      prefillSourceRef.current = false;
+
       sendMessage(displayMessage, {
-        source: 'followup',
+        source,
         attachments: messageAttachments,
         attachmentIds,
         selectionOverride: hasText ? undefined : '',
@@ -197,6 +202,7 @@ export function ChatSection({
     handleKeyDown: handleInputKeyDown,
     handleSend: handleInputSend,
     syncHeight: syncTextareaHeight,
+    setValue,
   } = useChatInput({
     onSend: handleSendMessage,
     isSending: isSending || isAttachmentUploading,
@@ -204,6 +210,18 @@ export function ChatSection({
     canSend: hasPendingAttachments,
   });
   const canSend = Boolean(inputValue.trim()) || hasPendingAttachments;
+
+  useEffect(() => {
+    if (!pendingPrefill || !pendingPrefill.trim()) return;
+    prefillSourceRef.current = true;
+    setValue(pendingPrefill);
+    if (isOpen && isActive) {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    }
+    onClearPrefill?.();
+  }, [pendingPrefill, setValue, onClearPrefill, isOpen, isActive, inputRef]);
 
   useLayoutEffect(() => {
     if (!isOpen || !isActive) return;
@@ -222,7 +240,7 @@ export function ChatSection({
         key={message.id}
         message={message}
         action={
-          message.role === 'assistant' && !message.isPending ? (
+          message.role === 'assistant' && !message.isPending && !message.isError ? (
             <SaveNoteAction content={message.content} />
           ) : undefined
         }

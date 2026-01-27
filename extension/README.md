@@ -15,7 +15,7 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 ### Core Files
 
 - **`manifest.json`**: Extension configuration (permissions, scripts, metadata)
-- **`contentScript-react.js`**: Active content script (Ctrl/Cmd + select to open, Escape to close) that mounts the React sidebar bundle and syncs layout/state
+- **`contentScript-react.js`**: Active content script (context menu prefill + Escape to close) that mounts the React sidebar bundle and syncs layout/state
 - **`dist/ui/index.js`**: Built React sidebar bundle (source in `/ui/extension`)
 - **`background.js`**: Service worker for context menus and session management
 - **`popup.js`**: Settings and authentication UI (uses `window.LockInAuth` from the bundled client)
@@ -35,8 +35,9 @@ Chrome extension component of the Lock-in study assistant. Provides a sidebar in
 
 ### Text Selection & Processing
 
-- Hold **Ctrl** (Windows/Linux) or **Cmd** (Mac) and highlight text
-- Sidebar opens automatically with AI response
+- Highlight text, right-click, and choose **"Lock-in: Explain"**
+- Sidebar opens with the chat input prefilled (no auto-send)
+- Edit the text if needed, then click **Send**
 - Three processing modes:
   - **Explain**: Get clear explanations with examples
 
@@ -185,7 +186,7 @@ The extension follows best practices:
 
 - `init()` / `safeInit()`: Load adapters, API client, stored preferences, mount React sidebar bundle
 - `handleSidebarToggle()`: Persist open/closed state and sync the page split class (content width = viewport minus clamped sidebar)
-- `runMode(mode)`: Open sidebar on selection (Ctrl/Cmd + highlight) and update mode
+- Context menu prefill handling: open sidebar, set pending prefill text
 - `listenToStorageChanges()`: Keep mode, open state, and active tab in sync across contexts
 - `initializeReactSidebar()`: Create or update the singleton React sidebar instance
 

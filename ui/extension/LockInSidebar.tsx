@@ -38,7 +38,8 @@ export interface LockInSidebarProps {
   isOpen: boolean;
   onToggle: () => void;
   currentMode: StudyMode;
-  selectedText?: string;
+  pendingPrefill?: string;
+  onClearPrefill?: () => void;
   pageContext?: PageContext;
   adapter?: any;
   storage?: StorageAdapter;
@@ -49,7 +50,8 @@ function LockInSidebarContent({
   isOpen,
   onToggle,
   currentMode,
-  selectedText,
+  pendingPrefill,
+  onClearPrefill,
   pageContext,
   storage,
   activeTabExternal,
@@ -145,7 +147,8 @@ function LockInSidebarContent({
               mode={mode}
               pageUrl={pageUrl}
               courseCode={courseCode}
-              selectedText={selectedText}
+              pendingPrefill={pendingPrefill}
+              onClearPrefill={onClearPrefill}
               isOpen={isOpen}
               isActive={activeTab === CHAT_TAB_ID}
             />

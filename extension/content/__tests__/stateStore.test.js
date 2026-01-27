@@ -30,7 +30,7 @@ function createStateStore({ Storage, Logger }) {
     highlightingEnabled: true,
     currentMode: DEFAULT_MODE,
     isSidebarOpen: false,
-    cachedSelection: '',
+    pendingPrefill: '',
     currentChatId: null,
     currentActiveTab: 'chat',
     sessionPreferences: { ...DEFAULT_PREFS },
@@ -200,8 +200,14 @@ function createStateStore({ Storage, Logger }) {
     notify();
   }
 
-  function setSelection(text) {
-    state.cachedSelection = text || '';
+  function setPendingPrefill(text) {
+    state.pendingPrefill = typeof text === 'string' ? text : '';
+    notify();
+  }
+
+  function clearPendingPrefill() {
+    if (!state.pendingPrefill) return;
+    state.pendingPrefill = '';
     notify();
   }
 
@@ -271,7 +277,8 @@ function createStateStore({ Storage, Logger }) {
     persistMode,
     setMode,
     setSidebarOpen,
-    setSelection,
+    setPendingPrefill,
+    clearPendingPrefill,
     setChatId,
     setActiveTab,
     setPreferences,
@@ -405,17 +412,38 @@ describe('StateStore', () => {
     });
   });
 
-  describe('setSelection', () => {
-    it('should update cached selection', () => {
-      stateStore.setSelection('Selected text');
+  describe('setPendingPrefill', () => {
+    it('should update pending prefill text', () => {
+      stateStore.setPendingPrefill('Selected text');
 
-      expect(stateStore.getSnapshot().cachedSelection).toBe('Selected text');
+      expect(stateStore.getSnapshot().pendingPrefill).toBe('Selected text');
     });
 
     it('should handle empty string', () => {
-      stateStore.setSelection('');
+      stateStore.setPendingPrefill('');
 
-      expect(stateStore.getSnapshot().cachedSelection).toBe('');
+      expect(stateStore.getSnapshot().pendingPrefill).toBe('');
+    });
+
+    it('should ignore non-string values', () => {
+      stateStore.setPendingPrefill(42);
+
+      expect(stateStore.getSnapshot().pendingPrefill).toBe('');
+    });
+  });
+
+  describe('clearPendingPrefill', () => {
+    it('should clear pending prefill when present', () => {
+      stateStore.setPendingPrefill('Selected text');
+      stateStore.clearPendingPrefill();
+
+      expect(stateStore.getSnapshot().pendingPrefill).toBe('');
+    });
+
+    it('should noop when no prefill is set', () => {
+      stateStore.clearPendingPrefill();
+
+      expect(stateStore.getSnapshot().pendingPrefill).toBe('');
     });
   });
 

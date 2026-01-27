@@ -13,7 +13,8 @@ const { v4: uuidv4 } = require('uuid');
 const Sentry = require('@sentry/node');
 const { logger } = require('./index');
 
-const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const LOG_REQUEST_HEADERS = process.env.LOG_REQUEST_HEADERS === 'true';
+const IGNORED_PATH_PREFIXES = ['/health', '/ready', '/metrics', '/favicon.ico'];
 
 /**
  * Generate a unique request ID.
@@ -51,7 +52,7 @@ function createRequestLogger() {
         method: req.method,
         url: req.url,
         // Omit sensitive headers
-        headers: sanitizeHeaders(req.headers),
+        headers: LOG_REQUEST_HEADERS ? sanitizeHeaders(req.headers) : undefined,
       }),
       res: (res) => ({
         statusCode: res.statusCode,
@@ -67,13 +68,17 @@ function createRequestLogger() {
       return 'info';
     },
 
-    // Only log health checks at debug level (reduce noise)
+    // Reduce noise from known noisy endpoints
     autoLogging: {
       ignore: (req) => {
-        // Skip health check logging in production to reduce noise
-        if (IS_PRODUCTION && req.url === '/health') {
+        if (req.method === 'OPTIONS') {
           return true;
         }
+
+        if (IGNORED_PATH_PREFIXES.some((prefix) => req.url?.startsWith(prefix))) {
+          return true;
+        }
+
         return false;
       },
     },

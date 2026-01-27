@@ -93,8 +93,6 @@ export interface UseChatOptions {
   pageUrl: string;
   /** Course code if available */
   courseCode: string | null;
-  /** Selected text from page (triggers new chat) */
-  selectedText?: string;
 }
 
 export interface UseChatMessagesOptions {

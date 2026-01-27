@@ -87,10 +87,9 @@ function coerceSendOptions(
  * - Manages active chat session state
  * - Coordinates message sending with history updates
  * - Handles storage persistence for active chat ID
- * - Responds to selected text changes
  */
 export function useChat(options: UseChatOptions): UseChatReturn {
-  const { apiClient, storage, mode, pageUrl, courseCode, selectedText } = options;
+  const { apiClient, storage, mode, pageUrl, courseCode } = options;
   const queryClient = useQueryClient();
 
   // Local state
@@ -99,8 +98,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Track previous selection to avoid re-processing
-  const previousSelectionRef = useRef<string | undefined>();
   const activeChatIdRef = useRef<string | null>(null);
   const activeHistoryIdRef = useRef<string | null>(null);
 
@@ -446,19 +443,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     },
     [apiClient, mode, setMessages],
   );
-
-  // Handle selected text changes
-  useEffect(() => {
-    if (!selectedText || selectedText.trim().length === 0) return;
-    if (previousSelectionRef.current === selectedText) return;
-    previousSelectionRef.current = selectedText;
-
-    if (messages.length === 0) {
-      startNewChat(selectedText, 'selection');
-    } else {
-      sendMessage(selectedText, 'selection');
-    }
-  }, [selectedText, messages.length, startNewChat, sendMessage]);
 
   const clearError = useCallback(() => setError(null), []);
 

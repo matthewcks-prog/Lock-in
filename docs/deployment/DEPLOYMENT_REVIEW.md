@@ -163,7 +163,7 @@ Missing required variables:
 
 ### ✅ Fix Applied
 
-Updated [.github/workflows/backend-deploy.yml](.github/workflows/backend-deploy.yml) to use GitHub secrets with fallback:
+Updated [.github/workflows/backend-deploy.yml](../../.github/workflows/backend-deploy.yml) to use GitHub secrets with fallback:
 
 ```yaml
 -e SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://test-project.supabase.co' }}

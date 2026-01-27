@@ -50,7 +50,7 @@ gh secret list
 
 ### Step 2: Update GitHub Actions Workflow
 
-The workflow needs access to these secrets. Add to [backend-deploy.yml](.github/workflows/backend-deploy.yml):
+The workflow needs access to these secrets. Add to [backend-deploy.yml](../../.github/workflows/backend-deploy.yml):
 
 ```yaml
 # In the "Wait for container to be healthy" step environment

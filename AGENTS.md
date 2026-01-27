@@ -1,4 +1,4 @@
-﻿# Lock-in Project AGENTS.md
+# Lock-in Project AGENTS.md
 
 ## Project Overview
 
@@ -12,13 +12,13 @@
 
 Every feature should reinforce this loop:
 
-1. **Capture** â†’ Highlight text / video / assignment spec
-2. **Understand** â†’ Explain / summarise
-3. **Distil** â†’ Turn that into a note, flashcard, or todo
-4. **Organise** â†’ Auto-bucket by unit, week, topic (course metadata)
-5. **Act** â†’ Show upcoming tasks, revision items, questions
+1. **Capture** → Highlight text / video / assignment spec
+2. **Understand** → Explain / summarise
+3. **Distil** → Turn that into a note, flashcard, or todo
+4. **Organise** → Auto-bucket by unit, week, topic (course metadata)
+5. **Act** → Show upcoming tasks, revision items, questions
 
-**When making changes, ask**: Does this support the loop? Does it make capture â†’ understand â†’ distil â†’ organise â†’ act easier?
+**When making changes, ask**: Does this support the loop? Does it make capture → understand → distil → organise → act easier?
 
 ---
 
@@ -32,17 +32,17 @@ This project uses a structured documentation approach:
 - **`docs/architecture/REPO_MAP.md`** - Repository structure map and entrypoints
 - **`docs/tracking/REFACTOR_PLAN.md`** - Phased refactoring plan
 - **`docs/tracking/PROMPT_LOG.md`** - Log of refactoring prompts and outcomes
-- **`CODE_OVERVIEW.md`** - Current codebase snapshot (implementation details)
-- **`DATABASE.md`** - Database schema and migration history
+- **`docs/reference/CODE_OVERVIEW.md`** - Current codebase snapshot (implementation details)
+- **`docs/reference/DATABASE.md`** - Database schema and migration history
 - **Folder-level `AGENTS.md`** - Folder-specific conventions (e.g., `/extension/AGENTS.md`)
 
-**Doc stability**: `/AGENTS.md` and `docs/architecture/ARCHITECTURE.md` are stable contracts; `docs/tracking/STATUS.md` and `CODE_OVERVIEW.md` are living snapshots; `docs/architecture/REPO_MAP.md` is a concise navigation map.
+**Doc stability**: `/AGENTS.md` and `docs/architecture/ARCHITECTURE.md` are stable contracts; `docs/tracking/STATUS.md` and `docs/reference/CODE_OVERVIEW.md` are living snapshots; `docs/architecture/REPO_MAP.md` is a concise navigation map.
 
 **When to update docs:**
 
 - **`/AGENTS.md`**: Only when architectural boundaries, coding rules, or workflow patterns change
-- **`DATABASE.md`**: When schema changes (new tables/columns, migrations)
-- **`CODE_OVERVIEW.md`**: When file structure or implementation patterns change
+- **`docs/reference/DATABASE.md`**: When schema changes (new tables/columns, migrations)
+- **`docs/reference/CODE_OVERVIEW.md`**: When file structure or implementation patterns change
 - **Folder `AGENTS.md`**: When folder-specific conventions change
 
 ## Architecture Principles
@@ -66,16 +66,16 @@ Both share:
 ### Separation of Concerns
 
 ```
-/extension     â†’ Chrome-specific code only (manifest, background, content script injection)
-  /dist/ui     â†’ Built output: React sidebar bundle (source in /ui/extension)
-  /dist/libs   â†’ Built outputs: initApi/contentLibs/webvttParser bundles
-/ui           â†’ UI source (shared hooks + extension UI source)
-/ui/extension â†’ Source: Extension-only React components for the sidebar widget
-/core          â†’ Business logic, domain models (NO Chrome dependencies)
-/integrations  â†’ Site-specific adapters (Moodle, Edstem, etc.)
-/api           â†’ Backend API client (NO Chrome dependencies)
-/web           â†’ Future: web app React/Next.js app (full pages and dashboards)
-/shared/ui     â†’ Optional: Low-level UI kit (Button, Card, TextInput, etc.) - basic components only
+/extension     → Chrome-specific code only (manifest, background, content script injection)
+  /dist/ui     → Built output: React sidebar bundle (source in /ui/extension)
+  /dist/libs   → Built outputs: initApi/contentLibs/webvttParser bundles
+/ui           → UI source (shared hooks + extension UI source)
+/ui/extension → Source: Extension-only React components for the sidebar widget
+/core          → Business logic, domain models (NO Chrome dependencies)
+/integrations  → Site-specific adapters (Moodle, Edstem, etc.)
+/api           → Backend API client (NO Chrome dependencies)
+/web           → Future: web app React/Next.js app (full pages and dashboards)
+/shared/ui     → Optional: Low-level UI kit (Button, Card, TextInput, etc.) - basic components only
 ```
 
 **Rule**: If code in `/core` or `/api` needs Chrome APIs, you're doing it wrong. Extract Chrome-specific parts to `/extension`. The extension UI source (`/ui/extension`) is Chrome-specific and will not be reused by the web app.
@@ -118,8 +118,8 @@ To add a new site integration:
   - `/ui/extension` - Source: Sidebar widget React components (extension-specific, not shared)
   - `/extension/dist/ui` - Built output: React sidebar bundle (built from `/ui/extension`)
   - `/extension/dist/libs` - Built output: initApi/contentLibs/webvttParser bundles (built from `/extension/src`)
-  - `chromeStorage` wraps `chrome.storage` â†’ calls shared storage interface
-  - `chromeMessaging` wraps `chrome.runtime.sendMessage` â†’ calls shared messaging interface
+  - `chromeStorage` wraps `chrome.storage` → calls shared storage interface
+  - `chromeMessaging` wraps `chrome.runtime.sendMessage` → calls shared messaging interface
 
 - **Core code** (`/core`, `/api`): Pure JavaScript/TypeScript, no Chrome APIs
   - Can be reused by web app without modification
@@ -183,7 +183,7 @@ To add a new site integration:
 
 ## File Organization
 
-See `CODE_OVERVIEW.md` for detailed file structure and current implementation patterns.
+See `docs/reference/CODE_OVERVIEW.md` for detailed file structure and current implementation patterns.
 
 **Key boundaries:**
 
@@ -202,24 +202,24 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 
 1. **Scan key docs & structure**
    - Read `/AGENTS.md` (this file)
-   - Check `DATABASE.md` if touching schema
+   - Check `docs/reference/DATABASE.md` if touching schema
    - Check folder-level `AGENTS.md` if editing specific folders
-   - Review `CODE_OVERVIEW.md` for current implementation patterns
+   - Review `docs/reference/CODE_OVERVIEW.md` for current implementation patterns
 
 2. **Plan first**
    - Identify what will change and which files are involved
    - Determine if changes impact architecture, database, or documented behaviors
 
 3. **Make code changes**
-   - Follow the core loop: Capture â†’ Understand â†’ Distil â†’ Organise â†’ Act
+   - Follow the core loop: Capture → Understand → Distil → Organise → Act
    - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
    - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
    - Single widget: Don't duplicate the sidebar component
    - Incremental changes: Don't rewrite everything at once
 
 4. **Update living docs (MANDATORY)**
-   - Update `DATABASE.md` if schema changes (new tables/columns, migrations)
-   - Update `CODE_OVERVIEW.md` if file structure or implementation patterns change
+   - Update `docs/reference/DATABASE.md` if schema changes (new tables/columns, migrations)
+   - Update `docs/reference/CODE_OVERVIEW.md` if file structure or implementation patterns change
    - Update folder `AGENTS.md` if folder-specific conventions change
    - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
 
@@ -230,7 +230,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 
 ### When Adding Features
 
-- Follow the core loop: Capture â†’ Understand â†’ Distil â†’ Organise â†’ Act
+- Follow the core loop: Capture → Understand → Distil → Organise → Act
 - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
 - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
 - Single widget: Don't duplicate the sidebar component
@@ -257,8 +257,8 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - [ ] Do network calls use shared retry/timeout wrappers?
 - [ ] Is shared state persisted (no in-memory jobs/rate limits)?
 - [ ] Are docs placed under `docs/` with links updated?
-- [ ] If adding new database tables â†’ Updated `DATABASE.md`?
-- [ ] If changing file structure â†’ Updated `CODE_OVERVIEW.md`?
+- [ ] If adding new database tables → Updated `docs/reference/DATABASE.md`?
+- [ ] If changing file structure → Updated `docs/reference/CODE_OVERVIEW.md`?
 
 ---
 
@@ -276,7 +276,7 @@ See `CODE_OVERVIEW.md` for detailed file structure and current implementation pa
 - Domain types: `core/domain/Note.ts`
 - Service layer: `core/services/notesService.ts` (handles content format, migrations)
 - UI: `ui/extension/notes/` (Lexical editor, panels)
-- See `CODE_OVERVIEW.md` for detailed implementation patterns
+- See `docs/reference/CODE_OVERVIEW.md` for detailed implementation patterns
 
 ### Adding a New Extension UI Feature
 
@@ -390,7 +390,7 @@ This ensures the refactor plan and prompt log stay accurate and reflect the curr
 ## Questions?
 
 - Check folder-level `AGENTS.md` files
-- Review `CODE_OVERVIEW.md` for current implementation patterns
+- Review `docs/reference/CODE_OVERVIEW.md` for current implementation patterns
 - Check `docs/tracking/STATUS.md` for outstanding issues and recent changes
 - Ask before making large architectural changes
 

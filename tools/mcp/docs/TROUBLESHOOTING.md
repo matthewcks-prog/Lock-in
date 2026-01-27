@@ -766,8 +766,8 @@ If psql connects but MCP doesn't, issue is with MCP config (not connection strin
 
 **1. Check documentation:**
 
-- [README.md](README.md) - Setup guide
-- [USAGE_GUIDELINES.md](USAGE_GUIDELINES.md) - Best practices
+- [README.md](../README.md) - Setup guide
+- [USAGE_GUIDELINES.md](./USAGE_GUIDELINES.md) - Best practices
 - [SUPABASE_READONLY_SETUP.md](SUPABASE_READONLY_SETUP.md) - Database setup
 
 **2. Run validation:**
@@ -784,8 +784,8 @@ Get-Content tools\mcp\config\*.json
 
 **4. Review Lock-in docs:**
 
-- [AGENTS.md](../../AGENTS.md) - Architecture principles
-- [STATUS.md](../../docs/tracking/STATUS.md) - Current status
+- [AGENTS.md](../../../AGENTS.md) - Architecture principles
+- [STATUS.md](../../../docs/tracking/STATUS.md) - Current status
 
 **5. Check Supabase status:**
 
@@ -830,7 +830,7 @@ $LASTEXITCODE
 
 ## Next Steps
 
-- **Setup:** [README.md](README.md) - Full setup guide
-- **Usage:** [USAGE_GUIDELINES.md](USAGE_GUIDELINES.md) - Best practices
+- **Setup:** [README.md](../README.md) - Full setup guide
+- **Usage:** [USAGE_GUIDELINES.md](./USAGE_GUIDELINES.md) - Best practices
 - **Database:** [SUPABASE_READONLY_SETUP.md](SUPABASE_READONLY_SETUP.md) - Database setup
-- **Lock-in:** [../../AGENTS.md](../../AGENTS.md) - Architecture principles
+- **Lock-in:** [../../AGENTS.md](../../../AGENTS.md) - Architecture principles

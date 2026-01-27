@@ -145,5 +145,5 @@ Currently, migrations are forward-only. For rollbacks:
 
 ## Related Documentation
 
-- [DATABASE.md](../../DATABASE.md) - Full schema documentation
-- [AZURE_DEPLOYMENT.md](../../docs/setup/AZURE_DEPLOYMENT.md) - Deployment guide
+- [DATABASE.md](../../docs/reference/DATABASE.md) - Full schema documentation
+- [AZURE.md](../../docs/deployment/AZURE.md) - Deployment guide
