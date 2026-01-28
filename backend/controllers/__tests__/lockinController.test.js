@@ -17,7 +17,7 @@ const {
   extractFirstUserMessage,
   coerceGeneratedTitle,
 } = require('../../utils/chatTitle');
-const { updateChatTitle, getChatMessages } = require('../../chatRepository');
+const { updateChatTitle } = require('../../chatRepository');
 
 test('buildInitialChatTitle creates fallback title from first user message', () => {
   const title = buildInitialChatTitle('What is an array data structure?');

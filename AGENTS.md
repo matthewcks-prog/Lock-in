@@ -330,6 +330,75 @@ The transcript system uses a **provider pattern with dependency injection**:
 
 **Rule**: Business logic (extraction algorithm) lives in `/core`. Chrome-specific fetching lives in `/extension`. Providers depend on fetcher interface, not concrete implementations.
 
+## Backend Architecture Rules (NON-NEGOTIABLE)
+
+### Layer boundaries
+
+We follow: Controllers → Services → Repositories/Providers → DB/External APIs
+
+**Controllers (backend/controllers/)**
+Controllers MUST:
+
+- Parse HTTP inputs (req.params, req.query, req.body)
+- Call validation helpers
+- Call service functions (application logic)
+- Map service results to HTTP responses (status + JSON)
+  Controllers MUST NOT:
+- Build prompts/system messages
+- Call Supabase directly
+- Loop through attachments/assets with repository calls
+- Contain business rules like "effectiveMode" or mode switching
+- Contain OpenAI request wiring or retry logic
+  Target size: ~150 lines max per controller.
+
+**Services (backend/services/)**
+Services own the workflow:
+
+- Orchestrate repository calls
+- Implement business rules
+- Implement idempotency boundaries (wrap the entire unit-of-work)
+- Decide “what happens” and return structured results
+  Services MUST NOT:
+- Read req/res directly
+- Access Express objects
+- Contain raw SQL/Supabase query building (that belongs in repositories)
+
+**Repositories (backend/repositories/ or backend/\*Repository.js)**
+Repositories MUST:
+
+- Encapsulate Supabase queries and DB mapping
+- Never reference Express or OpenAI
+  Repositories MUST NOT:
+- Construct prompts or business policies
+
+**Providers (backend/providers/)**
+Providers contain external API client wiring:
+
+- OpenAI/Azure clients, retry/fallback, timeouts
+  Providers MUST NOT:
+- Know about HTTP or database schema
+
+### “Stop the bleed” rules (SoC enforcement)
+
+Before adding logic to a controller, ask:
+
+1. Is this HTTP-specific? If no → move to service/util.
+2. Does it touch DB? If yes → service/repository, not controller.
+3. Does it build LLM prompts? If yes → move out of controller immediately.
+
+### PR quality gates
+
+- No new controller over 200 lines without justification.
+- Every new feature must include at least one test at the service/util layer.
+- Prefer extracting pure functions (normalizers/builders) to improve testability.
+
+### Naming conventions
+
+- `*Controller.js` = transport glue only
+- `*Service.js` = orchestration + business rules
+- `*Repository.js` = DB access only
+- Prompt builders live outside controllers (prefer `services/` or `utils/` until a domain folder is introduced)
+
 ---
 
 ## Naming Conventions

@@ -153,7 +153,7 @@ function logError(err, req) {
  * Global error handler middleware
  * Must be registered last in the middleware chain
  */
-function errorHandler(err, req, res, next) {
+function errorHandler(err, req, res, _next) {
   // Log the error
   logError(err, req);
 

@@ -8,6 +8,13 @@ import {
   normalizePanoptoEmbedUrl,
   type PanoptoInfo,
 } from './urlUtils';
+import { logWithPrefix } from '../../utils/transcriptLogger';
+
+const PANOPTO_PREFIX = '[Panopto]';
+const logDebug = (message: string, meta?: Record<string, unknown>) =>
+  logWithPrefix(PANOPTO_PREFIX, 'debug', message, meta);
+const logWarn = (message: string, meta?: Record<string, unknown>) =>
+  logWithPrefix(PANOPTO_PREFIX, 'warn', message, meta);
 
 function decodeEscapedUrl(value: string): string {
   return value
@@ -89,13 +96,13 @@ export function extractCaptionVttUrl(html: string): string | null {
     const match = html.match(pattern);
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);
-      console.log(`[Panopto] Caption URL found with pattern ${i + 1}:`, url.substring(0, 100));
+      logDebug('Caption URL found', { patternIndex: i + 1, url: url.substring(0, 100) });
       return url;
     }
   }
 
-  console.warn('[Panopto] No caption URL found in embed HTML. HTML length:', html.length);
-  console.log('[Panopto] HTML sample:', html.substring(0, 500).replace(/\s+/g, ' '));
+  logWarn('No caption URL found in embed HTML', { htmlLength: html.length });
+  logDebug('Embed HTML sample', { sample: html.substring(0, 500).replace(/\s+/g, ' ') });
 
   return null;
 }
@@ -128,7 +135,7 @@ export function extractPanoptoMediaUrl(html: string): string | null {
     /"(?:Url|url|URL)"\s*:\s*"(https?:\/\/[^"]*panopto[^"]*\/(?:Podcast|Stream|Delivery)[^"]*)"/i,
   ];
 
-  console.log('[Panopto] Searching for media URL in HTML (length:', html.length, ')');
+  logDebug('Searching for media URL in embed HTML', { htmlLength: html.length });
 
   for (let i = 0; i < patterns.length; i++) {
     const pattern = patterns[i];
@@ -136,10 +143,13 @@ export function extractPanoptoMediaUrl(html: string): string | null {
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);
       if (isValidVideoUrl(url)) {
-        console.log(`[Panopto] Media URL found with pattern ${i + 1}:`, url.substring(0, 100));
+        logDebug('Media URL found', { patternIndex: i + 1, url: url.substring(0, 100) });
         return url;
       } else {
-        console.log(`[Panopto] Pattern ${i + 1} matched but URL invalid:`, url.substring(0, 50));
+        logDebug('Pattern matched but URL invalid', {
+          patternIndex: i + 1,
+          url: url.substring(0, 50),
+        });
       }
     }
   }
@@ -149,16 +159,18 @@ export function extractPanoptoMediaUrl(html: string): string | null {
   );
 
   if (urlKeys.length > 0) {
-    console.log('[Panopto] Found URL-like keys in HTML:', urlKeys.slice(0, 10).join(', '));
+    logDebug('Found URL-like keys in embed HTML', { keys: urlKeys.slice(0, 10) });
   }
 
   const anyVideoUrl = html.match(/https?:\/\/[^"'\s]+(?:\.mp4|\.m3u8|\/stream\/|\/podcast\/)/i);
   if (anyVideoUrl && anyVideoUrl[0]) {
-    console.log('[Panopto] Found potential video URL in HTML:', anyVideoUrl[0].substring(0, 100));
+    logDebug('Found potential video URL in embed HTML', {
+      url: anyVideoUrl[0].substring(0, 100),
+    });
     return anyVideoUrl[0];
   }
 
-  console.warn('[Panopto] No media URL found for AI transcription');
+  logWarn('No media URL found for AI transcription');
 
   return null;
 }

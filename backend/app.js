@@ -64,7 +64,7 @@ function createApp() {
 
   // Sentry test endpoint (only in development)
   if (process.env.NODE_ENV !== 'production') {
-    app.get('/debug-sentry', (req, res, next) => {
+    app.get('/debug-sentry', (_req, _res, _next) => {
       // This will throw an error that Sentry should capture
       throw new Error('Sentry test error from Lock-in backend!');
     });

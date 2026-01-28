@@ -40,9 +40,13 @@ describe('chatRepository pagination', () => {
     resetModule('../../backend/chatRepository');
     resetModule('../../backend/supabaseClient.js');
     resetModule('../../backend/supabaseClient');
-    ({ supabase } = require('../../backend/supabaseClient.js'));
+    ({ supabase } = require('../../backend/supabaseClient.js') as {
+      supabase: { from: ReturnType<typeof vi.fn> };
+    });
     supabase.from = vi.fn();
-    ({ getRecentChats } = require('../../backend/chatRepository.js'));
+    ({ getRecentChats } = require('../../backend/chatRepository.js') as {
+      getRecentChats: GetRecentChats;
+    });
   });
 
   it('returns nextCursor when more chats exist', async () => {

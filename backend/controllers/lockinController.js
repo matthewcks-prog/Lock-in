@@ -5,7 +5,6 @@
  */
 
 const {
-  generateLockInResponse,
   generateStructuredStudyResponse,
   generateChatTitleFromHistory,
 } = require('../openaiClient');
@@ -29,7 +28,6 @@ const {
 const { checkDailyLimit } = require('../rateLimiter');
 const {
   validateMode,
-  validateLanguageCode,
   validateUUID,
   validateChatHistory,
   validateText,

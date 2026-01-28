@@ -40,7 +40,11 @@ This is a living overview of the current codebase. Update it whenever files move
   - `interactions.js` (Escape handlers).
 
 - **`background.js`**
-  - Service worker for background tasks, context menus, and session routing.
+  - Service worker entrypoint that loads shared libs and delegates to `extension/background/index.js` for listener registration.
+
+- **`background/`**
+  - Modular background implementation: router/validators, handlers, sessions/settings/auth, context menus, lifecycle, and transcript services.
+  - `background/index.js` assembles dependencies and registers listeners; no side effects on module load.
 
 - **`popup.js`**
   - Toolbar popup UI logic, settings, and auth UI.
@@ -84,6 +88,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`core/transcripts/types/echo360Types.ts`** - Echo360-specific types for syllabus parsing and detection.
 - **`core/transcripts/parsers/echo360Parser.ts`** - Thin entrypoint for Echo360 syllabus parsing; implementation split under `core/transcripts/parsers/echo360/` (record utils, URL helpers, syllabus parser + fetcher).
 - **`core/transcripts/utils/echo360Logger.ts`** - Echo360 logging utility shared by provider and parser.
+- **`core/transcripts/utils/transcriptLogger.ts`** - Transcript logging helper with environment-aware log level gating (silent in tests; override via `LOCKIN_TRANSCRIPT_LOG_LEVEL`).
 - **`core/transcripts/utils/echo360Network.ts`** - Echo360 network helpers for retries/timeouts/redirect-aware HTML fetches.
 - **`core/transcripts/webvttParser.ts`** - WebVTT parsing with HTML entity decoding
 - **`core/transcripts/fetchers/types.ts`** - Fetcher interfaces (AsyncFetcher, EnhancedAsyncFetcher) and type guards. No Chrome dependencies.
@@ -95,7 +100,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`extension/dist/libs/transcriptProviders.js`** - Bundled transcript providers + registry + Panopto helpers for background usage (loaded via `importScripts`).
 - **`extension/src/networkUtils.js`** - Background fetch helpers (retry, credentials, HTML fetch, redirect tracking) used by ExtensionFetcher and PanoptoMediaResolver.
 - **`extension/src/panoptoResolver.js`** - PanoptoMediaResolver for AI media URL resolution; uses core Panopto helpers.
-- **`extension/background.js`** - ExtensionFetcher class (Chrome-specific CORS/credentials) + message routing. Delegates extraction to core providers via registry and wires AI media URL resolution via PanoptoMediaResolver.
+- **`extension/background/`** - ExtensionFetcher (`transcripts/extensionFetcher.js`), transcript routing, AI transcription pipeline, and message handlers; `extension/background.js` is the MV3 entrypoint that loads modules and registers listeners.
 - **AI fallback**: `useTranscripts.ts` triggers `FETCH_PANOPTO_MEDIA_URL` when captions are missing, then `TRANSCRIBE_MEDIA_AI` streams media to backend transcript jobs.
 - **Backend durability**: Transcript job chunks live in Supabase Storage bucket `transcript-jobs` and are processed via heartbeat-based job claims for multi-instance recovery.
 

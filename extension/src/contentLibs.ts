@@ -12,8 +12,8 @@ import { createContentRuntime } from './contentRuntime';
 
 if (typeof window !== 'undefined') {
   const runtime = createContentRuntime();
-  (window as any).LockInContent = runtime;
-  (window as any).LockInContent.__version = runtime.__version;
+  window.LockInContent = runtime;
+  window.LockInContent.__version = runtime.__version;
 }
 
 export { createContentRuntime };

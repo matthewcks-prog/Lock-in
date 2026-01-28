@@ -1,3 +1,5 @@
+import { logWithPrefix } from './transcriptLogger';
+
 const LOG_PREFIX = '[Lock-in Transcript:Echo360]';
 
 export function log(
@@ -6,14 +8,6 @@ export function log(
   message: string,
   meta?: Record<string, unknown>,
 ): void {
-  const logFn =
-    level === 'error'
-      ? console.error
-      : level === 'warn'
-        ? console.warn
-        : level === 'debug'
-          ? console.debug
-          : console.info;
-  const msg = `${LOG_PREFIX} [${requestId}] ${message}`;
-  meta ? logFn(msg, meta) : logFn(msg);
+  const prefix = `${LOG_PREFIX} [${requestId}]`;
+  logWithPrefix(prefix, level, message, meta);
 }

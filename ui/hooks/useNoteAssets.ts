@@ -2,6 +2,15 @@ import { useCallback, useRef, useState } from 'react';
 import type { NoteAsset } from '../../core/domain/Note.ts';
 import type { NotesService } from '../../core/services/notesService.ts';
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'object' && err !== null) {
+    const record = err as Record<string, unknown>;
+    if (typeof record.message === 'string') return record.message;
+  }
+  return fallback;
+}
+
 export interface UseNoteAssetsResult {
   noteAssets: NoteAsset[];
   isLoading: boolean;
@@ -57,10 +66,10 @@ export function useNoteAssets(
       if (loadingNoteIdRef.current === noteId) {
         setNoteAssets(Array.isArray(assets) ? assets : []);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Only update error if this is still the current request
       if (loadingNoteIdRef.current === noteId) {
-        setError(err?.message || 'Failed to load attachments');
+        setError(getErrorMessage(err, 'Failed to load attachments'));
       }
     } finally {
       // Only clear loading if this is still the current request
@@ -91,8 +100,8 @@ export function useNoteAssets(
         const asset = await notesService.uploadAsset(noteId, file);
         setNoteAssets((prev) => [...prev, asset]);
         return asset;
-      } catch (err: any) {
-        setError(err?.message || 'Failed to upload attachment');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to upload attachment'));
         return null;
       } finally {
         setIsUploading(false);
@@ -112,8 +121,8 @@ export function useNoteAssets(
         await notesService.deleteAsset(assetId);
         setNoteAssets((prev) => prev.filter((asset) => asset.id !== assetId));
         return true;
-      } catch (err: any) {
-        setError(err?.message || 'Failed to delete attachment');
+      } catch (err: unknown) {
+        setError(getErrorMessage(err, 'Failed to delete attachment'));
         return false;
       }
     },

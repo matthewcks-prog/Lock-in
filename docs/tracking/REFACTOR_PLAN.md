@@ -1,6 +1,6 @@
 # Refactor Plan (Quality Audit 2026-01-23)
 
-Last updated: 2026-01-27
+Last updated: 2026-01-28
 
 This plan is derived from `docs/archive/QUALITY_AUDIT_2026-01-23.md`, updated to reflect work already completed and the remaining backlog. Phases are ordered by risk reduction, scalability, and architectural alignment. Use the acceptance criteria to verify completion before moving to the next phase.
 
@@ -47,6 +47,11 @@ This plan is derived from `docs/archive/QUALITY_AUDIT_2026-01-23.md`, updated to
   - **Problem:** `console.log` used in runtime services.
   - **Outcome:** `backend/services/transcriptsService.js` and `backend/sentry.js` log via observability logger.
   - **Acceptance criteria:** No direct `console.log`/`console.error` in backend runtime paths.
+
+- [x] **Test log noise + circular require warnings**
+  - **Problem:** Node tests emitted circular dependency warnings from stubbed modules; transcript/provider/Sentry debug logs cluttered vitest output.
+  - **Outcome:** Test module stubs are marked loaded, transcript logging is level-gated (silent in tests), and extension logger/Sentry debug logs are suppressed in test runs.
+  - **Acceptance criteria:** `npm run test` and `npm run test:backend` run without warning noise.
 
 - [x] **Targeted notes/chat test coverage**
   - **Problem:** Critical UI paths lacked coverage.
@@ -159,6 +164,11 @@ This plan is derived from `docs/archive/QUALITY_AUDIT_2026-01-23.md`, updated to
   - **Problem:** Hard dependencies on `fetch`, `chrome`, `window`, env at import time.
   - **Work:** Inject fetch/storage/env into modules; add lightweight interfaces.
   - **Acceptance criteria:** Tests can stub dependencies without global hacks.
+
+- [x] **Modularize MV3 background service worker**
+  - **Problem:** `extension/background.js` mixed routing, sessions, transcripts, and AI transcription logic, making testing difficult.
+  - **Work:** Split into `extension/background/` modules (router/validators, handlers, sessions/settings/auth, transcripts, lifecycle) with a single entrypoint in `background.js`; add unit tests for router/validators/helpers with chrome adapter.
+  - **Acceptance criteria:** No module-load side effects beyond `initBackground()`; message contracts unchanged; unit tests cover router/validators/helpers.
 
 - [x] **No feature breaks or regression**
   - Ensure npm run validate still passes. Add more tests if needed.

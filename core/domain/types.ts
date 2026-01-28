@@ -186,7 +186,7 @@ export interface NoteRecord {
   course_code: string | null;
   note_type: string | null;
   tags: string[];
-  embedding?: any; // Vector embedding for semantic search
+  embedding?: number[] | null; // Vector embedding for semantic search
   created_at: string;
   updated_at: string;
 }

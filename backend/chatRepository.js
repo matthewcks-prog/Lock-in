@@ -142,7 +142,7 @@ async function getChatMessages(userId, chatId) {
     throw new Error(`Failed to fetch chat messages: ${error.message}`);
   }
 
-  return (data || []).map(({ chat_id, user_id, ...rest }) => rest);
+  return (data || []).map(({ chat_id: _chat_id, user_id: _user_id, ...rest }) => rest);
 }
 
 /**

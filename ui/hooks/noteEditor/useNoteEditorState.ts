@@ -4,6 +4,15 @@ import type { Note, NoteStatus } from '@core/domain/Note';
 import type { NotesService } from '@core/services/notesService';
 import { createClientNoteId, createContentFingerprint, createDraftNote } from './noteUtils';
 
+function getErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'object' && err !== null) {
+    const record = err as Record<string, unknown>;
+    if (typeof record.message === 'string') return record.message;
+  }
+  return fallback;
+}
+
 export interface NoteEditorStateOptions {
   noteId?: string | null;
   notesService: NotesService | null | undefined;
@@ -129,9 +138,9 @@ export function useNoteEditorState({
         lastSavedFingerprintRef.current = createContentFingerprint(loaded.title, loaded.content);
         lastLoadedNoteIdRef.current = targetId;
         setStatus('idle');
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (cancelled) return;
-        setError(err?.message || 'Failed to load note');
+        setError(getErrorMessage(err, 'Failed to load note'));
         setStatus('error');
       } finally {
         if (!cancelled) {

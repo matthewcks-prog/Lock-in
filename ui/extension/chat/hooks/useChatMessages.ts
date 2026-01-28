@@ -13,9 +13,9 @@ import { isValidUUID, normalizeChatMessage } from '../types';
 /**
  * Normalizes API response to ChatMessage array.
  */
-function normalizeMessages(response: any[], mode: UseChatMessagesOptions['mode']): ChatMessage[] {
+function normalizeMessages(response: unknown, mode: UseChatMessagesOptions['mode']): ChatMessage[] {
   if (!Array.isArray(response)) return [];
-  return response.map((message: any) => normalizeChatMessage(message, mode));
+  return response.map((message) => normalizeChatMessage(message, mode));
 }
 
 /**

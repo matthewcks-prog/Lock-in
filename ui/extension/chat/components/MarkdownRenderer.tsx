@@ -21,16 +21,14 @@ interface MarkdownRendererProps {
 /**
  * Custom code block component with syntax highlighting
  */
-const CodeBlock = memo(function CodeBlock({
-  inline,
-  className,
-  children,
-  ...props
-}: {
+type CodeProps = Omit<React.HTMLAttributes<HTMLElement>, 'style'> & {
   inline?: boolean;
-  className?: string;
-  children?: React.ReactNode;
-}) {
+  node?: unknown;
+};
+
+const syntaxStyle = oneDark as unknown as Record<string, React.CSSProperties>;
+
+const CodeBlock = memo(function CodeBlock({ inline, className, children, ...props }: CodeProps) {
   // Extract language from className (e.g., "language-javascript")
   const match = /language-(\w+)/.exec(className || '');
   const language = match ? match[1] : '';
@@ -57,7 +55,7 @@ const CodeBlock = memo(function CodeBlock({
         </div>
       )}
       <SyntaxHighlighter
-        style={oneDark as any}
+        style={syntaxStyle}
         language={language || 'text'}
         PreTag="div"
         customStyle={{
@@ -77,7 +75,9 @@ const CodeBlock = memo(function CodeBlock({
 /**
  * Custom components for markdown elements
  */
-const markdownComponents = {
+type MarkdownComponents = Record<string, React.ComponentType<Record<string, unknown>>>;
+
+const markdownComponents: MarkdownComponents = {
   // Code blocks with syntax highlighting
   code: CodeBlock,
 
@@ -160,7 +160,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
 
   return (
     <div className={`markdown-content text-gray-900 ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents as any}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
         {content}
       </ReactMarkdown>
     </div>

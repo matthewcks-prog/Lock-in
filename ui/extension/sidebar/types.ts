@@ -1,7 +1,7 @@
 export interface StorageAdapter {
-  get: (key: string) => Promise<unknown>;
+  get: <T = unknown>(key: string) => Promise<T | null>;
   set: (key: string, value: unknown) => Promise<void>;
-  getLocal?: (key: string) => Promise<unknown>;
+  getLocal?: <T = unknown>(key: string) => Promise<T | null>;
   setLocal?: (key: string, value: unknown) => Promise<void>;
 }
 

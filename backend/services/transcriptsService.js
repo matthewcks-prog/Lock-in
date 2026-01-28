@@ -15,7 +15,6 @@ const {
   listTranscriptJobsByStatusBefore,
 } = require('../repositories/transcriptsRepository');
 const {
-  TRANSCRIPTION_SEGMENT_MAX_MB,
   TRANSCRIPTION_TEMP_DIR,
   TRANSCRIPT_CHUNK_RETENTION_HOURS,
   TRANSCRIPT_CHUNK_HARD_TTL_DAYS,

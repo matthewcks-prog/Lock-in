@@ -83,6 +83,11 @@ function isDevelopmentBuild(): boolean {
 }
 
 const isDevelopment = isDevelopmentBuild();
+const isTestEnv =
+  typeof process !== 'undefined' &&
+  (process.env?.NODE_ENV === 'test' ||
+    process.env?.VITEST === 'true' ||
+    process.env?.VITEST === '1');
 
 // ============================================================================
 // DSN Resolution
@@ -318,7 +323,7 @@ let currentSurface: Surface | null = null;
  */
 export async function initSentry(surface: Surface): Promise<boolean> {
   if (isInitialized) {
-    if (isDevelopment) {
+    if (isDevelopment && !isTestEnv) {
       console.log(`[Sentry] Already initialized for surface: ${currentSurface}`);
     }
     return true;
@@ -327,7 +332,7 @@ export async function initSentry(surface: Surface): Promise<boolean> {
   // Check telemetry opt-out
   const telemetryEnabled = await isTelemetryEnabled();
   if (!telemetryEnabled) {
-    if (isDevelopment) {
+    if (isDevelopment && !isTestEnv) {
       console.log('[Sentry] Telemetry disabled by user preference');
     }
     return false;
@@ -336,7 +341,7 @@ export async function initSentry(surface: Surface): Promise<boolean> {
   const dsn = getSentryDsn();
 
   // Debug logging for troubleshooting
-  if (isDevelopment) {
+  if (isDevelopment && !isTestEnv) {
     console.log('[Sentry] Initialization debug:', {
       surface,
       hasDsn: !!dsn,
@@ -347,7 +352,7 @@ export async function initSentry(surface: Surface): Promise<boolean> {
   }
 
   if (!dsn) {
-    if (isDevelopment) {
+    if (isDevelopment && !isTestEnv) {
       console.log('[Sentry] No DSN configured, skipping initialization');
     }
     return false;
@@ -432,7 +437,7 @@ export async function initSentry(surface: Surface): Promise<boolean> {
 
     isInitialized = true;
 
-    if (isDevelopment) {
+    if (isDevelopment && !isTestEnv) {
       console.log(`[Sentry] ✓ Initialized successfully for surface: ${surface}`);
     }
 
@@ -504,7 +509,7 @@ export function setupMv3Lifecycle(): void {
     const chrome = (globalContext as any).chrome;
     if (chrome?.runtime?.onSuspend) {
       chrome.runtime.onSuspend.addListener(() => {
-        if (isDevelopment) {
+        if (isDevelopment && !isTestEnv) {
           console.log('[Sentry] Service worker suspending, flushing events...');
         }
         flushSentry(2000);
@@ -524,7 +529,7 @@ export function setupMv3Lifecycle(): void {
  */
 export function captureError(error: Error, context?: Record<string, unknown>): void {
   if (!sentryClient || !sentryScope) {
-    if (isDevelopment) {
+    if (isDevelopment && !isTestEnv) {
       console.warn('[Sentry] Not initialized, error not captured:', error);
     }
     return;

@@ -27,7 +27,7 @@ export interface LockInConfig {
  * Get config from window (set by config.js)
  */
 export function getConfig(): LockInConfig {
-  const config = (typeof window !== 'undefined' && (window as any).LOCKIN_CONFIG) || {};
+  const config = typeof window !== 'undefined' ? (window.LOCKIN_CONFIG ?? {}) : {};
   return {
     backendUrl: config.BACKEND_URL || 'http://localhost:3000',
     supabaseUrl: config.SUPABASE_URL || '',
@@ -88,12 +88,12 @@ export function initClients(): { authClient: AuthClient; apiClient: ApiClient } 
 
   // Expose globally for legacy code and content scripts
   if (typeof window !== 'undefined') {
-    (window as any).LockInAuth = authClient;
-    (window as any).LockInAPI = apiClient;
+    window.LockInAuth = authClient;
+    window.LockInAPI = apiClient;
 
     // Also expose as authClient/apiClient for backward compatibility
-    (window as any).authClient = authClient;
-    (window as any).apiClient = apiClient;
+    window.authClient = authClient;
+    window.apiClient = apiClient;
   }
 
   return cachedClients;

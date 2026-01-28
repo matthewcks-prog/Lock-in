@@ -4,6 +4,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const Module = require('node:module');
 const { TRANSCRIPT_CHUNK_MAX_BYTES } = require('../../config');
 
 function createRepoState() {
@@ -119,8 +120,18 @@ function loadController({ repo, service }) {
   const originalService = require.cache[servicePath];
   const originalController = require.cache[controllerPath];
 
-  require.cache[repoPath] = { exports: repo };
-  require.cache[servicePath] = { exports: service };
+  const repoModule = new Module(repoPath, module);
+  repoModule.filename = repoPath;
+  repoModule.exports = repo;
+  repoModule.loaded = true;
+
+  const serviceModule = new Module(servicePath, module);
+  serviceModule.filename = servicePath;
+  serviceModule.exports = service;
+  serviceModule.loaded = true;
+
+  require.cache[repoPath] = repoModule;
+  require.cache[servicePath] = serviceModule;
   delete require.cache[controllerPath];
 
   const controller = require('../../controllers/transcriptsController');

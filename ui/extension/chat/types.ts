@@ -6,6 +6,7 @@
  */
 
 import type { StudyMode } from '@core/domain/types';
+import type { ApiClient } from '@api/client';
 
 // =============================================================================
 // Message Types
@@ -66,7 +67,7 @@ export interface SendMessageParams {
   /** Existing chat ID if continuing conversation */
   chatId?: string | null;
   /** Chat history for context */
-  chatHistory?: Array<{ role: string; content: string }>;
+  chatHistory?: Array<{ role: ChatMessageRole; content: string }>;
 }
 
 export interface ChatApiResponse {
@@ -81,11 +82,11 @@ export interface ChatApiResponse {
 
 export interface UseChatOptions {
   /** API client for backend calls */
-  apiClient: any | null;
+  apiClient: ApiClient | null;
   /** Storage adapter for persistence */
   storage?: {
-    get: (key: string) => Promise<any>;
-    set: (key: string, value: any) => Promise<void>;
+    get: <T = unknown>(key: string) => Promise<T | null>;
+    set: (key: string, value: unknown) => Promise<void>;
   };
   /** Current study mode */
   mode: StudyMode;
@@ -96,18 +97,18 @@ export interface UseChatOptions {
 }
 
 export interface UseChatMessagesOptions {
-  apiClient: any | null;
+  apiClient: ApiClient | null;
   chatId: string | null;
   mode: StudyMode;
 }
 
 export interface UseChatHistoryOptions {
-  apiClient: any | null;
+  apiClient: ApiClient | null;
   limit?: number;
 }
 
 export interface UseSendMessageOptions {
-  apiClient: any | null;
+  apiClient: ApiClient | null;
   mode: StudyMode;
   pageUrl: string;
   courseCode: string | null;
@@ -162,6 +163,16 @@ export function buildInitialChatTitle(text: string): string {
   return coerceChatTitle(text, FALLBACK_CHAT_TITLE);
 }
 
+type RecordValue = Record<string, unknown>;
+
+function isRecord(value: unknown): value is RecordValue {
+  return typeof value === 'object' && value !== null;
+}
+
+function getString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
 export function relativeTimeLabel(iso: string | null | undefined): string {
   if (!iso) return 'just now';
   const date = new Date(iso);
@@ -176,39 +187,51 @@ export function relativeTimeLabel(iso: string | null | undefined): string {
   return `${days}d ago`;
 }
 
-export function normalizeChatAttachment(raw: any): ChatAttachment | null {
-  if (!raw) return null;
+export function normalizeChatAttachment(raw: unknown): ChatAttachment | null {
+  if (!isRecord(raw)) return null;
 
-  const kind = (raw.kind || raw.type || 'other') as ChatAttachmentKind;
-  const mime = raw.mime || raw.mimeType || raw.mime_type || '';
-  const name = raw.name || raw.fileName || raw.file_name || 'Attachment';
-  const dataUrl = raw.dataUrl;
-  const url = raw.url;
+  const kindValue = getString(raw.kind) || getString(raw.type) || 'other';
+  const kind = (
+    ['image', 'document', 'code', 'other'].includes(kindValue) ? kindValue : 'other'
+  ) as ChatAttachmentKind;
+  const mime = getString(raw.mime) || getString(raw.mimeType) || getString(raw.mime_type) || '';
+  const name =
+    getString(raw.name) || getString(raw.fileName) || getString(raw.file_name) || 'Attachment';
+  const dataUrl = getString(raw.dataUrl);
+  const url = getString(raw.url);
 
   return {
     kind,
     mime,
     name,
-    dataUrl: typeof dataUrl === 'string' ? dataUrl : undefined,
-    url: typeof url === 'string' ? url : undefined,
+    dataUrl,
+    url,
   };
 }
 
-export function normalizeChatMessage(raw: any, mode: StudyMode): ChatMessage {
-  const attachments = Array.isArray(raw?.attachments)
-    ? raw.attachments
+export function normalizeChatMessage(raw: unknown, mode: StudyMode): ChatMessage {
+  const record = isRecord(raw) ? raw : {};
+  const attachments = Array.isArray(record.attachments)
+    ? record.attachments
         .map(normalizeChatAttachment)
         .filter((attachment: ChatAttachment | null): attachment is ChatAttachment =>
           Boolean(attachment),
         )
     : undefined;
 
+  const modeValue =
+    record.mode === 'explain' || record.mode === 'general' ? record.mode : undefined;
+
   return {
-    id: raw?.id || `msg-${Math.random().toString(16).slice(2)}`,
-    role: raw?.role === 'assistant' ? 'assistant' : 'user',
-    content: raw?.content || raw?.output_text || raw?.input_text || 'Message',
-    timestamp: raw?.created_at || new Date().toISOString(),
-    mode: raw?.mode || mode,
+    id: getString(record.id) || `msg-${Math.random().toString(16).slice(2)}`,
+    role: record.role === 'assistant' ? 'assistant' : 'user',
+    content:
+      getString(record.content) ||
+      getString(record.output_text) ||
+      getString(record.input_text) ||
+      'Message',
+    timestamp: getString(record.created_at) || new Date().toISOString(),
+    mode: modeValue || mode,
     attachments,
   };
 }

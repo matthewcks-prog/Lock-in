@@ -7,7 +7,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createNotesService } from '../notesService';
 import type { ApiClient } from '../../../api/client';
-import type { NoteContent } from '../../domain/Note';
+import type { NoteContent, NoteAsset } from '../../domain/Note';
 
 describe('NotesService', () => {
   let mockApiClient: ApiClient;
@@ -344,18 +344,19 @@ describe('NotesService', () => {
 
   describe('listAssets', () => {
     it('should list assets for a note', async () => {
-      const mockAssets = [
+      const mockAssets: NoteAsset[] = [
         {
           id: 'asset-1',
-          note_id: 'note-1',
+          noteId: 'note-1',
+          userId: 'user-1',
           type: 'image',
-          mime_type: 'image/png',
-          storage_path: 'path/to/asset.png',
-          created_at: '2024-01-01T00:00:00Z',
+          mimeType: 'image/png',
+          storagePath: 'path/to/asset.png',
+          createdAt: '2024-01-01T00:00:00Z',
           url: 'https://example.com/asset.png',
-          file_name: 'image.png',
+          fileName: 'image.png',
         },
-      ] as unknown as any[];
+      ];
 
       vi.mocked(mockApiClient.listNoteAssets).mockResolvedValue(mockAssets);
 
@@ -369,16 +370,17 @@ describe('NotesService', () => {
 
   describe('uploadAsset', () => {
     it('should upload an asset', async () => {
-      const mockAsset = {
+      const mockAsset: NoteAsset = {
         id: 'asset-1',
-        note_id: 'note-1',
+        noteId: 'note-1',
+        userId: 'user-1',
         type: 'image',
-        mime_type: 'image/png',
-        storage_path: 'path/to/asset.png',
-        created_at: '2024-01-01T00:00:00Z',
+        mimeType: 'image/png',
+        storagePath: 'path/to/asset.png',
+        createdAt: '2024-01-01T00:00:00Z',
         url: 'https://example.com/asset.png',
-        file_name: 'image.png',
-      } as unknown as any;
+        fileName: 'image.png',
+      };
 
       const file = new File(['content'], 'image.png', { type: 'image/png' });
       vi.mocked(mockApiClient.uploadNoteAsset).mockResolvedValue(mockAsset);

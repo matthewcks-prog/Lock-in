@@ -1,6 +1,6 @@
 type TestRequire = {
-  (id: string): any;
-  cache: Record<string, { exports?: any } | undefined>;
+  (id: string): unknown;
+  cache: Record<string, { exports?: unknown } | undefined>;
   resolve: (id: string) => string;
 };
 

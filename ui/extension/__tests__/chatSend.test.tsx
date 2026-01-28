@@ -11,19 +11,24 @@ const actEnvironment = globalThis as typeof globalThis & {
 actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
 
 type StorageStub = {
-  get: (key: string) => Promise<unknown>;
+  get: <T = unknown>(key: string) => Promise<T | null>;
   set: (key: string, value: unknown) => Promise<void>;
-  getLocal: (key: string) => Promise<unknown>;
+  getLocal: <T = unknown>(key: string) => Promise<T | null>;
   setLocal: (key: string, value: unknown) => Promise<void>;
 };
 
 function createStorageStub(values: Record<string, unknown> = {}): StorageStub {
+  const get = vi.fn(<T = unknown,>(key: string) =>
+    Promise.resolve(Object.prototype.hasOwnProperty.call(values, key) ? (values[key] as T) : null),
+  ) as StorageStub['get'];
+  const getLocal = vi.fn(<T = unknown,>() =>
+    Promise.resolve<T | null>(null),
+  ) as StorageStub['getLocal'];
+
   return {
-    get: vi.fn((key: string) =>
-      Promise.resolve(Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null),
-    ),
+    get,
     set: vi.fn(() => Promise.resolve()),
-    getLocal: vi.fn(() => Promise.resolve(null)),
+    getLocal,
     setLocal: vi.fn(() => Promise.resolve()),
   };
 }

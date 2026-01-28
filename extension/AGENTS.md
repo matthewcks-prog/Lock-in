@@ -41,12 +41,14 @@ The `/extension` folder contains **Chrome extension-specific code only**. This i
 
 ### `background.js`
 
-- Service worker (Chrome extension lifecycle)
-- Context menu handlers
-- Session management (per-tab)
-- Message routing
-- **DO NOT** contain business logic - delegate to core/services
-- **Transcript extraction**: Uses `ExtensionFetcher` class (Chrome-specific CORS/credentials) and delegates to core providers via fetcher interface. No extraction algorithm logic here - that's in `/core/transcripts/providers/`.
+- Service worker entrypoint (Chrome extension lifecycle)
+- Loads shared libs + `extension/background/` modules, then registers listeners
+- **DO NOT** contain business logic - delegate to modular handlers/services
+
+### `background/`
+
+- Modular background implementation: router/validators, handlers, sessions/settings/auth, context menus, lifecycle hooks, and transcript services
+- **Transcript extraction**: `transcripts/extensionFetcher.js` provides Chrome-specific CORS/credentials; extraction logic stays in `/core/transcripts/providers/`
 
 ### `contentScript-react.js`
 

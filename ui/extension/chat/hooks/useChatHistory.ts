@@ -19,21 +19,35 @@ type ChatHistoryPage = {
   };
 };
 
+type RecordValue = Record<string, unknown>;
+
+function isRecord(value: unknown): value is RecordValue {
+  return typeof value === 'object' && value !== null;
+}
+
+function getString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
 /**
  * Normalizes API response to ChatHistoryItem array.
  */
-function normalizeHistory(response: any[]): ChatHistoryItem[] {
+function normalizeHistory(response: unknown): ChatHistoryItem[] {
   if (!Array.isArray(response)) return [];
 
-  return response.map((item: any) => ({
-    id: item.id || `chat-${Math.random().toString(16).slice(2)}`,
-    title: coerceChatTitle(item.title, FALLBACK_CHAT_TITLE),
-    updatedAt: item.updated_at || item.updatedAt || new Date().toISOString(),
-    lastMessage: item.lastMessage || '',
-  }));
+  return response.map((item) => {
+    const record = isRecord(item) ? item : {};
+    return {
+      id: getString(record.id) || `chat-${Math.random().toString(16).slice(2)}`,
+      title: coerceChatTitle(getString(record.title), FALLBACK_CHAT_TITLE),
+      updatedAt:
+        getString(record.updated_at) || getString(record.updatedAt) || new Date().toISOString(),
+      lastMessage: getString(record.lastMessage) || '',
+    };
+  });
 }
 
-function normalizeHistoryPage(response: any): ChatHistoryPage {
+function normalizeHistoryPage(response: unknown): ChatHistoryPage {
   if (Array.isArray(response)) {
     return {
       chats: normalizeHistory(response),
@@ -41,9 +55,10 @@ function normalizeHistoryPage(response: any): ChatHistoryPage {
     };
   }
 
-  const pagination = response?.pagination || {};
+  const record = isRecord(response) ? response : {};
+  const pagination = isRecord(record.pagination) ? record.pagination : {};
   return {
-    chats: normalizeHistory(response?.chats || []),
+    chats: normalizeHistory(record.chats),
     pagination: {
       hasMore: Boolean(pagination?.hasMore),
       nextCursor: typeof pagination?.nextCursor === 'string' ? pagination.nextCursor : null,

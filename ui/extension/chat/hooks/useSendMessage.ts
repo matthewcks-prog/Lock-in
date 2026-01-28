@@ -49,6 +49,8 @@ type SendMessageMutationParams = SendMessageWithAttachmentsParams & {
   activeChatId: string | null;
 };
 
+type ChatHistoryEntry = { role: ChatMessage['role']; content: string };
+
 const IDEMPOTENCY_BUCKET_MS = 5000;
 
 function hashString(value: string): string {
@@ -128,14 +130,14 @@ export function useSendMessage(options: UseSendMessageOptions) {
         });
       }
 
-      const baseHistory =
-        params.chatHistory ||
-        params.currentMessages.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
+      const baseHistorySource = params.chatHistory ?? params.currentMessages;
+      const baseHistory: ChatHistoryEntry[] = baseHistorySource.map((msg) => ({
+        role: msg.role === 'assistant' ? 'assistant' : 'user',
+        content: msg.content,
+      }));
 
-      const apiChatId = isValidUUID(params.chatId) ? params.chatId : undefined;
+      const apiChatId =
+        typeof params.chatId === 'string' && isValidUUID(params.chatId) ? params.chatId : undefined;
       const selectionPayload =
         params.selectionOverride !== undefined ? params.selectionOverride : params.message;
       const userMessagePayload =
@@ -149,7 +151,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
         newUserMessage: userMessagePayload,
         chatId: apiChatId,
         pageUrl: params.pageUrl || pageUrl,
-        courseCode: params.courseCode || courseCode || undefined,
+        courseCode: params.courseCode ?? courseCode ?? undefined,
         attachments: params.attachmentIds,
         idempotencyKey,
       });

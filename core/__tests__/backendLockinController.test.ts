@@ -60,12 +60,24 @@ function loadLockinController() {
   resetModule('../../backend/repositories/chatAssetsRepository.js');
   resetModule('../../backend/repositories/chatAssetsRepository');
 
-  const openaiClient = require('../../backend/openaiClient.js');
+  const openaiClient = require('../../backend/openaiClient.js') as {
+    generateStructuredStudyResponse?: typeof generateStructuredStudyResponse;
+    generateChatTitleFromHistory?: ReturnType<typeof vi.fn>;
+    generateLockInResponse?: ReturnType<typeof vi.fn>;
+  };
   openaiClient.generateStructuredStudyResponse = generateStructuredStudyResponse;
   openaiClient.generateChatTitleFromHistory = vi.fn();
   openaiClient.generateLockInResponse = vi.fn();
 
-  const chatRepository = require('../../backend/chatRepository.js');
+  const chatRepository = require('../../backend/chatRepository.js') as {
+    createChat?: typeof createChat;
+    getChatById?: typeof getChatById;
+    insertChatMessage?: typeof insertChatMessage;
+    touchChat?: typeof touchChat;
+    getRecentChats?: typeof getRecentChats;
+    getChatMessages?: typeof getChatMessages;
+    updateChatTitle?: typeof updateChatTitle;
+  };
   chatRepository.createChat = createChat;
   chatRepository.getChatById = getChatById;
   chatRepository.insertChatMessage = insertChatMessage;
@@ -74,25 +86,34 @@ function loadLockinController() {
   chatRepository.getChatMessages = getChatMessages;
   chatRepository.updateChatTitle = updateChatTitle;
 
-  const rateLimiter = require('../../backend/rateLimiter.js');
+  const rateLimiter = require('../../backend/rateLimiter.js') as {
+    checkDailyLimit?: typeof checkDailyLimit;
+  };
   rateLimiter.checkDailyLimit = checkDailyLimit;
 
-  const chatAssetsController = require('../../backend/controllers/chatAssetsController.js');
+  const chatAssetsController = require('../../backend/controllers/chatAssetsController.js') as {
+    getAssetForVision?: typeof getAssetForVision;
+    getAssetTextContent?: typeof getAssetTextContent;
+    createSignedAssetUrl?: typeof createSignedAssetUrl;
+  };
   chatAssetsController.getAssetForVision = getAssetForVision;
   chatAssetsController.getAssetTextContent = getAssetTextContent;
   chatAssetsController.createSignedAssetUrl = createSignedAssetUrl;
 
-  const chatAssetsRepoModule = require('../../backend/repositories/chatAssetsRepository.js');
+  const chatAssetsRepoModule =
+    require('../../backend/repositories/chatAssetsRepository.js') as Record<string, unknown>;
   Object.assign(chatAssetsRepoModule, chatAssetsRepository);
 
-  ({ handleLockinRequest } = require('../../backend/controllers/lockinController.js'));
+  ({ handleLockinRequest } = require('../../backend/controllers/lockinController.js') as {
+    handleLockinRequest: LockinHandler;
+  });
 }
 
 type TestResponse = {
   statusCode: number;
-  body: any;
+  body: Record<string, unknown> | null;
   status: (code: number) => TestResponse;
-  json: (payload: any) => TestResponse;
+  json: (payload: Record<string, unknown>) => TestResponse;
 };
 
 function createRes(): TestResponse {
@@ -103,7 +124,7 @@ function createRes(): TestResponse {
       this.statusCode = code;
       return this;
     },
-    json(payload: any) {
+    json(payload: Record<string, unknown>) {
       this.body = payload;
       return this;
     },

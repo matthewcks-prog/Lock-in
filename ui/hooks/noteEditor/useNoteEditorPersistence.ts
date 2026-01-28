@@ -13,6 +13,23 @@ import {
 } from './offlineQueue';
 import { createClientNoteId, createContentFingerprint, createDraftNote } from './noteUtils';
 
+type ErrorMeta = {
+  code?: string;
+  status?: number;
+  message?: string;
+};
+
+function getErrorMeta(err: unknown): ErrorMeta {
+  const record = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
+  return {
+    code: typeof record?.code === 'string' ? record.code : undefined,
+    status: typeof record?.status === 'number' ? record.status : undefined,
+    message:
+      (err instanceof Error && err.message) ||
+      (typeof record?.message === 'string' ? record.message : undefined),
+  };
+}
+
 export interface NoteEditorPersistenceOptions {
   notesService: NotesService | null | undefined;
   defaultCourseCode?: string | null;
@@ -190,12 +207,16 @@ export function useNoteEditorPersistence({
         window.clearTimeout(savedResetRef.current);
       }
       savedResetRef.current = window.setTimeout(() => setStatus('idle'), SAVED_RESET_DELAY_MS);
-    } catch (err: any) {
-      if (controller.signal.aborted || err?.code === 'ABORTED') return;
+    } catch (err: unknown) {
+      const meta = getErrorMeta(err);
+      if (controller.signal.aborted || meta.code === 'ABORTED') return;
 
-      const isNetworkError = err?.code === 'NETWORK_ERROR' || !navigator.onLine;
+      const isNetworkError = meta.code === 'NETWORK_ERROR' || !navigator.onLine;
       const isRetryable =
-        isNetworkError || err?.code === 'RATE_LIMIT' || err?.status === 429 || err?.status >= 500;
+        isNetworkError ||
+        meta.code === 'RATE_LIMIT' ||
+        meta.status === 429 ||
+        (meta.status ?? 0) >= 500;
 
       if (isRetryable && pendingSave.retryCount < MAX_SAVE_RETRIES) {
         addToOfflineQueue(pendingSave);
@@ -205,7 +226,7 @@ export function useNoteEditorPersistence({
         );
         setStatus('error');
       } else {
-        setError(err?.message || 'Failed to save note');
+        setError(meta.message || 'Failed to save note');
         setStatus('error');
       }
     }
@@ -320,7 +341,7 @@ export function useNoteEditorPersistence({
             courseCode: pendingSave.courseCode,
             sourceUrl: pendingSave.sourceUrl,
             sourceSelection: pendingSave.sourceSelection,
-            noteType: pendingSave.noteType as any,
+            noteType: pendingSave.noteType,
             tags: pendingSave.tags,
           };
           saved = await notesService.updateNote(pendingSave.noteId, payload, {
@@ -333,7 +354,7 @@ export function useNoteEditorPersistence({
             courseCode: pendingSave.courseCode,
             sourceUrl: pendingSave.sourceUrl,
             sourceSelection: pendingSave.sourceSelection,
-            noteType: pendingSave.noteType as any,
+            noteType: pendingSave.noteType,
             tags: pendingSave.tags,
             clientNoteId: pendingSave.clientNoteId,
           };
@@ -375,14 +396,15 @@ export function useNoteEditorPersistence({
             );
           }
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`[NoteEditor] Failed to sync offline save:`, err);
+        const meta = getErrorMeta(err);
         const isRetryable =
-          err?.code === 'NETWORK_ERROR' ||
-          err?.code === 'RATE_LIMIT' ||
-          err?.status === 429 ||
-          err?.status >= 500;
-        const isStale = err?.code === 'CONFLICT' || err?.code === 'NOT_FOUND';
+          meta.code === 'NETWORK_ERROR' ||
+          meta.code === 'RATE_LIMIT' ||
+          meta.status === 429 ||
+          (meta.status ?? 0) >= 500;
+        const isStale = meta.code === 'CONFLICT' || meta.code === 'NOT_FOUND';
 
         const updated = loadOfflineQueue().map((s) =>
           getQueueKey(s) === queueKey ? { ...s, retryCount: (s.retryCount ?? 0) + 1 } : s,

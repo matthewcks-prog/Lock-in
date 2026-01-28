@@ -178,9 +178,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (!storage) return;
 
     storage
-      .get(ACTIVE_CHAT_ID_KEY)
+      .get<string>(ACTIVE_CHAT_ID_KEY)
       .then(async (storedChatId) => {
-        if (storedChatId && isValidUUID(storedChatId)) {
+        if (typeof storedChatId === 'string' && isValidUUID(storedChatId)) {
           setActiveChatId(storedChatId);
           setActiveHistoryId(storedChatId);
         }
@@ -212,14 +212,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       const fallbackTitle = buildInitialChatTitle(initialMessage || '');
       const chat = await apiClient.createChat({ title: fallbackTitle });
-      if (!chat?.id) {
+      const chatId = typeof chat?.id === 'string' ? chat.id : null;
+      if (!chatId) {
         throw new Error('Failed to create chat session');
       }
 
-      setActiveChatId(chat.id);
-      setActiveHistoryId(chat.id);
+      setActiveChatId(chatId);
+      setActiveHistoryId(chatId);
 
-      return chat.id;
+      return chatId;
     },
     [apiClient],
   );

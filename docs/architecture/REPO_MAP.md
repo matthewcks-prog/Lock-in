@@ -15,6 +15,7 @@ integrations/
   adapters/, index.ts, __tests__/
 extension/
   manifest.json, contentScript-react.js, background.js, popup.js
+  background/ (router, handlers, transcripts, sessions, settings, auth, lifecycle modules)
   content/ (pageContext, stateStore, sidebarHost, sessionManager, interactions)
   src/ (initApi.ts, contentLibs.ts, chromeStorage.ts, logger.ts, messaging.ts)
   dist/

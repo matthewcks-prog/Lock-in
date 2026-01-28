@@ -47,7 +47,7 @@ function getTranscriptionClient() {
  * @param {number} options.maxRetries - Max retries (default: 3)
  * @returns {Promise<Object>} Transcription response
  */
-async function transcribeAudioFile({ filePath, language, maxRetries = 3 }) {
+async function transcribeAudioFile({ filePath, language, maxRetries: _maxRetries = 3 }) {
   if (!filePath) {
     throw new Error('Audio file path is required');
   }

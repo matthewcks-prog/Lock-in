@@ -37,13 +37,6 @@ const JOB_STATUS = {
   CANCELED: 'canceled',
 };
 
-const ACTIVE_STATUSES = new Set([
-  JOB_STATUS.CREATED,
-  JOB_STATUS.UPLOADING,
-  JOB_STATUS.UPLOADED,
-  JOB_STATUS.PROCESSING,
-]);
-
 const UPLOADABLE_STATUSES = new Set([JOB_STATUS.CREATED, JOB_STATUS.UPLOADING]);
 
 function sanitizeMediaUrlForStorage(mediaUrl) {

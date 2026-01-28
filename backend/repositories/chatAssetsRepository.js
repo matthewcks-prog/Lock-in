@@ -88,7 +88,7 @@ async function listAssetsForChat(chatId, userId) {
     .order('created_at', { ascending: true });
 
   if (error) throw error;
-  return (data || []).map(({ chat_messages, ...asset }) => asset);
+  return (data || []).map(({ chat_messages: _chat_messages, ...asset }) => asset);
 }
 
 /**

@@ -20,7 +20,7 @@ export interface Logger {
  */
 function isDebugEnabled(): boolean {
   if (typeof window === 'undefined') return false;
-  const config = (window as any).LOCKIN_CONFIG;
+  const config = window.LOCKIN_CONFIG;
   return config?.DEBUG === true || config?.DEBUG === 'true';
 }
 
@@ -56,7 +56,7 @@ const logger = createLogger();
 
 // Expose globally for content scripts
 if (typeof window !== 'undefined') {
-  (window as any).LockInLogger = logger;
+  window.LockInLogger = logger;
 }
 
 export { logger };

@@ -33,6 +33,7 @@ import {
 } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
 import { useSidebarState } from './sidebar/useSidebarState';
+import type { BaseAdapter } from '../../integrations/adapters/baseAdapter';
 export interface LockInSidebarProps {
   apiClient: ApiClient | null;
   isOpen: boolean;
@@ -41,7 +42,7 @@ export interface LockInSidebarProps {
   pendingPrefill?: string;
   onClearPrefill?: () => void;
   pageContext?: PageContext;
-  adapter?: any;
+  adapter?: BaseAdapter;
   storage?: StorageAdapter;
   activeTabExternal?: string;
 }

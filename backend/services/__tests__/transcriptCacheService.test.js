@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const Module = require('node:module');
 
 function loadService(repo) {
   const repoPath = require.resolve('../../repositories/transcriptsRepository');
@@ -8,7 +9,12 @@ function loadService(repo) {
   const originalRepo = require.cache[repoPath];
   const originalService = require.cache[servicePath];
 
-  require.cache[repoPath] = { exports: repo };
+  const repoModule = new Module(repoPath, module);
+  repoModule.filename = repoPath;
+  repoModule.exports = repo;
+  repoModule.loaded = true;
+
+  require.cache[repoPath] = repoModule;
   delete require.cache[servicePath];
 
   const service = require('../../services/transcriptCacheService');
