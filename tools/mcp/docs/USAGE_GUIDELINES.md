@@ -14,7 +14,7 @@ Lock-in architecture rules.
 
 1. Confirm current status: `../../../docs/tracking/STATUS.md`
 2. Review guardrails: `../../../AGENTS.md`
-3. Run validation before big changes: `../scripts/validate-mcp-setup.ps1`
+3. Run validation before big changes: `../../scripts/tools/validate-mcp-setup.ps1`
 
 ## Related Docs
 

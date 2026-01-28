@@ -19,5 +19,5 @@ npm run docs:check-links
 
 ## If Something Fails
 
-- Run `../scripts/validate-mcp-setup.ps1`
+- Run `../../scripts/tools/validate-mcp-setup.ps1`
 - Check `./TROUBLESHOOTING.md`

@@ -287,3 +287,4 @@ if ($issuesFound -eq 0) {
 Write-Host "=============================================" -ForegroundColor $InfoColor
 
 exit $issuesFound
+

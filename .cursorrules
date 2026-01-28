@@ -1,33 +1,18 @@
-# Lock-in Project Context
+# Cursor Rules
+# These rules ensure that all generated code adheres to the project's strict architectural boundaries.
 
-## Project Constraints
-- **Extension-first**: Primary UI is the Chrome extension sidebar.
-- **Chrome Isolation**:
-  - `/extension`: Chrome APIs allowed (`chrome.runtime`, `chrome.storage`).
-  - `/core` & `/api`: **NO** Chrome APIs. Pure JS/TS only.
-  - `/ui/extension`: Extension-specific React components.
-- **Single Widget**: Re-use `LockInSidebar.tsx` for all sites. Use adapters for site differences.
+# 1. ALWAYS read the relevant AGENTS.md files before generating code.
+#    - Root: /AGENTS.md
+#    - Core: /core/AGENTS.md (if editing /core)
+#    - Backend: /backend/AGENTS.md (if editing /backend)
+#    - Extension: /extension/AGENTS.md (if editing /extension)
+#    - Integrations: /integrations/AGENTS.md (if editing /integrations)
 
-## Core Loop
-Every feature must support: **Capture** -> **Understand** -> **Distil** -> **Organise** -> **Act**.
+# 2. RESPECT "Forbidden Imports" logic:
+#    - /core MUST NOT import 'chrome', 'react', 'express', 'backend'
+#    - /api MUST NOT import 'chrome'
+#    - /integrations MUST NOT import 'backend', 'api', 'chrome'
+#    - /backend MUST NOT import 'chrome', 'extension', 'ui'
 
-## Tech Stack
-- React 18
-- Tailwind CSS (Use standard classes, avoid arbitrary values)
-- Vite (Build tool)
-- Supabase (Backend/Auth)
-- TanStack Query (State)
-
-## Coding Style ("Vibe" Friendly)
-- **Functional**: Prefer functional components and hooks.
-- **Typed**: strict TypeScript. Define types in `core/domain`.
-- **Clean**: Small files (<200 lines). Single Responsibility.
-- **D.R.Y**: Extract shared logic to `/core` hooks or services.
-
-## Architecture
-- `core/transcripts`: Provider pattern for video extraction.
-- `integrations/adapters`: Strategy pattern for site-specific logic (`BaseAdapter`).
-
-## Common Tasks
-- **New Site**: Add adapter in `integrations/adapters`, register in `integrations/index.ts`.
-- **New Feature**: Add domain logic in `core`, UI in `ui/extension`.
+# 3. PREFER pure functions in /core.
+# 4. USE Dependency Injection for any platform-specific side effects in /core.
