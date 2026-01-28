@@ -154,6 +154,19 @@ export default [
     },
   },
 
+  // Exception: Allow DOM globals in core/api test files
+  {
+    files: [
+      'core/**/__tests__/**/*.{js,mjs,cjs,ts,tsx}',
+      'api/**/__tests__/**/*.{js,mjs,cjs,ts,tsx}',
+      'core/**/*.test.{js,mjs,cjs,ts,tsx}',
+      'api/**/*.test.{js,mjs,cjs,ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-globals': 'off', // Allow document, window, etc. in tests
+    },
+  },
+
   // - /integrations (Site Adapters) must be pure DOM parsers (ERROR)
   {
     files: ['integrations/**/*.{js,mjs,cjs,ts,tsx}'],
