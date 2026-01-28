@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const rootDir = join(__dirname, '..');
+const rootDir = join(__dirname, '..', '..'); // scripts/ci -> scripts -> root
 const extensionDir = join(rootDir, 'extension');
 
 // ANSI color codes for terminal output
