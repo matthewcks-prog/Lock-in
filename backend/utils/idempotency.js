@@ -1,72 +1,163 @@
+const { supabase } = require('../supabaseClient');
+
 const DEFAULT_TTL_MS = 2 * 60 * 1000;
-const DEFAULT_MAX_ENTRIES = 500;
+const DEFAULT_WAIT_MS = 5 * 1000;
+const DEFAULT_POLL_INTERVAL_MS = 250;
+
+function createIdempotencyConflictError(message) {
+  const error = new Error(message);
+  error.status = 409;
+  error.payload = {
+    success: false,
+    error: { message },
+  };
+  return error;
+}
 
 function createIdempotencyStore(options = {}) {
   const ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
-  const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
-  const entries = new Map();
+  const waitMs = options.waitMs ?? DEFAULT_WAIT_MS;
+  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
 
-  function cleanup(now = Date.now()) {
-    for (const [key, entry] of entries.entries()) {
-      if (entry.expiresAt <= now) {
-        entries.delete(key);
+  async function cleanupExpired(userId, nowIso) {
+    if (!userId) return;
+    const { error } = await supabase
+      .from('idempotency_keys')
+      .delete()
+      .eq('user_id', userId)
+      .lt('expires_at', nowIso);
+    if (error) {
+      throw error;
+    }
+  }
+
+  async function getEntry(key, userId) {
+    if (!key || !userId) return null;
+    const { data, error } = await supabase
+      .from('idempotency_keys')
+      .select('*')
+      .eq('idempotency_key', key)
+      .eq('user_id', userId)
+      .limit(1);
+
+    if (error) {
+      throw error;
+    }
+
+    return Array.isArray(data) && data.length > 0 ? data[0] : null;
+  }
+
+  async function insertEntry(key, userId, nowIso, expiresAt) {
+    const payload = {
+      idempotency_key: key,
+      user_id: userId,
+      status: 'in_progress',
+      created_at: nowIso,
+      updated_at: nowIso,
+      expires_at: expiresAt,
+    };
+
+    const { data, error } = await supabase
+      .from('idempotency_keys')
+      .insert(payload)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return { inserted: false, entry: null };
       }
+      throw error;
     }
 
-    if (entries.size <= maxEntries) return;
-    const keys = Array.from(entries.keys());
-    const excess = entries.size - maxEntries;
-    for (let i = 0; i < excess; i += 1) {
-      entries.delete(keys[i]);
+    return { inserted: true, entry: data };
+  }
+
+  async function updateEntry(key, userId, updates) {
+    const payload = {
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('idempotency_keys')
+      .update(payload)
+      .eq('idempotency_key', key)
+      .eq('user_id', userId);
+
+    if (error) {
+      throw error;
     }
   }
 
-  function setEntry(key, value) {
-    const now = Date.now();
-    entries.set(key, {
-      ...value,
-      expiresAt: now + ttlMs,
-    });
-    cleanup(now);
-  }
+  async function deleteEntry(key, userId) {
+    if (!key || !userId) return;
+    const { error } = await supabase
+      .from('idempotency_keys')
+      .delete()
+      .eq('idempotency_key', key)
+      .eq('user_id', userId);
 
-  function getEntry(key) {
-    if (!key) return null;
-    const entry = entries.get(key);
-    if (!entry) return null;
-    if (entry.expiresAt <= Date.now()) {
-      entries.delete(key);
-      return null;
+    if (error) {
+      throw error;
     }
-    return entry;
   }
 
-  async function run(key, task) {
-    if (!key) {
+  async function waitForCompletion(key, userId) {
+    const start = Date.now();
+    const deadline = start + waitMs;
+
+    while (Date.now() < deadline) {
+      const entry = await getEntry(key, userId);
+      if (!entry) return null;
+      if (entry.status === 'completed' && entry.response) {
+        return entry.response;
+      }
+      if (entry.expires_at && new Date(entry.expires_at).getTime() <= Date.now()) {
+        await deleteEntry(key, userId);
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    throw createIdempotencyConflictError('Request is already in progress. Please retry shortly.');
+  }
+
+  async function run(key, userId, task) {
+    if (!key || !userId) {
       return task();
     }
 
-    const existing = getEntry(key);
-    if (existing?.response) {
-      return existing.response;
-    }
-    if (existing?.promise) {
-      return existing.promise;
-    }
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const expiresAt = new Date(now.getTime() + ttlMs).toISOString();
 
-    const promise = (async () => {
-      try {
-        const response = await task();
-        setEntry(key, { response });
-        return response;
-      } catch (error) {
-        entries.delete(key);
-        throw error;
+    await cleanupExpired(userId, nowIso);
+
+    const insertResult = await insertEntry(key, userId, nowIso, expiresAt);
+
+    if (!insertResult.inserted) {
+      const existing = await getEntry(key, userId);
+      if (existing?.expires_at && new Date(existing.expires_at).getTime() <= Date.now()) {
+        await deleteEntry(key, userId);
+        return run(key, userId, task);
       }
-    })();
 
-    setEntry(key, { promise });
-    return promise;
+      if (existing?.status === 'completed' && existing.response) {
+        return existing.response;
+      }
+
+      return waitForCompletion(key, userId);
+    }
+
+    try {
+      const response = await task();
+      await updateEntry(key, userId, { status: 'completed', response });
+      return response;
+    } catch (error) {
+      await deleteEntry(key, userId);
+      throw error;
+    }
   }
 
   return {

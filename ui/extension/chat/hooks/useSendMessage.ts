@@ -11,6 +11,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { RateLimitError } from '@core/errors';
+import {
+  useTranscriptCache,
+  type TranscriptCacheInput,
+} from '../../transcripts/hooks/useTranscriptCache';
 import type {
   ChatMessage,
   SendMessageParams,
@@ -36,6 +40,8 @@ interface SendMessageWithAttachmentsParams extends SendMessageParams {
   userMessageOverride?: string;
   /** Idempotency key for de-duplication */
   idempotencyKey?: string;
+  /** Optional transcript context to cache before sending */
+  transcriptContext?: TranscriptCacheInput;
 }
 
 type SendMessageMutationParams = SendMessageWithAttachmentsParams & {
@@ -89,6 +95,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
   const queryClient = useQueryClient();
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingSendKeyRef = useRef<string | null>(null);
+  const { cacheTranscript } = useTranscriptCache(apiClient);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -113,6 +120,12 @@ export function useSendMessage(options: UseSendMessageOptions) {
 
       if (!apiClient?.processText) {
         throw new Error('API client not available');
+      }
+
+      if (params.transcriptContext) {
+        cacheTranscript(params.transcriptContext).catch((error) => {
+          console.warn('[Lock-in] Failed to cache transcript for chat:', error);
+        });
       }
 
       const baseHistory =

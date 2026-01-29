@@ -52,6 +52,7 @@ export function TranscriptToolContent() {
         <>
           <TranscriptMessage
             transcript={transcriptState.lastTranscript.transcript}
+            video={transcriptState.lastTranscript.video}
             videoTitle={transcriptState.lastTranscript.video.title || 'Video'}
             saveNote={saveNote}
           />

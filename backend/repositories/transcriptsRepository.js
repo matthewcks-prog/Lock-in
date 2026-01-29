@@ -166,6 +166,41 @@ async function insertTranscriptJobChunk({ jobId, chunkIndex, byteSize }) {
   return { inserted: true, data };
 }
 
+async function deleteTranscriptJobChunk({ jobId, chunkIndex }) {
+  const { error } = await supabase
+    .from('transcript_job_chunks')
+    .delete()
+    .eq('job_id', jobId)
+    .eq('chunk_index', chunkIndex);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function deleteTranscriptJobChunks(jobId) {
+  if (!jobId) return;
+  const { error } = await supabase.from('transcript_job_chunks').delete().eq('job_id', jobId);
+  if (error) {
+    throw error;
+  }
+}
+
+async function listTranscriptJobChunkIndices(jobId) {
+  if (!jobId) return [];
+  const { data, error } = await supabase
+    .from('transcript_job_chunks')
+    .select('chunk_index')
+    .eq('job_id', jobId)
+    .order('chunk_index', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).map((row) => row.chunk_index);
+}
+
 async function getTranscriptJobChunkStats(jobId) {
   if (!jobId) {
     return { count: 0, minIndex: null, maxIndex: null };
@@ -227,6 +262,23 @@ async function listActiveTranscriptJobs({ userId }) {
   return data || [];
 }
 
+async function listTranscriptJobsByHeartbeatBefore({ statuses, heartbeatBefore }) {
+  if (!Array.isArray(statuses) || statuses.length === 0) return [];
+  if (!heartbeatBefore) return [];
+
+  const { data, error } = await supabase
+    .from('transcript_jobs')
+    .select('*')
+    .in('status', statuses)
+    .or(`processing_heartbeat_at.is.null,processing_heartbeat_at.lt.${heartbeatBefore}`);
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
 async function listTranscriptJobsByStatusBefore({ statuses, updatedBefore }) {
   if (!Array.isArray(statuses) || statuses.length === 0) return [];
   if (!updatedBefore) return [];
@@ -244,6 +296,76 @@ async function listTranscriptJobsByStatusBefore({ statuses, updatedBefore }) {
   return data || [];
 }
 
+async function listTranscriptJobsCreatedBefore({ createdBefore }) {
+  if (!createdBefore) return [];
+  const { data, error } = await supabase
+    .from('transcript_jobs')
+    .select('*')
+    .lt('created_at', createdBefore)
+    .gt('bytes_received', 0);
+
+  if (error) {
+    throw error;
+  }
+
+  return data || [];
+}
+
+async function claimTranscriptJobForProcessing({ jobId, workerId, staleBefore }) {
+  if (!jobId || !workerId) return null;
+  const now = new Date().toISOString();
+  let query = supabase
+    .from('transcript_jobs')
+    .update({
+      status: 'processing',
+      error: null,
+      processing_worker_id: workerId,
+      processing_started_at: now,
+      processing_heartbeat_at: now,
+      updated_at: now,
+    })
+    .eq('id', jobId)
+    .in('status', ['uploaded', 'processing']);
+
+  const staleFilter = staleBefore
+    ? `processing_worker_id.is.null,processing_heartbeat_at.is.null,processing_heartbeat_at.lt.${staleBefore}`
+    : 'processing_worker_id.is.null';
+  query = query.or(staleFilter);
+
+  const { data, error } = await query.select().single();
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw error;
+  }
+
+  return data;
+}
+
+async function consumeTranscriptUploadBytes({ userId, bytes, limit }) {
+  if (!userId || !Number.isFinite(bytes)) {
+    return { allowed: true, remaining: Infinity, retryAfterSeconds: 0 };
+  }
+
+  const { data, error } = await supabase.rpc('consume_transcript_upload_bytes', {
+    p_user_id: userId,
+    p_bytes: bytes,
+    p_limit: limit,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+  return {
+    allowed: Boolean(result?.allowed),
+    remaining: result?.remaining ?? null,
+    retryAfterSeconds: result?.retry_after_seconds ?? 0,
+  };
+}
+
 module.exports = {
   getTranscriptByFingerprint,
   upsertTranscriptCache,
@@ -253,7 +375,14 @@ module.exports = {
   countTranscriptJobsSince,
   countActiveTranscriptJobs,
   insertTranscriptJobChunk,
+  deleteTranscriptJobChunk,
+  deleteTranscriptJobChunks,
+  listTranscriptJobChunkIndices,
   getTranscriptJobChunkStats,
   listActiveTranscriptJobs,
+  listTranscriptJobsByHeartbeatBefore,
   listTranscriptJobsByStatusBefore,
+  listTranscriptJobsCreatedBefore,
+  claimTranscriptJobForProcessing,
+  consumeTranscriptUploadBytes,
 };

@@ -31,9 +31,14 @@ export default defineConfig({
     clearMocks: true,
     // CI/CD optimizations
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      thresholds: {
+        statements: 35,
+        branches: 25,
+        functions: 30,
+        lines: 35,
       },
     },
     // Ensure tests run headless (default behavior)

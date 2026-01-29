@@ -92,7 +92,9 @@ if ($repoName) {
     Write-Check "GitHub Secrets"
 
     $requiredSecrets = @(
-        "AZURE_CREDENTIALS",
+        "AZURE_CLIENT_ID",
+        "AZURE_TENANT_ID",
+        "AZURE_SUBSCRIPTION_ID",
         "AZURE_CONTAINER_REGISTRY",
         "AZURE_RESOURCE_GROUP",
         "AZURE_RESOURCE_GROUP_STAGING"
@@ -277,9 +279,9 @@ if ($issuesFound -eq 0) {
     Write-Host "Fix the issues above, then run this script again." -ForegroundColor $WarningColor
     Write-Host ""
     Write-Host "For help:" -ForegroundColor $InfoColor
-    Write-Host "  - See: docs/QUICK_FIX_CICD.md"
+    Write-Host "  - See: docs/deployment/CICD.md"
     Write-Host "  - See: .github/workflows/README.md"
-    Write-Host "  - Run: scripts/setup-ci-cd.ps1 for automated setup"
+    Write-Host "  - Run: .\setup_uami.ps1 for OIDC setup"
     Write-Host ""
 }
 Write-Host "=============================================" -ForegroundColor $InfoColor

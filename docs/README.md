@@ -15,11 +15,11 @@ Stable architecture documentation and system design:
 
 ### 🚀 Setup & Deployment
 
-**Location:** `docs/setup/`
+**Location:** `docs/setup/` and `docs/deployment/`
 
 Setup guides and deployment documentation:
 
-- **[AZURE_DEPLOYMENT.md](setup/AZURE_DEPLOYMENT.md)** - Azure Container Apps deployment guide
+- **[AZURE.md](deployment/AZURE.md)** - Azure Container Apps deployment guide
 - **[LOCAL_SUPABASE_SETUP.md](setup/LOCAL_SUPABASE_SETUP.md)** - Local Supabase CLI setup guide
 
 ### 🎯 Features
@@ -115,7 +115,7 @@ For high-level project documentation, see the root directory:
 
 ### Deployment
 
-- [Azure Deployment](setup/AZURE_DEPLOYMENT.md) - Production deployment guide
+- [Azure Deployment](deployment/AZURE.md) - Production deployment guide
 
 ## Contributing
 

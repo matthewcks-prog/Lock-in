@@ -7,7 +7,8 @@
 
 import type { StorageInterface } from '../core/storage/storageInterface';
 import type { AuthSession, AuthUser } from '../core/domain/types';
-import { createLogger } from '../core/utils/logger';
+import { createLogger, type Logger } from '../core/utils/logger';
+import type { FetchLike } from './fetcher';
 
 export interface AuthConfig {
   supabaseUrl: string;
@@ -37,7 +38,10 @@ type SupabaseSessionPayload = {
   user?: AuthUser | null;
 };
 
-const logger = createLogger('Auth');
+export interface AuthDependencies {
+  fetcher?: FetchLike;
+  logger?: Logger;
+}
 
 /**
  * Create auth error with code
@@ -100,6 +104,17 @@ async function parseErrorResponse(
     code = 'EMAIL_NOT_CONFIRMED';
   } else if (normalized.includes('invalid email')) {
     code = 'INVALID_EMAIL';
+  } else if (
+    normalized.includes('invalid api key') ||
+    normalized.includes('invalid apikey') ||
+    normalized.includes('apikey is required') ||
+    normalized.includes('api key') ||
+    response.status === 401
+  ) {
+    // API key issues - could be missing, expired, or rotated
+    code = 'INVALID_API_KEY';
+  } else if (response.status === 403) {
+    code = 'FORBIDDEN';
   }
 
   return { message, code, details: payloadRecord || undefined };
@@ -131,7 +146,11 @@ function normalizeSession(
 /**
  * Create Supabase auth client
  */
-export function createAuthClient(config: AuthConfig, storage: StorageInterface): AuthClient {
+export function createAuthClient(
+  config: AuthConfig,
+  storage: StorageInterface,
+  deps: AuthDependencies = {},
+): AuthClient {
   const {
     supabaseUrl,
     supabaseAnonKey,
@@ -139,6 +158,12 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
     tokenExpiryBufferMs = 60000,
   } = config;
 
+  const fetcher = deps.fetcher ?? globalThis.fetch;
+  if (typeof fetcher !== 'function') {
+    throw new Error('Fetch implementation is required. Provide fetcher in createAuthClient.');
+  }
+
+  const logger = deps.logger ?? createLogger('Auth');
   const listeners = new Set<(session: AuthSession | null) => void>();
 
   function assertConfig(): void {
@@ -186,7 +211,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
   async function signInWithEmail(email: string, password: string): Promise<AuthSession> {
     assertConfig();
 
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    const response = await fetcher(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: {
         apikey: supabaseAnonKey,
@@ -210,7 +235,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
   async function signUpWithEmail(email: string, password: string): Promise<AuthSession> {
     assertConfig();
 
-    const response = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+    const response = await fetcher(`${supabaseUrl}/auth/v1/signup`, {
       method: 'POST',
       headers: {
         apikey: supabaseAnonKey,
@@ -250,7 +275,7 @@ export function createAuthClient(config: AuthConfig, storage: StorageInterface):
       throw new Error('Missing refresh token');
     }
 
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+    const response = await fetcher(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
       method: 'POST',
       headers: {
         apikey: supabaseAnonKey,

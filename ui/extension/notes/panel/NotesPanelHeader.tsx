@@ -1,4 +1,6 @@
 import { Star, Trash2 } from 'lucide-react';
+import type { Note } from '@core/domain/Note';
+import { ExportDropdown } from '../export';
 
 export function NotesPanelHeader({
   courseCode,
@@ -12,6 +14,9 @@ export function NotesPanelHeader({
   onToggleStar,
   onDeleteNote,
   onNewNote,
+  note,
+  week,
+  onExportError,
 }: {
   courseCode: string | null;
   weekLabel: string | null;
@@ -24,6 +29,9 @@ export function NotesPanelHeader({
   onToggleStar: (event: React.MouseEvent) => void;
   onDeleteNote: (event: React.MouseEvent) => void;
   onNewNote: () => void;
+  note: Note | null;
+  week: number | null;
+  onExportError?: (error: string) => void;
 }) {
   return (
     <header className="lockin-notes-header lockin-notes-header-row">
@@ -69,6 +77,7 @@ export function NotesPanelHeader({
       <div className="lockin-notes-header-right">
         {showActions && (
           <div className="lockin-notes-header-actions">
+            <ExportDropdown note={note} week={week} onExportError={onExportError} />
             <button
               type="button"
               className={`lockin-note-action-btn lockin-note-star-btn${

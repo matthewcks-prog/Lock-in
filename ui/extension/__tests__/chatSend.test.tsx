@@ -152,6 +152,50 @@ describe('LockInSidebar chat send reliability', () => {
     expect(processText).toHaveBeenCalledTimes(1);
   });
 
+  it('does not send when input is empty', async () => {
+    const processText = vi.fn().mockResolvedValue({
+      data: { explanation: 'Reply' },
+      chatId: '11111111-1111-4111-8111-111111111111',
+      chatTitle: 'Title',
+    });
+    const apiClient = createApiClientStub({
+      processText,
+      getRecentChats: vi.fn().mockResolvedValue({
+        chats: [],
+        pagination: { hasMore: false, nextCursor: null },
+      }),
+    });
+    const storage = createStorageStub();
+
+    await act(async () => {
+      root.render(
+        <LockInSidebar
+          apiClient={apiClient}
+          isOpen={true}
+          onToggle={vi.fn()}
+          currentMode="explain"
+          storage={storage}
+        />,
+      );
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    const sendButton = document.querySelector('.lockin-send-btn') as HTMLButtonElement | null;
+    expect(sendButton).not.toBeNull();
+    expect(sendButton?.disabled).toBe(true);
+
+    await act(async () => {
+      sendButton?.click();
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    expect(processText).not.toHaveBeenCalled();
+  });
+
   it('shows rate limit feedback when requests are throttled', async () => {
     const apiClient = createApiClientStub({
       processText: vi.fn().mockRejectedValue(new RateLimitError('Rate limit', 3000)),

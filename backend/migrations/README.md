@@ -4,19 +4,20 @@ This directory contains SQL migrations for the Lock-in Supabase database.
 
 ## Migration Overview
 
-| Migration                              | Purpose               | Key Changes                             |
-| -------------------------------------- | --------------------- | --------------------------------------- |
-| `001_note_assets.sql`                  | Note file attachments | `note_assets` table, indexes, RLS       |
-| `002_performance_indexes.sql`          | Query performance     | Indexes on all tables for scale         |
-| `003_row_level_security.sql`           | Multi-tenant security | RLS policies for data isolation         |
-| `004_vector_extension_schema.sql`      | pgvector fix          | Fix search_path after extension move    |
-| `005_starred_notes.sql`                | Starred notes         | `is_starred` column + partial index     |
-| `006_transcripts.sql`                  | Transcript system     | `transcripts`, `transcript_jobs` tables |
-| `007_transcripts_hardening.sql`        | State machine         | Status constraints, chunk tracking      |
-| `008_transcript_privacy_hardening.sql` | Privacy               | 90-day TTL, URL redaction, cleanup      |
-| `009_feedback.sql`                     | User feedback         | `feedback` table for bug reports        |
-| `010_chat_assets.sql`                  | Chat attachments      | `chat_message_assets` table             |
-| `011_chat_assets_cleanup.sql`          | Orphan cleanup        | Cleanup function for unlinked assets    |
+| Migration                               | Purpose               | Key Changes                                           |
+| --------------------------------------- | --------------------- | ----------------------------------------------------- |
+| `001_note_assets.sql`                   | Note file attachments | `note_assets` table, indexes, RLS                     |
+| `002_performance_indexes.sql`           | Query performance     | Indexes on all tables for scale                       |
+| `003_row_level_security.sql`            | Multi-tenant security | RLS policies for data isolation                       |
+| `004_vector_extension_schema.sql`       | pgvector fix          | Fix search_path after extension move                  |
+| `005_starred_notes.sql`                 | Starred notes         | `is_starred` column + partial index                   |
+| `006_transcripts.sql`                   | Transcript system     | `transcripts`, `transcript_jobs` tables               |
+| `007_transcripts_hardening.sql`         | State machine         | Status constraints, chunk tracking                    |
+| `008_transcript_privacy_hardening.sql`  | Privacy               | 90-day TTL, URL redaction, cleanup                    |
+| `009_feedback.sql`                      | User feedback         | `feedback` table for bug reports                      |
+| `010_chat_assets.sql`                   | Chat attachments      | `chat_message_assets` table                           |
+| `011_chat_assets_cleanup.sql`           | Orphan cleanup        | Cleanup function for unlinked assets                  |
+| `012_transcript_storage_and_limits.sql` | Transcript durability | Processing metadata, upload windows, idempotency keys |
 
 ## Running Migrations
 

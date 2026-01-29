@@ -8,6 +8,7 @@ const router = express.Router();
 
 router.use(requireSupabaseUser);
 
+router.post('/transcripts/cache', asyncHandler(transcriptsController.cacheTranscript));
 router.post('/transcripts/jobs', asyncHandler(transcriptsController.createJob));
 router.get('/transcripts/jobs/active', asyncHandler(transcriptsController.listActiveJobs));
 router.post(

@@ -11,6 +11,7 @@
  */
 
 const Sentry = require('@sentry/node');
+const { logger } = require('./observability');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
@@ -60,23 +61,26 @@ function initSentry() {
 
   // Debug logging for troubleshooting
   if (isDevelopment) {
-    console.log('[Sentry] Initialization debug:', {
-      hasDsn: !!dsn,
-      dsnPrefix: dsn ? dsn.substring(0, 30) + '...' : 'none',
-      nodeEnv: process.env.NODE_ENV || 'undefined',
-      sentryEnabled: enabled,
-    });
+    logger.debug(
+      {
+        hasDsn: !!dsn,
+        dsnPrefix: dsn ? dsn.substring(0, 30) + '...' : 'none',
+        nodeEnv: process.env.NODE_ENV || 'undefined',
+        sentryEnabled: enabled,
+      },
+      '[Sentry] Initialization debug',
+    );
   }
 
   // Check if explicitly disabled
   if (!enabled) {
-    console.log('[Sentry] Disabled via SENTRY_ENABLED=false, skipping initialization');
+    logger.info('[Sentry] Disabled via SENTRY_ENABLED=false, skipping initialization');
     return false;
   }
 
   if (!dsn) {
     if (isDevelopment) {
-      console.log('[Sentry] No DSN configured, skipping initialization');
+      logger.debug('[Sentry] No DSN configured, skipping initialization');
     }
     return false;
   }
@@ -169,10 +173,10 @@ function initSentry() {
       },
     });
 
-    console.log(`[Sentry] ✓ Initialized for ${isDevelopment ? 'development' : 'production'}`);
+    logger.info(`[Sentry] Initialized for ${isDevelopment ? 'development' : 'production'}`);
     return true;
   } catch (err) {
-    console.error('[Sentry] Failed to initialize:', err);
+    logger.error({ err }, '[Sentry] Failed to initialize');
     return false;
   }
 }

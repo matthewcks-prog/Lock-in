@@ -18,7 +18,7 @@
 
 4. **Extraction flow**
    - `extractTranscript()` sends `EXTRACT_TRANSCRIPT` to background.
-   - Background routes to `extractPanoptoTranscript()` or `extractHtml5Transcript()`.
+   - Background uses the provider registry + `ExtensionFetcher` to call core providers.
    - If captions are missing, the UI surfaces AI transcription fallback.
 
 5. **AI fallback trigger**
@@ -43,27 +43,27 @@
 
 1. **Provider interface**
    - `core/transcripts/providerRegistry.ts` defines `TranscriptProviderV2` and a registry.
-   - Registry exists, but detection uses direct function calls in `detectVideosSync()`.
+   - Registry is used in background extraction; detection still uses direct function calls in `detectVideosSync()`.
 
 2. **Registered providers**
-   - `PanoptoProvider` in `core/transcripts/providers/panoptoProvider.ts` handles caption extraction (VTT).
+   - `PanoptoProvider`, `Echo360Provider`, and `Html5Provider` in `core/transcripts/providers/*`.
 
 3. **Background extractors**
-   - `extension/background.js` implements `extractPanoptoTranscript()` and `extractHtml5Transcript()`.
+   - `extension/background.js` registers providers and delegates extraction via `ExtensionFetcher`.
    - HTML5 DOM caption parsing lives in `ui/extension/transcripts/extractHtml5TranscriptFromDom.ts`.
 
 ### Transcript Data Model
 
 - `core/transcripts/types.ts`
-  - `VideoProvider = 'panopto' | 'html5' | 'youtube' | 'unknown'`
+  - `VideoProvider = 'panopto' | 'echo360' | 'youtube' | 'html5' | 'unknown'`
   - `DetectedVideo` includes Panopto metadata (`panoptoTenant`) and HTML5 fields (`mediaUrl`, `trackUrls`).
   - `TranscriptResult` + `TranscriptSegment` represent parsed transcript data.
 
 ### Network & Auth
 
 1. **Background fetch helpers**
-   - `fetchWithRetry()` + `fetchWithCredentials()` in `extension/background.js`.
-   - `fetchVttContent()` for caption files.
+   - `fetchWithRetry()` + `fetchWithCredentials()` in `extension/src/networkUtils.js`.
+   - `ExtensionFetcher` in `extension/background.js` uses these helpers for providers.
 
 2. **Background message handlers**
    - `EXTRACT_TRANSCRIPT` -> `handleTranscriptExtraction()`.
@@ -79,6 +79,8 @@
 ### Storage / Caching
 
 - No persistent transcript cache in the extension (stored in React state only).
+- Feature actions (note save today; chat/quiz when wired) call `POST /api/transcripts/cache` via `useTranscriptCache`.
+- Backend persists cached transcripts in `transcripts` keyed by fingerprint for durability.
 - Session storage is scoped to `lockin_session_${tabId}` in background.
 
 ---
@@ -91,12 +93,14 @@
 | `useTranscripts`             | `ui/extension/transcripts/useTranscripts.ts`    | Detect/extract + AI fallback orchestration                 |
 | `detectVideosSync`           | `core/transcripts/videoDetection.ts`            | Panopto + HTML5 detection                                  |
 | `PanoptoProvider`            | `core/transcripts/providers/panoptoProvider.ts` | Panopto caption extraction                                 |
-| `extractPanoptoTranscript`   | `extension/background.js`                       | Background Panopto caption fetch + parse                   |
-| `extractHtml5Transcript`     | `extension/background.js`                       | Background HTML5 caption fetch + parse                     |
+| `Echo360Provider`            | `core/transcripts/providers/echo360Provider.ts` | Echo360 transcript extraction                              |
+| `Html5Provider`              | `core/transcripts/providers/html5Provider.ts`   | HTML5 track caption extraction                             |
+| `handleTranscriptExtraction` | `extension/background.js`                       | Background transcript routing via provider registry        |
+| `ExtensionFetcher`           | `extension/background.js`                       | Provider fetcher with credentials/CORS support             |
 | `handlePanoptoMediaUrlFetch` | `extension/background.js`                       | Panopto AI media URL entrypoint                            |
-| `PanoptoMediaResolver`       | `extension/background.js`                       | Viewer/embed parsing + MAIN-world probe + range validation |
-| `panoptoRuntimeProbe`        | `extension/background.js`                       | MAIN-world probe used by `chrome.scripting.executeScript`  |
-| `fetchWithCredentials`       | `extension/background.js`                       | Authenticated HTML/VTT fetch helper                        |
+| `PanoptoMediaResolver`       | `extension/src/panoptoResolver.js`              | Viewer/embed parsing + MAIN-world probe + range validation |
+| `panoptoRuntimeProbe`        | `extension/src/panoptoResolver.js`              | MAIN-world probe used by `chrome.scripting.executeScript`  |
+| `fetchWithCredentials`       | `extension/src/networkUtils.js`                 | Authenticated HTML/VTT fetch helper                        |
 | `transcribeWithAI`           | `ui/extension/transcripts/useTranscripts.ts`    | Starts AI transcription pipeline                           |
 
 ---

@@ -7,20 +7,24 @@ const {
   countTranscriptJobsSince,
   countActiveTranscriptJobs,
   insertTranscriptJobChunk,
+  deleteTranscriptJobChunk,
   getTranscriptJobChunkStats,
   listActiveTranscriptJobs,
+  consumeTranscriptUploadBytes,
 } = require('../repositories/transcriptsRepository');
 const {
   appendTranscriptChunk,
   startTranscriptProcessing,
-  cancelTranscriptProcessing,
 } = require('../services/transcriptsService');
+const { cacheExternalTranscript } = require('../services/transcriptCacheService');
 const {
   TRANSCRIPT_DAILY_JOB_LIMIT,
+  TRANSCRIPT_CHUNK_MAX_BYTES,
   TRANSCRIPT_MAX_CONCURRENT_JOBS,
   TRANSCRIPT_MAX_TOTAL_BYTES,
   TRANSCRIPT_MAX_DURATION_MINUTES,
   TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE,
+  TRANSCRIPT_PROCESSING_STALE_MINUTES,
 } = require('../config');
 
 const JOB_STATUS = {
@@ -41,9 +45,6 @@ const ACTIVE_STATUSES = new Set([
 ]);
 
 const UPLOADABLE_STATUSES = new Set([JOB_STATUS.CREATED, JOB_STATUS.UPLOADING]);
-
-const UPLOAD_RATE_WINDOWS = new Map();
-const UPLOAD_RATE_WINDOW_MS = 60 * 1000;
 
 function sanitizeMediaUrlForStorage(mediaUrl) {
   if (!mediaUrl) return '';
@@ -77,27 +78,23 @@ function getStartOfTodayUTC() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
-function enforceUploadRateLimit(userId, bytes) {
+async function enforceUploadRateLimit(userId, bytes) {
   if (!userId || !Number.isFinite(TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE)) return;
-  const now = Date.now();
-  const entry = UPLOAD_RATE_WINDOWS.get(userId);
-  const windowEntry =
-    entry && now - entry.startedAt < UPLOAD_RATE_WINDOW_MS ? entry : { startedAt: now, bytes: 0 };
+  const limit =
+    Number.isFinite(TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE) && TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE > 0
+      ? TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE
+      : null;
+  if (!limit) return;
 
-  if (windowEntry.bytes + bytes > TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE) {
-    const retryAfterSeconds = Math.ceil(
-      (UPLOAD_RATE_WINDOW_MS - (now - windowEntry.startedAt)) / 1000,
-    );
+  const result = await consumeTranscriptUploadBytes({ userId, bytes, limit });
+  if (!result.allowed) {
     throw new AppError(
       'Upload rate limit exceeded. Please wait before uploading more.',
       'TRANSCRIPT_RATE_LIMIT',
       429,
-      { retryAfterSeconds },
+      { retryAfterSeconds: result.retryAfterSeconds },
     );
   }
-
-  windowEntry.bytes += bytes;
-  UPLOAD_RATE_WINDOWS.set(userId, windowEntry);
 }
 
 function parseExpectedTotalChunks(rawValue) {
@@ -113,6 +110,17 @@ function ensureValidChunkIndex(chunkIndex) {
   if (!Number.isInteger(chunkIndex) || chunkIndex < 0) {
     throw new ValidationError('Chunk index must be a non-negative integer', 'x-chunk-index');
   }
+}
+
+function isProcessingStale(job) {
+  if (!TRANSCRIPT_PROCESSING_STALE_MINUTES || !job) return false;
+  const cutoff = Date.now() - TRANSCRIPT_PROCESSING_STALE_MINUTES * 60 * 1000;
+  const heartbeat = job.processing_heartbeat_at
+    ? new Date(job.processing_heartbeat_at).getTime()
+    : null;
+  const started = job.processing_started_at ? new Date(job.processing_started_at).getTime() : null;
+  const reference = heartbeat ?? started;
+  return reference !== null && Number.isFinite(reference) && reference < cutoff;
 }
 
 async function createJob(req, res) {
@@ -203,6 +211,11 @@ async function uploadChunk(req, res) {
   if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
     throw new ValidationError('Chunk payload is required', 'chunk');
   }
+  if (Number.isFinite(TRANSCRIPT_CHUNK_MAX_BYTES) && req.body.length > TRANSCRIPT_CHUNK_MAX_BYTES) {
+    throw new AppError('Chunk exceeds maximum allowed size.', 'TRANSCRIPT_CHUNK_TOO_LARGE', 413, {
+      maxBytes: TRANSCRIPT_CHUNK_MAX_BYTES,
+    });
+  }
   if (chunkIndex === null) {
     throw new ValidationError('Chunk index header is required', 'x-chunk-index');
   }
@@ -246,7 +259,7 @@ async function uploadChunk(req, res) {
     throw new AppError('Upload exceeds maximum allowed size.', 'TRANSCRIPT_MAX_BYTES', 413);
   }
 
-  enforceUploadRateLimit(userId, req.body.length);
+  await enforceUploadRateLimit(userId, req.body.length);
 
   const insertResult = await insertTranscriptJobChunk({
     jobId,
@@ -258,7 +271,12 @@ async function uploadChunk(req, res) {
     return res.json({ success: true, duplicate: true });
   }
 
-  await appendTranscriptChunk(jobId, req.body, chunkIndex);
+  try {
+    await appendTranscriptChunk({ jobId, userId, chunk: req.body, chunkIndex });
+  } catch (error) {
+    await deleteTranscriptJobChunk({ jobId, chunkIndex });
+    throw error;
+  }
   const updates = {
     status: job.status === JOB_STATUS.CREATED ? JOB_STATUS.UPLOADING : job.status,
     error: null,
@@ -325,6 +343,13 @@ async function finalizeJob(req, res) {
     });
   }
 
+  if (job.status === JOB_STATUS.PROCESSING && !isProcessingStale(job)) {
+    return res.json({
+      success: true,
+      job: { id: job.id, status: JOB_STATUS.PROCESSING },
+    });
+  }
+
   const expectedChunks =
     job.expected_total_chunks ??
     (expectedTotalChunks ? parseExpectedTotalChunks(expectedTotalChunks) : null);
@@ -356,11 +381,18 @@ async function finalizeJob(req, res) {
       status: JOB_STATUS.PROCESSING,
       error: null,
       expected_total_chunks: expectedChunks,
+      language_hint: typeof languageHint === 'string' ? languageHint : null,
+      max_minutes: coerceNumber(maxMinutes),
     },
   });
 
   startTranscriptProcessing(
-    { ...job, expected_total_chunks: expectedChunks },
+    {
+      ...job,
+      expected_total_chunks: expectedChunks,
+      language_hint: typeof languageHint === 'string' ? languageHint : null,
+      max_minutes: coerceNumber(maxMinutes),
+    },
     {
       languageHint: typeof languageHint === 'string' ? languageHint : null,
       maxMinutes: coerceNumber(maxMinutes),
@@ -389,7 +421,6 @@ async function cancelJob(req, res) {
     });
   }
 
-  await cancelTranscriptProcessing(jobId);
   await updateTranscriptJob({
     jobId,
     userId,
@@ -464,7 +495,6 @@ async function cancelAllActiveJobs(req, res) {
 
   for (const job of jobs) {
     try {
-      await cancelTranscriptProcessing(job.id);
       await updateTranscriptJob({
         jobId: job.id,
         userId,
@@ -486,6 +516,25 @@ async function cancelAllActiveJobs(req, res) {
   });
 }
 
+async function cacheTranscript(req, res) {
+  const userId = req.user?.id;
+  const { fingerprint, provider, transcript, meta } = req.body || {};
+
+  const cached = await cacheExternalTranscript({
+    userId,
+    fingerprint,
+    provider,
+    transcript,
+    meta,
+  });
+
+  return res.json({
+    success: true,
+    fingerprint: cached?.fingerprint || fingerprint,
+    cachedAt: cached?.created_at || null,
+  });
+}
+
 module.exports = {
   createJob,
   uploadChunk,
@@ -494,4 +543,5 @@ module.exports = {
   getJob,
   listActiveJobs,
   cancelAllActiveJobs,
+  cacheTranscript,
 };

@@ -11,15 +11,17 @@ import {
 } from './build/viteShared';
 
 export default defineConfig(({ mode }) => {
+  // Align NODE_ENV with Vite mode so React's JSX transform and runtime match.
+  // This must happen before the react plugin processes files.
+  const resolvedNodeEnv = mode === 'development' ? 'development' : 'production';
+  process.env.NODE_ENV = resolvedNodeEnv;
+
   // Load environment variables
   const env = loadEnv(mode, process.cwd(), '');
 
   // Only upload source maps in production builds when Sentry auth is configured
   const shouldUploadSourceMaps =
     mode === 'production' && env.SENTRY_AUTH_TOKEN && env.SENTRY_ORG && env.SENTRY_PROJECT;
-
-  // Use production JSX runtime for builds (avoids jsxDEV not a function error)
-  const isDev = mode === 'development';
 
   const baseAliases = createAliases({ includeApi: true, includeSharedUi: true });
   const optionalAliases = createOptionalDependencyAliases();
@@ -30,15 +32,15 @@ export default defineConfig(({ mode }) => {
 
   return {
     define: createDefines(mode),
+    esbuild: {
+      jsxDev: mode === 'development',
+    },
     css: {
       postcss: './postcss.config.js',
     },
     plugins: [
       react({
-        // Explicitly set JSX runtime mode to avoid dev/prod mismatch
         jsxRuntime: 'automatic',
-        // In production, don't include React Refresh or dev helpers
-        ...(isDev ? {} : { jsxImportSource: 'react' }),
       }),
       ensureAsciiSafeOutput(
         resolve(process.cwd(), 'extension/dist/ui/index.js'),

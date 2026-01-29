@@ -35,6 +35,7 @@ describe('initApi global surface', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
+    vi.stubGlobal('fetch', vi.fn());
     testWindow = window as InitApiTestWindow;
 
     const storageSync = {

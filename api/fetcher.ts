@@ -10,7 +10,9 @@ import {
   RateLimitError,
   ValidationError,
 } from '../core/errors';
-import { createLogger } from '../core/utils/logger';
+import { createLogger, type Logger } from '../core/utils/logger';
+
+export type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 interface RetryConfig {
   maxRetries: number;
@@ -25,8 +27,6 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxDelayMs: 5000,
   retryableStatuses: [429, 502, 503, 504],
 };
-
-const logger = createLogger('ApiFetcher');
 
 function calculateRetryDelay(attempt: number, config: RetryConfig): number {
   const exponentialDelay = config.baseDelayMs * Math.pow(2, attempt);
@@ -207,11 +207,23 @@ export { ConflictError };
 export interface FetcherConfig {
   backendUrl: string;
   authClient: AuthClient;
+  fetcher?: FetchLike;
+  logger?: Logger;
+}
+
+function resolveFetch(fetcher?: FetchLike): FetchLike {
+  const resolved = fetcher ?? globalThis.fetch;
+  if (typeof resolved !== 'function') {
+    throw new Error('Fetch implementation is required. Provide fetcher in createFetcher config.');
+  }
+  return resolved;
 }
 
 export function createFetcher(config: FetcherConfig) {
   const { backendUrl, authClient } = config;
   const clientConfig = { backendUrl };
+  const fetcher = resolveFetch(config.fetcher);
+  const logger = config.logger ?? createLogger('ApiFetcher');
 
   async function apiRequest<T = unknown>(
     endpoint: string,
@@ -275,7 +287,7 @@ export function createFetcher(config: FetcherConfig) {
 
       let response: Response;
       try {
-        response = await fetch(url, requestOptions);
+        response = await fetcher(url, requestOptions);
       } catch (networkError) {
         if (fetchOptions.signal?.aborted) {
           throw createAbortError();

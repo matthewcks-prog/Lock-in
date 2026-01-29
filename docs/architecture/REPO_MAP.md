@@ -25,7 +25,17 @@ ui/
 shared/
   ui/components/ (Button, Card, ConfirmDialog, Toast, TextInput, Tabs)
 docs/
-  AGENTS.md, ARCHITECTURE.md, REPO_MAP.md, STATUS.md, REFACTOR_PLAN.md, PROMPT_LOG.md, SMOKE_CHECKLIST.md, TRANSCRIPT_TROUBLESHOOTING.md, QUALITY_AUDIT_2025-12-16.md
+  README.md, AI_SERVICES_ARCHITECTURE.md, CI_CHECKLIST.md, MONOREPO.md
+  TRANSCRIPT_TROUBLESHOOTING.md (legacy; canonical in docs/features/transcripts/TROUBLESHOOTING.md)
+  architecture/ (ARCHITECTURE.md, REPO_MAP.md)
+  tracking/ (STATUS.md, REFACTOR_PLAN.md, PROMPT_LOG.md, AI_SERVICES_REFACTOR_2026-01-19.md)
+  testing/ (SMOKE_CHECKLIST.md, BACKEND_TESTING.md)
+  features/
+    transcripts/ (REVIEW.md, SYSTEM_MAP.md, TROUBLESHOOTING.md)
+  setup/ (LOCAL_SUPABASE_SETUP.md, ENVIRONMENT_SETUP.md, ENV_QUICK_REFERENCE.md, ENV_SECURITY_FIXES.md, CODE_FORMATTING.md)
+  deployment/ (AUDIT_SUMMARY.md, AZURE.md, CICD.md, DEPLOYMENT_CHECK.md, DEPLOYMENT_REVIEW.md, ENVIRONMENTS.md, FIX_DEPLOYMENT_ISSUE.md, README.md, ROLLBACK.md)
+  archive/ (QUALITY_AUDIT_2025-12-16.md)
+  achieve/ (legacy; typo - audit doc)
 tools/
   mcp/ (MCP server setup, configs, scripts for AI assistant tooling)
 ```
