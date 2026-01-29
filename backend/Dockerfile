@@ -26,23 +26,23 @@ COPY backend/package*.json ./backend/
 # Install dependencies from root (hoisted structure)
 # This ensures all workspace dependencies are resolved correctly
 ENV NODE_ENV=production
-RUN npm ci --omit=dev --ignore-scripts
-
-# Create backend/node_modules directory to ensure COPY command in next stage never fails
-RUN mkdir -p backend/node_modules
+RUN npm ci --omit=dev --ignore-scripts && \
+    npm cache clean --force && \
+    mkdir -p backend/node_modules
 
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Minimal runtime image
 # -----------------------------------------------------------------------------
 FROM node:20.18-alpine
 
-# Install FFmpeg as fallback (ffmpeg-static should work, but belt-and-suspenders)
-# Also install curl for health checks
-RUN apk add --no-cache ffmpeg curl
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Install runtime dependencies and create non-root user
+# FFmpeg: fallback for transcription (ffmpeg-static should work, but belt-and-suspenders)
+# curl: required for health checks
+RUN apk add --no-cache ffmpeg curl && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    mkdir -p /tmp/transcripts && \
+    chown nodejs:nodejs /tmp/transcripts
 
 WORKDIR /app
 
@@ -56,10 +56,6 @@ COPY --chown=nodejs:nodejs backend/ ./backend/
 
 # Copy required core config files
 COPY --chown=nodejs:nodejs core/config/chatLimits.json ./core/config/chatLimits.json
-
-# Create temp directory for transcription jobs with correct permissions
-RUN mkdir -p /tmp/transcripts && \
-    chown nodejs:nodejs /tmp/transcripts
 
 # Switch to non-root user
 USER nodejs

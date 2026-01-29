@@ -243,13 +243,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+      - name: Determine image tags
+        id: tags
+        run: |
+          # Determine environment-specific tags
+          if [ "${{ github.ref }}" = "refs/heads/develop" ] || [ "$needs.build-and-deploy.outputs.should-deploy-staging" = "true" ]; then
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-latest" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ] || [ "$needs.build-and-deploy.outputs.should-deploy-production" = "true" ]; then
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-latest" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            # Fallback for other branches
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -257,19 +271,17 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: true
-          tags: |
-            ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             VCS_REF=${{ github.sha }}
-
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          labels: |
+            org.opencontainers.image.title=lock-in-backend
+            org.opencontainers.image.version=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
   # ===========================================================================
   # Deploy to Staging (lock-in-dev)
