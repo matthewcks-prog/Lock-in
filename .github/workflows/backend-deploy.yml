@@ -322,7 +322,7 @@ jobs:
         with:
           resourceGroup: ${{ env.RESOURCE_GROUP }}
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
-          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}
 
       - name: Verify staging deployment
         if: steps.check-creds.outputs.skip != 'true'
@@ -388,12 +388,8 @@ jobs:
           echo "az containerapp update \\"
           echo "  --name lock-in-dev \\"
           echo "  --resource-group <your-resource-group> \\"
-          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}"
 
-  # ===========================================================================
-  # Deploy to Production (lock-in-backend)
-  # Only deploys from main branch
-  # ===========================================================================
   # ===========================================================================
   # Deploy to Production (lock-in-backend)
   # Only deploys from main branch
@@ -434,7 +430,7 @@ jobs:
         with:
           resourceGroup: ${{ env.RESOURCE_GROUP }}
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
-          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-${{ github.sha }}
 
       - name: Verify production deployment
         if: steps.check-creds.outputs.skip != 'true'
@@ -500,7 +496,7 @@ jobs:
           echo "az containerapp update \\"
           echo "  --name lock-in-backend \\"
           echo "  --resource-group <your-resource-group> \\"
-          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-${{ github.sha }}"
 
   # ===========================================================================
   # Summary Job - Always runs to show deployment info
