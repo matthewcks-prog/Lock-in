@@ -136,25 +136,30 @@ jobs:
         run: |
           # Use unique container name to prevent conflicts between workflow runs
           CONTAINER_NAME="test-container-${{ github.run_id }}"
+          IMAGE_TAG="${{ env.IMAGE_NAME }}:test"
+
           echo "CONTAINER_NAME=$CONTAINER_NAME" >> $GITHUB_ENV
+          echo "Starting container: $CONTAINER_NAME with image: $IMAGE_TAG"
 
           # Cleanup any stale containers (belt-and-suspenders)
-          docker rm -f $CONTAINER_NAME 2>/dev/null || true
+          docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
 
           # Start new container with unique name
-          docker run -d --name $CONTAINER_NAME -p 3000:3000 \
+          docker run -d \
+            --name "$CONTAINER_NAME" \
+            -p 3000:3000 \
             -e NODE_ENV=development \
-            -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || 'test-key-fallback' }} \
-            -e SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://test-project.supabase.co' }} \
-            -e SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-dummy-key' }} \
-            -e SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'test-dummy-key' }} \
+            -e "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || 'test-key-fallback' }}" \
+            -e "SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://test-project.supabase.co' }}" \
+            -e "SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-dummy-key' }}" \
+            -e "SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'test-dummy-key' }}" \
             --health-cmd="curl -f http://localhost:3000/health || exit 1" \
             --health-interval=10s \
             --health-timeout=5s \
             --health-retries=3 \
-            ${{ env.IMAGE_NAME }}:test
+            "$IMAGE_TAG"
 
-          echo "Container started: $CONTAINER_NAME"
+          echo "✅ Container started successfully: $CONTAINER_NAME"
 
       - name: Wait for container to be healthy
         run: |
