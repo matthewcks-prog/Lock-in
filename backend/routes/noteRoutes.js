@@ -1,7 +1,7 @@
 // backend/routes/noteRoutes.js
 
 const express = require('express');
-const { requireSupabaseUser } = require('../authMiddleware');
+const { requireSupabaseUser } = require('../middleware/authMiddleware');
 const notesController = require('../controllers/notes/crud');
 const notesChatController = require('../controllers/notes/chat');
 const noteAssetsController = require('../controllers/notes/assets');

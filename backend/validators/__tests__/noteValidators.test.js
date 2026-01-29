@@ -5,11 +5,8 @@ const assert = require('node:assert/strict');
 
 const {
   createNoteSchema,
-  updateNoteSchema,
   noteIdParamSchema,
   searchNotesSchema,
-  listNotesSchema,
-  chatWithNotesSchema,
   setStarredSchema,
 } = require('../noteValidators');
 

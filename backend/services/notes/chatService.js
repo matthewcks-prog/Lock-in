@@ -2,7 +2,7 @@
 
 const notesRepo = require('../../repositories/notesRepository');
 const { embedText } = require('../embeddings');
-const { chatWithModel } = require('../../openaiClient');
+const { chatWithModel } = require('../llmClient');
 const { extractPlainTextFromLexical } = require('../../utils/lexicalUtils');
 const { CHAT_WITH_NOTES_SYSTEM_PROMPT } = require('../../config/prompts');
 

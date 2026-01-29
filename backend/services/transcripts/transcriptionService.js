@@ -10,13 +10,13 @@
 
 const fs = require('fs');
 const path = require('path');
-const { createTranscriptionClient } = require('../providers/transcriptionFactory');
+const { createTranscriptionClient } = require('../../providers/transcriptionFactory');
 const {
   AZURE_SPEECH_API_KEY,
   AZURE_SPEECH_REGION,
   AZURE_SPEECH_LANGUAGE,
   OPENAI_API_KEY,
-} = require('../config');
+} = require('../../config');
 
 let transcriptionClientInstance = null;
 

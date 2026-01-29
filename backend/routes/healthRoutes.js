@@ -10,8 +10,11 @@
  */
 
 const express = require('express');
-const { getEmbeddingsStats, runEmbeddingsDiagnostics } = require('../services/embeddings');
-const { requireSupabaseUser } = require('../authMiddleware');
+const {
+  getEmbeddingsDiagnostics,
+  getEmbeddingsHealth,
+} = require('../controllers/health/embeddings');
+const { requireSupabaseUser } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
@@ -20,43 +23,13 @@ const router = express.Router();
  * Run comprehensive diagnostics on embeddings service
  * Requires authentication - admin only
  */
-router.get('/diagnostics', requireSupabaseUser, async (req, res) => {
-  try {
-    const diagnostics = await runEmbeddingsDiagnostics();
-    res.json({
-      status: 'ok',
-      diagnostics,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
+router.get('/diagnostics', requireSupabaseUser, getEmbeddingsDiagnostics);
 
 /**
  * GET /api/health/embeddings
  * Check embeddings service health and get usage stats
  * Requires authentication
  */
-router.get('/', requireSupabaseUser, (req, res) => {
-  try {
-    const stats = getEmbeddingsStats();
-    res.json({
-      status: 'ok',
-      ...stats,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: 'error',
-      message: error.message,
-      timestamp: new Date().toISOString(),
-    });
-  }
-});
+router.get('/', requireSupabaseUser, getEmbeddingsHealth);
 
 module.exports = router;

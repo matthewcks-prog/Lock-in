@@ -5,7 +5,7 @@
  * Mirrors the pattern from noteAssetsRepository.js
  */
 
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../db/supabaseClient');
 
 /**
  * Create a new chat asset record

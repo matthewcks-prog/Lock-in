@@ -14,10 +14,10 @@ const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 // const healthRoutes = require('./routes/healthRoutes'); // TODO: Fix and re-enable
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
-const { setupSentryErrorHandler } = require('./sentry');
+const { setupSentryErrorHandler } = require('./observability/sentry');
 const { createRequestLogger, sentryRequestIdMiddleware } = require('./observability/requestLogger');
 const { createHealthRoutes } = require('./observability/healthCheck');
-const { supabase } = require('./supabaseClient');
+const { supabase } = require('./db/supabaseClient');
 const config = require('./config');
 
 function createApp() {

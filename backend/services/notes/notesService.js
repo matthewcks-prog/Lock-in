@@ -1,9 +1,4 @@
-const {
-  AppError,
-  ConflictError,
-  NotFoundError,
-  ValidationError,
-} = require('../../middleware/errorHandler');
+const { AppError, ConflictError, NotFoundError, ValidationError } = require('../../errors');
 const { logger: baseLogger } = require('../../observability');
 const notesRepo = require('../../repositories/notesRepository');
 const noteAssetsRepository = require('../../repositories/noteAssetsRepository');
@@ -11,7 +6,7 @@ const contentService = require('./contentService');
 const { createIdempotencyStore } = require('../../utils/idempotency');
 const { MAX_NOTE_CONTENT_LENGTH } = require('../../utils/noteLimits');
 const { NOTE_ASSETS_BUCKET } = require('../../config');
-const { supabase } = require('../../supabaseClient');
+const { createStorageRepository } = require('../../repositories/storageRepository');
 
 const defaultIdempotencyStore = createIdempotencyStore();
 
@@ -96,14 +91,21 @@ function buildUpdateMetadata(payload, services) {
 }
 
 function createNotesService(deps = {}) {
+  const bucket = deps.bucket ?? NOTE_ASSETS_BUCKET;
+  const storageRepository =
+    deps.storageRepository ??
+    createStorageRepository({
+      bucket,
+      supabaseClient: deps.supabase,
+    });
   const services = {
     notesRepo: deps.notesRepo ?? notesRepo,
     noteAssetsRepository: deps.noteAssetsRepository ?? noteAssetsRepository,
     contentService: deps.contentService ?? contentService,
     idempotencyStore: deps.idempotencyStore ?? defaultIdempotencyStore,
     logger: deps.logger ?? baseLogger,
-    supabase: deps.supabase ?? supabase,
-    bucket: deps.bucket ?? NOTE_ASSETS_BUCKET,
+    storageRepository,
+    bucket,
   };
 
   async function createNote({ userId, payload, idempotencyKey } = {}) {
@@ -245,9 +247,7 @@ function createNotesService(deps = {}) {
       const assets = await services.noteAssetsRepository.listAssetsForNote(noteId, userId);
       if (assets && assets.length > 0) {
         const storagePaths = assets.map((asset) => asset.storage_path);
-        const { error: storageError } = await services.supabase.storage
-          .from(services.bucket)
-          .remove(storagePaths);
+        const { error: storageError } = await services.storageRepository.remove(storagePaths);
 
         if (storageError) {
           services.logger.warn(

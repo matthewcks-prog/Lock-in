@@ -28,7 +28,7 @@ const { initApplicationInsights, disposeApplicationInsights, logger } = require(
 initApplicationInsights();
 
 // Initialize Sentry after App Insights
-const { initSentry } = require('./sentry');
+const { initSentry } = require('./observability/sentry');
 initSentry();
 
 // Now import everything else - both App Insights and Sentry will instrument these
@@ -37,7 +37,7 @@ const { PORT, isAzureEnabled, isOpenAIEnabled, isOpenAIFallbackEnabled } = requi
 const {
   startTranscriptJobReaper,
   stopTranscriptJobReaper,
-} = require('./services/transcriptsService');
+} = require('./services/transcripts/transcriptsService');
 
 // =============================================================================
 // Application Startup

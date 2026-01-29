@@ -45,7 +45,7 @@ This plan is derived from `docs/archive/QUALITY_AUDIT_2026-01-23.md`, updated to
 
 - [x] **Structured logging in backend runtime paths**
   - **Problem:** `console.log` used in runtime services.
-  - **Outcome:** `backend/services/transcriptsService.js` and `backend/sentry.js` log via observability logger.
+  - **Outcome:** `backend/services/transcripts/transcriptsService.js` and `backend/observability/sentry.js` log via observability logger.
   - **Acceptance criteria:** No direct `console.log`/`console.error` in backend runtime paths.
 
 - [x] **Test log noise + circular require warnings**
@@ -237,7 +237,7 @@ This plan is derived from `docs/archive/QUALITY_AUDIT_2026-01-23.md`, updated to
   - Split by responsibility (routing vs extraction vs networking), keep background as wiring only.
 
 - [ ] **Backend controllers/services**
-  - Target: `backend/controllers/*.js`, `backend/services/*.js`, `backend/openaiClient.js`.
+  - Target: `backend/controllers/*.js`, `backend/services/*.js`, `backend/services/llmClient.js`.
   - Split by workflow boundaries and dependency injection.
 
 - [ ] **Large UI modules**

@@ -4,7 +4,7 @@ const Module = require('node:module');
 
 function loadService(repo) {
   const repoPath = require.resolve('../../repositories/transcriptsRepository');
-  const servicePath = require.resolve('../../services/transcriptCacheService');
+  const servicePath = require.resolve('../../services/transcripts/transcriptCacheService');
 
   const originalRepo = require.cache[repoPath];
   const originalService = require.cache[servicePath];
@@ -17,7 +17,7 @@ function loadService(repo) {
   require.cache[repoPath] = repoModule;
   delete require.cache[servicePath];
 
-  const service = require('../../services/transcriptCacheService');
+  const service = require('../../services/transcripts/transcriptCacheService');
 
   return {
     service,

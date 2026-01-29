@@ -1,4 +1,4 @@
-# AI Services Architecture - Lock-in
+﻿# AI Services Architecture - Lock-in
 
 **Last Updated:** 2026-01-19
 
@@ -10,7 +10,7 @@ Lock-in uses a **provider factory pattern** with **automatic fallback** for AI s
 
 ## Service Strategy
 
-### 1. Chat Completions → OpenAI (Primary Only)
+### 1. Chat Completions â†’ OpenAI (Primary Only)
 
 **Provider:** OpenAI  
 **Model:** `gpt-4o-mini`  
@@ -21,19 +21,19 @@ Lock-in uses a **provider factory pattern** with **automatic fallback** for AI s
 **Architecture:**
 
 - Factory: `backend/providers/llmProviderFactory.js`
-- Consumer: `backend/openaiClient.js`
-- Line count: 505 lines (chat orchestration + prompt building)
+- Consumer: `backend/services/llmClient.js`
+- Line count: 492 lines (chat orchestration + prompt building)
 
 **Key Files:**
 
 ```
 backend/providers/llmProviderFactory.js  (chat client factory)
-backend/openaiClient.js                  (chat orchestration & prompts)
+backend/services/llmClient.js            (chat orchestration & prompts)
 ```
 
 ---
 
-### 2. Text Embeddings → Azure OpenAI (Primary) → OpenAI (Fallback)
+### 2. Text Embeddings â†’ Azure OpenAI (Primary) â†’ OpenAI (Fallback)
 
 **Primary:** Azure OpenAI Embeddings  
 **Fallback:** OpenAI Embeddings  
@@ -43,11 +43,11 @@ backend/openaiClient.js                  (chat orchestration & prompts)
 
 **Architecture:**
 
-- Factory: `backend/providers/embeddingsFactory.js` (142 lines)
-- Service: `backend/services/embeddings.js` (87 lines)
+- Factory: `backend/providers/embeddingsFactory.js` (219 lines)
+- Service: `backend/services/embeddings.js` (102 lines)
 - Consumers:
-- `backend/controllers/notes/crud.js` (semantic search, note embeddings)
-- `backend/controllers/notes/chat.js` (RAG queries)
+- `backend/services/notes/notesService.js` (semantic search, note embeddings)
+- `backend/services/notes/chatService.js` (RAG queries)
 
 **Key Features:**
 
@@ -62,13 +62,13 @@ backend/openaiClient.js                  (chat orchestration & prompts)
 backend/providers/embeddingsFactory.js       (factory + fallback logic)
 backend/providers/azureEmbeddingsClient.js   (Azure-specific implementation)
 backend/services/embeddings.js               (service wrapper)
-backend/controllers/notes/crud.js            (consumer: note embeddings)
-backend/controllers/notes/chat.js            (consumer: RAG queries)
+backend/services/notes/notesService.js       (consumer: note embeddings)
+backend/services/notes/chatService.js        (consumer: RAG queries)
 ```
 
 ---
 
-### 3. Transcription → Azure Speech (Primary) → OpenAI Whisper (Fallback)
+### 3. Transcription â†’ Azure Speech (Primary) â†’ OpenAI Whisper (Fallback)
 
 **Primary:** Azure Speech-to-Text  
 **Fallback:** OpenAI Whisper  
@@ -77,24 +77,24 @@ backend/controllers/notes/chat.js            (consumer: RAG queries)
 
 **Architecture:**
 
-- Factory: `backend/providers/transcriptionFactory.js` (236 lines)
-- Service: `backend/services/transcription.js` (145 lines)
-- Consumer: `backend/services/transcriptsService.js` (transcript job orchestration)
+- Factory: `backend/providers/transcriptionFactory.js` (207 lines)
+- Service: `backend/services/transcripts/transcriptionService.js` (120 lines)
+- Consumer: `backend/services/transcripts/transcriptsService.js` (transcript job orchestration)
 
 **Key Features:**
 
-- Language code mapping (ISO 639-1 → Azure locale format)
+- Language code mapping (ISO 639-1 â†’ Azure locale format)
 - File size validation (25MB limit for Whisper, 200MB for Azure Speech)
 - Automatic format detection
-- Response normalization (Azure ↔ Whisper format compatibility)
+- Response normalization (Azure â†” Whisper format compatibility)
 
 **Key Files:**
 
 ```
 backend/providers/transcriptionFactory.js       (factory + fallback logic)
 backend/providers/azureSpeechClient.js          (Azure Speech implementation)
-backend/services/transcription.js               (service wrapper)
-backend/services/transcriptsService.js          (consumer: job orchestration)
+backend/services/transcripts/transcriptionService.js (service wrapper)
+backend/services/transcripts/transcriptsService.js   (consumer: job orchestration)
 ```
 
 ---
@@ -119,24 +119,19 @@ backend/services/transcriptsService.js          (consumer: job orchestration)
 - **Pattern:** Service wrapper with singleton instances
 - **Files:**
   - `embeddings.js` - Embeddings service (uses embeddingsFactory)
-  - `transcription.js` - Transcription service (uses transcriptionFactory)
-  - `transcriptsService.js` - Transcript job orchestration (uses transcription service)
-
-### Application Layer (`backend/`)
-
-- **Purpose:** High-level chat orchestration, prompt building
-- **Files:**
-  - `openaiClient.js` - Chat completions orchestration (uses llmProviderFactory)
+  - `transcripts/transcriptionService.js` - Transcription service (uses transcriptionFactory)
+  - `transcripts/transcriptsService.js` - Transcript job orchestration (uses transcription service)
+  - `llmClient.js` - Chat completions orchestration (uses llmProviderFactory)
 
 ### Controller Layer (`backend/controllers/`)
 
 - **Purpose:** HTTP request handling, business logic coordination
 - **Files:**
-  - `assistant/ai.js` - Main chat endpoint (uses openaiClient)
+  - `assistant/ai.js` - Main chat endpoint (delegates to assistantService -> llmClient)
   - `assistant/chat.js` - Chat listing and message retrieval
-  - `assistant/title.js` - Chat title generation
+  - `assistant/title.js` - Chat title generation (chatTitleService -> llmClient)
   - `notes/crud.js` - Note CRUD + embeddings (uses embeddings service)
-  - `notes/chat.js` - RAG queries (uses embeddings service + openaiClient)
+  - `notes/chat.js` - RAG queries (notes chat service -> embeddings + llmClient)
 
 ---
 
@@ -171,16 +166,16 @@ AZURE_SPEECH_LANGUAGE=en-US
 
 ### Configuration Functions
 
-**backend/config.js:**
+**backend/config/index.js:**
 
 ```javascript
 // Chat: Always OpenAI (no Azure check needed)
 isOpenAIEnabled(); // Checks OPENAI_API_KEY
 
-// Embeddings: Azure (primary) → OpenAI (fallback)
+// Embeddings: Azure (primary) â†’ OpenAI (fallback)
 isAzureEmbeddingsEnabled(); // Checks AZURE_OPENAI_API_KEY + ENDPOINT + EMBEDDINGS_DEPLOYMENT
 
-// Transcription: Azure Speech (primary) → Whisper (fallback)
+// Transcription: Azure Speech (primary) â†’ Whisper (fallback)
 isAzureSpeechEnabled(); // Checks AZURE_SPEECH_API_KEY + REGION
 ```
 
@@ -224,16 +219,16 @@ isAzureSpeechEnabled(); // Checks AZURE_SPEECH_API_KEY + REGION
 
 **Target:** Primary files <250 lines (per REFACTOR_PLAN.md)
 
-| Module                    | Lines | Status                             |
-| ------------------------- | ----- | ---------------------------------- |
-| `embeddingsFactory.js`    | 142   | ✅ Under limit                     |
-| `transcriptionFactory.js` | 236   | ✅ Under limit                     |
-| `llmProviderFactory.js`   | 47    | ✅ Under limit                     |
-| `embeddings.js`           | 87    | ✅ Under limit                     |
-| `transcription.js`        | 145   | ✅ Under limit                     |
-| `openaiClient.js`         | 505   | ⚠️ Orchestration file (acceptable) |
+| Module                                | Lines | Status                                |
+| ------------------------------------- | ----- | ------------------------------------- |
+| `embeddingsFactory.js`                | 219   | âœ… Under limit                       |
+| `transcriptionFactory.js`             | 207   | âœ… Under limit                       |
+| `llmProviderFactory.js`               | 41    | âœ… Under limit                       |
+| `embeddings.js`                       | 102   | âœ… Under limit                       |
+| `transcripts/transcriptionService.js` | 120   | âœ… Under limit                       |
+| `services/llmClient.js`               | 492   | âš ï¸ Orchestration file (acceptable) |
 
-**Refactor Complete:** All targeted modules are now under the 250-line threshold. `openaiClient.js` is larger but serves as the main chat orchestration layer (prompt building, context management, streaming).
+**Refactor Complete:** All targeted modules are now under the 250-line threshold. `services/llmClient.js` is larger but serves as the main chat orchestration layer (prompt building, context management, streaming).
 
 ---
 
@@ -243,29 +238,29 @@ isAzureSpeechEnabled(); // Checks AZURE_SPEECH_API_KEY + REGION
 
 1. **Created `backend/services/embeddings.js`** - Uses embeddingsFactory with proper Azure check
 2. **Updated `backend/providers/llmProviderFactory.js`** - Simplified to OpenAI-only for chat
-3. **Updated `backend/services/transcriptsService.js`** - Uses transcription.js service
-4. **Updated controllers** - Use embeddings.js service instead of openaiClient
-5. **Removed from openaiClient.js** - Legacy embedText() and transcribeAudioFile() functions
+3. **Updated `backend/services/transcripts/transcriptsService.js`** - Uses transcription service
+4. **Updated controllers** - Use embeddings.js service instead of the LLM client
+5. **Removed from services/llmClient.js** - Legacy embedText() and transcribeAudioFile() functions
 
 ### Before:
 
-- ❌ embedText() in openaiClient used `isAzureEnabled()` (chat check, not embeddings)
-- ❌ embeddingsFactory existed but wasn't used
-- ❌ transcriptsService imported from openaiClient (wrong layer)
-- ❌ Mixed concerns: chat, embeddings, transcription in one file
+- âŒ embedText() in the legacy LLM client used `isAzureEnabled()` (chat check, not embeddings)
+- âŒ embeddingsFactory existed but wasn't used
+- âŒ transcriptsService imported from the legacy LLM client (wrong layer)
+- âŒ Mixed concerns: chat, embeddings, transcription in one file
 
 ### After:
 
-- ✅ Embeddings use `isAzureEmbeddingsEnabled()` (correct check)
-- ✅ embeddingsFactory properly used via embeddings.js service
-- ✅ Transcription uses dedicated transcription.js service
-- ✅ openaiClient.js focused on chat only (505 lines, down from 710)
-- ✅ Clear separation: factories → services → controllers
+- âœ… Embeddings use `isAzureEmbeddingsEnabled()` (correct check)
+- âœ… embeddingsFactory properly used via embeddings.js service
+- âœ… Transcription uses dedicated transcription service
+- âœ… services/llmClient.js focused on chat only (492 lines, down from 710)
+- âœ… Clear separation: factories â†’ services â†’ controllers
 
 ### Verification:
 
 ```bash
-npm run check  # ✅ All tests pass, build succeeds
+npm run check  # âœ… All tests pass, build succeeds
 ```
 
 ---

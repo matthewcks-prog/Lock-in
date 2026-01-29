@@ -129,7 +129,7 @@ The `/backend` directory contains the **Node.js/Express API server** that:
 
 - `express` (Router, Request, Response)
 - Controllers (handler functions)
-- Middleware (`authMiddleware`, `rateLimiter`, `uploadMiddleware`)
+- Middleware (`authMiddleware`, `uploadMiddleware`)
 
 **MUST NOT import**:
 
@@ -159,8 +159,8 @@ router.post('/notes', authenticate, createNote);
 
 **MUST NOT import**:
 
-- `supabaseClient.js` (use services/repos instead)
-- `openaiClient.js` (use services/providers instead)
+- `db/supabaseClient.js` (use services/repos instead)
+- `services/llmClient.js` (use services/providers instead)
 - Repositories directly (use services as intermediary)
 
 **Example**:
@@ -178,7 +178,7 @@ async function createNote(req, res) {
 }
 
 // ❌ BAD
-const supabase = require('../supabaseClient'); // NO!
+const supabase = require('../db/supabaseClient'); // NO!
 async function createNote(req, res) {
   const note = await supabase.from('notes').insert(req.body); // NO!
 }
@@ -226,7 +226,7 @@ async function generateChatResponse(req, res) { // NO req/res!
 
 **MUST import**:
 
-- `supabaseClient.js` ONLY
+- `db/supabaseClient.js` ONLY
 - Core domain types
 
 **MUST NOT import**:
@@ -240,7 +240,7 @@ async function generateChatResponse(req, res) { // NO req/res!
 
 ```javascript
 // ✅ GOOD
-const supabase = require('../supabaseClient');
+const supabase = require('../db/supabaseClient');
 
 async function createNote(userId, noteData) {
   const { data, error } = await supabase
@@ -762,7 +762,7 @@ function sanitizeInput(input, maxLength = 10000) {
 **MUST enforce per-user rate limits**:
 
 ```javascript
-// Configured in rateLimiter.js
+// Configured in services/rateLimitService.js
 const RATE_LIMITS = {
   AI_REQUESTS: { windowMs: 60000, maxRequests: 20 }, // 20/min
   CHAT_ASSETS: { windowMs: 60000, maxRequests: 5 }, // 5/min
@@ -780,7 +780,7 @@ const RATE_LIMITS = {
 1. **Define route** (`routes/featureRoutes.js`):
 
 ```javascript
-router.post('/feature', authenticate, rateLimiter('feature'), handleFeature);
+router.post('/feature', authenticate, handleFeature);
 ```
 
 2. **Create controller** (`controllers/featureController.js`):
@@ -855,7 +855,7 @@ async function handleChat(req, res) {
 
 ```javascript
 // ❌ BAD
-const supabase = require('../supabaseClient');
+const supabase = require('../db/supabaseClient');
 
 async function createNote(req, res) {
   const { data } = await supabase.from('notes').insert(req.body);

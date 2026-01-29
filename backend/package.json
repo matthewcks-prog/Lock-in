@@ -19,7 +19,7 @@
     "format:check": "prettier --check .",
     "test": "node --test --test-reporter=spec",
     "test:ci": "node --test --test-reporter=spec",
-    "test:azure": "node verify-azure-embeddings.js",
+    "test:azure": "node scripts/verify-azure-embeddings.js",
     "docker:build": "cd .. && docker build -f backend/Dockerfile -t lock-in-backend .",
     "docker:run": "docker rm -f lock-in-backend-local || true && docker run --name lock-in-backend-local -p 3000:3000 --env-file ../.env lock-in-backend"
   },

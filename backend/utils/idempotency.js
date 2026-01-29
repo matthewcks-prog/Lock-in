@@ -1,4 +1,4 @@
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../db/supabaseClient');
 
 const DEFAULT_TTL_MS = 2 * 60 * 1000;
 const DEFAULT_WAIT_MS = 5 * 1000;

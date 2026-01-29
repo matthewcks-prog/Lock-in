@@ -22,79 +22,13 @@ const isDev = process.env.NODE_ENV !== 'production';
  * @property {Object} [error.details] - Additional error details (dev only)
  */
 
-/**
- * Map of known error codes to HTTP status codes
- */
-const ERROR_STATUS_MAP = {
-  VALIDATION_ERROR: 400,
-  INVALID_INPUT: 400,
-  MISSING_REQUIRED_FIELD: 400,
-  INVALID_JSON: 400,
-  AUTH_REQUIRED: 401,
-  INVALID_TOKEN: 401,
-  SESSION_EXPIRED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  RATE_LIMIT: 429,
-  INTERNAL_ERROR: 500,
-  BAD_GATEWAY: 502,
-  SERVICE_UNAVAILABLE: 503,
-};
-
-/**
- * Custom application error class
- */
-class AppError extends Error {
-  constructor(message, code = 'INTERNAL_ERROR', statusCode = null, details = null) {
-    super(message);
-    this.name = 'AppError';
-    this.code = code;
-    this.statusCode = statusCode || ERROR_STATUS_MAP[code] || 500;
-    this.details = details;
-    this.isOperational = true; // Distinguishes from programming errors
-    Error.captureStackTrace(this, this.constructor);
-  }
-}
-
-/**
- * Not found error
- */
-class NotFoundError extends AppError {
-  constructor(resource = 'Resource', id = null) {
-    const message = id ? `${resource} with ID ${id} not found` : `${resource} not found`;
-    super(message, 'NOT_FOUND', 404);
-  }
-}
-
-/**
- * Validation error
- */
-class ValidationError extends AppError {
-  constructor(message, field = null) {
-    super(message, 'VALIDATION_ERROR', 400, field ? { field } : null);
-  }
-}
-
-/**
- * Conflict error (for optimistic locking)
- */
-class ConflictError extends AppError {
-  constructor(message = 'Resource was modified by another session', updatedAt = null) {
-    super(message, 'CONFLICT', 409, updatedAt ? { updatedAt } : null);
-    this.updatedAt = updatedAt;
-  }
-}
-
-/**
- * Rate limit error
- */
-class RateLimitError extends AppError {
-  constructor(message = 'Too many requests', retryAfterSeconds = null) {
-    super(message, 'RATE_LIMIT', 429, retryAfterSeconds ? { retryAfterSeconds } : null);
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
+const {
+  AppError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+  RateLimitError,
+} = require('../errors');
 
 /**
  * Format error for response

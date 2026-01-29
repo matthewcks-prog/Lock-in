@@ -7,8 +7,8 @@
 // Load environment variables
 require('dotenv').config();
 
-const { createEmbeddingsClient } = require('./providers/embeddingsFactory');
-const config = require('./config');
+const { createEmbeddingsClient } = require('../providers/embeddingsFactory');
+const config = require('../config');
 
 console.log('\n🔍 Azure Embeddings Configuration Test\n');
 console.log('━'.repeat(60));

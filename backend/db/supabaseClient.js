@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const config = require('./config');
+const config = require('../config');
 
 // Use environment-aware configuration from centralized config
 const SUPABASE_URL = config.SUPABASE_URL;

@@ -1,4 +1,4 @@
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../db/supabaseClient');
 
 async function getTranscriptByFingerprint({ fingerprint, userId }) {
   if (!fingerprint || !userId) return null;

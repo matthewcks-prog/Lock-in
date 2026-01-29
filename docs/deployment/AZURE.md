@@ -454,7 +454,7 @@ const API_BASE_URL =
 
 ### 5.3 Update CORS Origins (if needed)
 
-If deploying a web app frontend, update `backend/config.js`:
+If deploying a web app frontend, update `backend/config/index.js`:
 
 ```javascript
 const ALLOWED_ORIGINS = [
@@ -660,7 +660,7 @@ curl http://localhost:3000/health
 
 ### CORS Errors
 
-- Verify origin is in `ALLOWED_ORIGINS` in `backend/config.js`
+- Verify origin is in `ALLOWED_ORIGINS` in `backend/config/index.js`
 - Check browser console for exact origin being blocked
 - Rebuild and redeploy after updating CORS config
 

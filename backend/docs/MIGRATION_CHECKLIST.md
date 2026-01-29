@@ -1,4 +1,4 @@
-# 🔧 Your Current .env Migration Checklist
+﻿# 🔧 Your Current .env Migration Checklist
 
 ## Current State Analysis
 
@@ -198,4 +198,4 @@ SUPABASE_URL_DEV=https://...
 
 ---
 
-**Need help?** Check [docs/deployment/ENVIRONMENTS.md](../docs/deployment/ENVIRONMENTS.md) for the canonical guide.
+**Need help?** Check [docs/deployment/ENVIRONMENTS.md](../../docs/deployment/ENVIRONMENTS.md) for the canonical guide.

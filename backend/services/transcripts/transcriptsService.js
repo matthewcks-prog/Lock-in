@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const { spawn, execSync } = require('child_process');
-const { transcribeAudioFile } = require('./transcription');
+const { transcribeAudioFile } = require('./transcriptionService');
 const {
   claimTranscriptJobForProcessing,
   deleteTranscriptJobChunks,
@@ -13,7 +13,7 @@ const {
   updateTranscriptJob,
   upsertTranscriptCache,
   listTranscriptJobsByStatusBefore,
-} = require('../repositories/transcriptsRepository');
+} = require('../../repositories/transcriptsRepository');
 const {
   TRANSCRIPTION_TEMP_DIR,
   TRANSCRIPT_CHUNK_RETENTION_HOURS,
@@ -22,8 +22,8 @@ const {
   TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES,
   TRANSCRIPT_PROCESSING_HEARTBEAT_INTERVAL_SECONDS,
   TRANSCRIPT_PROCESSING_STALE_MINUTES,
-} = require('../config');
-const { logger } = require('../observability');
+} = require('../../config');
+const { logger } = require('../../observability');
 const {
   downloadTranscriptChunk,
   removeTranscriptChunks,

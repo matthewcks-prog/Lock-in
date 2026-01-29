@@ -1,4 +1,4 @@
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../db/supabaseClient');
 
 async function createAsset({ id, noteId, userId, type, mimeType, storagePath }) {
   const { data, error } = await supabase

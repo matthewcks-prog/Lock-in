@@ -4,8 +4,8 @@
 
 require('dotenv').config();
 
-const { createAzureEmbeddingsClient } = require('./providers/azureEmbeddingsClient');
-const config = require('./config');
+const { createAzureEmbeddingsClient } = require('../providers/azureEmbeddingsClient');
+const config = require('../config');
 
 console.log('\n🔍 Detailed Azure Embeddings Diagnostic\n');
 console.log('━'.repeat(60));

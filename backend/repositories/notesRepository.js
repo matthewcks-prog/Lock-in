@@ -1,6 +1,6 @@
 // backend/repositories/notesRepository.js
 
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../db/supabaseClient');
 
 /**
  * Repository for notes CRUD operations.

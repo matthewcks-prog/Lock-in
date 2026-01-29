@@ -58,14 +58,14 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 - `index.js` - Server entry point
 - `app.js` - Express application setup
-- `config.js` - Centralized configuration
+- `config/index.js` - Centralized configuration
 - `routes/assistantRoutes.js` - API route definitions
 - `controllers/assistant/ai.js` - Assistant request handlers
-- `openaiClient.js` - OpenAI API integration
-- `chatRepository.js` - Database operations
-- `supabaseClient.js` - Supabase client
-- `authMiddleware.js` - Authentication middleware
-- `rateLimiter.js` - Rate limiting
+- `services/llmClient.js` - LLM integration + prompt orchestration
+- `repositories/chatRepository.js` - Database operations
+- `db/supabaseClient.js` - Supabase client
+- `middleware/authMiddleware.js` - Authentication middleware
+- `services/rateLimitService.js` - Rate limiting
 
 ## Setup Instructions
 

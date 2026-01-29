@@ -11,7 +11,7 @@
  */
 
 const Sentry = require('@sentry/node');
-const { logger } = require('./observability');
+const { logger } = require('./index');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 

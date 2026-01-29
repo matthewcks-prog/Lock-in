@@ -1,7 +1,7 @@
 // backend/routes/feedbackRoutes.js
 
 const express = require('express');
-const { requireSupabaseUser } = require('../authMiddleware');
+const { requireSupabaseUser } = require('../middleware/authMiddleware');
 const feedbackController = require('../controllers/feedback');
 
 const router = express.Router();

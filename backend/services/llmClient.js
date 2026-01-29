@@ -5,15 +5,15 @@
  * - Chat Completions: OpenAI (Primary) - gpt-4o-mini (~$0.23/month)
  *
  * Note: Embeddings → services/embeddings.js (Azure primary, OpenAI fallback)
- *       Transcription → services/transcription.js (Azure Speech primary, Whisper fallback)
+ *       Transcription → services/transcripts/transcriptionService.js (Azure Speech primary, Whisper fallback)
  *
- * @module openaiClient
+ * @module services/llmClient
  */
 
-const { buildInitialChatTitle, coerceGeneratedTitle } = require('./utils/chatTitle');
-const { getDeployment } = require('./config');
-const { createPrimaryClient, createFallbackClient } = require('./providers/llmProviderFactory');
-const { withRetryAndFallback } = require('./providers/withFallback');
+const { buildInitialChatTitle, coerceGeneratedTitle } = require('../utils/chatTitle');
+const { getDeployment } = require('../config');
+const { createPrimaryClient, createFallbackClient } = require('../providers/llmProviderFactory');
+const { withRetryAndFallback } = require('../providers/withFallback');
 const MAX_HISTORY_MESSAGES = 30;
 const MAX_ATTACHMENT_CONTEXT_CHARS = 5000;
 const MIN_SELECTION_PRIMARY_CHARS = 20;

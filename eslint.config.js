@@ -14,6 +14,20 @@ export default [
       '**/coverage/**',
     ],
   },
+  {
+    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: {
+      'max-lines': [
+        'warn',
+        {
+          max: 500,
+          skipBlankLines: true,
+          skipComments: true,
+        },
+      ],
+      complexity: ['warn', 20],
+    },
+  },
 
   // Legacy globals guardrail: prefer canonical LockInContent runtime
   {
@@ -310,6 +324,13 @@ export default [
     },
     rules: {
       'no-undef': 'off', // Test globals
+    },
+  },
+  {
+    files: ['**/__tests__/**/*.{js,mjs,cjs,ts,tsx}', '**/*.{test,spec}.{js,mjs,cjs,ts,tsx}'],
+    rules: {
+      'max-lines': 'off',
+      complexity: 'off',
     },
   },
   prettierConfig,

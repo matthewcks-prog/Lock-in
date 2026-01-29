@@ -1,15 +1,6 @@
-const { supabase } = require('../../supabaseClient');
-const {
-  createChat,
-  getChatById,
-  getRecentChats,
-  getChatMessages,
-} = require('../../chatRepository');
+const { chatService } = require('../../services/assistant/chatService');
 const { DEFAULT_CHAT_LIST_LIMIT, MAX_CHAT_LIST_LIMIT } = require('../../config');
 const { validateUUID } = require('../../utils/validation');
-const { buildInitialChatTitle } = require('../../utils/chatTitle');
-const chatAssetsRepository = require('../../repositories/chatAssetsRepository');
-const { createSignedAssetUrl } = require('./assets');
 
 function parseChatCursor(rawCursor) {
   if (typeof rawCursor !== 'string') return null;
@@ -28,10 +19,6 @@ function parseChatCursor(rawCursor) {
   return new Date(parsed).toISOString();
 }
 
-/**
- * GET /api/chats
- * List recent chats for the authenticated user.
- */
 async function listChats(req, res) {
   try {
     const userId = req.user?.id;
@@ -43,17 +30,15 @@ async function listChats(req, res) {
       return res.status(400).json({ error: 'Invalid cursor parameter' });
     }
 
-    // Validate and constrain limit
-    let limit =
+    const limit =
       Number.isFinite(requestedLimit) && requestedLimit > 0
         ? Math.min(requestedLimit, MAX_CHAT_LIST_LIMIT)
         : DEFAULT_CHAT_LIST_LIMIT;
 
-    const { chats, pagination } = await getRecentChats(userId, { limit, cursor });
+    const { chats, pagination } = await chatService.listChats({ userId, limit, cursor });
 
     const response = chats.map((chat) => ({
       ...chat,
-      // Return null for empty titles so frontend can handle fallback/generation
       title: chat.title && chat.title.trim() ? chat.title : null,
     }));
 
@@ -67,10 +52,6 @@ async function listChats(req, res) {
   }
 }
 
-/**
- * POST /api/chats
- * Create a new chat session for the authenticated user.
- */
 async function createChatSession(req, res) {
   try {
     const userId = req.user?.id;
@@ -85,9 +66,8 @@ async function createChatSession(req, res) {
         : typeof initialMessage === 'string'
           ? initialMessage
           : '';
-    const chatTitle = buildInitialChatTitle(seed);
 
-    const chat = await createChat(userId, chatTitle);
+    const chat = await chatService.createChatSession({ userId, titleSeed: seed });
 
     return res.status(201).json({
       id: chat.id,
@@ -102,16 +82,11 @@ async function createChatSession(req, res) {
   }
 }
 
-/**
- * DELETE /api/chats/:chatId
- * Soft-enforced delete of a chat and its messages (scoped to the user).
- */
 async function deleteChat(req, res) {
   try {
     const userId = req.user?.id;
     const chatId = req.params.chatId;
 
-    // Validate chatId format
     const chatIdValidation = validateUUID(chatId);
     if (!chatIdValidation.valid) {
       return res.status(400).json({
@@ -120,38 +95,11 @@ async function deleteChat(req, res) {
       });
     }
 
-    // Verify the chat belongs to the user
-    const chat = await getChatById(userId, chatId);
-    if (!chat) {
+    const result = await chatService.deleteChat({ userId, chatId });
+    if (result?.notFound) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'The requested chat does not exist for this user',
-      });
-    }
-
-    const { error: messagesError } = await supabase
-      .from('chat_messages')
-      .delete()
-      .eq('chat_id', chatId)
-      .eq('user_id', userId);
-
-    if (messagesError) {
-      console.error('Error deleting chat messages:', messagesError);
-      return res.status(500).json({
-        error: 'Failed to delete chat messages',
-      });
-    }
-
-    const { error: chatError } = await supabase
-      .from('chats')
-      .delete()
-      .eq('id', chatId)
-      .eq('user_id', userId);
-
-    if (chatError) {
-      console.error('Error deleting chat:', chatError);
-      return res.status(500).json({
-        error: 'Failed to delete chat',
       });
     }
 
@@ -167,16 +115,11 @@ async function deleteChat(req, res) {
   }
 }
 
-/**
- * GET /api/chats/:chatId/messages
- * List all messages in a chat owned by the authenticated user.
- */
 async function listChatMessages(req, res) {
   try {
     const userId = req.user?.id;
     const { chatId } = req.params;
 
-    // Validate chatId format
     const chatIdValidation = validateUUID(chatId);
     if (!chatIdValidation.valid) {
       return res.status(400).json({
@@ -185,45 +128,12 @@ async function listChatMessages(req, res) {
       });
     }
 
-    const chat = await getChatById(userId, chatId);
-    if (!chat) {
+    const result = await chatService.listChatMessages({ userId, chatId });
+    if (result?.notFound) {
       return res.status(404).json({ error: 'Chat not found' });
     }
 
-    const messages = await getChatMessages(userId, chatId);
-    const assets = await chatAssetsRepository.listAssetsForChat(chatId, userId);
-    const assetsByMessage = new Map();
-
-    if (assets.length > 0) {
-      const assetsWithUrls = await Promise.all(
-        assets.map(async (asset) => ({
-          id: asset.id,
-          messageId: asset.message_id,
-          kind: asset.type,
-          mime: asset.mime_type,
-          name: asset.file_name || 'Attachment',
-          url: await createSignedAssetUrl(asset.storage_path),
-        })),
-      );
-
-      for (const asset of assetsWithUrls) {
-        if (!asset.messageId) continue;
-        if (!assetsByMessage.has(asset.messageId)) {
-          assetsByMessage.set(asset.messageId, []);
-        }
-        assetsByMessage.get(asset.messageId).push(asset);
-      }
-    }
-
-    const response = messages.map((message) => {
-      const attachments = assetsByMessage.get(message.id);
-      if (!attachments || attachments.length === 0) {
-        return message;
-      }
-      return { ...message, attachments };
-    });
-
-    return res.json(response);
+    return res.json(result.messages);
   } catch (error) {
     console.error('Error fetching chat messages:', error);
     return res.status(500).json({ error: 'Failed to load chat messages' });

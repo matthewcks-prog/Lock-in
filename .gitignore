@@ -71,3 +71,7 @@ temp/
 # Testing
 coverage/
 .nyc_output/
+
+# Azure Container Registry (temporary diagnostic files)
+manifest.json
+metadata.json

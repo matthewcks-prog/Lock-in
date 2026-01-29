@@ -1,4 +1,4 @@
-# Azure Embeddings Setup Documentation
+﻿# Azure Embeddings Setup Documentation
 
 ## ✅ Configuration Summary
 

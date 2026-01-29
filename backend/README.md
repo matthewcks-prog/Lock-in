@@ -35,7 +35,8 @@ Full documentation:
 
 - [Environment Guide](../docs/deployment/ENVIRONMENTS.md) - Canonical environment strategy
 - [Local Supabase Setup](../docs/setup/LOCAL_SUPABASE_SETUP.md) - Local database workflow
-- [Migration Checklist](./MIGRATION_CHECKLIST.md) - Upgrade from legacy .env
+- [Migration Checklist](./docs/MIGRATION_CHECKLIST.md) - Upgrade from legacy .env
+- [Azure Embeddings Setup](./docs/AZURE_EMBEDDINGS_SETUP.md) - Azure embeddings verification tips
 
 3. **Run development server:**
 
@@ -80,9 +81,21 @@ See [.env.example](./.env.example) for complete list with descriptions.
 backend/
 ├── index.js                    # Server entry point + validation
 ├── app.js                      # Express application setup
-├── config.js                   # Centralized configuration
-├── utils/
-│   └── validateEnv.js          # Environment validation
+├── config/
+│   ├── index.js                # Centralized configuration
+│   └── prompts.js              # Prompt templates
+├── db/
+│   └── supabaseClient.js       # Supabase client configuration
+├── docs/
+│   ├── AZURE_EMBEDDINGS_SETUP.md
+│   └── MIGRATION_CHECKLIST.md
+├── middleware/
+│   ├── authMiddleware.js       # Authentication middleware
+│   ├── errorHandler.js         # Error response mapping
+│   └── uploadMiddleware.js     # Multer upload validation
+├── observability/
+│   ├── index.js                # Logger wiring
+│   └── sentry.js               # Sentry integration
 ├── routes/
 │   ├── assistantRoutes.js      # Chat/processing API routes
 │   ├── noteRoutes.js           # Notes API routes
@@ -90,26 +103,57 @@ backend/
 │   └── feedbackRoutes.js       # User feedback routes
 ├── controllers/
 │   ├── assistant/
-│   │   ├── ai.js              # AI request handlers
-│   │   ├── chat.js            # Chat CRUD/listing
-│   │   ├── title.js           # Chat title generation
-│   │   └── assets.js          # Chat attachments
+│   │   ├── ai.js               # AI request handlers
+│   │   ├── chat.js             # Chat CRUD/listing
+│   │   ├── title.js            # Chat title generation
+│   │   └── assets.js           # Chat attachments
 │   ├── notes/
-│   │   ├── crud.js            # Notes CRUD operations
-│   │   ├── chat.js            # Notes-based chat (RAG)
-│   │   └── assets.js          # Note asset upload/list/delete
+│   │   ├── crud.js             # Notes CRUD operations
+│   │   ├── chat.js             # Notes-based chat (RAG)
+│   │   └── assets.js           # Note asset upload/list/delete
 │   ├── transcripts/
-│   │   └── index.js           # Transcript cache + job lifecycle
+│   │   └── index.js            # Transcript cache + job lifecycle
 │   └── feedback/
-│       └── index.js           # User feedback handlers
+│       └── index.js            # User feedback handlers
 ├── repositories/
-│   └── notesRepository.js      # Database operations for notes
-├── openaiClient.js             # LLM provider integration (Azure OpenAI + fallback)
-├── chatRepository.js           # Chat persistence operations
-├── supabaseClient.js           # Supabase client configuration
-├── authMiddleware.js           # Authentication middleware
-├── rateLimiter.js              # Rate limiting
+│   ├── chatRepository.js       # Chat persistence operations
+│   ├── notesRepository.js      # Database operations for notes
+│   ├── noteAssetsRepository.js # Note asset metadata
+│   ├── chatAssetsRepository.js # Chat asset metadata
+│   ├── transcriptsRepository.js # Transcript jobs + cache
+│   ├── feedbackRepository.js   # Feedback storage
+│   └── rateLimitRepository.js  # Rate limit counters
+├── providers/
+│   ├── llmProviderFactory.js   # Chat client factory
+│   ├── embeddingsFactory.js    # Embeddings client factory
+│   ├── transcriptionFactory.js # Transcription client factory
+│   ├── storageRepository.js  # Supabase Storage wrapper (via repositories/)
+│   └── withFallback.js         # Retry + fallback wrapper
+├── services/
+│   ├── llmClient.js            # LLM orchestration + prompts
+│   ├── embeddings.js           # Embeddings service
+│   ├── rateLimitService.js     # Rate limit enforcement
+│   ├── feedbackService.js      # Feedback orchestration
+│   ├── assistant/
+│   │   ├── assistantService.js # /api/lockin orchestration
+│   │   ├── chatService.js      # Chat CRUD/listing
+│   │   ├── chatAssetsService.js # Chat asset lifecycle
+│   │   └── chatTitleService.js # Chat title generation
+│   ├── notes/
+│   │   ├── notesService.js     # Notes orchestration
+│   │   ├── noteAssetsService.js # Note asset lifecycle
+│   │   └── chatService.js      # Notes-based chat (RAG)
+│   └── transcripts/
+│       ├── transcriptsService.js       # Transcript processing
+│       ├── transcriptJobsService.js    # Job lifecycle orchestration
+│       ├── transcriptionService.js     # Azure Speech / Whisper
+│       ├── transcriptCacheService.js   # Cache upserts
+│       └── transcriptStorage.js        # Storage wrapper
+├── scripts/
+│   ├── verify-azure-embeddings.js
+│   └── verify-embeddings.js
 ├── utils/
+│   ├── validateEnv.js          # Environment validation
 │   └── validation.js           # Input validation utilities
 └── package.json                # Dependencies
 ```
@@ -432,10 +476,10 @@ npm run test:ci             # CI-specific test command (same as npm test)
 Verify Azure OpenAI embeddings configuration:
 
 ```bash
-npm run test:azure          # Run verify-azure-embeddings.js
+npm run test:azure          # Run scripts/verify-azure-embeddings.js
 ```
 
-**Note:** `verify-azure-embeddings.js` and similar utility scripts are NOT unit tests. They make actual API calls and are used for manual verification only.
+**Note:** `scripts/verify-azure-embeddings.js` and similar utility scripts are NOT unit tests. They make actual API calls and are used for manual verification only.
 
 ### API Testing
 

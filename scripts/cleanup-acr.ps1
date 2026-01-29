@@ -1,10 +1,12 @@
 <#
 .SYNOPSIS
-    Azure Container Registry Manual Cleanup Script
+    Azure Container Registry Manual Cleanup Script (Refactored)
 
 .DESCRIPTION
     Manually clean up old container images from Azure Container Registry.
-    Supports dry-run mode, configurable retention periods, and detailed reporting.
+    Uses 'az acr manifest list-metadata' for efficient, single-query retrieval of image data.
+    Supports dry-run mode, OCI multi-arch images, and configurable retention periods.
+    Industry-grade error handling and reporting.
 
 .PARAMETER RegistryName
     Name of the Azure Container Registry (without .azurecr.io)
@@ -23,9 +25,6 @@
 
 .EXAMPLE
     .\cleanup-acr.ps1 -RegistryName "myacr" -DryRun $true
-
-.EXAMPLE
-    .\cleanup-acr.ps1 -RegistryName "myacr" -StagingRetentionDays 7 -DryRun $false
 #>
 
 param(
@@ -42,208 +41,186 @@ param(
     [int]$ProductionRetentionDays = 90,
 
     [Parameter(Mandatory=$false)]
-    [bool]$DryRun = $true,
-
-    [Parameter(Mandatory=$false)]
-    [switch]$Verbose
+    [bool]$DryRun = $true
 )
 
-# Set strict mode
-Set-StrictMode -Version Latest
+# Set error preference only, strict mode caused environment compatibility issues
 $ErrorActionPreference = "Stop"
 
-# Color functions
-function Write-Success { param([string]$Message) Write-Host "✅ $Message" -ForegroundColor Green }
-function Write-Info { param([string]$Message) Write-Host "ℹ️  $Message" -ForegroundColor Cyan }
-function Write-Warning { param([string]$Message) Write-Host "⚠️  $Message" -ForegroundColor Yellow }
-function Write-Error { param([string]$Message) Write-Host "❌ $Message" -ForegroundColor Red }
+# Utility functions for formatted output
+function Write-Success { param([string]$Message) Write-Host "[OK] $Message" -ForegroundColor Green }
+function Write-Info { param([string]$Message) Write-Host "[INFO] $Message" -ForegroundColor Cyan }
+function Write-Warning { param([string]$Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
+function Write-Error { param([string]$Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 function Write-Header { param([string]$Message) Write-Host "`n========================================" -ForegroundColor Magenta; Write-Host $Message -ForegroundColor Magenta; Write-Host "========================================`n" -ForegroundColor Magenta }
 
-# Validate parameters
+# 1. Validation
 if ([string]::IsNullOrEmpty($RegistryName)) {
-    Write-Error "Registry name is required. Set AZURE_CONTAINER_REGISTRY environment variable or use -RegistryName parameter."
+    Write-Error "Registry name is required. Set AZURE_CONTAINER_REGISTRY env var or use -RegistryName."
     exit 1
 }
 
-Write-Header "Azure Container Registry Cleanup"
-
+Write-Header "Azure Container Registry Cleanup (Optimized)"
 Write-Info "Configuration:"
-Write-Host "  Registry: $RegistryName"
-Write-Host "  Repository: $Repository"
-Write-Host "  Staging Retention: $StagingRetentionDays days"
-Write-Host "  Production Retention: $ProductionRetentionDays days"
-Write-Host "  Mode: $(if ($DryRun) { 'DRY RUN (Preview Only)' } else { 'LIVE (Will Delete)' })"
-Write-Host ""
+Write-Info "  Registry: $RegistryName"
+Write-Info "  Repository: $Repository"
+Write-Info "  Staging Retention: $StagingRetentionDays days"
+Write-Info "  Production Retention: $ProductionRetentionDays days"
+Write-Info "  Mode: $(if ($DryRun) { 'DRY RUN (Preview Only)' } else { 'LIVE (Will Delete)' })"
 
-# Check if logged in to Azure
+# 2. Login Check
 Write-Info "Verifying Azure CLI login..."
 try {
     $account = az account show 2>$null | ConvertFrom-Json
-    if ($null -eq $account) {
-        Write-Error "Not logged in to Azure. Run 'az login' first."
-        exit 1
-    }
+    if ($null -eq $account) { throw "Not logged in" }
     Write-Success "Logged in as: $($account.user.name)"
 } catch {
-    Write-Error "Azure CLI not found or not logged in. Install Azure CLI and run 'az login'."
+    Write-Error "Please run 'az login' to authenticate."
     exit 1
 }
 
-# Calculate cutoff dates
-$stagingCutoff = (Get-Date).AddDays(-$StagingRetentionDays)
-$productionCutoff = (Get-Date).AddDays(-$ProductionRetentionDays)
-
-Write-Info "Cutoff Dates:"
-Write-Host "  Staging: $($stagingCutoff.ToString('yyyy-MM-dd HH:mm:ss'))"
-Write-Host "  Production: $($productionCutoff.ToString('yyyy-MM-dd HH:mm:ss'))"
+# 3. Calculate Cutoff Dates
+$now = Get-Date
+$stagingCutoff = $now.AddDays(-$StagingRetentionDays)
+$productionCutoff = $now.AddDays(-$ProductionRetentionDays)
+Write-Info "Cutoffs: Staging < $($stagingCutoff.ToString('yyyy-MM-dd')), Production < $($productionCutoff.ToString('yyyy-MM-dd'))"
 Write-Host ""
 
-# Get all tags
-Write-Info "Fetching tags from repository: $Repository"
-try {
-    $tagsJson = az acr repository show-tags --name $RegistryName --repository $Repository --orderby time_desc --output json 2>$null
-    $tags = $tagsJson | ConvertFrom-Json
+# 4. Fetch Manifests (Bulk Operation)
+Write-Header "Analyzing Images"
+Write-Info "Fetching metadata for ALL images (this is efficient)..."
 
-    if ($null -eq $tags -or $tags.Count -eq 0) {
-        Write-Warning "No tags found in repository $Repository"
+try {
+    # Using list-metadata prevents N+1 API calls and handles OCI indices correctly
+    # We fetch ALL manifests to ensure we see old ones.
+    # Warning: For extremely large repos (10k+ tags), this might take a moment but is still faster than individual calls.
+    # We remove 2>$null to see errors if they happen, but usually az handles it.
+    $manifestsJson = az acr manifest list-metadata --registry $RegistryName --name $Repository --orderby time_desc --output json
+
+    if (-not $manifestsJson) {
+        Write-Warning "No manifests found or repository does not exist."
         exit 0
     }
 
-    Write-Success "Found $($tags.Count) tags"
+    $manifests = $manifestsJson | ConvertFrom-Json
+    if ($null -eq $manifests) {
+        Write-Warning "Manifest list is empty."
+        exit 0
+    }
+    Write-Success "Successfully retrieved $($manifests.Count) manifests."
 } catch {
-    Write-Error "Failed to fetch tags: $_"
+    Write-Error "Failed to fetch manifests. Error: $_"
     exit 1
 }
 
-# Initialize counters
-$stagingDeleted = 0
-$productionDeleted = 0
-$stagingSpaceSaved = 0
-$productionSpaceSaved = 0
+# 5. Process Tags
 $toDelete = @()
+$stagingStats = @{ Count = 0; SizeMB = 0 }
+$prodStats = @{ Count = 0; SizeMB = 0 }
 
-Write-Header "Analyzing Images"
+foreach ($manifest in $manifests) {
+    # Skip if no tags (dangling images are not target of this specific script logic, though they consume space)
+    # Check if tags property exists and is not null/empty
+    if ($null -eq $manifest.tags -or $manifest.tags.Count -eq 0) { continue }
 
-# Process each tag
-foreach ($tag in $tags) {
-    # Skip semantic version tags
-    if ($tag -match '^v\d+\.\d+\.\d+') {
-        Write-Success "Preserving semantic version: $tag"
-        continue
-    }
-
-    # Skip latest tags
-    if ($tag -like "*-latest" -or $tag -eq "latest") {
-        Write-Success "Preserving latest tag: $tag"
-        continue
-    }
-
-    # Get manifest details
+    # Use lastUpdateTime as the most reliable indicator of 'age'
     try {
-        $manifestJson = az acr manifest show --name "${Repository}:${tag}" --registry $RegistryName --output json 2>$null
-        $manifest = $manifestJson | ConvertFrom-Json
-
-        $createdAt = [DateTime]::Parse($manifest.created)
-        $imageSize = [long]$manifest.imageSize
-        $sizeMB = [math]::Round($imageSize / 1MB, 2)
-
+        $lastUpdate = [DateTime]::Parse($manifest.lastUpdateTime)
     } catch {
-        Write-Warning "Could not get manifest info for $tag, skipping"
+        Write-Warning "Could not parse date for digest $($manifest.digest), skipping."
         continue
     }
 
-    # Determine environment and cutoff
-    $isStaging = $false
-    $isProduction = $false
-    $cutoff = $stagingCutoff
-
-    if ($tag -like "staging-*") {
-        $isStaging = $true
-        $cutoff = $stagingCutoff
-    } elseif ($tag -like "production-*") {
-        $isProduction = $true
-        $cutoff = $productionCutoff
-    } else {
-        # Default to staging (shorter retention)
-        $isStaging = $true
-        $cutoff = $stagingCutoff
+    # Size calculation (handle 0 size for indices by checking if imageSize exists, though metadata usually has it)
+    $sizeMB = 0
+    if ($manifest | Get-Member -Name "imageSize") {
+         $sizeMB = [math]::Round($manifest.imageSize / 1MB, 2)
     }
 
-    # Check if older than cutoff
-    if ($createdAt -lt $cutoff) {
-        $envType = if ($isStaging) { "staging" } else { "production" }
-        Write-Warning "Marking for deletion: $tag ($envType, created $($createdAt.ToString('yyyy-MM-dd')), ${sizeMB}MB)"
-
-        $toDelete += [PSCustomObject]@{
-            Tag = $tag
-            Environment = $envType
-            CreatedAt = $createdAt
-            SizeMB = $sizeMB
-            IsStaging = $isStaging
+    foreach ($tag in $manifest.tags) {
+        # SKIP Special Tags
+        if ($tag -match '^v\d+\.\d+\.\d+' -or $tag -eq "latest" -or $tag -like "*-latest") {
+            Write-Success "Preserving: $tag (Semantic Version or Latest)"
+            continue
         }
 
-        if ($isStaging) {
-            $stagingDeleted++
-            $stagingSpaceSaved += $sizeMB
-        } else {
-            $productionDeleted++
-            $productionSpaceSaved += $sizeMB
+        # Determine Environment Policy
+        $isStaging = $true
+        $cutoff = $stagingCutoff
+        $envType = "staging"
+
+        if ($tag -like "production-*") {
+            $isStaging = $false
+            $cutoff = $productionCutoff
+            $envType = "production"
         }
-    } else {
-        Write-Success "Keeping recent image: $tag (created $($createdAt.ToString('yyyy-MM-dd')))"
+
+        # Check Eligibility
+        if ($lastUpdate -lt $cutoff) {
+            $ageDays = ($now - $lastUpdate).Days
+            Write-Warning "Marking for deletion: $tag ($envType, ${ageDays}d old, $sizeMB MB)"
+
+            $toDelete += [PSCustomObject]@{
+                Tag = $tag
+                Digest = $manifest.digest
+                Env = $envType
+                SizeMB = $sizeMB
+            }
+
+            if ($isStaging) {
+                $stagingStats.Count++
+                $stagingStats.SizeMB += $sizeMB
+            } else {
+                $prodStats.Count++
+                $prodStats.SizeMB += $sizeMB
+            }
+        }
     }
 }
 
-# Show summary and confirm
+# 6. Summary and Execution
 Write-Header "Cleanup Summary"
-Write-Host "Staging images to delete: $stagingDeleted (${stagingSpaceSaved}MB)"
-Write-Host "Production images to delete: $productionDeleted (${productionSpaceSaved}MB)"
-Write-Host "Total images to delete: $($toDelete.Count)"
-Write-Host "Total space to save: $([math]::Round($stagingSpaceSaved + $productionSpaceSaved, 2))MB"
-Write-Host ""
+Write-Info "Staging to delete:    $($stagingStats.Count) images (~$($stagingStats.SizeMB) MB derived)"
+Write-Info "Production to delete: $($prodStats.Count) images (~$($prodStats.SizeMB) MB derived)"
+Write-Info "Total items found:    $($toDelete.Count)"
 
 if ($toDelete.Count -eq 0) {
-    Write-Success "No images to delete!"
+    Write-Success "No images eligible for deletion. Repository is clean!"
     exit 0
 }
 
-# Confirm deletion
 if (-not $DryRun) {
-    Write-Warning "This will PERMANENTLY DELETE $($toDelete.Count) images from ACR!"
-    $confirmation = Read-Host "Type 'DELETE' to confirm"
-
-    if ($confirmation -ne "DELETE") {
-        Write-Info "Cleanup cancelled by user"
+    Write-Warning "You are about to PERMANENTLY DELETE $($toDelete.Count) tags."
+    $confirm = Read-Host "Type 'DELETE' to confirm"
+    if ($confirm -ne "DELETE") {
+        Write-Info "Operation cancelled."
         exit 0
     }
+    Write-Header "Executing Deletions"
+} else {
+    Write-Header "Preview Deletions (Dry Run)"
 }
 
-# Execute deletions
-Write-Header "$(if ($DryRun) { 'Preview' } else { 'Executing' }) Deletions"
-
 foreach ($item in $toDelete) {
+    $logMsg = "$($item.Tag) ($($item.Env))"
+
     if ($DryRun) {
-        Write-Info "[DRY RUN] Would delete: $($item.Tag)"
+        Write-Info "[DRY RUN] Would delete: $logMsg"
     } else {
         try {
+            # Deleting the tag. If it's the last tag, ACR usually deletes the manifest too.
             az acr repository delete --name $RegistryName --image "${Repository}:$($item.Tag)" --yes 2>$null | Out-Null
-            Write-Success "Deleted: $($item.Tag)"
+            Write-Success "Deleted: $logMsg"
         } catch {
-            Write-Error "Failed to delete $($item.Tag): $_"
+            Write-Error "Failed to delete $logMsg : $_"
         }
     }
 }
 
-# Final summary
-Write-Header "Cleanup Complete"
-Write-Success "$(if ($DryRun) { 'Preview completed' } else { 'Cleanup completed successfully' })"
-Write-Host ""
-Write-Host "Staging images processed: $stagingDeleted"
-Write-Host "Production images processed: $productionDeleted"
-Write-Host "Total space saved: $([math]::Round($stagingSpaceSaved + $productionSpaceSaved, 2))MB"
-
+Write-Header "Done"
 if ($DryRun) {
-    Write-Host ""
-    Write-Warning "This was a dry run. No images were actually deleted."
-    Write-Info "Run with -DryRun `$false to execute the cleanup."
+    Write-Warning "This was a DRY RUN. No changes were made."
+    Write-Info "Run with -DryRun `$false to execute cleanup."
+} else {
+    Write-Success "Cleanup operation completed."
 }

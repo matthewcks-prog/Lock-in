@@ -22,7 +22,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`manifest.json`**
   - Chrome Extension manifest (permissions, content scripts, background service worker, icons).
 
-- **`config.js`**
+- **`config/index.js`**
   - Generated from `extension/src/config.ts` during build.
   - Exposes `window.LOCKIN_CONFIG` (backend URL, Supabase URL, Supabase anon key) from `.env`-driven `VITE_*` values.
   - Single source of truth for runtime URLs.
@@ -152,9 +152,10 @@ This is a living overview of the current codebase. Update it whenever files move
   - Configures middleware (CORS, JSON parsing, logging).
   - Wires up routes and error handling.
 
-- **`config.js`**
+- **`config/index.js`**
   - Centralized configuration (env vars, rate limits, CORS origins).
   - Asset upload settings: bucket names, max size, MIME allow-lists, and chat asset signed URL TTL.
+  - Prompt templates live under `config/prompts.js`.
 
 ### Routes & Controllers
 
@@ -168,8 +169,8 @@ This is a living overview of the current codebase. Update it whenever files move
   - Authenticated routes for transcript caching plus job creation, chunk upload, finalize, cancel, and status polling.
 
 - **`controllers/assistant/ai.js`**
-  - Handles AI processing requests and idempotent chat creation.
-  - Input validation and error handling.
+  - Thin HTTP handler for `/api/lockin`.
+  - Delegates validation, rate limits, and orchestration to `services/assistant/assistantService.js`.
 
 - **`controllers/assistant/chat.js`**
   - Chat session CRUD/listing and message retrieval.
@@ -178,9 +179,9 @@ This is a living overview of the current codebase. Update it whenever files move
   - Chat title generation (OpenAI summarization + persistence).
 
 - **`controllers/assistant/assets.js`**
-  - Chat message attachment upload/list/delete via Supabase Storage.
+  - Chat message attachment upload/list/delete via `services/assistant/chatAssetsService.js`.
   - Supports images, documents, and code files, returning signed URLs for private assets.
-  - Provides `getAssetForVision()` to fetch base64-encoded images for AI processing.
+  - Vision/base64 extraction lives in the service layer (`getAssetForVision`, `resolveAttachmentsForMessage`).
 
 - **`controllers/notes/crud.js`**
   - Notes CRUD HTTP translation; delegates to `services/notes/notesService.js`.
@@ -197,34 +198,70 @@ This is a living overview of the current codebase. Update it whenever files move
 
 ### Data Layer
 
-- **`chatRepository.js`**
+- **`repositories/chatRepository.js`**
   - Database access layer for chats and chat messages (Supabase).
 
-- **`notesRepository.js`**
+- **`repositories/notesRepository.js`**
   - Data access for notes, embeddings, and ownership checks.
 
-- **`noteAssetsRepository.js`**
+- **`repositories/noteAssetsRepository.js`**
   - Data access for the `note_assets` table (create/list/get/delete).
 
-- **`chatAssetsRepository.js`**
+- **`repositories/chatAssetsRepository.js`**
   - Data access for the `chat_message_assets` table (create/list/get/delete/link).
 
-- **`transcriptsRepository.js`**
+- **`repositories/transcriptsRepository.js`**
   - Data access for per-user transcript cache, transcript job records, chunk tracking, and upload rate windows.
 
-- **`supabaseClient.js`**
+- **`repositories/feedbackRepository.js`**
+  - Feedback persistence.
+
+- **`repositories/rateLimitRepository.js`**
+  - Rate limit counters for AI requests and asset uploads.
+
+- **`db/supabaseClient.js`**
   - Configured Supabase client instance used across the data layer.
 
 ### Services
 
-- **`services/transcriptsService.js`**
+- **`services/assistant/assistantService.js`**
+  - `/api/lockin` orchestration: validation, rate limits, idempotency, chat persistence, and LLM calls.
+
+- **`services/assistant/chatService.js`**
+  - Chat CRUD/listing + message creation.
+
+- **`services/assistant/chatAssetsService.js`**
+  - Chat asset lifecycle (upload/list/delete) with storage integration, signed URLs, and attachment resolution for LLM calls.
+
+- **`services/assistant/chatTitleService.js`**
+  - Chat title generation and persistence.
+
+- **`services/llmClient.js`**
+  - LLM orchestration + prompt construction for structured responses and chat titles.
+
+- **`services/embeddings.js`**
+  - Embeddings service wrapper (Azure primary, OpenAI fallback).
+
+- **`services/rateLimitService.js`**
+  - Enforces per-user daily limits for AI requests and asset uploads.
+
+- **`services/feedbackService.js`**
+  - Feedback validation + persistence orchestration.
+
+- **`services/transcripts/transcriptsService.js`**
   - Handles ffmpeg audio extraction, segmentation, STT, processing heartbeats, and transcript job cleanup/recovery.
 
-- **`services/transcriptCacheService.js`**
+- **`services/transcripts/transcriptJobsService.js`**
+  - Transcript job lifecycle coordination (create/upload/finalize/cancel/status/cache).
+
+- **`services/transcripts/transcriptCacheService.js`**
   - Validates and upserts transcript cache entries from extension feature actions.
 
-- **`services/transcriptStorage.js`**
+- **`services/transcripts/transcriptStorage.js`**
   - Supabase Storage wrapper for transcript job chunks (`transcript-jobs` bucket).
+
+- **`services/transcripts/transcriptionService.js`**
+  - Azure Speech + Whisper fallback transcription wrapper.
 
 - **`services/notes/notesService.js`**
   - Note creation/update orchestration: content normalization, embedding generation, idempotency, optimistic locking, and asset cleanup on delete.
@@ -237,21 +274,30 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`providers/llmProviderFactory.js`**
   - Creates the primary Azure OpenAI client and optional OpenAI fallback client.
 
+- **`providers/embeddingsFactory.js`**
+  - Embeddings client factory with Azure primary + OpenAI fallback.
+
+- **`providers/transcriptionFactory.js`**
+  - Transcription client factory (Azure Speech + Whisper fallback).
+
+- **`providers/storageProvider.js`**
+  - Supabase Storage wrapper used by asset and transcript services.
+
 - **`providers/withFallback.js`**
   - Generic retry + fallback wrapper with exponential backoff and structured logging.
 
 ### External Services
 
-- **`openaiClient.js`**
-  - LLM SDK wrapper (Azure OpenAI primary + OpenAI fallback), prompt construction, response formatting, and audio transcription.
+- **`services/llmClient.js`**
+  - LLM SDK wrapper (OpenAI primary + optional fallback), prompt construction, and response formatting for chat + structured responses.
 
 ### Middleware
 
-- **`authMiddleware.js`**
+- **`middleware/authMiddleware.js`**
   - Validates Supabase JWT tokens and attaches user context.
 
-- **`rateLimiter.js`**
-  - Per-user rate limiting backed by Supabase (AI requests + chat asset uploads).
+- **`middleware/errorHandler.js`**
+  - Centralized error-to-response mapping.
 
 - **`middleware/uploadMiddleware.js`**
   - Multer-based in-memory upload handler with size and MIME validation for note assets.
@@ -305,7 +351,7 @@ See [docs/testing/BACKEND_TESTING.md](../testing/BACKEND_TESTING.md) for detaile
 ### Backend
 
 1. **Layered architecture**: Routes -> Controllers -> Services -> Repositories -> Database.
-2. **Middleware chain**: Auth -> Rate Limit -> Validation -> Handler.
+2. **Middleware chain**: Auth -> Validation -> Handler. Rate limiting is enforced inside `services/rateLimitService.js` (used by assistant + chat asset flows).
 3. **Centralized error handling**: `middleware/errorHandler.js` provides consistent error responses with proper codes and status mapping.
 4. **Configuration**: All extension env vars accessed through `extension/config.js` (generated from `extension/src/config.ts` with Vite `VITE_*` env injection).
 5. **Optimistic locking**: Notes support `If-Unmodified-Since` header for conflict detection.
@@ -388,7 +434,7 @@ The system is designed to handle thousands of concurrent users:
 - **Extension behavior & UI**: Start with `extension/contentScript-react.js` and helpers in `extension/content/`, then the built React bundle `extension/dist/ui/index.js` (source in `ui/extension/index.tsx`).
 - **Backend request flow**: Start with `backend/routes/assistantRoutes.js`, then `controllers/assistant/ai.js` (AI flow) or `controllers/assistant/chat.js` (chat list/detail).
 - **Auth & persistence**: Supabase auth client lives in `/api/auth.ts` and is bundled to the extension via `extension/dist/libs/initApi.js` (`window.LockInAuth`); backend enforcement via `backend/middleware/authMiddleware.js`.
-- **API communication**: Use the bundled `/api/client.ts` exposed through `extension/dist/libs/initApi.js` (`window.LockInAPI`); backend logic in `openaiClient.js`. The client includes typed methods for note assets (`uploadNoteAsset`, `listNoteAssets`, `deleteNoteAsset`) that return `NoteAsset` objects with camelCase fields.
+- **API communication**: Use the bundled `/api/client.ts` exposed through `extension/dist/libs/initApi.js` (`window.LockInAPI`); backend logic in `services/assistant/assistantService.js` + `services/llmClient.js`. The client includes typed methods for note assets (`uploadNoteAsset`, `listNoteAssets`, `deleteNoteAsset`) that return `NoteAsset` objects with camelCase fields.
 
 ## MCP Tooling
 

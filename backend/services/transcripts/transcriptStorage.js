@@ -1,5 +1,5 @@
-const { supabase } = require('../supabaseClient');
-const { TRANSCRIPT_JOBS_BUCKET } = require('../config');
+const { supabase } = require('../../db/supabaseClient');
+const { TRANSCRIPT_JOBS_BUCKET } = require('../../config');
 
 const CHUNK_INDEX_PAD = 6;
 

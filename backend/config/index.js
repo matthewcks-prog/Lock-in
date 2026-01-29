@@ -7,7 +7,7 @@
  */
 
 const path = require('path');
-const chatLimits = require('../core/config/chatLimits.json');
+const chatLimits = require('../../core/config/chatLimits.json');
 
 // =============================================================================
 // Environment Selection & Supabase Configuration
@@ -260,7 +260,7 @@ validateAzureOpenAIConfig();
 const TRANSCRIPTION_MODEL = OPENAI_TRANSCRIPTION_MODEL;
 const TRANSCRIPTION_SEGMENT_MAX_MB = parseInt(process.env.TRANSCRIPTION_SEGMENT_MAX_MB, 10) || 24;
 const TRANSCRIPTION_TEMP_DIR =
-  process.env.TRANSCRIPTION_TEMP_DIR || path.join(__dirname, 'tmp', 'transcripts');
+  process.env.TRANSCRIPTION_TEMP_DIR || path.join(__dirname, '..', 'tmp', 'transcripts');
 const TRANSCRIPT_CHUNK_MAX_BYTES =
   parseInt(process.env.TRANSCRIPT_CHUNK_MAX_BYTES, 10) || 8 * 1024 * 1024;
 const TRANSCRIPT_DAILY_JOB_LIMIT = parseInt(process.env.TRANSCRIPT_DAILY_JOB_LIMIT, 10) || 20;

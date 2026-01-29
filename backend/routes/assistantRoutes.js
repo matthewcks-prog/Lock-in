@@ -5,7 +5,7 @@
  */
 
 const express = require('express');
-const { requireSupabaseUser } = require('../authMiddleware');
+const { requireSupabaseUser } = require('../middleware/authMiddleware');
 const { handleLockinRequest } = require('../controllers/assistant/ai');
 const {
   createChatSession,

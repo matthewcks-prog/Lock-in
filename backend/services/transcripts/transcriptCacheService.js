@@ -1,5 +1,5 @@
-const { ValidationError } = require('../middleware/errorHandler');
-const { upsertTranscriptCache } = require('../repositories/transcriptsRepository');
+const { ValidationError } = require('../../errors');
+const { upsertTranscriptCache } = require('../../repositories/transcriptsRepository');
 
 function coerceNumber(value) {
   const num = Number(value);

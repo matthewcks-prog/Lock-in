@@ -8,8 +8,8 @@ process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-api-key';
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { supabase } = require('./supabaseClient');
-const { updateChatTitle } = require('./chatRepository');
+const { supabase } = require('../../db/supabaseClient');
+const { updateChatTitle } = require('../chatRepository');
 
 test('updateChatTitle updates the chat row for the user', async (t) => {
   const calls = [];

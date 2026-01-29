@@ -1,6 +1,6 @@
 // backend/repositories/feedbackRepository.js
 
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../db/supabaseClient');
 
 /**
  * Repository for feedback CRUD operations.

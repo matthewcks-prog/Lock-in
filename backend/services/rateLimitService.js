@@ -1,4 +1,7 @@
-const { supabase } = require('./supabaseClient');
+const {
+  countAiRequestsSince,
+  getChatAssetUsageSince,
+} = require('../repositories/rateLimitRepository');
 
 function getStartOfTodayUTC() {
   const now = new Date();
@@ -17,17 +20,7 @@ async function checkDailyLimit(userId, maxPerDay = 100) {
 
   const startOfToday = getStartOfTodayUTC().toISOString();
 
-  const { error, count } = await supabase
-    .from('ai_requests')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('created_at', startOfToday);
-
-  if (error) {
-    throw new Error(`Failed to check daily limit: ${error.message}`);
-  }
-
-  const used = typeof count === 'number' ? count : 0;
+  const used = await countAiRequestsSince({ userId, since: startOfToday });
 
   if (used >= upperLimit) {
     return { allowed: false, remaining: 0 };
@@ -54,18 +47,10 @@ async function checkChatAssetDailyLimits(
   }
 
   const startOfToday = getStartOfTodayUTC().toISOString();
-  const { data, error, count } = await supabase
-    .from('chat_message_assets')
-    .select('file_size', { count: 'exact' })
-    .eq('user_id', userId)
-    .gte('created_at', startOfToday);
-
-  if (error) {
-    throw new Error(`Failed to check chat asset limits: ${error.message}`);
-  }
-
-  const usedUploads = typeof count === 'number' ? count : 0;
-  const usedBytes = (data || []).reduce((sum, row) => sum + (row.file_size || 0), 0);
+  const { usedUploads, usedBytes } = await getChatAssetUsageSince({
+    userId,
+    since: startOfToday,
+  });
 
   const remainingUploads = Number.isFinite(uploadLimit)
     ? Math.max(uploadLimit - usedUploads, 0)

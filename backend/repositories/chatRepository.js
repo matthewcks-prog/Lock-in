@@ -1,5 +1,5 @@
-const { supabase } = require('./supabaseClient');
-const { DEFAULT_CHAT_LIST_LIMIT } = require('./config');
+const { supabase } = require('../db/supabaseClient');
+const { DEFAULT_CHAT_LIST_LIMIT } = require('../config');
 
 /**
  * Create a new chat row for the given user.
@@ -173,6 +173,40 @@ async function updateChatTitle(userId, chatId, title) {
   return data;
 }
 
+/**
+ * Delete chat messages for a chat owned by user.
+ * @param {object} params
+ * @param {string} params.userId
+ * @param {string} params.chatId
+ * @returns {Promise<void>}
+ */
+async function deleteChatMessages({ userId, chatId }) {
+  const { error } = await supabase
+    .from('chat_messages')
+    .delete()
+    .eq('chat_id', chatId)
+    .eq('user_id', userId);
+
+  if (error) {
+    throw new Error(`Failed to delete chat messages: ${error.message}`);
+  }
+}
+
+/**
+ * Delete a chat owned by user.
+ * @param {object} params
+ * @param {string} params.userId
+ * @param {string} params.chatId
+ * @returns {Promise<void>}
+ */
+async function deleteChat({ userId, chatId }) {
+  const { error } = await supabase.from('chats').delete().eq('id', chatId).eq('user_id', userId);
+
+  if (error) {
+    throw new Error(`Failed to delete chat: ${error.message}`);
+  }
+}
+
 module.exports = {
   createChat,
   getChatById,
@@ -181,4 +215,6 @@ module.exports = {
   getRecentChats,
   getChatMessages,
   updateChatTitle,
+  deleteChatMessages,
+  deleteChat,
 };
