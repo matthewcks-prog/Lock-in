@@ -142,7 +142,7 @@ The `/backend` directory contains the **Node.js/Express API server** that:
 ```javascript
 // ✅ GOOD
 const express = require('express');
-const { createNote, listNotes } = require('../controllers/notesController');
+const { createNote, listNotes } = require('../controllers/notes/crud');
 const { authenticate } = require('../middleware/authMiddleware');
 
 router.post('/notes', authenticate, createNote);
@@ -464,7 +464,7 @@ function validateNoteInput(body) {
 **MUST mock service layer**:
 
 ```javascript
-// controllers/__tests__/notesController.test.js
+// controllers/__tests__/notesCrud.test.js
 const { test } = require('node:test');
 const assert = require('node:assert');
 

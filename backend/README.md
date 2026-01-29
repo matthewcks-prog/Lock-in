@@ -84,12 +84,24 @@ backend/
 ├── utils/
 │   └── validateEnv.js          # Environment validation
 ├── routes/
-│   ├── lockinRoutes.js         # Chat/processing API routes
-│   └── noteRoutes.js           # Notes API routes
+│   ├── assistantRoutes.js      # Chat/processing API routes
+│   ├── noteRoutes.js           # Notes API routes
+│   ├── transcriptsRoutes.js    # Transcript job routes
+│   └── feedbackRoutes.js       # User feedback routes
 ├── controllers/
-│   ├── lockinController.js     # Chat/processing request handlers
-│   ├── notesController.js      # Notes CRUD operations
-│   └── notesChatController.js  # Notes-based chat (RAG)
+│   ├── assistant/
+│   │   ├── ai.js              # AI request handlers
+│   │   ├── chat.js            # Chat CRUD/listing
+│   │   ├── title.js           # Chat title generation
+│   │   └── assets.js          # Chat attachments
+│   ├── notes/
+│   │   ├── crud.js            # Notes CRUD operations
+│   │   ├── chat.js            # Notes-based chat (RAG)
+│   │   └── assets.js          # Note asset upload/list/delete
+│   ├── transcripts/
+│   │   └── index.js           # Transcript cache + job lifecycle
+│   └── feedback/
+│       └── index.js           # User feedback handlers
 ├── repositories/
 │   └── notesRepository.js      # Database operations for notes
 ├── openaiClient.js             # LLM provider integration (Azure OpenAI + fallback)

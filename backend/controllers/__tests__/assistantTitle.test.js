@@ -1,5 +1,5 @@
 /**
- * Unit tests for lockinController title generation and storage
+ * Unit tests for assistant chat title generation and storage
  */
 
 // Test environment setup - use _DEV suffixed vars as per the environment config pattern

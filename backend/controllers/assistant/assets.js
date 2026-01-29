@@ -2,21 +2,21 @@
  * Chat Assets Controller
  *
  * Handles file upload, listing, and deletion for chat message attachments.
- * Mirrors the pattern from noteAssetsController.js
+ * Mirrors the pattern from notes/assets.js
  */
 
 const { randomUUID } = require('crypto');
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../../supabaseClient');
 const {
   CHAT_ASSETS_BUCKET,
   CHAT_ASSET_DAILY_UPLOAD_LIMIT,
   CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT,
   CHAT_ASSET_SIGNED_URL_TTL_SECONDS,
-} = require('../config');
-const chatAssetsRepository = require('../repositories/chatAssetsRepository');
-const { getChatById } = require('../chatRepository');
-const { validateChatAssetFile } = require('../utils/chatAssetValidation');
-const { checkChatAssetDailyLimits } = require('../rateLimiter');
+} = require('../../config');
+const chatAssetsRepository = require('../../repositories/chatAssetsRepository');
+const { getChatById } = require('../../chatRepository');
+const { validateChatAssetFile } = require('../../utils/chatAssetValidation');
+const { checkChatAssetDailyLimits } = require('../../rateLimiter');
 
 async function createSignedAssetUrl(storagePath) {
   const { data, error } = await supabase.storage

@@ -6,19 +6,19 @@
 
 const express = require('express');
 const { requireSupabaseUser } = require('../authMiddleware');
+const { handleLockinRequest } = require('../controllers/assistant/ai');
 const {
-  handleLockinRequest,
   createChatSession,
   listChats,
   deleteChat,
   listChatMessages,
-  generateChatTitle,
-} = require('../controllers/lockinController');
+} = require('../controllers/assistant/chat');
+const { generateChatTitle } = require('../controllers/assistant/title');
 const {
   uploadChatAsset,
   listChatAssets,
   deleteChatAsset,
-} = require('../controllers/chatAssetsController');
+} = require('../controllers/assistant/assets');
 const { assetUploadMiddleware } = require('../middleware/uploadMiddleware');
 
 const router = express.Router();

@@ -1,6 +1,6 @@
-// backend/controllers/feedbackController.js
+// backend/controllers/feedback/index.js
 
-const feedbackRepo = require('../repositories/feedbackRepository');
+const feedbackRepo = require('../../repositories/feedbackRepository');
 
 /**
  * Feedback controller for handling user-submitted feedback.

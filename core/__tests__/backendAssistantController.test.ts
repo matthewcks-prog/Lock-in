@@ -38,25 +38,25 @@ type TestRequest = {
   get?: (key: string) => string | undefined;
 };
 
-type LockinHandler = (req: TestRequest, res: TestResponse) => Promise<void> | void;
+type AssistantHandler = (req: TestRequest, res: TestResponse) => Promise<void> | void;
 
-let handleLockinRequest: LockinHandler;
+let handleLockinRequest: AssistantHandler;
 
 function resetModule(modulePath: string) {
   delete require.cache[require.resolve(modulePath)];
 }
 
-function loadLockinController() {
-  resetModule('../../backend/controllers/lockinController.js');
-  resetModule('../../backend/controllers/lockinController');
+function loadAssistantController() {
+  resetModule('../../backend/controllers/assistant/ai.js');
+  resetModule('../../backend/controllers/assistant/ai');
   resetModule('../../backend/openaiClient.js');
   resetModule('../../backend/openaiClient');
   resetModule('../../backend/chatRepository.js');
   resetModule('../../backend/chatRepository');
   resetModule('../../backend/rateLimiter.js');
   resetModule('../../backend/rateLimiter');
-  resetModule('../../backend/controllers/chatAssetsController.js');
-  resetModule('../../backend/controllers/chatAssetsController');
+  resetModule('../../backend/controllers/assistant/assets.js');
+  resetModule('../../backend/controllers/assistant/assets');
   resetModule('../../backend/repositories/chatAssetsRepository.js');
   resetModule('../../backend/repositories/chatAssetsRepository');
 
@@ -91,21 +91,21 @@ function loadLockinController() {
   };
   rateLimiter.checkDailyLimit = checkDailyLimit;
 
-  const chatAssetsController = require('../../backend/controllers/chatAssetsController.js') as {
+  const assistantAssets = require('../../backend/controllers/assistant/assets.js') as {
     getAssetForVision?: typeof getAssetForVision;
     getAssetTextContent?: typeof getAssetTextContent;
     createSignedAssetUrl?: typeof createSignedAssetUrl;
   };
-  chatAssetsController.getAssetForVision = getAssetForVision;
-  chatAssetsController.getAssetTextContent = getAssetTextContent;
-  chatAssetsController.createSignedAssetUrl = createSignedAssetUrl;
+  assistantAssets.getAssetForVision = getAssetForVision;
+  assistantAssets.getAssetTextContent = getAssetTextContent;
+  assistantAssets.createSignedAssetUrl = createSignedAssetUrl;
 
   const chatAssetsRepoModule =
     require('../../backend/repositories/chatAssetsRepository.js') as Record<string, unknown>;
   Object.assign(chatAssetsRepoModule, chatAssetsRepository);
 
-  ({ handleLockinRequest } = require('../../backend/controllers/lockinController.js') as {
-    handleLockinRequest: LockinHandler;
+  ({ handleLockinRequest } = require('../../backend/controllers/assistant/ai.js') as {
+    handleLockinRequest: AssistantHandler;
   });
 }
 
@@ -131,11 +131,11 @@ function createRes(): TestResponse {
   };
 }
 
-describe('lockinController attachments validation', () => {
+describe('assistant AI attachments validation', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     checkDailyLimit.mockResolvedValue({ allowed: true });
-    loadLockinController();
+    loadAssistantController();
   });
 
   it('returns 400 when selection and attachments are missing', async () => {

@@ -114,7 +114,7 @@ function createReq({ userId, jobId, body, headers }) {
 function loadController({ repo, service }) {
   const repoPath = require.resolve('../../repositories/transcriptsRepository');
   const servicePath = require.resolve('../../services/transcriptsService');
-  const controllerPath = require.resolve('../../controllers/transcriptsController');
+  const controllerPath = require.resolve('../../controllers/transcripts');
 
   const originalRepo = require.cache[repoPath];
   const originalService = require.cache[servicePath];
@@ -134,7 +134,7 @@ function loadController({ repo, service }) {
   require.cache[servicePath] = serviceModule;
   delete require.cache[controllerPath];
 
-  const controller = require('../../controllers/transcriptsController');
+  const controller = require('../../controllers/transcripts');
 
   return {
     controller,

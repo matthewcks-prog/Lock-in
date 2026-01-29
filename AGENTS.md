@@ -174,23 +174,92 @@ This project uses a **stable contract + living snapshot** documentation approach
 │  └──────────────┴──────────────┴──────────────────────┘│
 └─────────────────────────────────────────────────────────┘
                           ↓
+```
+
 ┌─────────────────────────────────────────────────────────┐
-│                   BACKEND API (Node.js)                  │
-│  Routes → Controllers → Services → Repos → DB/APIs       │
+│ BACKEND API (Node.js) │
+│ Routes → Controllers → Services → Repos → DB/APIs │
+│ │
+│ Layer Enforcement Rules (STRICT): │
+│ • Routes: Define endpoints, apply middleware │
+│ • Controllers: HTTP only (parse req, call service, res) │
+│ • Services: Business logic, orchestration │
+│ • Repositories: Data access (Supabase queries) │
+│ • Providers: External API wrappers (OpenAI, etc.) │
 └─────────────────────────────────────────────────────────┘
-```
 
-### Layer Dependency Rules
+````
 
-**MUST follow these dependencies** (arrows show allowed direction):
+### Backend Layering Rules (MANDATORY)
 
-```
-Extension → Core → (nothing)
-Extension → API → Core → (nothing)
-Extension → Integrations → Core → (nothing)
-Backend Controllers → Backend Services → Backend Repos → Supabase
-Backend Services → Backend Providers → External APIs
-```
+**Controllers (`/backend/controllers`):**
+- **ALLOWED**: HTTP concerns (req/res), calling services, formatting responses
+- **FORBIDDEN**: Business logic, data transformation, validation logic, direct DB access
+- **MAX SIZE**: 50 lines per function (guideline)
+- **PATTERN**:
+  ```javascript
+  async function createNote(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { title, content } = req.body; // Already validated by middleware
+
+      // Delegate to service
+      const note = await noteService.create({ userId, title, content });
+
+      res.status(201).json(note);
+    } catch (err) {
+      next(err);
+    }
+  }
+````
+
+**Services (`/backend/services`):**
+
+- **PURPOSE**: Business logic, orchestration, domain rules
+- **ALLOWED**: Calling repositories, calling providers, data transformation, complex logic
+- **FORBIDDEN**: HTTP concerns (req/res), direct Supabase client usage
+- **PATTERN**:
+
+  ```javascript
+  async function create({ userId, title, content }) {
+    // Business logic here
+    const processed = contentService.processNoteContent(content);
+    const embedding = await generateEmbedding(processed.plainText);
+
+    return await notesRepo.createNote({
+      userId,
+      title: validateTitle(title),
+      ...processed,
+      embedding,
+    });
+  }
+  ```
+
+**Validators (`/backend/validators`):**
+
+- **TOOL**: Zod schemas for declarative validation
+- **USAGE**: Apply via `validate(schema)` middleware in routes
+- **NO IMPERATIVE VALIDATION** in controllers
+- **PATTERN**:
+
+  ```javascript
+  const createNoteSchema = z.object({
+    title: z.string().max(500).optional(),
+    content: z.string().min(1),
+  });
+
+  // In routes:
+  router.post('/notes', validate(createNoteSchema), createNote);
+  ```
+
+**Repositories (`/backend/repositories`):**
+
+- **PURPOSE**: Data access abstraction
+- **ALLOWED**: Supabase queries, data mapping
+- **FORBIDDEN**: Business logic, validation
+- **EXAMPLE**: `notesRepo.createNote()`, `notesRepo.searchNotesByEmbedding()`
+
+````
 
 **MUST NOT**:
 
@@ -220,7 +289,7 @@ ErrorCodes = {
 throw new AuthError(ErrorCodes.AUTH_INVALID_TOKEN, 'Token expired');
 throw new ValidationError(ErrorCodes.VALIDATION_INVALID_INPUT, 'Invalid email');
 throw new NetworkError(ErrorCodes.NETWORK_TIMEOUT, 'Request timed out');
-```
+````
 
 **Error Handling Rules**:
 
@@ -503,7 +572,7 @@ const mockSupabase = {
 **Examples**:
 
 - `background.js` handling routing + fetching + business logic
-- `lockinController.js` validating + building prompts + calling DB + formatting
+- `assistant/ai.js` validating + building prompts + calling DB + formatting
 
 **Prevention**:
 
@@ -531,39 +600,102 @@ async function handleRequest(req, res) {
 }
 ```
 
-### 2. Layering Violations
+### 2. Controller Layering Violations
 
-**Symptom**: Controllers calling DB directly, services depending on Express
+**Symptom**: Controllers containing business logic, validation, or data transformation
 
 **Examples**:
 
-- Controller imports `supabaseClient.js`
-- Service function takes `req, res` parameters
-- Core code imports `chrome.storage`
+- Controller manually parsing JSON, stripping HTML, generating embeddings
+- Controller building AI prompts inline
+- Controller directly accessing `supabase` client
+- Imperative validation with `if` statements instead of Zod middleware
 
 **Prevention**:
 
-- **MUST**: Review imports in PR (controllers should NOT import Supabase)
-- **SHOULD**: Use ESLint rules to enforce boundaries
-- **MUST**: Reject PRs with cross-layer imports
+- **MUST**: Use Zod validation middleware (no `if (!field) return res.status(400)`)
+- **MUST**: Delegate business logic to services
+- **MUST**: Use repositories for data access (controllers NEVER import `supabaseClient`)
+- **SHOULD**: Keep controllers under 50 lines per function
 
 **Fix**:
 
 ```javascript
-// ❌ BAD - Controller accesses DB
+// ❌ BAD - Business logic in controller
 async function createNote(req, res) {
-  const note = await supabase.from('notes').insert(req.body);
+  // Manual validation
+  if (!req.body.content || req.body.content.length === 0) {
+    return res.status(400).json({ error: 'Content required' });
+  }
+
+  // Business logic (HTML stripping, embedding)
+  const plainText = req.body.content.replace(/<[^>]*>/g, ' ').trim();
+  const embedding = await embedText(plainText);
+
+  // Direct DB access
+  const { data } = await supabase.from('notes').insert({ content: plainText, embedding });
+  res.json(data);
 }
 
-// ✅ GOOD - Controller calls service
-async function createNote(req, res) {
-  const validated = validateNoteInput(req.body);
-  const note = await noteService.create(validated, req.user.id);
-  res.json(note);
+// ✅ GOOD - Thin controller
+async function createNote(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { title, content } = req.body; // Validated by Zod middleware
+
+    // Delegate to service
+    const note = await noteService.create({ userId, title, content });
+
+    res.status(201).json(note);
+  } catch (err) {
+    next(err);
+  }
 }
 ```
 
-### 3. Scattered Prompts
+### 3. Missing Validation Middleware
+
+**Symptom**: Controllers cluttered with imperative validation checks
+
+**Examples**:
+
+```javascript
+// ❌ BAD
+if (!query || typeof query !== 'string' || query.trim().length === 0) {
+  return res.status(400).json({ error: 'Invalid query' });
+}
+if (!isValidUUID(noteId)) {
+  return res.status(400).json({ error: 'Invalid ID' });
+}
+```
+
+**Prevention**:
+
+- **MUST**: Define Zod schemas in `/backend/validators`
+- **MUST**: Apply validation middleware in routes: `router.post('/notes', validate(createNoteSchema), createNote)`
+- **MUST**: Remove all imperative validation from controllers
+
+**Fix**:
+
+```javascript
+// ✅ GOOD - Validator
+const createNoteSchema = z.object({
+  query: z.string().min(1),
+  noteId: z.string().uuid(),
+});
+
+// Route
+router.post('/notes/search', validate(searchSchema), searchNotes);
+
+// Controller (no validation needed)
+async function searchNotes(req, res) {
+  const { query } = req.body; // Already validated
+  const results = await noteService.search(req.user.id, query);
+  res.json(results);
+}
+```
+
+### 4. Scattered Prompts
 
 **Symptom**: Prompt strings in controllers, hardcoded system messages
 

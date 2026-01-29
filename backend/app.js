@@ -8,7 +8,7 @@
 const express = require('express');
 const cors = require('cors');
 const { MAX_SELECTION_LENGTH, MAX_USER_MESSAGE_LENGTH, isOriginAllowed } = require('./config');
-const lockinRoutes = require('./routes/lockinRoutes');
+const assistantRoutes = require('./routes/assistantRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
@@ -71,7 +71,7 @@ function createApp() {
   }
 
   // API routes
-  app.use('/api', lockinRoutes);
+  app.use('/api', assistantRoutes);
   app.use('/api', noteRoutes);
   app.use('/api', transcriptsRoutes);
   app.use('/api', feedbackRoutes);

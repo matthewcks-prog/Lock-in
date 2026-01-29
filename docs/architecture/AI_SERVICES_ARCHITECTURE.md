@@ -46,8 +46,8 @@ backend/openaiClient.js                  (chat orchestration & prompts)
 - Factory: `backend/providers/embeddingsFactory.js` (142 lines)
 - Service: `backend/services/embeddings.js` (87 lines)
 - Consumers:
-  - `backend/controllers/notesController.js` (semantic search, note embeddings)
-  - `backend/controllers/notesChatController.js` (RAG queries)
+- `backend/controllers/notes/crud.js` (semantic search, note embeddings)
+- `backend/controllers/notes/chat.js` (RAG queries)
 
 **Key Features:**
 
@@ -62,8 +62,8 @@ backend/openaiClient.js                  (chat orchestration & prompts)
 backend/providers/embeddingsFactory.js       (factory + fallback logic)
 backend/providers/azureEmbeddingsClient.js   (Azure-specific implementation)
 backend/services/embeddings.js               (service wrapper)
-backend/controllers/notesController.js       (consumer: note embeddings)
-backend/controllers/notesChatController.js   (consumer: RAG queries)
+backend/controllers/notes/crud.js            (consumer: note embeddings)
+backend/controllers/notes/chat.js            (consumer: RAG queries)
 ```
 
 ---
@@ -132,9 +132,11 @@ backend/services/transcriptsService.js          (consumer: job orchestration)
 
 - **Purpose:** HTTP request handling, business logic coordination
 - **Files:**
-  - `lockinController.js` - Main chat endpoint (uses openaiClient)
-  - `notesController.js` - Note CRUD + embeddings (uses embeddings service)
-  - `notesChatController.js` - RAG queries (uses embeddings service + openaiClient)
+  - `assistant/ai.js` - Main chat endpoint (uses openaiClient)
+  - `assistant/chat.js` - Chat listing and message retrieval
+  - `assistant/title.js` - Chat title generation
+  - `notes/crud.js` - Note CRUD + embeddings (uses embeddings service)
+  - `notes/chat.js` - RAG queries (uses embeddings service + openaiClient)
 
 ---
 

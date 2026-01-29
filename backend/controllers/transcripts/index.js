@@ -1,4 +1,4 @@
-const { AppError, ValidationError, NotFoundError } = require('../middleware/errorHandler');
+const { AppError, ValidationError, NotFoundError } = require('../../middleware/errorHandler');
 const {
   createTranscriptJob,
   getTranscriptJob,
@@ -11,12 +11,12 @@ const {
   getTranscriptJobChunkStats,
   listActiveTranscriptJobs,
   consumeTranscriptUploadBytes,
-} = require('../repositories/transcriptsRepository');
+} = require('../../repositories/transcriptsRepository');
 const {
   appendTranscriptChunk,
   startTranscriptProcessing,
-} = require('../services/transcriptsService');
-const { cacheExternalTranscript } = require('../services/transcriptCacheService');
+} = require('../../services/transcriptsService');
+const { cacheExternalTranscript } = require('../../services/transcriptCacheService');
 const {
   TRANSCRIPT_DAILY_JOB_LIMIT,
   TRANSCRIPT_CHUNK_MAX_BYTES,
@@ -25,7 +25,7 @@ const {
   TRANSCRIPT_MAX_DURATION_MINUTES,
   TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE,
   TRANSCRIPT_PROCESSING_STALE_MINUTES,
-} = require('../config');
+} = require('../../config');
 
 const JOB_STATUS = {
   CREATED: 'created',

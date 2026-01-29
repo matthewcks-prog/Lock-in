@@ -1,7 +1,7 @@
 const express = require('express');
 const { requireSupabaseUser } = require('../authMiddleware');
 const { asyncHandler } = require('../middleware/errorHandler');
-const transcriptsController = require('../controllers/transcriptsController');
+const transcriptsController = require('../controllers/transcripts');
 const { TRANSCRIPT_CHUNK_MAX_BYTES } = require('../config');
 
 const router = express.Router();

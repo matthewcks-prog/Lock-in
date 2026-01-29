@@ -2,7 +2,7 @@ Critical Issues
 
 Transcript extraction logic is duplicated across background.js, transcriptHandler.ts, panoptoResolver.js, and core/transcripts/providers/\*\* (plus transcriptProviders.js), violating ARCHITECTURE.md and AGENTS.md; this is a major source‑of‑truth conflict.
 STATUS.md is referenced by AGENTS.md, ARCHITECTURE.md, README.md, REPO_MAP.md, and transcript troubleshooting docs, but the file is missing; the documentation contract is broken.
-Backend transcript processing relies on in‑memory state (transcriptsService.js ACTIVE_JOBS, transcriptsController.js UPLOAD_RATE_WINDOWS, idempotency.js); this won’t scale across instances and risks lost/duplicated jobs.
+Backend transcript processing relies on in‑memory state (transcriptsService.js ACTIVE_JOBS, controllers/transcripts/index.js UPLOAD_RATE_WINDOWS, idempotency.js); this won’t scale across instances and risks lost/duplicated jobs.
 textUtils.ts uses document.createElement, breaking the “core is Node‑compatible” rule and making /core unsafe to import outside a browser.
 Organization Review (misplaced .md)
 
@@ -79,8 +79,8 @@ then size
 
 background.js (1803)
 panoptoResolver.js (868)
-lockinController.js (664)
-notesController.js (605)
+assistant/ai.js (664)
+notes/crud.js (605)
 sentry.ts (545)
 transcriptHandler.ts (530)
 panoptoProvider.test.ts (528)
@@ -89,7 +89,7 @@ stateStore.test.js (477)
 ImageNode.tsx (453)
 echo360Provider.test.ts (444)
 transcriptsService.js (433)
-transcriptsController.js (432)
+transcripts/index.js (432)
 useChat.ts (426)
 NoteToolbar.tsx (396)
 useNoteEditorPersistence.ts (390)

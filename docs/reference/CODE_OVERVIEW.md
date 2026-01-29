@@ -158,7 +158,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 ### Routes & Controllers
 
-- **`routes/lockinRoutes.js`**
+- **`routes/assistantRoutes.js`**
   - HTTP route definitions and middleware wiring.
 
 - **`routes/noteRoutes.js`**
@@ -167,27 +167,32 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`routes/transcriptsRoutes.js`**
   - Authenticated routes for transcript caching plus job creation, chunk upload, finalize, cancel, and status polling.
 
-- **`controllers/lockinController.js`**
-  - Handlers for AI processing, chat listing/deletion, chat messages, and chat title generation (OpenAI summarization + persistence).
+- **`controllers/assistant/ai.js`**
+  - Handles AI processing requests and idempotent chat creation.
   - Input validation and error handling.
 
-- **`controllers/notesController.js`**
-  - Notes CRUD, including embeddings.
+- **`controllers/assistant/chat.js`**
+  - Chat session CRUD/listing and message retrieval.
 
-- **`controllers/notesChatController.js`**
-  - Handles chat over notes.
+- **`controllers/assistant/title.js`**
+  - Chat title generation (OpenAI summarization + persistence).
 
-- **`controllers/noteAssetsController.js`**
-  - Handles note asset upload/list/delete via Supabase Storage with validation.
-  - Returns assets with snake_case fields (note_id, mime_type, storage_path, created_at) that are mapped to camelCase in the API client.
-
-- **`controllers/chatAssetsController.js`**
-  - Handles chat message attachment upload/list/delete via Supabase Storage.
-  - Supports images (for GPT-4o-mini vision analysis), documents, and code files.
-  - Enforces upload limits, validates magic bytes, and returns signed URLs for private assets.
+- **`controllers/assistant/assets.js`**
+  - Chat message attachment upload/list/delete via Supabase Storage.
+  - Supports images, documents, and code files, returning signed URLs for private assets.
   - Provides `getAssetForVision()` to fetch base64-encoded images for AI processing.
 
-- **`controllers/transcriptsController.js`**
+- **`controllers/notes/crud.js`**
+  - Notes CRUD HTTP translation; delegates to `services/notes/notesService.js`.
+
+- **`controllers/notes/chat.js`**
+  - Handles chat over notes.
+
+- **`controllers/notes/assets.js`**
+  - Thin HTTP layer for note asset upload/list/delete; delegates to `services/notes/noteAssetsService.js`.
+  - Returns assets with snake_case fields (note_id, mime_type, storage_path, created_at) that are mapped to camelCase in the API client.
+
+- **`controllers/transcripts/index.js`**
   - Transcript cache and job lifecycle handlers (create, upload chunks, finalize, cancel, status) with quota enforcement and chunk integrity checks.
 
 ### Data Layer
@@ -220,6 +225,12 @@ This is a living overview of the current codebase. Update it whenever files move
 
 - **`services/transcriptStorage.js`**
   - Supabase Storage wrapper for transcript job chunks (`transcript-jobs` bucket).
+
+- **`services/notes/notesService.js`**
+  - Note creation/update orchestration: content normalization, embedding generation, idempotency, optimistic locking, and asset cleanup on delete.
+
+- **`services/notes/noteAssetsService.js`**
+  - Note asset lifecycle (upload/list/delete) with storage integration and ownership checks.
 
 ### Providers
 
@@ -293,7 +304,7 @@ See [docs/testing/BACKEND_TESTING.md](../testing/BACKEND_TESTING.md) for detaile
 
 ### Backend
 
-1. **Layered architecture**: Routes -> Controllers -> Repository -> Database.
+1. **Layered architecture**: Routes -> Controllers -> Services -> Repositories -> Database.
 2. **Middleware chain**: Auth -> Rate Limit -> Validation -> Handler.
 3. **Centralized error handling**: `middleware/errorHandler.js` provides consistent error responses with proper codes and status mapping.
 4. **Configuration**: All extension env vars accessed through `extension/config.js` (generated from `extension/src/config.ts` with Vite `VITE_*` env injection).
@@ -375,7 +386,7 @@ The system is designed to handle thousands of concurrent users:
 ## Where to Start Reading
 
 - **Extension behavior & UI**: Start with `extension/contentScript-react.js` and helpers in `extension/content/`, then the built React bundle `extension/dist/ui/index.js` (source in `ui/extension/index.tsx`).
-- **Backend request flow**: Start with `backend/routes/lockinRoutes.js`, then `controllers/lockinController.js`.
+- **Backend request flow**: Start with `backend/routes/assistantRoutes.js`, then `controllers/assistant/ai.js` (AI flow) or `controllers/assistant/chat.js` (chat list/detail).
 - **Auth & persistence**: Supabase auth client lives in `/api/auth.ts` and is bundled to the extension via `extension/dist/libs/initApi.js` (`window.LockInAuth`); backend enforcement via `backend/middleware/authMiddleware.js`.
 - **API communication**: Use the bundled `/api/client.ts` exposed through `extension/dist/libs/initApi.js` (`window.LockInAPI`); backend logic in `openaiClient.js`. The client includes typed methods for note assets (`uploadNoteAsset`, `listNoteAssets`, `deleteNoteAsset`) that return `NoteAsset` objects with camelCase fields.
 

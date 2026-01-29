@@ -20,7 +20,7 @@ Unit test files MUST use the `.test.js` suffix:
 ✅ chatRepository.test.js
 ✅ validation.test.js
 ✅ assetValidation.test.js
-✅ controllers/__tests__/lockinController.test.js
+✅ controllers/__tests__/assistantTitle.test.js
 ```
 
 **Why?** The Node.js test runner is configured to ONLY run files matching `**/*.test.js` pattern. This ensures:
@@ -263,7 +263,7 @@ backend/
 │   └── validation.test.js           ✅ Test next to code
 ├── controllers/
 │   └── __tests__/                   ✅ Tests in __tests__ subdirectory
-│       ├── lockinController.test.js
+│       ├── assistantTitle.test.js
 │       └── transcriptsController.test.js
 ├── scripts/
 │   ├── verify-azure-embeddings.js   ✅ Utility with verify- prefix

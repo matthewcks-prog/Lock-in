@@ -24,7 +24,7 @@ export default defineConfig({
       // These require backend dependencies (openai, @supabase/supabase-js)
       '**/backendOpenaiPrompt.test.ts',
       '**/backendChatPagination.test.ts',
-      '**/backendLockinController.test.ts',
+      '**/backendAssistantController.test.ts',
     ],
     globals: true,
     restoreMocks: true,
