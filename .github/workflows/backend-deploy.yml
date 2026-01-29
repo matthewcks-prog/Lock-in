@@ -43,6 +43,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  security-events: write # Required for SARIF uploads (Trivy results)
 
 env:
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -126,18 +127,22 @@ jobs:
 
       - name: Upload Trivy scan results
         if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
         continue-on-error: true
 
       - name: Start test container
         run: |
-          # Cleanup any existing container to avoid name conflict
-          docker rm -f test-container || true
+          # Use unique container name to prevent conflicts between workflow runs
+          CONTAINER_NAME="test-container-${{ github.run_id }}"
+          echo "CONTAINER_NAME=$CONTAINER_NAME" >> $GITHUB_ENV
 
-          # Start new container
-          docker run -d --name test-container -p 3000:3000 \
+          # Cleanup any stale containers (belt-and-suspenders)
+          docker rm -f $CONTAINER_NAME 2>/dev/null || true
+
+          # Start new container with unique name
+          docker run -d --name $CONTAINER_NAME -p 3000:3000 \
             -e NODE_ENV=development \
             -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || 'test-key-fallback' }} \
             -e SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://test-project.supabase.co' }} \
@@ -148,6 +153,8 @@ jobs:
             --health-timeout=5s \
             --health-retries=3 \
             ${{ env.IMAGE_NAME }}:test
+
+          echo "Container started: $CONTAINER_NAME"
 
       - name: Wait for container to be healthy
         run: |
@@ -167,14 +174,14 @@ jobs:
 
           echo "❌ Container failed to become healthy"
           echo "Dump container logs:"
-          docker logs test-container
+          docker logs $CONTAINER_NAME
           exit 1
 
       - name: Cleanup test container
         if: always()
         run: |
-          docker stop test-container || true
-          docker rm test-container || true
+          docker stop $CONTAINER_NAME || true
+          docker rm $CONTAINER_NAME || true
 
       - name: Determine deployment targets
         id: check-deploy
