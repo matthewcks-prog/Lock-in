@@ -156,6 +156,10 @@ export function NotesPanel({
   const linkedTarget = weekLabel ? note?.sourceUrl || pageUrl : null;
   const showActions = view === 'current' && !!editorActiveId;
 
+  const handleExportError = (error: string) => {
+    showToast(error, 'error');
+  };
+
   return (
     <div className="lockin-notes-panel">
       <NotesPanelHeader
@@ -170,6 +174,9 @@ export function NotesPanel({
         onToggleStar={handleHeaderToggleStar}
         onDeleteNote={handleHeaderDelete}
         onNewNote={handleNewNote}
+        note={note}
+        week={currentWeek ?? null}
+        onExportError={handleExportError}
       />
 
       {deleteError && (

@@ -104,6 +104,17 @@ async function parseErrorResponse(
     code = 'EMAIL_NOT_CONFIRMED';
   } else if (normalized.includes('invalid email')) {
     code = 'INVALID_EMAIL';
+  } else if (
+    normalized.includes('invalid api key') ||
+    normalized.includes('invalid apikey') ||
+    normalized.includes('apikey is required') ||
+    normalized.includes('api key') ||
+    response.status === 401
+  ) {
+    // API key issues - could be missing, expired, or rotated
+    code = 'INVALID_API_KEY';
+  } else if (response.status === 403) {
+    code = 'FORBIDDEN';
   }
 
   return { message, code, details: payloadRecord || undefined };

@@ -83,6 +83,17 @@ function getFriendlyAuthError(error) {
   if (code === 'USER_ALREADY_REGISTERED') {
     return 'An account already exists for this email. Try logging in instead.';
   }
+  if (code === 'INVALID_API_KEY') {
+    // API key configuration issue - developer needs to rebuild extension
+    console.error(
+      '[Lock-in] Invalid API key detected. The extension may need to be rebuilt with valid Supabase credentials.',
+      'Run: npm run build:config && npm run verify-build',
+    );
+    return 'Configuration error. Please contact support or rebuild the extension.';
+  }
+  if (code === 'FORBIDDEN') {
+    return 'Access denied. Please try again or contact support.';
+  }
   return error?.message || "We couldn't sign you in. Please try again.";
 }
 
