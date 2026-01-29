@@ -159,16 +159,16 @@ LOCKIN_REPO_ROOT=C:/Users/matth/Lock-in
 
 ## Setup Instructions
 
-See **[SETUP.md](SETUP.md)** for detailed step-by-step setup instructions.
+See **[SETUP.md](docs/SETUP.md)** for detailed step-by-step setup instructions.
 
 Quick start:
 
 1. **Install MCP servers** - Run `tools/mcp/scripts/install-mcp-servers.ps1` (Windows) or `install-mcp-servers.sh` (Linux)
 2. **Create `.cursor/mcp.json`** - Copy template from `tools/mcp/config/mcp.json.template` and update paths
 3. **Set up `.env.local`** - Copy `tools/mcp/config/env.local.template` to `.env.local` and fill in values
-4. **Create Supabase read-only user** - See **[SUPABASE_READONLY_SETUP.md](SUPABASE_READONLY_SETUP.md)** for detailed instructions
+4. **Create Supabase read-only user** - See **[SUPABASE_READONLY_SETUP.md](docs/SUPABASE_READONLY_SETUP.md)** for detailed instructions
 5. **Verify connections** in Cursor Settings → MCP Servers
-6. **Run smoke tests** - See **[SMOKE_TESTS.md](SMOKE_TESTS.md)** for 12 test prompts
+6. **Run smoke tests** - See **[SMOKE_TESTS.md](docs/SMOKE_TESTS.md)** for 12 test prompts
 
 ## Adding New MCP Servers
 
@@ -180,7 +180,7 @@ Quick start:
 
 ## Supabase Read-Only User Setup
 
-See **[SUPABASE_READONLY_SETUP.md](SUPABASE_READONLY_SETUP.md)** for detailed instructions on creating a read-only database user for MCP access.
+See **[SUPABASE_READONLY_SETUP.md](docs/SUPABASE_READONLY_SETUP.md)** for detailed instructions on creating a read-only database user for MCP access.
 
 ## Troubleshooting
 

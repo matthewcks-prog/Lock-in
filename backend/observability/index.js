@@ -11,18 +11,24 @@
  * Application Insights needs to instrument Node.js modules before they're loaded.
  */
 
-const { existsSync } = require('node:fs');
-const { resolve } = require('node:path');
-
 const shouldLoadAppInsights = Boolean(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING);
 const appInsights = shouldLoadAppInsights ? require('applicationinsights') : null;
 
-const pinoPackagePath = resolve(__dirname, '../node_modules/pino/package.json');
-const pinoRootPath = resolve(process.cwd(), 'node_modules/pino/package.json');
-const pino = existsSync(pinoPackagePath) || existsSync(pinoRootPath) ? require('pino') : null;
-
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const LOG_LEVEL = process.env.LOG_LEVEL || (IS_PRODUCTION ? 'info' : 'debug');
+
+let pino = null;
+try {
+  // Use Node resolution so workspaces/hoisting still locate the dependency.
+  pino = require('pino');
+} catch (error) {
+  if (!IS_PRODUCTION) {
+    console.warn(
+      '[Observability] Pino not available; using console logger fallback.',
+      error?.message,
+    );
+  }
+}
 
 // =============================================================================
 // Application Insights Setup
@@ -229,13 +235,25 @@ function trackEvent(name, properties = {}, measurements = {}) {
  * Create the base pino logger instance.
  * Configures JSON output for production, pretty output for development.
  */
+const DEFAULT_PINO_LEVELS = {
+  fatal: 60,
+  error: 50,
+  warn: 40,
+  info: 30,
+  debug: 20,
+  trace: 10,
+};
+
 function createConsoleLogger() {
   return {
     level: LOG_LEVEL,
+    levels: { values: DEFAULT_PINO_LEVELS },
     info: console.log.bind(console),
     warn: console.warn.bind(console),
     error: console.error.bind(console),
     debug: console.debug.bind(console),
+    trace: console.debug.bind(console),
+    fatal: console.error.bind(console),
     child: () => createConsoleLogger(),
   };
 }

@@ -268,3 +268,26 @@ export function validateChatAssetRecords(value: unknown, field = 'chatAssets'): 
   const list = assertArray(value, field);
   return list.map((item, index) => validateChatAssetRecord(item, `${field}[${index}]`));
 }
+
+export function validateTranscriptCacheResponse(
+  value: unknown,
+  field = 'transcriptCache',
+): {
+  success: boolean;
+  fingerprint?: string;
+  cachedAt?: string;
+} {
+  const record = assertRecord(value, field);
+  const success = assertBoolean(record.success, `${field}.success`);
+  if ('fingerprint' in record) {
+    assertOptionalString(record.fingerprint, `${field}.fingerprint`);
+  }
+  if ('cachedAt' in record) {
+    assertOptionalString(record.cachedAt, `${field}.cachedAt`);
+  }
+  return {
+    success,
+    fingerprint: typeof record.fingerprint === 'string' ? record.fingerprint : undefined,
+    cachedAt: typeof record.cachedAt === 'string' ? record.cachedAt : undefined,
+  };
+}

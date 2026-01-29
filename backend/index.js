@@ -33,14 +33,7 @@ initSentry();
 
 // Now import everything else - both App Insights and Sentry will instrument these
 const { createApp } = require('./app');
-const {
-  PORT,
-  SUPABASE_URL,
-  SUPABASE_SERVICE_ROLE_KEY,
-  isAzureEnabled,
-  isOpenAIEnabled,
-  isOpenAIFallbackEnabled,
-} = require('./config');
+const { PORT, isAzureEnabled, isOpenAIEnabled, isOpenAIFallbackEnabled } = require('./config');
 const {
   startTranscriptJobReaper,
   stopTranscriptJobReaper,
@@ -143,6 +136,6 @@ process.on('uncaughtException', (err) => {
   gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason, _promise) => {
   logger.error({ reason: String(reason) }, 'Unhandled rejection');
 });

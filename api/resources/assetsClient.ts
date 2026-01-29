@@ -15,7 +15,21 @@ export interface DeleteNoteAssetParams {
   assetId: string;
 }
 
-function mapNoteAsset(raw: any): NoteAsset {
+type NoteAssetRecord = {
+  id: string;
+  note_id: string;
+  user_id: string;
+  type: NoteAsset['type'];
+  mime_type: string;
+  storage_path: string;
+  created_at: string;
+  url?: string | null;
+  file_name?: string | null;
+  filename?: string | null;
+  name?: string | null;
+};
+
+function mapNoteAsset(raw: NoteAssetRecord): NoteAsset {
   return {
     id: raw.id,
     noteId: raw.note_id,
@@ -24,7 +38,7 @@ function mapNoteAsset(raw: any): NoteAsset {
     mimeType: raw.mime_type,
     storagePath: raw.storage_path,
     createdAt: raw.created_at,
-    url: raw.url,
+    url: raw.url ?? '',
     fileName: raw.file_name || raw.filename || raw.name || null,
   };
 }
@@ -47,7 +61,7 @@ export function createAssetsClient(apiRequest: ApiRequest) {
       body: formData,
     });
 
-    return mapNoteAsset(validateNoteAssetRecord(raw, 'uploadNoteAsset'));
+    return mapNoteAsset(validateNoteAssetRecord(raw, 'uploadNoteAsset') as NoteAssetRecord);
   }
 
   async function listNoteAssets(params: ListNoteAssetsParams): Promise<NoteAsset[]> {
@@ -60,7 +74,9 @@ export function createAssetsClient(apiRequest: ApiRequest) {
       method: 'GET',
     });
 
-    return validateNoteAssetRecords(raw, 'listNoteAssets').map(mapNoteAsset);
+    return validateNoteAssetRecords(raw, 'listNoteAssets').map((record) =>
+      mapNoteAsset(record as NoteAssetRecord),
+    );
   }
 
   async function deleteNoteAsset(params: DeleteNoteAssetParams): Promise<void> {

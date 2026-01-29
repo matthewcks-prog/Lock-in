@@ -66,10 +66,10 @@ Run this checklist:
 ### Steps
 
 1. Navigate to a supported page (e.g., Moodle course page, Edstem)
-2. Hold **Ctrl** (Windows/Linux) or **Cmd** (Mac) and select some text on the page
-3. The sidebar should open automatically with the selected text
-4. Verify the selected text appears in the sidebar input or context
-5. Trigger a mode: click "Explain" or "General"
+2. Highlight some text on the page
+3. Right-click and select **"Lock-in: Explain"**
+4. The sidebar should open with the selected text prefilled in the chat input
+5. Edit the text if needed, then click **Send**
 6. Wait for AI response
 7. Note the chat ID (if visible in UI or console)
 8. Refresh the page
@@ -77,12 +77,12 @@ Run this checklist:
 
 ### Expected Results
 
-| Step                   | Expected                                                |
-| ---------------------- | ------------------------------------------------------- |
-| Ctrl/Cmd + select text | Sidebar opens, selection captured in context            |
-| Trigger mode           | Loading indicator shown, request sent to backend        |
-| AI response            | Message renders correctly, no JSON/HTML escaping issues |
-| Refresh + reopen       | Chat ID persists, conversation history visible          |
+| Step                 | Expected                                                |
+| -------------------- | ------------------------------------------------------- |
+| Context menu prefill | Sidebar opens, selection prefilled in input             |
+| Send message         | Loading indicator shown, request sent to backend        |
+| AI response          | Message renders correctly, no JSON/HTML escaping issues |
+| Refresh + reopen     | Chat ID persists, conversation history visible          |
 
 ---
 

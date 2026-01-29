@@ -113,7 +113,7 @@ const messaging = createMessaging();
 
 // Expose globally for content scripts
 if (typeof window !== 'undefined') {
-  (window as any).LockInMessaging = messaging;
+  window.LockInMessaging = messaging;
 }
 
 export { messaging };

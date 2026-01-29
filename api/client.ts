@@ -11,7 +11,7 @@
  */
 
 import type { AuthClient } from './auth';
-import { createFetcher, type ApiRequestOptions } from './fetcher';
+import { createFetcher, type ApiRequestOptions, type FetchLike } from './fetcher';
 import { createLockinClient, type ProcessTextParams } from './resources/lockinClient';
 import { createChatsClient } from './resources/chatsClient';
 import {
@@ -41,14 +41,25 @@ import {
   type FeedbackContext,
   type FeedbackRecord,
 } from './resources/feedbackClient';
+import {
+  createTranscriptsClient,
+  type CacheTranscriptParams,
+  type TranscriptCacheMeta,
+  type TranscriptCacheResponse,
+} from './resources/transcriptsClient';
 
 export interface ApiClientConfig {
   backendUrl: string;
   authClient: AuthClient;
+  fetcher?: FetchLike;
 }
 
 export function createApiClient(config: ApiClientConfig) {
-  const fetcher = createFetcher(config);
+  const fetcher = createFetcher({
+    backendUrl: config.backendUrl,
+    authClient: config.authClient,
+    fetcher: config.fetcher,
+  });
   const { apiRequest, getBackendUrl } = fetcher;
 
   const { processText } = createLockinClient(apiRequest);
@@ -67,6 +78,7 @@ export function createApiClient(config: ApiClientConfig) {
   const { uploadNoteAsset, listNoteAssets, deleteNoteAsset } = createAssetsClient(apiRequest);
   const { uploadChatAsset, listChatAssets, deleteChatAsset } = createChatAssetsClient(apiRequest);
   const { submitFeedback, listFeedback, getFeedback } = createFeedbackClient(apiRequest);
+  const { cacheTranscript } = createTranscriptsClient(apiRequest);
 
   return {
     apiRequest,
@@ -94,6 +106,7 @@ export function createApiClient(config: ApiClientConfig) {
     submitFeedback,
     listFeedback,
     getFeedback,
+    cacheTranscript,
   };
 }
 
@@ -118,4 +131,7 @@ export type {
   FeedbackStatus,
   FeedbackContext,
   FeedbackRecord,
+  CacheTranscriptParams,
+  TranscriptCacheMeta,
+  TranscriptCacheResponse,
 };

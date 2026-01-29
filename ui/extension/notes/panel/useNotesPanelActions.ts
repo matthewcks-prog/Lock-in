@@ -73,8 +73,13 @@ export function useNotesPanelActions({
 
       closeDeleteConfirm();
       showToast('Note deleted', 'success');
-    } catch (err: any) {
-      const errorMessage = err?.message || 'Failed to delete note';
+    } catch (err: unknown) {
+      const errorRecord =
+        typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
+      const errorMessage =
+        (err instanceof Error && err.message) ||
+        (typeof errorRecord?.message === 'string' ? errorRecord.message : undefined) ||
+        'Failed to delete note';
       setDeleteError(errorMessage);
       showToast(errorMessage, 'error');
       console.error('[Lock-in] Delete note failed:', err);
@@ -105,16 +110,22 @@ export function useNotesPanelActions({
         } else {
           showToast('Note unstarred', 'info');
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const errorRecord =
+          typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
+        const code = typeof errorRecord?.code === 'string' ? errorRecord.code : undefined;
+        const message =
+          (err instanceof Error && err.message) ||
+          (typeof errorRecord?.message === 'string' ? errorRecord.message : undefined);
         let errorMessage = 'Failed to update star status';
-        if (err?.code === 'AUTH_REQUIRED') {
+        if (code === 'AUTH_REQUIRED') {
           errorMessage = 'Please sign in to star notes';
-        } else if (err?.code === 'NOT_FOUND') {
+        } else if (code === 'NOT_FOUND') {
           errorMessage = 'Note not found';
-        } else if (err?.code === 'NETWORK_ERROR') {
+        } else if (code === 'NETWORK_ERROR') {
           errorMessage = 'Network error. Check your connection.';
-        } else if (err?.message && err.message.length < 60) {
-          errorMessage = err.message;
+        } else if (message && message.length < 60) {
+          errorMessage = message;
         }
         showToast(errorMessage, 'error');
         console.error('[Lock-in] Toggle star failed:', err);

@@ -47,8 +47,13 @@ export function AssetCleanupPlugin({
           editor.getEditorState().read(() => {
             const node = $getNodeByKey(nodeKey);
             if (!node) return;
-            if ($isImageNode(node) || $isAttachmentNode(node)) {
-              const assetId = (node as any).getAssetId?.();
+            if ($isImageNode(node)) {
+              const assetId = node.getAssetId();
+              if (assetId) {
+                assetKeyMapRef.current.set(nodeKey, assetId);
+              }
+            } else if ($isAttachmentNode(node)) {
+              const assetId = node.getAssetId();
               if (assetId) {
                 assetKeyMapRef.current.set(nodeKey, assetId);
               }

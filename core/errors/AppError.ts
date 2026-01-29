@@ -86,7 +86,7 @@ export class AppError extends Error {
 
     // Set cause if provided (for error chaining)
     if (options?.cause) {
-      (this as any).cause = options.cause;
+      (this as Error & { cause?: Error }).cause = options.cause;
     }
   }
 
@@ -245,8 +245,9 @@ export function wrapError(error: unknown, fallbackMessage?: string): AppError {
 
   if (error instanceof Error) {
     // Check for known error codes on the error object
-    const code = (error as any).code as ErrorCode | undefined;
-    const status = (error as any).status as number | undefined;
+    const errorMeta = error as Error & { code?: unknown; status?: unknown };
+    const code = typeof errorMeta.code === 'string' ? (errorMeta.code as ErrorCode) : undefined;
+    const status = typeof errorMeta.status === 'number' ? errorMeta.status : undefined;
 
     if (code && Object.values(ErrorCodes).includes(code)) {
       return new AppError(error.message, code, { status, cause: error });

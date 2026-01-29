@@ -11,19 +11,24 @@ const actEnvironment = globalThis as typeof globalThis & {
 actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
 
 type StorageStub = {
-  get: (key: string) => Promise<unknown>;
+  get: <T = unknown>(key: string) => Promise<T | null>;
   set: (key: string, value: unknown) => Promise<void>;
-  getLocal: (key: string) => Promise<unknown>;
+  getLocal: <T = unknown>(key: string) => Promise<T | null>;
   setLocal: (key: string, value: unknown) => Promise<void>;
 };
 
 function createStorageStub(values: Record<string, unknown> = {}): StorageStub {
+  const get = vi.fn(<T = unknown,>(key: string) =>
+    Promise.resolve(Object.prototype.hasOwnProperty.call(values, key) ? (values[key] as T) : null),
+  ) as StorageStub['get'];
+  const getLocal = vi.fn(<T = unknown,>() =>
+    Promise.resolve<T | null>(null),
+  ) as StorageStub['getLocal'];
+
   return {
-    get: vi.fn((key: string) =>
-      Promise.resolve(Object.prototype.hasOwnProperty.call(values, key) ? values[key] : null),
-    ),
+    get,
     set: vi.fn(() => Promise.resolve()),
-    getLocal: vi.fn(() => Promise.resolve(null)),
+    getLocal,
     setLocal: vi.fn(() => Promise.resolve()),
   };
 }
@@ -152,6 +157,50 @@ describe('LockInSidebar chat send reliability', () => {
     expect(processText).toHaveBeenCalledTimes(1);
   });
 
+  it('does not send when input is empty', async () => {
+    const processText = vi.fn().mockResolvedValue({
+      data: { explanation: 'Reply' },
+      chatId: '11111111-1111-4111-8111-111111111111',
+      chatTitle: 'Title',
+    });
+    const apiClient = createApiClientStub({
+      processText,
+      getRecentChats: vi.fn().mockResolvedValue({
+        chats: [],
+        pagination: { hasMore: false, nextCursor: null },
+      }),
+    });
+    const storage = createStorageStub();
+
+    await act(async () => {
+      root.render(
+        <LockInSidebar
+          apiClient={apiClient}
+          isOpen={true}
+          onToggle={vi.fn()}
+          currentMode="explain"
+          storage={storage}
+        />,
+      );
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    const sendButton = document.querySelector('.lockin-send-btn') as HTMLButtonElement | null;
+    expect(sendButton).not.toBeNull();
+    expect(sendButton?.disabled).toBe(true);
+
+    await act(async () => {
+      sendButton?.click();
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    expect(processText).not.toHaveBeenCalled();
+  });
+
   it('shows rate limit feedback when requests are throttled', async () => {
     const apiClient = createApiClientStub({
       processText: vi.fn().mockRejectedValue(new RateLimitError('Rate limit', 3000)),
@@ -208,5 +257,63 @@ describe('LockInSidebar chat send reliability', () => {
     );
     const combinedText = [errorBanner?.textContent || '', ...bubbleTexts].join(' ');
     expect(combinedText).toContain("You're sending too fast - try again in 3s.");
+  });
+
+  it('does not show save note button on error messages', async () => {
+    const apiClient = createApiClientStub({
+      processText: vi.fn().mockRejectedValue(new Error('Please sign in to continue')),
+      getRecentChats: vi.fn().mockResolvedValue({
+        chats: [],
+        pagination: { hasMore: false, nextCursor: null },
+      }),
+    });
+    const storage = createStorageStub();
+
+    await act(async () => {
+      root.render(
+        <LockInSidebar
+          apiClient={apiClient}
+          isOpen={true}
+          onToggle={vi.fn()}
+          currentMode="explain"
+          storage={storage}
+        />,
+      );
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    const textarea = document.querySelector(
+      '.lockin-chat-input-field',
+    ) as HTMLTextAreaElement | null;
+    expect(textarea).not.toBeNull();
+
+    await act(async () => {
+      if (textarea) {
+        setTextareaValue(textarea, 'Hello');
+      }
+    });
+    await act(async () => {
+      await flushPromises(2);
+    });
+
+    const sendButton = document.querySelector('.lockin-send-btn') as HTMLButtonElement | null;
+    expect(sendButton).not.toBeNull();
+
+    await act(async () => {
+      sendButton?.click();
+    });
+    await act(async () => {
+      await flushPromises(4);
+    });
+
+    // Verify error message is shown in a bubble with error styling
+    const errorBubbles = document.querySelectorAll('.lockin-chat-msg-error');
+    expect(errorBubbles.length).toBeGreaterThan(0);
+
+    // Verify NO save note button is present for error messages
+    const saveNoteButtons = document.querySelectorAll('.lockin-chat-save-note-btn');
+    expect(saveNoteButtons.length).toBe(0);
   });
 });

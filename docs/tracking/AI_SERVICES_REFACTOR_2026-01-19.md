@@ -34,7 +34,7 @@ Implemented **provider factory pattern** with proper separation of concerns:
 - **Factory:** `backend/providers/embeddingsFactory.js` (142 lines)
 - **Service:** `backend/services/embeddings.js` (NEW, 87 lines)
 - **Fix:** Now uses `isAzureEmbeddingsEnabled()` (correct check)
-- **Consumers:** `notesController.js`, `notesChatController.js`
+- **Consumers:** `notes/crud.js`, `notes/chat.js`
 
 ### 3. Transcription → Azure Speech (Primary) → OpenAI Whisper (Fallback)
 
@@ -55,13 +55,13 @@ Implemented **provider factory pattern** with proper separation of concerns:
 
 - ✅ `backend/providers/llmProviderFactory.js` - Simplified to OpenAI-only for chat
 - ✅ `backend/services/transcriptsService.js` - Now imports from `./transcription` instead of `../openaiClient`
-- ✅ `backend/controllers/notesController.js` - Uses `embeddings.js` service
-- ✅ `backend/controllers/notesChatController.js` - Uses `embeddings.js` service
+- ✅ `backend/controllers/notes/crud.js` - Uses `embeddings.js` service
+- ✅ `backend/controllers/notes/chat.js` - Uses `embeddings.js` service
 - ✅ `backend/openaiClient.js` - Removed `embedText()` and `transcribeAudioFile()`
 
 ### Documentation Updated:
 
-- ✅ `docs/AI_SERVICES_ARCHITECTURE.md` - Complete architecture documentation
+- ✅ `docs/architecture/AI_SERVICES_ARCHITECTURE.md` - Complete architecture documentation
 - ✅ `docs/tracking/REFACTOR_PLAN.md` - Marked Phase 3 OpenAI provider item as complete
 
 ---
@@ -212,8 +212,8 @@ AZURE_SPEECH_REGION=australiaeast
 
 ## Related Issues
 
-- [REFACTOR_PLAN.md Phase 3](../docs/tracking/REFACTOR_PLAN.md) - OpenAI provider finalization
-- [AI_SERVICES_ARCHITECTURE.md](../docs/AI_SERVICES_ARCHITECTURE.md) - Complete architecture documentation
+- [REFACTOR_PLAN.md Phase 3](./REFACTOR_PLAN.md) - OpenAI provider finalization
+- [AI_SERVICES_ARCHITECTURE.md](../architecture/AI_SERVICES_ARCHITECTURE.md) - Complete architecture documentation
 
 ---
 

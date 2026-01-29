@@ -185,7 +185,7 @@ const storage = createStorage();
 
 // Expose globally for content scripts
 if (typeof window !== 'undefined') {
-  (window as any).LockInStorage = storage;
+  window.LockInStorage = storage;
 }
 
 export { storage };

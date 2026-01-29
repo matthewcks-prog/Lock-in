@@ -20,6 +20,15 @@ export interface SidebarInstance {
   updateProps: (newProps: Partial<LockInSidebarProps>) => void;
 }
 
+declare global {
+  interface Window {
+    LockInUI?: {
+      createLockInSidebar: typeof createLockInSidebar;
+      LockInSidebar: typeof LockInSidebar;
+    };
+  }
+}
+
 export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance {
   let container = document.getElementById('lockin-root');
   if (!container) {
@@ -56,7 +65,7 @@ export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance 
 }
 
 if (typeof window !== 'undefined') {
-  (window as any).LockInUI = {
+  window.LockInUI = {
     createLockInSidebar,
     LockInSidebar,
   };

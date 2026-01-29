@@ -20,18 +20,16 @@ function createAuthStub(token: string | null = 'token'): AuthClient {
 const backendUrl = 'http://example.test';
 
 describe('createApiClient public surface', () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
-    globalThis.fetch = originalFetch;
   });
 
   it('returns the exact method bag', () => {
     const client = createApiClient({
       backendUrl,
       authClient: createAuthStub(),
+      fetcher: vi.fn() as unknown as typeof fetch,
     });
 
     expect(Object.keys(client).sort()).toEqual([...API_CLIENT_EXPECTED_KEYS]);
@@ -45,12 +43,9 @@ describe('createApiClient public surface', () => {
 });
 
 describe('apiRequest invariants', () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
-    globalThis.fetch = originalFetch;
   });
 
   it('retries retryable responses with exponential backoff defaults', async () => {
@@ -71,9 +66,12 @@ describe('apiRequest invariants', () => {
           headers: { 'content-type': 'application/json' },
         }),
       );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const client = createApiClient({ backendUrl, authClient });
+    const client = createApiClient({
+      backendUrl,
+      authClient,
+      fetcher: fetchMock as unknown as typeof fetch,
+    });
     const request = client.apiRequest('/retry-me', { method: 'GET' });
 
     await vi.advanceTimersByTimeAsync(500);
@@ -92,9 +90,12 @@ describe('apiRequest invariants', () => {
         headers: { 'content-type': 'application/json' },
       }),
     );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const client = createApiClient({ backendUrl, authClient });
+    const client = createApiClient({
+      backendUrl,
+      authClient,
+      fetcher: fetchMock as unknown as typeof fetch,
+    });
     const request = client.apiRequest('/conflict', { method: 'GET' });
 
     await expect(request).rejects.toBeInstanceOf(ConflictError);
@@ -109,9 +110,12 @@ describe('apiRequest invariants', () => {
   it('returns undefined on 204 responses', async () => {
     const authClient = createAuthStub();
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const client = createApiClient({ backendUrl, authClient });
+    const client = createApiClient({
+      backendUrl,
+      authClient,
+      fetcher: fetchMock as unknown as typeof fetch,
+    });
     const result = await client.apiRequest('/no-content', { method: 'DELETE' });
 
     expect(result).toBeUndefined();
@@ -120,11 +124,14 @@ describe('apiRequest invariants', () => {
   it('maps aborted signals to ABORTED errors before request runs', async () => {
     const authClient = createAuthStub();
     const fetchMock = vi.fn();
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
     const controller = new AbortController();
     controller.abort();
 
-    const client = createApiClient({ backendUrl, authClient });
+    const client = createApiClient({
+      backendUrl,
+      authClient,
+      fetcher: fetchMock as unknown as typeof fetch,
+    });
 
     await expect(
       client.apiRequest('/abort', { method: 'GET', signal: controller.signal }),
@@ -140,9 +147,12 @@ describe('apiRequest invariants', () => {
         headers: { 'content-type': 'application/json' },
       }),
     );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const client = createApiClient({ backendUrl, authClient });
+    const client = createApiClient({
+      backendUrl,
+      authClient,
+      fetcher: fetchMock as unknown as typeof fetch,
+    });
     const request = client.apiRequest('/notes/1', {
       method: 'PUT',
       ifUnmodifiedSince: 'local-ts',
@@ -181,9 +191,12 @@ describe('note asset mapping', () => {
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     );
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const client = createApiClient({ backendUrl, authClient });
+    const client = createApiClient({
+      backendUrl,
+      authClient,
+      fetcher: fetchMock as unknown as typeof fetch,
+    });
     const asset = await client.uploadNoteAsset({ noteId: 'n1', file: new Blob() });
 
     expect(asset).toEqual({

@@ -5,7 +5,7 @@
  * - Ensure UI bundle and helpers are loaded
  * - Resolve site adapter and page context
  * - Wire the state store, session manager, and sidebar host
- * - Bind user interactions (selection + Escape close)
+ * - Bind user interactions (Escape close)
  */
 
 // ============================================================================
@@ -30,7 +30,6 @@ const Storage = Runtime.storage || window.LockInStorage || null;
 const Messaging = Runtime.messaging || window.LockInMessaging || null;
 const ContentHelpers = Runtime || {};
 
-const MIN_SELECTION_LENGTH = 3;
 let bootstrapPromise = null;
 let hasBootstrapped = false;
 
@@ -123,20 +122,11 @@ async function bootstrap() {
       pageContext,
       state: initialState,
       onToggle: handleSidebarToggle,
+      onClearPrefill: stateStore.clearPendingPrefill,
     });
 
     await sessionManager.getTabId();
     await sessionManager.restoreSession();
-
-    const runMode = async (mode) => {
-      await stateStore.persistMode(mode);
-      const snapshot = stateStore.getSnapshot();
-      if (!snapshot.isSidebarOpen) {
-        await stateStore.setSidebarOpen(true);
-      } else {
-        sidebarHost.updatePropsFromState(snapshot);
-      }
-    };
 
     const closeSidebar = async () => {
       const snapshot = stateStore.getSnapshot();
@@ -147,14 +137,28 @@ async function bootstrap() {
 
     const interactionController = createInteractionController({
       stateStore,
-      onRunMode: runMode,
       onCloseSidebar: closeSidebar,
-      determineMode: () => stateStore.determineDefaultMode(),
       logger: Logger,
-      minSelectionLength: MIN_SELECTION_LENGTH,
     });
 
     interactionController.bind();
+
+    if (Messaging && typeof Messaging.onMessage === 'function') {
+      Messaging.onMessage((message) => {
+        if (message?.type === 'PREFILL_CHAT_INPUT') {
+          const text = typeof message.payload?.text === 'string' ? message.payload.text : '';
+          if (!text.trim()) return undefined;
+          stateStore.setPendingPrefill(text);
+          stateStore.setActiveTab('chat');
+          if (!stateStore.getSnapshot().isSidebarOpen) {
+            stateStore.setSidebarOpen(true).catch((error) => {
+              Logger.warn('Failed to open sidebar for prefill:', error);
+            });
+          }
+        }
+        return undefined;
+      });
+    }
 
     // Set up message handler for media fetch requests (for AI transcription)
     setupMediaFetchHandler();

@@ -25,7 +25,7 @@
       highlightingEnabled: true,
       currentMode: DEFAULT_MODE,
       isSidebarOpen: false,
-      cachedSelection: '',
+      pendingPrefill: '',
       currentChatId: null,
       currentActiveTab: 'chat',
       sessionPreferences: { ...DEFAULT_PREFS },
@@ -195,8 +195,14 @@
       notify();
     }
 
-    function setSelection(text) {
-      state.cachedSelection = text || '';
+    function setPendingPrefill(text) {
+      state.pendingPrefill = typeof text === 'string' ? text : '';
+      notify();
+    }
+
+    function clearPendingPrefill() {
+      if (!state.pendingPrefill) return;
+      state.pendingPrefill = '';
       notify();
     }
 
@@ -266,7 +272,8 @@
       persistMode,
       setMode,
       setSidebarOpen,
-      setSelection,
+      setPendingPrefill,
+      clearPendingPrefill,
       setChatId,
       setActiveTab,
       setPreferences,

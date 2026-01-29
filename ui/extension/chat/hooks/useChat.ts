@@ -14,6 +14,7 @@ import type {
   UseChatOptions,
   HistoryTitleSource,
 } from '../types';
+import type { TranscriptCacheInput } from '../../transcripts/hooks/useTranscriptCache';
 import {
   isValidUUID,
   buildInitialChatTitle,
@@ -32,6 +33,7 @@ interface SendChatMessageOptions {
   attachmentIds?: string[];
   selectionOverride?: string;
   userMessageOverride?: string;
+  transcriptContext?: TranscriptCacheInput;
 }
 
 interface UseChatReturn {
@@ -85,10 +87,9 @@ function coerceSendOptions(
  * - Manages active chat session state
  * - Coordinates message sending with history updates
  * - Handles storage persistence for active chat ID
- * - Responds to selected text changes
  */
 export function useChat(options: UseChatOptions): UseChatReturn {
-  const { apiClient, storage, mode, pageUrl, courseCode, selectedText } = options;
+  const { apiClient, storage, mode, pageUrl, courseCode } = options;
   const queryClient = useQueryClient();
 
   // Local state
@@ -97,8 +98,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
-  // Track previous selection to avoid re-processing
-  const previousSelectionRef = useRef<string | undefined>();
   const activeChatIdRef = useRef<string | null>(null);
   const activeHistoryIdRef = useRef<string | null>(null);
 
@@ -179,9 +178,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     if (!storage) return;
 
     storage
-      .get(ACTIVE_CHAT_ID_KEY)
+      .get<string>(ACTIVE_CHAT_ID_KEY)
       .then(async (storedChatId) => {
-        if (storedChatId && isValidUUID(storedChatId)) {
+        if (typeof storedChatId === 'string' && isValidUUID(storedChatId)) {
           setActiveChatId(storedChatId);
           setActiveHistoryId(storedChatId);
         }
@@ -213,14 +212,15 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
       const fallbackTitle = buildInitialChatTitle(initialMessage || '');
       const chat = await apiClient.createChat({ title: fallbackTitle });
-      if (!chat?.id) {
+      const chatId = typeof chat?.id === 'string' ? chat.id : null;
+      if (!chatId) {
         throw new Error('Failed to create chat session');
       }
 
-      setActiveChatId(chat.id);
-      setActiveHistoryId(chat.id);
+      setActiveChatId(chatId);
+      setActiveHistoryId(chatId);
 
-      return chat.id;
+      return chatId;
     },
     [apiClient],
   );
@@ -238,6 +238,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       const attachmentIds = resolvedOptions.attachmentIds;
       const selectionOverride = resolvedOptions.selectionOverride;
       const userMessageOverride = resolvedOptions.userMessageOverride;
+      const transcriptContext = resolvedOptions.transcriptContext;
 
       const now = new Date().toISOString();
       const provisionalChatId = `chat-${Date.now()}`;
@@ -289,6 +290,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         attachmentIds,
         selectionOverride,
         userMessageOverride,
+        transcriptContext,
       });
     },
     [mode, pageUrl, courseCode, setMessages, upsertHistory, sendMessageMutation],
@@ -307,6 +309,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       const attachmentIds = resolvedOptions.attachmentIds;
       const selectionOverride = resolvedOptions.selectionOverride;
       const userMessageOverride = resolvedOptions.userMessageOverride;
+      const transcriptContext = resolvedOptions.transcriptContext;
 
       const hasChatContext = Boolean(activeChatId || activeHistoryId);
 
@@ -372,6 +375,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
         attachmentIds,
         selectionOverride,
         userMessageOverride,
+        transcriptContext,
       });
     },
     [
@@ -440,19 +444,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     },
     [apiClient, mode, setMessages],
   );
-
-  // Handle selected text changes
-  useEffect(() => {
-    if (!selectedText || selectedText.trim().length === 0) return;
-    if (previousSelectionRef.current === selectedText) return;
-    previousSelectionRef.current = selectedText;
-
-    if (messages.length === 0) {
-      startNewChat(selectedText, 'selection');
-    } else {
-      sendMessage(selectedText, 'selection');
-    }
-  }, [selectedText, messages.length, startNewChat, sendMessage]);
 
   const clearError = useCallback(() => setError(null), []);
 

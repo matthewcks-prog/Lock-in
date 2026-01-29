@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { requireSupabaseUser } = require('../authMiddleware');
-const feedbackController = require('../controllers/feedbackController');
+const feedbackController = require('../controllers/feedback');
 
 const router = express.Router();
 

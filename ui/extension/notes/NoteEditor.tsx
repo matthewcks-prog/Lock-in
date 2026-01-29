@@ -65,13 +65,16 @@ export function NoteEditorShell({
   const initialEditorState = useMemo(() => {
     if (!note?.content) return null;
     if (note.content.version === 'lexical_v1' && note.content.editorState) {
-      const state = note.content.editorState as any;
+      const state = note.content.editorState;
       if (typeof state === 'string') return state;
-      try {
-        return JSON.stringify(state);
-      } catch {
-        return null;
+      if (state && typeof state === 'object') {
+        try {
+          return JSON.stringify(state);
+        } catch {
+          return null;
+        }
       }
+      return null;
     }
     return null;
   }, [note?.id, note?.content?.editorState]);
@@ -80,7 +83,7 @@ export function NoteEditorShell({
     () => ({
       namespace: 'LockInNoteEditor',
       theme: noteEditorTheme,
-      editorState: initialEditorState as any,
+      editorState: initialEditorState ?? undefined,
       editable: true,
       onError(error: Error) {
         console.error('Lexical editor error', error);

@@ -1,10 +1,20 @@
 import type { DetectedVideo } from '../../types';
+import type { AsyncFetcher, EnhancedAsyncFetcher } from '../../fetchers/types';
+import { hasRedirectSupport } from '../../fetchers/types';
 import {
   buildPanoptoEmbedUrl,
   buildPanoptoViewerUrl,
   extractPanoptoInfo,
   normalizePanoptoEmbedUrl,
+  type PanoptoInfo,
 } from './urlUtils';
+import { logWithPrefix } from '../../utils/transcriptLogger';
+
+const PANOPTO_PREFIX = '[Panopto]';
+const logDebug = (message: string, meta?: Record<string, unknown>) =>
+  logWithPrefix(PANOPTO_PREFIX, 'debug', message, meta);
+const logWarn = (message: string, meta?: Record<string, unknown>) =>
+  logWithPrefix(PANOPTO_PREFIX, 'warn', message, meta);
 
 function decodeEscapedUrl(value: string): string {
   return value
@@ -18,6 +28,51 @@ function decodeEscapedUrl(value: string): string {
     .replace(/&#x3D;/gi, '=')
     .replace(/&#39;/g, "'")
     .trim();
+}
+
+function normalizePanoptoCandidateUrl(candidate: string, baseUrl: string): string | null {
+  const decoded = decodeEscapedUrl(candidate);
+  if (!decoded || decoded.startsWith('javascript:')) return null;
+  const withProtocol = decoded.startsWith('//') ? `https:${decoded}` : decoded;
+  try {
+    return new URL(withProtocol, baseUrl).toString();
+  } catch {
+    return withProtocol;
+  }
+}
+
+export function extractPanoptoInfoFromHtml(
+  html: string,
+  baseUrl: string,
+): { info: PanoptoInfo; url: string } | null {
+  const candidates = new Set<string>();
+  const urlMatches = html.match(/(?:https?:)?\/\/[^\s"'<>]+/gi) || [];
+  const escapedMatches = html.match(/https?:\\\/\\\/[^\s"'<>]+/gi) || [];
+  const encodedMatches = html.match(/https?%3A%2F%2F[^\s"'<>]+/gi) || [];
+
+  for (const match of [...urlMatches, ...escapedMatches, ...encodedMatches]) {
+    if (!match.toLowerCase().includes('panopto')) continue;
+    candidates.add(match);
+  }
+
+  for (const candidate of candidates) {
+    const normalized = normalizePanoptoCandidateUrl(candidate, baseUrl);
+    if (normalized) {
+      const info = extractPanoptoInfo(normalized);
+      if (info) return { info, url: normalized };
+      try {
+        const decoded = decodeURIComponent(normalized);
+        if (decoded !== normalized) {
+          const decodedInfo = extractPanoptoInfo(decoded);
+          if (decodedInfo) return { info: decodedInfo, url: decoded };
+        }
+      } catch {
+        // Ignore decode errors
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -41,13 +96,13 @@ export function extractCaptionVttUrl(html: string): string | null {
     const match = html.match(pattern);
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);
-      console.log(`[Panopto] Caption URL found with pattern ${i + 1}:`, url.substring(0, 100));
+      logDebug('Caption URL found', { patternIndex: i + 1, url: url.substring(0, 100) });
       return url;
     }
   }
 
-  console.warn('[Panopto] No caption URL found in embed HTML. HTML length:', html.length);
-  console.log('[Panopto] HTML sample:', html.substring(0, 500).replace(/\s+/g, ' '));
+  logWarn('No caption URL found in embed HTML', { htmlLength: html.length });
+  logDebug('Embed HTML sample', { sample: html.substring(0, 500).replace(/\s+/g, ' ') });
 
   return null;
 }
@@ -80,7 +135,7 @@ export function extractPanoptoMediaUrl(html: string): string | null {
     /"(?:Url|url|URL)"\s*:\s*"(https?:\/\/[^"]*panopto[^"]*\/(?:Podcast|Stream|Delivery)[^"]*)"/i,
   ];
 
-  console.log('[Panopto] Searching for media URL in HTML (length:', html.length, ')');
+  logDebug('Searching for media URL in embed HTML', { htmlLength: html.length });
 
   for (let i = 0; i < patterns.length; i++) {
     const pattern = patterns[i];
@@ -88,10 +143,13 @@ export function extractPanoptoMediaUrl(html: string): string | null {
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);
       if (isValidVideoUrl(url)) {
-        console.log(`[Panopto] Media URL found with pattern ${i + 1}:`, url.substring(0, 100));
+        logDebug('Media URL found', { patternIndex: i + 1, url: url.substring(0, 100) });
         return url;
       } else {
-        console.log(`[Panopto] Pattern ${i + 1} matched but URL invalid:`, url.substring(0, 50));
+        logDebug('Pattern matched but URL invalid', {
+          patternIndex: i + 1,
+          url: url.substring(0, 50),
+        });
       }
     }
   }
@@ -101,18 +159,56 @@ export function extractPanoptoMediaUrl(html: string): string | null {
   );
 
   if (urlKeys.length > 0) {
-    console.log('[Panopto] Found URL-like keys in HTML:', urlKeys.slice(0, 10).join(', '));
+    logDebug('Found URL-like keys in embed HTML', { keys: urlKeys.slice(0, 10) });
   }
 
   const anyVideoUrl = html.match(/https?:\/\/[^"'\s]+(?:\.mp4|\.m3u8|\/stream\/|\/podcast\/)/i);
   if (anyVideoUrl && anyVideoUrl[0]) {
-    console.log('[Panopto] Found potential video URL in HTML:', anyVideoUrl[0].substring(0, 100));
+    logDebug('Found potential video URL in embed HTML', {
+      url: anyVideoUrl[0].substring(0, 100),
+    });
     return anyVideoUrl[0];
   }
 
-  console.warn('[Panopto] No media URL found for AI transcription');
+  logWarn('No media URL found for AI transcription');
 
   return null;
+}
+
+export async function resolvePanoptoInfoFromWrapperUrl(
+  url: string,
+  fetcher: AsyncFetcher | EnhancedAsyncFetcher,
+): Promise<{ info: PanoptoInfo | null; authRequired: boolean; finalUrl?: string }> {
+  try {
+    let html = '';
+    let finalUrl = url;
+
+    if (hasRedirectSupport(fetcher) && fetcher.fetchHtmlWithRedirectInfo) {
+      const result = await fetcher.fetchHtmlWithRedirectInfo(url);
+      html = result.html;
+      finalUrl = result.finalUrl || url;
+    } else {
+      html = await fetcher.fetchWithCredentials(url);
+    }
+
+    const directInfo = extractPanoptoInfo(finalUrl);
+    if (directInfo) {
+      return { info: directInfo, authRequired: false, finalUrl };
+    }
+
+    const fromHtml = extractPanoptoInfoFromHtml(html, finalUrl || url);
+    if (fromHtml) {
+      return { info: fromHtml.info, authRequired: false, finalUrl: fromHtml.url };
+    }
+
+    return { info: null, authRequired: false, finalUrl };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message === 'AUTH_REQUIRED') {
+      return { info: null, authRequired: true };
+    }
+    return { info: null, authRequired: false };
+  }
 }
 
 export function resolvePanoptoEmbedUrl(video: DetectedVideo): string {

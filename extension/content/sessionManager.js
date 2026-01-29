@@ -76,7 +76,7 @@
           return;
         }
 
-        stateStore.setSelection(session.selection || '');
+        stateStore.setPendingPrefill(session.selection || '');
         stateStore.setMode(session.mode || 'explain');
 
         if (session.chatId) {

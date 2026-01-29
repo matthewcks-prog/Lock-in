@@ -1,0 +1,25 @@
+# Windsurf / Codeium Rules
+
+# Project: Lock-in Chrome Extension
+
+## Context awareness
+- Always index `AGENTS.md` files to understand architectural constraints.
+
+## layer_rules:
+  - layer: "core"
+    path: "core/"
+    allowed_imports: ["@core/*", "utils", "crypto"]
+    forbidden_imports: ["chrome", "react", "express", "backend/*"]
+    description: "Pure domain logic. No platform specifics."
+
+  - layer: "integrations"
+    path: "integrations/"
+    allowed_imports: ["@core/*"]
+    forbidden_imports: ["api/*", "backend/*", "chrome"]
+    description: "Pure DOM parsers. No network/storage side effects."
+
+  - layer: "backend"
+    path: "backend/"
+    allowed_imports: ["express", "pg", "supabase"]
+    forbidden_imports: ["chrome", "extension/*", "ui/*"]
+    description: "Node.js server code. No browser globals."

@@ -15,7 +15,7 @@ const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks to match backend
  * This runs in the content script context which has access to same-origin resources
  *
  * @param {string} mediaUrl - The URL of the media to fetch
- * @param {function} onChunk - Callback for each chunk: (chunk: Uint8Array, index: number, isLast: boolean) => Promise<void>
+ * @param {function} onChunk - Callback for each chunk: (chunk: Uint8Array | null, index: number, isLast: boolean) => Promise<void>
  * @param {AbortSignal} signal - Optional abort signal
  * @returns {Promise<{success: boolean, error?: string, totalBytes?: number}>}
  */
@@ -201,11 +201,11 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
         } else {
           // Edge case: media size was exactly a multiple of CHUNK_SIZE
           // Buffer is empty but we still need to emit completion signal
-          // Send an empty final chunk to signal completion
+          // Send a completion signal without a payload
           console.log(
             '[Lock-in MediaFetcher] Buffer empty at end (exact chunk boundary), sending completion signal',
           );
-          await onChunk(new Uint8Array(0), chunkIndex, true);
+          await onChunk(null, chunkIndex, true);
         }
         break;
       }
@@ -229,10 +229,11 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
     }
 
     console.log('[Lock-in MediaFetcher] Fetch complete. Total bytes:', totalBytesRead);
+    const chunksCount = buffer.length > 0 ? chunkIndex + 1 : chunkIndex;
     return {
       success: true,
       totalBytes: totalBytesRead,
-      chunksCount: chunkIndex + 1,
+      chunksCount,
     };
   } catch (error) {
     console.error('[Lock-in MediaFetcher] Fetch error:', error);
@@ -278,16 +279,18 @@ async function handleMediaFetchRequest(payload, sendChunk) {
   });
 
   return fetchMediaAsChunks(mediaUrl, async (chunk, index, isLast) => {
-    // Convert Uint8Array to base64 for messaging
-    const base64 = arrayBufferToBase64(chunk);
+    const chunkBuffer =
+      chunk && chunk.byteLength
+        ? chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength)
+        : null;
     await sendChunk({
       type: 'MEDIA_CHUNK',
       payload: {
         requestId,
         jobId,
         chunkIndex: index,
-        chunkData: base64,
-        chunkSize: chunk.length,
+        chunkData: chunkBuffer,
+        chunkSize: chunk ? chunk.length : 0,
         isLast,
       },
     });

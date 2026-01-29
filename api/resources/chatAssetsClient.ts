@@ -32,16 +32,32 @@ export interface DeleteChatAssetParams {
   assetId: string;
 }
 
-function mapChatAsset(raw: any): ChatAsset {
+type ChatAssetRecord = {
+  id: string;
+  messageId?: string | null;
+  message_id?: string | null;
+  type: ChatAsset['type'];
+  mimeType?: string | null;
+  mime_type?: string | null;
+  fileName?: string | null;
+  file_name?: string | null;
+  fileSize?: number | null;
+  file_size?: number | null;
+  url?: string | null;
+  createdAt?: string;
+  created_at?: string;
+};
+
+function mapChatAsset(raw: ChatAssetRecord): ChatAsset {
   return {
     id: raw.id,
     messageId: raw.messageId || raw.message_id || null,
     type: raw.type,
-    mimeType: raw.mimeType || raw.mime_type,
+    mimeType: raw.mimeType || raw.mime_type || '',
     fileName: raw.fileName ?? raw.file_name ?? null,
     fileSize: raw.fileSize ?? raw.file_size ?? null,
     url: raw.url ?? null,
-    createdAt: raw.createdAt || raw.created_at,
+    createdAt: raw.createdAt || raw.created_at || new Date().toISOString(),
   };
 }
 
@@ -68,7 +84,7 @@ export function createChatAssetsClient(apiRequest: ApiRequest) {
       body: formData,
     });
 
-    return mapChatAsset(validateChatAssetRecord(raw, 'uploadChatAsset'));
+    return mapChatAsset(validateChatAssetRecord(raw, 'uploadChatAsset') as ChatAssetRecord);
   }
 
   /**
@@ -86,7 +102,9 @@ export function createChatAssetsClient(apiRequest: ApiRequest) {
       method: 'GET',
     });
 
-    return validateChatAssetRecords(raw, 'listChatAssets').map(mapChatAsset);
+    return validateChatAssetRecords(raw, 'listChatAssets').map((record) =>
+      mapChatAsset(record as ChatAssetRecord),
+    );
   }
 
   /**

@@ -8,7 +8,7 @@
 const express = require('express');
 const cors = require('cors');
 const { MAX_SELECTION_LENGTH, MAX_USER_MESSAGE_LENGTH, isOriginAllowed } = require('./config');
-const lockinRoutes = require('./routes/lockinRoutes');
+const assistantRoutes = require('./routes/assistantRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
@@ -64,14 +64,14 @@ function createApp() {
 
   // Sentry test endpoint (only in development)
   if (process.env.NODE_ENV !== 'production') {
-    app.get('/debug-sentry', (req, res, next) => {
+    app.get('/debug-sentry', (_req, _res, _next) => {
       // This will throw an error that Sentry should capture
       throw new Error('Sentry test error from Lock-in backend!');
     });
   }
 
   // API routes
-  app.use('/api', lockinRoutes);
+  app.use('/api', assistantRoutes);
   app.use('/api', noteRoutes);
   app.use('/api', transcriptsRoutes);
   app.use('/api', feedbackRoutes);

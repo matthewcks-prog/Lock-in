@@ -18,6 +18,20 @@ export interface ProcessTextParams {
   idempotencyKey?: string;
 }
 
+type LockinRequestBody = {
+  selection: string;
+  mode: 'explain' | 'general';
+  chatHistory: Array<{ role: string; content: string }>;
+  newUserMessage?: string;
+  chatId?: string;
+  pageContext?: string;
+  pageUrl?: string;
+  courseCode?: string;
+  language?: string;
+  attachments?: string[];
+  idempotencyKey?: string;
+};
+
 export function createLockinClient(apiRequest: ApiRequest) {
   async function processText(params: ProcessTextParams): Promise<ApiResponse<StudyResponse>> {
     const {
@@ -44,7 +58,7 @@ export function createLockinClient(apiRequest: ApiRequest) {
         content: message.content,
       }));
 
-    const body: any = {
+    const body: LockinRequestBody = {
       selection: selection || '',
       mode,
       chatHistory: normalizedHistory,

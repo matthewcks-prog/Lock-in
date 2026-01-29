@@ -380,21 +380,15 @@ az containerapp update \
 
 ## Phase 4: GitHub Actions CI/CD
 
-### 4.1 Create Azure Service Principal
+### 4.1 Configure OIDC (Managed Identity)
 
-```bash
-# Get subscription ID
-SUBSCRIPTION_ID=$(az account show --query id -o tsv)
-
-# Create service principal with contributor role
-az ad sp create-for-rbac \
-    --name "github-actions-lock-in" \
-    --role contributor \
-    --scopes /subscriptions/$SUBSCRIPTION_ID/resourceGroups/lock-in-prod \
-    --sdk-auth
+```powershell
+# From repo root (edit config values at top if needed)
+.\setup_uami.ps1
 ```
 
-Save the JSON output - you'll need it for GitHub.
+This creates a user-assigned managed identity, assigns roles, and configures
+federated credentials for GitHub Actions.
 
 ### 4.2 Configure GitHub Secrets
 
@@ -402,13 +396,14 @@ Go to GitHub repo → Settings → Secrets and variables → Actions
 
 Add these secrets:
 
-| Secret Name                | Value                                         |
-| -------------------------- | --------------------------------------------- |
-| `AZURE_CREDENTIALS`        | The JSON from service principal creation      |
-| `AZURE_CONTAINER_REGISTRY` | `lockinacr` (name only, no .azurecr.io)       |
-| `AZURE_RESOURCE_GROUP`     | `lock-in-prod`                                |
-| `ACR_USERNAME`             | ACR admin username (from setup script output) |
-| `ACR_PASSWORD`             | ACR admin password (from setup script output) |
+| Secret Name                    | Value                                   |
+| ------------------------------ | --------------------------------------- |
+| `AZURE_CLIENT_ID`              | Managed identity client ID              |
+| `AZURE_TENANT_ID`              | Azure AD tenant ID                      |
+| `AZURE_SUBSCRIPTION_ID`        | Azure subscription ID                   |
+| `AZURE_CONTAINER_REGISTRY`     | `lockinacr` (name only, no .azurecr.io) |
+| `AZURE_RESOURCE_GROUP`         | `lock-in-prod`                          |
+| `AZURE_RESOURCE_GROUP_STAGING` | `lock-in-dev`                           |
 
 ### 4.3 Create Production Environment
 

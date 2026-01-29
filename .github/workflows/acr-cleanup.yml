@@ -1,0 +1,284 @@
+# =============================================================================
+# Azure Container Registry Cleanup - Automated Image Retention Management
+#
+# PURPOSE: Reduce ACR storage costs by automatically removing old container images
+# SCHEDULE: Weekly (configurable)
+# RETENTION POLICIES:
+#   - Staging images: 14 days (configurable)
+#   - Production images: 90 days (configurable)
+#   - Semantic version tags (v*.*.*): Never deleted
+#   - Latest tags: Never deleted
+# =============================================================================
+
+name: ACR Cleanup
+
+on:
+  # Weekly cleanup on Sundays at 2 AM UTC
+  schedule:
+    - cron: '0 2 * * 0'
+
+  # Manual trigger with configurable parameters
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (preview deletions without executing)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      staging_retention_days:
+        description: 'Retention period for staging images (days)'
+        required: false
+        default: '14'
+        type: string
+      production_retention_days:
+        description: 'Retention period for production images (days)'
+        required: false
+        default: '90'
+        type: string
+      repository:
+        description: 'Repository name (leave empty for all)'
+        required: false
+        default: 'lock-in-backend'
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set cleanup parameters
+        id: params
+        run: |
+          # Use workflow inputs if provided, otherwise use defaults
+          DRY_RUN="${{ github.event.inputs.dry_run || 'false' }}"
+          STAGING_RETENTION="${{ github.event.inputs.staging_retention_days || '14' }}"
+          PRODUCTION_RETENTION="${{ github.event.inputs.production_retention_days || '90' }}"
+          REPOSITORY="${{ github.event.inputs.repository || 'lock-in-backend' }}"
+
+          echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+          echo "staging_retention=$STAGING_RETENTION" >> $GITHUB_OUTPUT
+          echo "production_retention=$PRODUCTION_RETENTION" >> $GITHUB_OUTPUT
+          echo "repository=$REPOSITORY" >> $GITHUB_OUTPUT
+
+          echo "🔧 Cleanup Configuration:"
+          echo "  Dry Run: $DRY_RUN"
+          echo "  Staging Retention: $STAGING_RETENTION days"
+          echo "  Production Retention: $PRODUCTION_RETENTION days"
+          echo "  Repository: $REPOSITORY"
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Cleanup old images
+        env:
+          DRY_RUN: ${{ steps.params.outputs.dry_run }}
+          STAGING_RETENTION: ${{ steps.params.outputs.staging_retention }}
+          PRODUCTION_RETENTION: ${{ steps.params.outputs.production_retention }}
+          REPOSITORY: ${{ steps.params.outputs.repository }}
+        run: |
+          set -euo pipefail
+
+          ACR_NAME="${{ env.AZURE_CONTAINER_REGISTRY }}"
+
+          # Calculate cutoff timestamps
+          STAGING_CUTOFF=$(date -u -d "-${STAGING_RETENTION} days" '+%Y-%m-%dT%H:%M:%SZ')
+          PRODUCTION_CUTOFF=$(date -u -d "-${PRODUCTION_RETENTION} days" '+%Y-%m-%dT%H:%M:%SZ')
+
+          echo "📅 Cutoff Timestamps:"
+          echo "  Staging: $STAGING_CUTOFF"
+          echo "  Production: $PRODUCTION_CUTOFF"
+          echo ""
+
+          # Get all tags for the repository
+          echo "🔍 Fetching all tags for repository: $REPOSITORY"
+          TAGS=$(az acr repository show-tags \
+            --name "$ACR_NAME" \
+            --repository "$REPOSITORY" \
+            --orderby time_desc \
+            --output tsv 2>/dev/null || echo "")
+
+          if [ -z "$TAGS" ]; then
+            echo "⚠️ No tags found for repository $REPOSITORY"
+            exit 0
+          fi
+
+          # Counters for summary
+          STAGING_DELETED=0
+          PRODUCTION_DELETED=0
+          STAGING_SIZE_SAVED=0
+          PRODUCTION_SIZE_SAVED=0
+
+          echo "🗑️ Analyzing images for cleanup..."
+          echo ""
+
+          # Process each tag
+          while IFS= read -r TAG; do
+            [ -z "$TAG" ] && continue
+
+            # Skip semantic version tags (v1.2.3, v2.0.0-beta, etc.)
+            if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              echo "✅ Preserving semantic version: $TAG"
+              continue
+            fi
+
+            # Skip 'latest' tags
+            if [[ "$TAG" == *"-latest" ]] || [[ "$TAG" == "latest" ]]; then
+              echo "✅ Preserving latest tag: $TAG"
+              continue
+            fi
+
+            # Get manifest creation timestamp
+            MANIFEST_INFO=$(az acr manifest show \
+              --name "$REPOSITORY:$TAG" \
+              --registry "$ACR_NAME" \
+              --query '{created: created, size: imageSize}' \
+              --output json 2>/dev/null || echo "{}")
+
+            CREATED_AT=$(echo "$MANIFEST_INFO" | jq -r '.created // empty')
+            IMAGE_SIZE=$(echo "$MANIFEST_INFO" | jq -r '.size // 0')
+
+            if [ -z "$CREATED_AT" ]; then
+              echo "⚠️ Could not determine creation time for $TAG, skipping"
+              continue
+            fi
+
+            # Determine if staging or production
+            IS_STAGING=false
+            IS_PRODUCTION=false
+
+            if [[ "$TAG" == staging-* ]]; then
+              IS_STAGING=true
+              CUTOFF=$STAGING_CUTOFF
+            elif [[ "$TAG" == production-* ]]; then
+              IS_PRODUCTION=true
+              CUTOFF=$PRODUCTION_CUTOFF
+            else
+              # Default: treat untagged as staging (shorter retention)
+              IS_STAGING=true
+              CUTOFF=$STAGING_CUTOFF
+            fi
+
+            # Check if image is older than cutoff
+            if [[ "$CREATED_AT" < "$CUTOFF" ]]; then
+              ENV_TYPE=$( [ "$IS_STAGING" = true ] && echo "staging" || echo "production" )
+              SIZE_MB=$((IMAGE_SIZE / 1024 / 1024))
+
+              echo "🗑️ Marking for deletion: $TAG (${ENV_TYPE}, created ${CREATED_AT}, ${SIZE_MB}MB)"
+
+              if [ "$DRY_RUN" = "false" ]; then
+                # Actually delete the manifest
+                az acr repository delete \
+                  --name "$ACR_NAME" \
+                  --image "$REPOSITORY:$TAG" \
+                  --yes \
+                  2>/dev/null || echo "⚠️ Failed to delete $TAG"
+
+                echo "  ✅ Deleted: $TAG"
+              else
+                echo "  🔍 [DRY RUN] Would delete: $TAG"
+              fi
+
+              # Update counters
+              if [ "$IS_STAGING" = true ]; then
+                STAGING_DELETED=$((STAGING_DELETED + 1))
+                STAGING_SIZE_SAVED=$((STAGING_SIZE_SAVED + SIZE_MB))
+              else
+                PRODUCTION_DELETED=$((PRODUCTION_DELETED + 1))
+                PRODUCTION_SIZE_SAVED=$((PRODUCTION_SIZE_SAVED + SIZE_MB))
+              fi
+            else
+              echo "✅ Keeping recent image: $TAG (created ${CREATED_AT})"
+            fi
+          done <<< "$TAGS"
+
+          # Summary
+          echo ""
+          echo "========================================"
+          echo "📊 CLEANUP SUMMARY"
+          echo "========================================"
+          echo "Mode: $([ "$DRY_RUN" = "true" ] && echo "DRY RUN" || echo "LIVE")"
+          echo ""
+          echo "Staging images:"
+          echo "  Deleted: $STAGING_DELETED"
+          echo "  Space saved: ${STAGING_SIZE_SAVED}MB"
+          echo ""
+          echo "Production images:"
+          echo "  Deleted: $PRODUCTION_DELETED"
+          echo "  Space saved: ${PRODUCTION_SIZE_SAVED}MB"
+          echo ""
+          echo "Total:"
+          echo "  Images deleted: $((STAGING_DELETED + PRODUCTION_DELETED))"
+          echo "  Space saved: $((STAGING_SIZE_SAVED + PRODUCTION_SIZE_SAVED))MB"
+          echo "========================================"
+
+          # Set outputs for reporting
+          echo "staging_deleted=$STAGING_DELETED" >> $GITHUB_ENV
+          echo "production_deleted=$PRODUCTION_DELETED" >> $GITHUB_ENV
+          echo "total_space_saved=$((STAGING_SIZE_SAVED + PRODUCTION_SIZE_SAVED))" >> $GITHUB_ENV
+
+      - name: Create cleanup report
+        if: always()
+        run: |
+          cat << EOF > cleanup-report.md
+          # ACR Cleanup Report - $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+          ## Configuration
+          - **Mode**: ${{ steps.params.outputs.dry_run == 'true' && 'DRY RUN' || 'LIVE' }}
+          - **Repository**: ${{ steps.params.outputs.repository }}
+          - **Staging Retention**: ${{ steps.params.outputs.staging_retention }} days
+          - **Production Retention**: ${{ steps.params.outputs.production_retention }} days
+
+          ## Results
+          - **Staging images deleted**: ${staging_deleted:-0}
+          - **Production images deleted**: ${production_deleted:-0}
+          - **Total space saved**: ${total_space_saved:-0}MB
+
+          ## Next Steps
+          ${{ steps.params.outputs.dry_run == 'true' && '⚠️ This was a dry run. No images were actually deleted. Review the logs and run with dry_run=false to execute.' || '✅ Cleanup completed successfully. Images have been removed from ACR.' }}
+          EOF
+
+          cat cleanup-report.md
+
+      - name: Upload cleanup report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acr-cleanup-report-${{ github.run_number }}
+          path: cleanup-report.md
+          retention-days: 90
+
+# =============================================================================
+# Required GitHub Secrets:
+#
+# AZURE_CLIENT_ID          - Azure client ID (UAMI or app registration)
+# AZURE_TENANT_ID          - Azure tenant ID
+# AZURE_SUBSCRIPTION_ID    - Azure subscription ID
+# AZURE_CONTAINER_REGISTRY - ACR name (without .azurecr.io suffix)
+#
+# Setup Instructions:
+# 1. Ensure the Azure service principal has AcrDelete permissions
+# 2. Test with dry_run=true first to preview changes
+# 3. Adjust retention periods based on your compliance requirements
+# 4. Consider enabling the schedule after successful dry runs
+# =============================================================================

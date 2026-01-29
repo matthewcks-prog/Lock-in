@@ -47,6 +47,9 @@ jobs:
       - name: Check code formatting
         run: npm run format:check
 
+      - name: Check doc link integrity
+        run: npm run docs:check-links
+
       - name: Run linting (all workspaces)
         run: npm run lint:all
 
@@ -63,7 +66,6 @@ jobs:
 
       - name: Run tests with coverage
         run: npm run test:coverage
-        continue-on-error: true
 
       - name: Upload coverage to artifacts
         uses: actions/upload-artifact@v4
@@ -95,15 +97,16 @@ jobs:
         if: always()
         run: |
           echo "=========================================="
-          echo "✅ Quality Gate Complete"
+          echo "Quality Gate Complete"
           echo "=========================================="
           echo ""
           echo "Checks performed:"
-          echo "  ✓ Code formatting"
-          echo "  ✓ Linting (extension + backend)"
-          echo "  ✓ Type checking"
-          echo "  ✓ Unit tests (extension + backend)"
-          echo "  ✓ Test coverage"
-          echo "  ✓ Build verification"
+          echo "  - Code formatting"
+          echo "  - Doc link integrity"
+          echo "  - Linting (extension + backend)"
+          echo "  - Type checking"
+          echo "  - Unit tests (extension + backend)"
+          echo "  - Test coverage"
+          echo "  - Build verification"
           echo ""
           echo "=========================================="

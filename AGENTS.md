@@ -1,359 +1,842 @@
 # Lock-in Project AGENTS.md
 
+> **Last Updated**: 2026-01-28  
+> **Version**: 2.0 - Industry Standard Architecture Documentation
+
+## Table of Contents
+
+- [Project Overview](#project-overview)
+- [Documentation Hierarchy](#documentation-hierarchy)
+- [Core Principles](#core-principles)
+- [Architectural Boundaries](#architectural-boundaries)
+- [Cross-Cutting Concerns](#cross-cutting-concerns)
+- [Reliability Requirements](#reliability-requirements)
+- [Testing Strategy](#testing-strategy)
+- [Making Changes](#making-changes)
+- [Common Failure Modes](#common-failure-modes)
+- [PR Quality Gates](#pr-quality-gates)
+- [Sub-AGENTS Index](#sub-agents-index)
+
+---
+
 ## Project Overview
 
 **Lock-in** is an AI-powered study assistant Chrome extension focused on Monash University students. It helps students understand and explain content from learning platforms (Moodle, Edstem, Panopto, etc.) while capturing notes and tasks.
 
 **Core Philosophy**: Extension-first, web-app-friendly. The extension is the primary surface; a future web app will share the same backend and data.
 
----
+### Core Experience Loop
 
-## Core Experience Loop
-
-Every feature should reinforce this loop:
+Every feature MUST reinforce this loop:
 
 1. **Capture** → Highlight text / video / assignment spec
-2. **Understand** → Explain / summarise
-3. **Distil** → Turn that into a note, flashcard, or todo
-4. **Organise** → Auto-bucket by unit, week, topic (course metadata)
+2. **Understand** → Explain / summarize
+3. **Distil** → Turn into note, flashcard, or todo
+4. **Organize** → Auto-bucket by unit, week, topic
 5. **Act** → Show upcoming tasks, revision items, questions
 
-**When making changes, ask**: Does this support the loop? Does it make capture → understand → distil → organise → act easier?
+**Decision filter**: Does this change support the loop? Does it make capture → understand → distil → organize → act easier?
 
 ---
 
 ## Documentation Hierarchy
 
-This project uses a structured documentation approach:
+This project uses a **stable contract + living snapshot** documentation approach:
 
-- **`/AGENTS.md`** (this file) - Canonical stable contract: architecture boundaries, coding rules, workflow patterns
-- **`docs/architecture/ARCHITECTURE.md`** - Stable architecture invariants (surfaces, boundaries, contracts)
-- **`docs/tracking/STATUS.md`** - Living snapshot: outstanding issues, recent changes, implementation status
-- **`docs/architecture/REPO_MAP.md`** - Repository structure map and entrypoints
-- **`docs/tracking/REFACTOR_PLAN.md`** - Phased refactoring plan
-- **`docs/tracking/PROMPT_LOG.md`** - Log of refactoring prompts and outcomes
-- **`CODE_OVERVIEW.md`** - Current codebase snapshot (implementation details)
-- **`DATABASE.md`** - Database schema and migration history
-- **Folder-level `AGENTS.md`** - Folder-specific conventions (e.g., `/extension/AGENTS.md`)
+### Stable Contracts (AGENTS Files)
 
-**Doc stability**: `/AGENTS.md` and `docs/architecture/ARCHITECTURE.md` are stable contracts; `docs/tracking/STATUS.md` and `CODE_OVERVIEW.md` are living snapshots; `docs/architecture/REPO_MAP.md` is a concise navigation map.
+- **`/AGENTS.md`** (this file) - Project-wide principles, boundaries, MUST/MUST NOT rules
+- **`/backend/AGENTS.md`** - Backend layering, prompt contracts, testing
+- **`/extension/AGENTS.md`** - Chrome-specific patterns, god file prevention
+- **`/shared/ui/AGENTS.md`** - UI primitives only
+- **`/core/AGENTS.md`** - Platform-agnostic domain logic
+- **`/integrations/AGENTS.md`** - Site adapter patterns
 
-**When to update docs:**
+**Update when**: Architectural boundaries, coding rules, or workflow patterns change
 
-- **`/AGENTS.md`**: Only when architectural boundaries, coding rules, or workflow patterns change
-- **`DATABASE.md`**: When schema changes (new tables/columns, migrations)
-- **`CODE_OVERVIEW.md`**: When file structure or implementation patterns change
-- **Folder `AGENTS.md`**: When folder-specific conventions change
+### Living Snapshots (Reference Docs)
 
-## Architecture Principles
+- **`docs/architecture/ARCHITECTURE.md`** - Stable architecture invariants
+- **`docs/tracking/STATUS.md`** - Outstanding issues, recent changes
+- **`docs/reference/CODE_OVERVIEW.md`** - Current implementation details
+- **`docs/reference/DATABASE.md`** - Database schema and migrations
+- **`docs/architecture/REPO_MAP.md`** - Repository structure map
+
+**Update when**: Implementation details change, files move, schema evolves
+
+### Documentation Update Rules
+
+| Change Type                | Files to Update                    | Required? |
+| -------------------------- | ---------------------------------- | --------- |
+| New architectural boundary | `/AGENTS.md` + relevant sub-AGENTS | **MUST**  |
+| Database schema change     | `docs/reference/DATABASE.md`       | **MUST**  |
+| File structure change      | `docs/reference/CODE_OVERVIEW.md`  | **MUST**  |
+| Folder convention change   | Folder-level `AGENTS.md`           | **MUST**  |
+| Implementation detail      | `docs/reference/CODE_OVERVIEW.md`  | SHOULD    |
+| Refactoring                | `docs/tracking/REFACTOR_PLAN.md`   | SHOULD    |
+
+---
+
+## Core Principles
+
+### 1. SOLID Principles (NON-NEGOTIABLE)
+
+#### Single Responsibility Principle
+
+- **MUST**: Each module has ONE reason to change
+- **Example**: `userRepository.js` handles DB access only, NOT validation or business logic
+- **Anti-pattern**: Controller that validates input, builds prompts, calls DB, and formats responses
+
+#### Open/Closed Principle
+
+- **MUST**: Open for extension, closed for modification
+- **Example**: Site adapters implement `BaseAdapter` interface
+- **Anti-pattern**: Adding `if (site === 'moodle')` checks throughout codebase
+
+#### Liskov Substitution Principle
+
+- **MUST**: Subtypes MUST be replaceable for base types without breaking behavior
+- **Example**: Any `BaseAdapter` implementation can replace another
+- **Anti-pattern**: Adapter that throws errors for `BaseAdapter` required methods
+
+#### Interface Segregation Principle
+
+- **MUST**: Clients MUST NOT depend on interfaces they don't use
+- **Example**: `AsyncFetcher` vs `EnhancedAsyncFetcher` (optional capabilities)
+- **Anti-pattern**: Forcing all adapters to implement video detection when only Panopto needs it
+
+#### Dependency Inversion Principle
+
+- **MUST**: Depend on abstractions, NOT concretions
+- **Example**: Transcript providers depend on `fetcher` interface, NOT `chrome.runtime`
+- **Anti-pattern**: Core code importing `chrome` directly
+
+### 2. DRY (Don't Repeat Yourself)
+
+- **MUST NOT**: Duplicate business logic across layers
+- **Example**: Validation rules in ONE place (validators), used by controllers
+- **Anti-pattern**: Same validation logic copied in controller and service
+
+### 3. Separation of Concerns
+
+```
+/extension     → Chrome-specific code ONLY (manifest, background, content scripts)
+/core          → Business logic, domain models (NO Chrome, NO Express)
+/integrations  → Site-specific adapters (Moodle, Edstem)
+/api           → Backend API client (NO Chrome dependencies)
+/backend       → Node.js/Express server (NO browser globals)
+/ui/extension  → Extension sidebar React components (NOT reused by web app)
+/shared/ui     → Low-level UI primitives (Button, Card, Input)
+```
+
+**Litmus test**: Can you import `/core` in Node.js without errors? If not, you have leakage.
+
+### 4. Testability
+
+- **MUST**: All new modules MUST specify "how to test" in PR
+- **MUST**: Business logic MUST be testable without mocking entire system
+- **SHOULD**: Prefer pure functions (deterministic input → output)
+
+### 5. Fail-Safe Defaults
+
+- **MUST**: System MUST degrade gracefully when services fail
+- **Example**: If OpenAI fails, show error message, don't crash extension
+- **Anti-pattern**: Unhandled promise rejection crashing background script
+
+---
+
+## Architectural Boundaries
 
 ### Two Surfaces, One Backend
 
-- **Chrome Extension** (`/extension`): In-context assistant on learning platforms
-  - UI: Sidebar widget with tabs (Chat/Notes/Settings) - specific to extension
-  - Source lives in `/ui/extension` - React components for the sidebar widget (build output lives in `/extension/dist/ui`, not source)
-- **Web App** (`/web` - future): Study dashboard, knowledge base, analytics
-  - UI: Full-page layouts (dashboard, notes library, calendar, analytics pages)
-  - Will have its own page/layout components under `/web`
-
-Both share:
-
-- Same Supabase backend + auth
-- Same domain models (`/core`)
-- Same API client (`/api`)
-- Optionally a low-level UI kit (`/shared/ui` or `/ui-kit`) for basic components like `<Button>`, `<Card>`, `<TextInput>`
-
-### Separation of Concerns
-
 ```
-/extension     → Chrome-specific code only (manifest, background, content script injection)
-  /dist/ui     → Built output: React sidebar bundle (source in /ui/extension)
-  /dist/libs   → Built outputs: initApi/contentLibs/webvttParser bundles
-/ui           → UI source (shared hooks + extension UI source)
-/ui/extension → Source: Extension-only React components for the sidebar widget
-/core          → Business logic, domain models (NO Chrome dependencies)
-/integrations  → Site-specific adapters (Moodle, Edstem, etc.)
-/api           → Backend API client (NO Chrome dependencies)
-/web           → Future: web app React/Next.js app (full pages and dashboards)
-/shared/ui     → Optional: Low-level UI kit (Button, Card, TextInput, etc.) - basic components only
+┌─────────────────────────────────────────────────────────┐
+│                  CHROME EXTENSION                        │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  Sidebar Widget (/ui/extension)                  │  │
+│  │  - Chat, Notes, Settings                         │  │
+│  │  - Extension-specific, NOT reused by web app     │  │
+│  └──────────────────────────────────────────────────┘  │
+│                         ↓                                │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  Chrome Wrappers (/extension)                    │  │
+│  │  - background.js, content scripts                │  │
+│  │  - Chrome API wrappers                           │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────┐
+│               SHARED LAYERS (Platform-Agnostic)          │
+│  ┌──────────────┬──────────────┬──────────────────────┐│
+│  │ /core        │ /api         │ /integrations        ││
+│  │ Domain logic │ API client   │ Site adapters        ││
+│  │ NO Chrome    │ NO Chrome    │ NO direct backend    ││
+│  └──────────────┴──────────────┴──────────────────────┘│
+└─────────────────────────────────────────────────────────┘
+                          ↓
 ```
 
-**Rule**: If code in `/core` or `/api` needs Chrome APIs, you're doing it wrong. Extract Chrome-specific parts to `/extension`. The extension UI source (`/ui/extension`) is Chrome-specific and will not be reused by the web app.
+┌─────────────────────────────────────────────────────────┐
+│ BACKEND API (Node.js) │
+│ Routes → Controllers → Services → Repos → DB/APIs │
+│ │
+│ Layer Enforcement Rules (STRICT): │
+│ • Routes: Define endpoints, apply middleware │
+│ • Controllers: HTTP only (parse req, call service, res) │
+│ • Services: Business logic, orchestration │
+│ • Repositories: Data access (Supabase queries) │
+│ • Providers: External API wrappers (OpenAI, etc.) │
+└─────────────────────────────────────────────────────────┘
+
+````
+
+### Backend Layering Rules (MANDATORY)
+
+**Controllers (`/backend/controllers`):**
+- **ALLOWED**: HTTP concerns (req/res), calling services, formatting responses
+- **FORBIDDEN**: Business logic, data transformation, validation logic, direct DB access
+- **MAX SIZE**: 50 lines per function (guideline)
+- **PATTERN**:
+  ```javascript
+  async function createNote(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const { title, content } = req.body; // Already validated by middleware
+
+      // Delegate to service
+      const note = await noteService.create({ userId, title, content });
+
+      res.status(201).json(note);
+    } catch (err) {
+      next(err);
+    }
+  }
+````
+
+**Services (`/backend/services`):**
+
+- **PURPOSE**: Business logic, orchestration, domain rules
+- **ALLOWED**: Calling repositories, calling providers, data transformation, complex logic
+- **FORBIDDEN**: HTTP concerns (req/res), direct Supabase client usage
+- **PATTERN**:
+
+  ```javascript
+  async function create({ userId, title, content }) {
+    // Business logic here
+    const processed = contentService.processNoteContent(content);
+    const embedding = await generateEmbedding(processed.plainText);
+
+    return await notesRepo.createNote({
+      userId,
+      title: validateTitle(title),
+      ...processed,
+      embedding,
+    });
+  }
+  ```
+
+**Validators (`/backend/validators`):**
+
+- **TOOL**: Zod schemas for declarative validation
+- **USAGE**: Apply via `validate(schema)` middleware in routes
+- **NO IMPERATIVE VALIDATION** in controllers
+- **PATTERN**:
+
+  ```javascript
+  const createNoteSchema = z.object({
+    title: z.string().max(500).optional(),
+    content: z.string().min(1),
+  });
+
+  // In routes:
+  router.post('/notes', validate(createNoteSchema), createNote);
+  ```
+
+**Repositories (`/backend/repositories`):**
+
+- **PURPOSE**: Data access abstraction
+- **ALLOWED**: Supabase queries, data mapping
+- **FORBIDDEN**: Business logic, validation
+- **EXAMPLE**: `notesRepo.createNote()`, `notesRepo.searchNotesByEmbedding()`
+
+````
+
+**MUST NOT**:
+
+- Core importing from Extension
+- Core importing from Backend
+- Integrations importing from Backend (use API client in extension layer)
+- Services importing from Controllers
 
 ---
 
-## Coding Rules
+## Cross-Cutting Concerns
 
-### 1. Single Widget Component
+### Error Handling
 
-- **ONE** `<LockInSidebar />` component used across all sites
-- Site differences handled via:
-  - `currentSiteAdapter` prop (injected adapter instance)
-  - `courseContext` prop (extracted context)
-  - Configuration object
+**MUST use centralized error taxonomy** (`/core/errors/`):
 
-**DO NOT** create separate widget implementations for different sites.
+```typescript
+// Standardized error codes
+ErrorCodes = {
+  AUTH_INVALID_TOKEN: 'auth/invalid-token',
+  VALIDATION_INVALID_INPUT: 'validation/invalid-input',
+  NETWORK_TIMEOUT: 'network/timeout',
+  // ... see /core/errors/ErrorCodes.ts
+};
 
-### 2. Site Adapters Pattern
+// Typed error classes
+throw new AuthError(ErrorCodes.AUTH_INVALID_TOKEN, 'Token expired');
+throw new ValidationError(ErrorCodes.VALIDATION_INVALID_INPUT, 'Invalid email');
+throw new NetworkError(ErrorCodes.NETWORK_TIMEOUT, 'Request timed out');
+````
 
-To add a new site integration:
+**Error Handling Rules**:
 
-1. Create `/integrations/adapters/yourSiteAdapter.ts`
-2. Implement `BaseAdapter` interface:
-   ```typescript
-   class YourSiteAdapter implements BaseAdapter {
-     canHandle(url: string): boolean { ... }
-     getCourseCode(dom: Document): string | null { ... }
-     getWeek(dom: Document): number | null { ... }
-     getPageContext(dom: Document, url: string): PageContext { ... }
-   }
-   ```
-3. Register in `/integrations/index.ts`
+1. **MUST**: Catch errors at boundaries (controllers, content scripts, background handlers)
+2. **MUST**: Use typed error classes from `/core/errors`
+3. **MUST**: Log errors with context (user ID, request ID, error code)
+4. **MUST NOT**: Swallow errors silently
+5. **SHOULD**: Provide user-friendly error messages via `getUserMessage()`
 
-**DO NOT** scatter site-specific logic in content scripts or UI components.
+### Logging
 
-### 3. Extension vs Core Separation
+**MUST use centralized logger** (`/core/utils/logger.ts`):
 
-- **Extension code** (`/extension`): Chrome-specific code
-  - `/ui/extension` - Source: Sidebar widget React components (extension-specific, not shared)
-  - `/extension/dist/ui` - Built output: React sidebar bundle (built from `/ui/extension`)
-  - `/extension/dist/libs` - Built output: initApi/contentLibs/webvttParser bundles (built from `/extension/src`)
-  - `chromeStorage` wraps `chrome.storage` → calls shared storage interface
-  - `chromeMessaging` wraps `chrome.runtime.sendMessage` → calls shared messaging interface
+```typescript
+import { logger } from '@core/utils/logger';
 
-- **Core code** (`/core`, `/api`): Pure JavaScript/TypeScript, no Chrome APIs
-  - Can be reused by web app without modification
-  - Domain models, business logic, API client
+logger.debug('Fetching transcript', { videoId, provider });
+logger.info('Transcript cached', { videoId, segments: count });
+logger.warn('Fallback to AI transcription', { videoId });
+logger.error('Transcript extraction failed', { videoId, error });
+```
 
-- **Web app code** (`/web` - future): Full-page layouts and dashboards
-  - Will have its own UI components, not reusing the sidebar widget
+**Logging Rules**:
 
-**Test**: Can you import `/core` or `/api` code in a Node.js script? If not, you have Chrome dependencies leaking in.
+1. **MUST**: Use structured logging (objects, not string concatenation)
+2. **MUST**: Include context (IDs, operation name, duration)
+3. **MUST NOT**: Log sensitive data (passwords, tokens, PII)
+4. **SHOULD**: Use appropriate log levels (debug/info/warn/error)
+5. **SHOULD**: Use `transcriptLogger` for transcript-specific logs (domain-specific loggers)
 
-### 4. State Management
+### Security & Privacy
 
-- **Server state** (notes, chats, tasks): Use TanStack Query or similar
-- **Local UI state**: React hooks (`useState`, `useReducer`)
-- **Extension state** (settings, preferences): `chrome.storage.sync` via storage wrapper
+**MUST follow these privacy rules**:
 
-**DO NOT** use global variables for state. Use React state or proper state management.
+1. **No API keys in extension code** - Use backend proxy
+2. **No user data in logs** - Redact sensitive fields
+3. **Input validation at ALL boundaries** - Don't trust frontend
+4. **Rate limiting** - Protect against abuse
+5. **CORS restrictions** - Locked to known origins
 
-### 5. UI Rendering
+**Example - Sensitive Data Redaction**:
 
-- **Use React/Preact components**, not HTML string building
-- **Styled with Tailwind CSS** or CSS Modules
-- **Components are small and focused** (single responsibility)
+```javascript
+// ❌ BAD
+logger.info('User logged in', { email: user.email, token: user.token });
 
-**DO NOT** build HTML strings in JavaScript. Use JSX/TSX.
+// ✅ GOOD
+logger.info('User logged in', { userId: user.id });
+```
 
----
+### Telemetry
 
-## File Organization
+**Error tracking** (Sentry):
 
-See `CODE_OVERVIEW.md` for detailed file structure and current implementation patterns.
-
-**Key boundaries:**
-
-- `/extension` - Chrome-specific code only
-- `/core` - Business logic, domain models (NO Chrome dependencies)
-- `/integrations` - Site-specific adapters
-- `/api` - Backend API client (NO Chrome dependencies)
-- `/web` - Future: web app (full pages, not reusing extension sidebar)
-- `/shared/ui` - Optional: Low-level UI kit (basic components only)
-
----
-
-## Making Changes
-
-### Workflow
-
-1. **Scan key docs & structure**
-   - Read `/AGENTS.md` (this file)
-   - Check `DATABASE.md` if touching schema
-   - Check folder-level `AGENTS.md` if editing specific folders
-   - Review `CODE_OVERVIEW.md` for current implementation patterns
-
-2. **Plan first**
-   - Identify what will change and which files are involved
-   - Determine if changes impact architecture, database, or documented behaviors
-
-3. **Make code changes**
-   - Follow the core loop: Capture → Understand → Distil → Organise → Act
-   - Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
-   - Use adapters: Site-specific logic goes in adapters, not UI or content scripts
-   - Single widget: Don't duplicate the sidebar component
-   - Incremental changes: Don't rewrite everything at once
-
-4. **Update living docs (MANDATORY)**
-   - Update `DATABASE.md` if schema changes (new tables/columns, migrations)
-   - Update `CODE_OVERVIEW.md` if file structure or implementation patterns change
-   - Update folder `AGENTS.md` if folder-specific conventions change
-   - Update `/AGENTS.md` only if architectural boundaries, coding rules, or workflow patterns change
-
-5. **Summarize what changed**
-   - List code changes (files + purpose)
-   - List doc changes (`.md` files updated and what changed)
-   - Note any TODOs or follow-ups
-
-### When Adding Features
-
-- Follow the core loop: Capture → Understand → Distil → Organise → Act
-- Respect separation: Extension code in `/extension`, shared code in `/core`/`/api`
-- Use adapters: Site-specific logic goes in adapters, not UI or content scripts
-- Single widget: Don't duplicate the sidebar component
-- UI location: Extension UI source goes in `/ui/extension` (built to `/extension/dist/ui`), web app UI will go in `/web`
-
-### When Refactoring
-
-- Incremental changes: Don't rewrite everything at once
-- Test after each step: Ensure extension still works
-- Maintain behavior: Don't remove features without discussion
-- Document as you go: Update comments and docs
-
-### Code Review Checklist
-
-- [ ] Does this support the core loop?
-- [ ] Is Chrome-specific code isolated to `/extension`?
-- [ ] Are site-specific adapters used instead of hardcoded logic?
-- [ ] Is the widget component reused, not duplicated?
-- [ ] Are types defined in `/core/domain/types.ts`?
-- [ ] Is state managed properly (React hooks or TanStack Query)?
-- [ ] Are components small and focused?
-- [ ] If adding new database tables → Updated `DATABASE.md`?
-- [ ] If changing file structure → Updated `CODE_OVERVIEW.md`?
+- **Extension**: Isolated `BrowserClient` + `Scope` (not `Sentry.init()`)
+- **Privacy**: Request bodies, auth headers, query params stripped
+- **User context**: NOT attached to error events
 
 ---
 
-## Common Patterns
+## Reliability Requirements
 
-### Adding a New Site
+### 1. Retry & Timeout Policy
 
-1. Create adapter: `/integrations/adapters/newSiteAdapter.ts`
-2. Register: Add to `/integrations/index.ts`
-3. Test: Verify course code extraction works
-4. Document: Add site to supported sites list
+**MUST use shared retry wrappers**:
 
-### Notes Editing Flow
+- **Extension**: `/extension/src/networkUtils.js` (Chrome-specific CORS/credentials)
+- **API client**: `/api/fetcher.ts` (exponential backoff with jitter)
+- **Backend**: `/backend/providers/withFallback.js` (retry + fallback)
 
-- Domain types: `core/domain/Note.ts`
-- Service layer: `core/services/notesService.ts` (handles content format, migrations)
-- UI: `ui/extension/notes/` (Lexical editor, panels)
-- See `CODE_OVERVIEW.md` for detailed implementation patterns
+**Retry Rules**:
 
-### Adding a New Extension UI Feature
+1. **MUST**: Retry transient errors (429, 502, 503, 504)
+2. **MUST**: Use exponential backoff with jitter (prevent thundering herd)
+3. **MUST**: Set max retries (3-5 attempts)
+4. **MUST NOT**: Retry non-idempotent operations without idempotency keys
+5. **MUST**: Set timeouts (network: 30s, LLM: 60s, transcription: 5min)
 
-1. Create component in `/ui/extension` (source location)
-2. Add hook if needed
-3. Integrate into `LockInSidebar.tsx`
-4. Style with Tailwind or CSS Modules
+### 2. Idempotency
 
-**Note**: Extension UI source is in `/ui/extension` (built to `/extension/dist/ui`). Extension UI is specific to the sidebar widget. The future web app will have its own UI components in `/web`.
+**MUST be idempotent** (safe to retry):
 
-### Adding a New API Endpoint
+- Note creation (via idempotency key)
+- Chat message insertion (duplicate detection)
+- File uploads (via content hash)
+- Transcript job creation (via video ID + user ID)
 
-1. Add to API client: `/api/client.ts` or specific file
-2. Add types: `/core/domain/types.ts`
-3. Use in service: `/core/services/` or directly in hooks
-4. Handle errors: Consistent error handling
+**Implementation**:
 
-### Transcript System Architecture
+```javascript
+// Backend: Idempotency store
+const { createIdempotencyStore } = require('../utils/idempotency');
+const idempotencyStore = createIdempotencyStore();
 
-The transcript system uses a **provider pattern with dependency injection**:
+// Controller: Check idempotency key
+const key = extractIdempotencyKey(req);
+const cached = await idempotencyStore.get(key);
+if (cached) return res.status(cached.status).json(cached.body);
+```
 
-1. **Provider Pattern** (`/core/transcripts/providers/`)
-   - All video providers implement `TranscriptProviderV2` interface
-   - Providers are auto-registered via `core/transcripts/index.ts`
-   - Detection uses provider registry, not direct function calls
-   - Each provider handles detection and extraction for its platform
+### 3. Input Validation
 
-2. **Fetcher Interface** (`/core/transcripts/fetchers/`)
-   - `AsyncFetcher` - Base interface for network operations
-   - `EnhancedAsyncFetcher` - Optional capabilities (redirect tracking, HTML parsing)
-   - Extension implements `ExtensionFetcher` in `background.js` (Chrome-specific)
-   - Future: Web app will implement `WebAppFetcher` (standard fetch API)
+**MUST validate at boundaries**:
 
-3. **Extraction Flow**
-   - Detection: `detectVideosSync()` uses provider registry
-   - Extraction: Provider's `extractTranscript(video, fetcher)` method
-   - Fetcher handles CORS/credentials (background script for extension)
-   - Caching: Transcripts cached in `chrome.storage.local` (future enhancement)
+```javascript
+// ❌ BAD - Trusting frontend input
+const user = await db.users.findById(req.body.userId);
 
-4. **File Organization**
-   - `/core/transcripts/providers/` - Provider implementations (Panopto, HTML5)
-   - `/core/transcripts/fetchers/` - Fetcher interfaces and type guards
-   - `/ui/extension/transcripts/hooks/` - React hooks (useTranscripts)
-   - `/extension/background.js` - ExtensionFetcher + message routing (no extraction logic)
+// ✅ GOOD - Validate UUID format
+const { userId } = req.body;
+if (!isValidUUID(userId)) {
+  throw new ValidationError('Invalid user ID format');
+}
+const user = await db.users.findById(userId);
+```
 
-5. **Why Fetcher Interface?**
-   - **CORS**: Background scripts bypass CORS, content scripts cannot
-   - **Credentials**: Background scripts can send cookies with `credentials: "include"`
-   - **Testability**: Core providers can be tested with mock fetchers
-   - **Reusability**: Same provider works in extension and future web app
+**Validation Rules**:
 
-**Rule**: Business logic (extraction algorithm) lives in `/core`. Chrome-specific fetching lives in `/extension`. Providers depend on fetcher interface, not concrete implementations.
+1. **MUST**: Validate at HTTP entry (controllers)
+2. **MUST**: Check types, formats, lengths, ranges
+3. **MUST**: Whitelist allowed values (not blacklist)
+4. **MUST**: Sanitize user inputs (prevent XSS, SQL injection)
+5. **SHOULD**: Use shared validation schemas (Zod, Joi)
 
----
+### 4. Scalability Guardrails
 
-## Naming Conventions
+**MUST NOT store cross-request state in memory**:
 
-- **Components**: PascalCase (`LockInSidebar.tsx`)
-- **Hooks**: camelCase starting with `use` (`useChat.ts`)
-- **Types/Interfaces**: PascalCase (`Note`, `CourseContext`)
-- **Functions**: camelCase (`createNote`, `extractCourseCode`)
-- **Files**: camelCase for utilities, PascalCase for components
-- **Constants**: UPPER_SNAKE_CASE (`STORAGE_KEYS`)
+- ❌ In-memory job queue (lost on restart)
+- ❌ In-memory rate limits (inconsistent across instances)
+- ❌ In-memory locks (not distributed)
+
+**MUST use durable storage**:
+
+- ✅ Supabase for jobs, rate limits, idempotency
+- ✅ Supabase Storage for transcript chunks
+- ✅ Database for locks (advisory locks)
 
 ---
 
 ## Testing Strategy
 
-- **Unit tests**: For domain logic (`/core`)
-- **Integration tests**: For adapters (`/integrations`)
-- **E2E tests**: For extension flows (future)
-- **Manual testing**: On all supported sites after changes
+### Testing Pyramid
+
+```
+         ╱╲
+        ╱  ╲         E2E Tests (Manual)
+       ╱────╲        - Extension flows on real sites
+      ╱      ╲       - User acceptance testing
+     ╱────────╲
+    ╱          ╲     Integration Tests
+   ╱            ╲    - Backend API contracts
+  ╱──────────────╲   - Adapter with real DOM
+ ╱                ╲
+╱──────────────────╲ Unit Tests (Most tests here)
+                     - Pure functions
+                     - Services with mocked dependencies
+                     - Utilities
+```
+
+### Unit Testing Rules
+
+**MUST write unit tests for**:
+
+- Pure functions (`/core/utils`)
+- Business logic (`/core/services`, `/backend/services`)
+- Adapters (`/integrations/adapters`)
+- Parsers (`/core/transcripts/parsers`)
+
+**Unit Test Pattern**:
+
+```javascript
+// ✅ GOOD - Mock dependencies
+test('extractTranscript with Panopto captions', async () => {
+  const mockFetcher = {
+    fetch: async (url) => ({ ok: true, text: async () => 'WEBVTT\n...' }),
+  };
+
+  const provider = new PanoptoProvider();
+  const result = await provider.extractTranscript(video, mockFetcher);
+
+  assert.equal(result.segments.length, 5);
+});
+```
+
+**MUST NOT**:
+
+- Test implementation details (private methods)
+- Make real network calls in unit tests
+- Use real database in unit tests
+
+### Integration Testing Rules
+
+**MUST write integration tests for**:
+
+- Backend controllers (with mock services)
+- API client (with mock backend)
+- Adapter selection (with real DOM fixtures)
+
+**Integration Test Pattern**:
+
+```javascript
+// Backend controller test
+test('POST /api/notes creates note', async () => {
+  const mockService = {
+    createNote: async (data) => ({ id: '123', ...data }),
+  };
+
+  const res = await request(app)
+    .post('/api/notes')
+    .send({ title: 'Test', content: 'Content' })
+    .expect(201);
+
+  assert.equal(res.body.id, '123');
+});
+```
+
+### Test File Naming
+
+**MUST follow these conventions**:
+
+- ✅ Unit tests: `*.test.js`, `*.test.ts`
+- ✅ Integration tests: `*.integration.test.js`
+- ❌ NEVER: `test-*.js` (conflicts with test runner)
+- ✅ Utilities: `verify-*`, `check-*`, `setup-*`
+
+### Mocking Guidelines
+
+**MUST mock these external dependencies**:
+
+| Dependency  | Mock Strategy         | Example                                                  |
+| ----------- | --------------------- | -------------------------------------------------------- |
+| Supabase    | Mock client methods   | `supabase.from().select()` returns fixture               |
+| OpenAI      | Mock SDK methods      | `client.chat.completions.create()` returns mock response |
+| Chrome APIs | Mock `chrome.*`       | `chrome.storage.local.get()` returns test data           |
+| Fetcher     | Mock interface        | `fetcher.fetch()` returns mock HTTP response             |
+| DOM         | Use jsdom or fixtures | `document.querySelector()` works with fixture HTML       |
+
+**Example**:
+
+```javascript
+// Mock Supabase
+const mockSupabase = {
+  from: () => ({
+    select: () => ({ data: [{ id: '1', title: 'Note' }], error: null }),
+    insert: () => ({ data: { id: '2' }, error: null }),
+  }),
+};
+```
 
 ---
 
-## Future Considerations
+## Making Changes
 
-When building new features, consider: Will the core logic work in both extension and web app? The UI will be separate.
+### Workflow Summary
 
-- **Web app**: Will reuse `/core` and `/api` layers, but will have its own UI in `/web`
-- **UI kit**: May create `/shared/ui` for basic reusable components (Button, Card, etc.)
-- See `docs/tracking/STATUS.md` for current feature status and planned work
+1. **Scan docs** → Read `/AGENTS.md` + relevant sub-AGENTS + `docs/reference/CODE_OVERVIEW.md`
+2. **Plan** → Identify files, check boundaries, determine doc updates
+3. **Implement** → Follow layer rules, respect patterns
+4. **Test** → Add tests per testing strategy
+5. **Document** → Update living docs (DATABASE.md, CODE_OVERVIEW.md)
+6. **Review** → Use PR checklist
+
+### Golden Paths (Detailed in Sub-AGENTS)
+
+- **Adding a backend endpoint** → See `/backend/AGENTS.md`
+- **Adding an extension feature** → See `/extension/AGENTS.md`
+- **Adding a new site** → See `/integrations/AGENTS.md`
+- **Adding core domain logic** → See `/core/AGENTS.md`
+- **Adding UI components** → See `/shared/ui/AGENTS.md`
 
 ---
 
-## Refactor Prep Tracking (MANDATORY)
+## Common Failure Modes
 
-When making changes related to refactor preparation (guardrails, documentation, tests, build scripts), you **MUST** update:
+### 1. God Files
 
-1. **`docs/tracking/REFACTOR_PLAN.md`**
-   - Mark completed phases or update phase descriptions
-   - Update "Definition of Done" checklist if criteria change
+**Symptom**: Single file >500 lines with multiple responsibilities
 
-2. **`docs/tracking/PROMPT_LOG.md`**
-   - Add a new row for the prompt session
-   - Include: Prompt ID, Tool, Mode, Purpose, Output Summary, Date
+**Examples**:
 
-This ensures the refactor plan and prompt log stay accurate and reflect the current state of refactor preparation work.
+- `background.js` handling routing + fetching + business logic
+- `assistant/ai.js` validating + building prompts + calling DB + formatting
 
-**Examples of refactor-prep changes:**
+**Prevention**:
 
-- Adding TypeScript type definitions for globals
-- Creating/updating build scripts (`verify-build`, etc.)
-- Adding ESLint rules for architectural boundaries
-- Creating smoke test checklists
-- Setting up test harnesses
-- Updating documentation structure
+- **MUST**: Extract functions to focused modules when file >200 lines (controllers), >300 lines (services)
+- **MUST**: Delegate to helpers/utils for complex logic
+- **SHOULD**: Review file structure every sprint
+
+**Fix**:
+
+```javascript
+// ❌ BAD - God controller
+async function handleRequest(req, res) {
+  // 200 lines of validation
+  // 100 lines of prompt building
+  // 50 lines of DB queries
+  // 50 lines of formatting
+}
+
+// ✅ GOOD - Delegated
+async function handleRequest(req, res) {
+  const validated = validateInput(req.body); // validation.js
+  const prompt = buildPrompt(validated); // promptBuilder.js
+  const result = await service.process(prompt); // service.js
+  res.json(formatResponse(result)); // formatter.js
+}
+```
+
+### 2. Controller Layering Violations
+
+**Symptom**: Controllers containing business logic, validation, or data transformation
+
+**Examples**:
+
+- Controller manually parsing JSON, stripping HTML, generating embeddings
+- Controller building AI prompts inline
+- Controller directly accessing `supabase` client
+- Imperative validation with `if` statements instead of Zod middleware
+
+**Prevention**:
+
+- **MUST**: Use Zod validation middleware (no `if (!field) return res.status(400)`)
+- **MUST**: Delegate business logic to services
+- **MUST**: Use repositories for data access (controllers NEVER import `supabaseClient`)
+- **SHOULD**: Keep controllers under 50 lines per function
+
+**Fix**:
+
+```javascript
+// ❌ BAD - Business logic in controller
+async function createNote(req, res) {
+  // Manual validation
+  if (!req.body.content || req.body.content.length === 0) {
+    return res.status(400).json({ error: 'Content required' });
+  }
+
+  // Business logic (HTML stripping, embedding)
+  const plainText = req.body.content.replace(/<[^>]*>/g, ' ').trim();
+  const embedding = await embedText(plainText);
+
+  // Direct DB access
+  const { data } = await supabase.from('notes').insert({ content: plainText, embedding });
+  res.json(data);
+}
+
+// ✅ GOOD - Thin controller
+async function createNote(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const { title, content } = req.body; // Validated by Zod middleware
+
+    // Delegate to service
+    const note = await noteService.create({ userId, title, content });
+
+    res.status(201).json(note);
+  } catch (err) {
+    next(err);
+  }
+}
+```
+
+### 3. Missing Validation Middleware
+
+**Symptom**: Controllers cluttered with imperative validation checks
+
+**Examples**:
+
+```javascript
+// ❌ BAD
+if (!query || typeof query !== 'string' || query.trim().length === 0) {
+  return res.status(400).json({ error: 'Invalid query' });
+}
+if (!isValidUUID(noteId)) {
+  return res.status(400).json({ error: 'Invalid ID' });
+}
+```
+
+**Prevention**:
+
+- **MUST**: Define Zod schemas in `/backend/validators`
+- **MUST**: Apply validation middleware in routes: `router.post('/notes', validate(createNoteSchema), createNote)`
+- **MUST**: Remove all imperative validation from controllers
+
+**Fix**:
+
+```javascript
+// ✅ GOOD - Validator
+const createNoteSchema = z.object({
+  query: z.string().min(1),
+  noteId: z.string().uuid(),
+});
+
+// Route
+router.post('/notes/search', validate(searchSchema), searchNotes);
+
+// Controller (no validation needed)
+async function searchNotes(req, res) {
+  const { query } = req.body; // Already validated
+  const results = await noteService.search(req.user.id, query);
+  res.json(results);
+}
+```
+
+### 4. Scattered Prompts
+
+**Symptom**: Prompt strings in controllers, hardcoded system messages
+
+**Examples**:
+
+- `const systemMessage = "You are a helpful assistant"` in controller
+- Prompt construction mixed with HTTP handling
+
+**Prevention**:
+
+- **MUST**: Build prompts in dedicated prompt builder modules
+- **MUST**: Define prompt contracts (inputs, max lengths, sanitization)
+- **MUST**: Keep prompt logic in services or utils, NOT controllers
+
+**Fix**: See `/backend/AGENTS.md` for prompt-building patterns
+
+### 4. Platform Leakage
+
+**Symptom**: `/core` code using `window`, `chrome`, `document`
+
+**Examples**:
+
+- Transcript provider calling `chrome.storage` directly
+- Domain service using `localStorage`
+
+**Prevention**:
+
+- **MUST**: Pass platform APIs as parameters (Dependency Injection)
+- **MUST**: Use interfaces for platform-specific code (fetcher pattern)
+- **MUST**: Test core code in Node.js environment (catches browser globals)
+
+**Fix**: See `/core/AGENTS.md` for platform-agnostic patterns
+
+### 5. Missing Tests
+
+**Symptom**: PR adds business logic without tests
+
+**Examples**:
+
+- New service method with no unit test
+- New validation rule with no test cases
+- Bug fix with no regression test
+
+**Prevention**:
+
+- **MUST**: Require tests for all new business logic (PR checklist)
+- **SHOULD**: Enforce coverage thresholds (80%+ for services/utils)
+- **MUST**: Review test quality, not just presence
+
+---
+
+## PR Quality Gates
+
+### Mandatory Checklist
+
+Before merging, PR **MUST** satisfy:
+
+- [ ] **Supports Core Loop**: Change reinforces Capture → Understand → Distil → Organize → Act
+- [ ] **Layer Boundaries**: No cross-layer imports (see [Architectural Boundaries](#architectural-boundaries))
+- [ ] **File Size**: Controllers <200 lines, Services <300 lines (or justification provided)
+- [ ] **Platform Purity**: `/core` and `/api` free of browser globals (`window`, `document`, `chrome`)
+- [ ] **Prompt Building**: Prompts in dedicated builders, NOT controllers (backend only)
+- [ ] **Error Handling**: Uses centralized error types from `/core/errors`
+- [ ] **Retry/Timeout**: Network calls use shared retry wrappers
+- [ ] **Input Validation**: All boundaries validate input (controllers, background handlers)
+- [ ] **Testing**: Business logic has unit tests, boundaries have integration tests
+- [ ] **Mocking**: Test mocks external dependencies (Supabase, OpenAI, Chrome APIs)
+- [ ] **Documentation**: Updated `docs/reference/CODE_OVERVIEW.md` if file structure changed
+- [ ] **Documentation**: Updated `docs/reference/DATABASE.md` if schema changed
+- [ ] **Documentation**: Updated folder `AGENTS.md` if conventions changed
+
+### Recommended Checks
+
+**SHOULD** satisfy (best practices):
+
+- [ ] Test coverage >80% for services/utils
+- [ ] No code duplication (DRY violations)
+- [ ] Accessibility: UI components are keyboard-navigable with ARIA labels
+- [ ] Performance: No unnecessary re-renders, debounced autosave
+- [ ] Security: No sensitive data in logs, inputs sanitized
+
+### Size Limits
+
+| File Type  | Max Lines | Justification Required? |
+| ---------- | --------- | ----------------------- |
+| Controller | 200       | Yes, if exceeded        |
+| Service    | 300       | Yes, if exceeded        |
+| Repository | 200       | Yes, if exceeded        |
+| Component  | 150       | Yes, if exceeded        |
+| Utility    | 100       | No (pure functions)     |
+
+**When size exceeded**: Extract helper functions, split into multiple modules
+
+---
+
+## Sub-AGENTS Index
+
+Each sub-AGENTS file inherits principles from this root file and adds layer-specific enforcement:
+
+### `/backend/AGENTS.md`
+
+**Purpose**: Backend API layering, prompt contracts, provider patterns  
+**Key Rules**: Routes → Controllers → Services → Repos → DB/APIs  
+**Golden Path**: Adding a new API endpoint  
+**See**: [backend/AGENTS.md](./backend/AGENTS.md)
+
+### `/extension/AGENTS.md`
+
+**Purpose**: Chrome extension wrappers, god file prevention  
+**Key Rules**: Thin wrappers, delegate to core/services  
+**Golden Path**: Adding Chrome extension feature  
+**See**: [extension/AGENTS.md](./extension/AGENTS.md)
+
+### `/core/AGENTS.md`
+
+**Purpose**: Platform-agnostic domain logic, pure functions, DI  
+**Key Rules**: No browser globals, no Express, pure functions preferred  
+**Golden Path**: Adding domain logic, transcript provider  
+**See**: [core/AGENTS.md](./core/AGENTS.md)
+
+### `/integrations/AGENTS.md`
+
+**Purpose**: Site adapters (Moodle, Edstem, Panopto)  
+**Key Rules**: Implement `BaseAdapter`, pure DOM parsing  
+**Golden Path**: Adding a new site integration  
+**See**: [integrations/AGENTS.md](./integrations/AGENTS.md)
+
+### `/shared/ui/AGENTS.md`
+
+**Purpose**: Low-level UI primitives (Button, Card, Input)  
+**Key Rules**: No business logic, accessible by default  
+**Golden Path**: Adding reusable UI component  
+**See**: [shared/ui/AGENTS.md](./shared/ui/AGENTS.md)
 
 ---
 
 ## Questions?
 
-- Check folder-level `AGENTS.md` files
-- Review `CODE_OVERVIEW.md` for current implementation patterns
-- Check `docs/tracking/STATUS.md` for outstanding issues and recent changes
-- Ask before making large architectural changes
+1. Check relevant sub-AGENTS file for layer-specific rules
+2. Review `docs/reference/CODE_OVERVIEW.md` for current implementation
+3. Check `docs/tracking/STATUS.md` for outstanding issues
+4. Ask before making large architectural changes
 
-**Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`) Chrome-free. Extension UI source (`/ui/extension`, built to `/extension/dist/ui`) is specific to the sidebar widget and will not be reused by the web app.
+**Remember**: Extension-first, but web-app-friendly. Keep shared code (`/core`, `/api`, `/integrations`) platform-agnostic. Follow the principle hierarchy: this file defines rules, sub-AGENTS enforce them.

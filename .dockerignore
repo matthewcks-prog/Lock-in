@@ -22,3 +22,90 @@ backend/tmp/
 backend/*.md
 !backend/package.json
 !backend/package-lock.json
+
+# Development and documentation files
+*.md
+!README.md
+docs/
+MIGRATION_CHECKLIST.md
+AZURE_EMBEDDINGS_SETUP.md
+AGENTS.md
+CONTRIBUTING_AI.md
+
+# Test files
+*.test.js
+*.spec.js
+__tests__/
+coverage/
+.nyc_output/
+
+# IDE and editor files
+.vscode/
+.cursor/
+.idea/
+.windsurfrules
+.cursorrules
+*.swp
+*.swo
+*~
+
+# Logs and temp files
+*.log
+tmp/
+.npm/
+.cache/
+logs/
+
+# Build artifacts
+build/
+dist/
+.next/
+out/
+
+# Git and CI/CD
+.git/
+.gitignore
+.gitattributes
+.github/
+.husky/
+
+# Dependencies (will be installed in container)
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Lock files (already included specifically)
+# package-lock.json is explicitly included above
+
+# Other config files not needed in production
+.editorconfig
+.prettierrc
+.prettierignore
+.eslintrc*
+eslint.config.js
+.trivyignore
+.npmrc
+tsconfig.json
+vite.config*.ts
+vitest.config.ts
+postcss.config.js
+tailwind.config.ts
+
+# Extension and UI (not needed in backend container)
+extension/
+ui/
+integrations/
+infrastructure/
+tools/
+scripts/
+types/
+shared/
+api/
+
+# Docker files
+docker-compose.yml
+Dockerfile
+.dockerignore

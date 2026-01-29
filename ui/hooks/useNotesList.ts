@@ -7,6 +7,16 @@ interface UseNotesListOptions {
   limit?: number;
 }
 
+function getErrorMeta(err: unknown): { code?: string; message?: string } {
+  const record = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
+  return {
+    code: typeof record?.code === 'string' ? record.code : undefined,
+    message:
+      (err instanceof Error && err.message) ||
+      (typeof record?.message === 'string' ? record.message : undefined),
+  };
+}
+
 /**
  * Hook for managing the notes list.
  *
@@ -48,8 +58,9 @@ export function useNotesList(options: UseNotesListOptions) {
         limit,
       });
       setNotes(list);
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load notes');
+    } catch (err: unknown) {
+      const meta = getErrorMeta(err);
+      setError(meta.message || 'Failed to load notes');
     } finally {
       setIsLoading(false);
       isRefreshingRef.current = false;
@@ -87,7 +98,7 @@ export function useNotesList(options: UseNotesListOptions) {
 
       try {
         await notesService.deleteNote(noteId);
-      } catch (err: any) {
+      } catch (err: unknown) {
         // Rollback: restore the note if delete failed
         if (deletedNote) {
           setNotes((prev) => {
@@ -101,7 +112,8 @@ export function useNotesList(options: UseNotesListOptions) {
             return newList;
           });
         }
-        setError(err?.message || 'Failed to delete note');
+        const meta = getErrorMeta(err);
+        setError(meta.message || 'Failed to delete note');
         throw err;
       }
     },
@@ -146,7 +158,8 @@ export function useNotesList(options: UseNotesListOptions) {
         // Update with the server response to ensure consistency
         setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
         return updated;
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const meta = getErrorMeta(err);
         // Rollback: restore the original state if toggle failed
         if (originalNote) {
           setNotes((prev) => prev.map((n) => (n.id === noteId ? originalNote! : n)));
@@ -154,14 +167,14 @@ export function useNotesList(options: UseNotesListOptions) {
 
         // Provide more specific error messages based on error type
         let errorMessage = 'Failed to toggle star';
-        if (err?.code === 'AUTH_REQUIRED') {
+        if (meta.code === 'AUTH_REQUIRED') {
           errorMessage = 'Please sign in to star notes';
-        } else if (err?.code === 'NOT_FOUND') {
+        } else if (meta.code === 'NOT_FOUND') {
           errorMessage = 'Note not found';
-        } else if (err?.code === 'NETWORK_ERROR') {
+        } else if (meta.code === 'NETWORK_ERROR') {
           errorMessage = 'Network error. Please check your connection.';
-        } else if (err?.message) {
-          errorMessage = err.message;
+        } else if (meta.message) {
+          errorMessage = meta.message;
         }
 
         setError(errorMessage);

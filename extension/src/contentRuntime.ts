@@ -49,6 +49,10 @@ interface LoggerInterface {
   debug?: (...args: unknown[]) => void;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function inferCourseCode(dom: Document, url: string): string | null {
   const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
   if (urlMatch) {
@@ -165,8 +169,15 @@ function createSessionApi(
 
   async function getTabId(): Promise<number | null> {
     try {
-      const response: any = await runtimeMessaging.send(runtimeMessaging.types.GET_TAB_ID);
-      const tabId = response?.data?.tabId ?? response?.tabId ?? null;
+      const response = await runtimeMessaging.send<unknown>(runtimeMessaging.types.GET_TAB_ID);
+      const responseRecord = isRecord(response) ? response : {};
+      const dataRecord = isRecord(responseRecord.data) ? responseRecord.data : {};
+      const tabId =
+        typeof dataRecord.tabId === 'number'
+          ? dataRecord.tabId
+          : typeof responseRecord.tabId === 'number'
+            ? responseRecord.tabId
+            : null;
       if (typeof tabId === 'number') {
         cachedTabId = tabId;
         return tabId;
@@ -180,8 +191,10 @@ function createSessionApi(
 
   async function getSession(): Promise<unknown> {
     try {
-      const response: any = await runtimeMessaging.send(runtimeMessaging.types.GET_SESSION);
-      return response?.data?.session ?? response?.session ?? null;
+      const response = await runtimeMessaging.send<unknown>(runtimeMessaging.types.GET_SESSION);
+      const responseRecord = isRecord(response) ? response : {};
+      const dataRecord = isRecord(responseRecord.data) ? responseRecord.data : {};
+      return dataRecord.session ?? responseRecord.session ?? null;
     } catch (error) {
       log.error('[Lock-in] Failed to get session:', error);
       return null;

@@ -45,7 +45,7 @@ If you added new backend test files, confirm:
 - [ ] Utility scripts don't start with `test-` (use `verify-*`, `check-*`, etc.)
 - [ ] Tests are placed next to the code or in `__tests__/` subdirectory
 
-**📚 See:** [docs/testing/BACKEND_TESTING.md](docs/testing/BACKEND_TESTING.md)
+**📚 See:** [docs/testing/BACKEND_TESTING.md](../docs/testing/BACKEND_TESTING.md)
 
 ### Manual Testing
 
@@ -78,7 +78,7 @@ If you added new backend test files, confirm:
 - [ ] Site-specific logic uses adapter pattern
 - [ ] No duplication of widget components
 
-**📚 See:** [AGENTS.md](AGENTS.md) for architecture rules
+**📚 See:** [AGENTS.md](../AGENTS.md) for architecture rules
 
 ## Deployment
 

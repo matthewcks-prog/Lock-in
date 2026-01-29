@@ -118,6 +118,8 @@ export default [
   },
   // Architectural boundaries:
   // - /core and /api must remain Chrome-free and extension-independent (ERROR)
+  // Architectural boundaries:
+  // - /core and /api must remain Chrome-free and extension-independent (ERROR)
   {
     files: ['core/**/*.{js,mjs,cjs,ts,tsx}', 'api/**/*.{js,mjs,cjs,ts,tsx}'],
     rules: {
@@ -125,7 +127,16 @@ export default [
         'error',
         {
           name: 'chrome',
-          message: 'Chrome APIs are not allowed in core/api. Use extension/* wrappers instead.',
+          message:
+            'Chrome APIs are not allowed in core/api. Use extension/* wrappers or DI instead.',
+        },
+        {
+          name: 'window',
+          message: 'Browser globals are not allowed in core/api. Core must be platform-agnostic.',
+        },
+        {
+          name: 'document',
+          message: 'DOM globals are not allowed in core/api. Core must be platform-agnostic.',
         },
       ],
       'no-restricted-imports': [
@@ -133,16 +144,89 @@ export default [
         {
           patterns: [
             {
-              group: [
-                'extension/**',
-                '../extension/**',
-                '../../extension/**',
-                '../../../extension/**',
-                '../../../../extension/**',
-              ],
-              message: 'core/api must remain Chrome-free and extension-independent.',
+              group: ['**/extension/**', '**/backend/**', 'express', 'react', 'react-dom'],
+              message:
+                'core/api must remain Chrome-free, UI-free, and backend-agnostic (pure logic only).',
             },
           ],
+        },
+      ],
+    },
+  },
+
+  // Exception: Allow DOM globals in core/api test files
+  {
+    files: [
+      'core/**/__tests__/**/*.{js,mjs,cjs,ts,tsx}',
+      'api/**/__tests__/**/*.{js,mjs,cjs,ts,tsx}',
+      'core/**/*.test.{js,mjs,cjs,ts,tsx}',
+      'api/**/*.test.{js,mjs,cjs,ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-globals': 'off', // Allow document, window, etc. in tests
+    },
+  },
+
+  // - /integrations (Site Adapters) must be pure DOM parsers (ERROR)
+  {
+    files: ['integrations/**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'chrome',
+          message: 'Chrome APIs are not allowed in integrations. Adapters must be pure functions.',
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/backend/**', '**/api/**', 'axios', 'node-fetch'],
+              message:
+                'Integrations must not make network calls. They only parse DOM and return data.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // - /backend must not depend on frontend code (ERROR)
+  {
+    files: ['backend/**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/extension/**', '**/ui/**', '**/integrations/**', 'chrome'],
+              message: 'Backend cannot import frontend/extension code.',
+            },
+            {
+              // Prevent importing core files that might accidentally use browser types in comments/JSDoc validation if strict
+              // But core is allowed if it's pure. We'll allow core.
+              group: ['chrome'],
+              message: 'Backend cannot use Chrome types or APIs.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'chrome',
+          message: 'Chrome APIs are not allowed in backend.',
+        },
+        {
+          name: 'window',
+          message: 'Browser globals are not allowed in backend.',
+        },
+        {
+          name: 'document',
+          message: 'DOM globals are not allowed in backend.',
         },
       ],
     },

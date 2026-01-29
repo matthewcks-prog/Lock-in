@@ -1,7 +1,7 @@
 import type { ApiClient } from '../../api/client';
 import type { Note, NoteAsset, NoteContent, NoteContentVersion, NoteType } from '../domain/Note.ts';
 import { AppError, ErrorCodes } from '../errors';
-import { createLogger } from '../utils/logger';
+import { createLogger, type Logger } from '../utils/logger';
 import { sanitizeUrl } from '../utils/urlSanitizer';
 
 export interface CreateNoteInput {
@@ -47,6 +47,10 @@ export interface NotesService {
   deleteAsset(assetId: string): Promise<void>;
 }
 
+export interface NotesServiceDependencies {
+  logger?: Logger;
+}
+
 const DEFAULT_CONTENT: NoteContent = {
   version: 'lexical_v1',
   editorState: null,
@@ -54,13 +58,13 @@ const DEFAULT_CONTENT: NoteContent = {
   plainText: '',
 };
 
-const logger = createLogger('NotesService');
+type NoteRecord = Record<string, unknown>;
 
-function isJson(value: unknown): boolean {
+function isRecord(value: unknown): value is NoteRecord {
   return typeof value === 'object' && value !== null;
 }
 
-function safeParseJson(value: unknown): any | null {
+function safeParseJson(value: unknown): unknown | null {
   if (value == null) return null;
   if (typeof value === 'object') return value;
   if (typeof value !== 'string') return null;
@@ -86,7 +90,7 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-function createPlainTextEditorState(text: string): Record<string, any> {
+function createPlainTextEditorState(text: string): Record<string, unknown> {
   const paragraph = {
     children: text
       ? [
@@ -133,10 +137,10 @@ function legacyHtmlToNoteContent(html: string): NoteContent {
 function extractPlainTextFromEditorState(editorState: unknown): string {
   try {
     const state = typeof editorState === 'string' ? JSON.parse(editorState) : editorState;
-    if (!isJson(state)) return '';
+    if (!isRecord(state)) return '';
 
-    const collectText = (node: any): string => {
-      if (!node) return '';
+    const collectText = (node: unknown): string => {
+      if (!isRecord(node)) return '';
       if (typeof node.text === 'string') return node.text;
       if (Array.isArray(node.children)) {
         return node.children.map(collectText).join(' ');
@@ -144,8 +148,8 @@ function extractPlainTextFromEditorState(editorState: unknown): string {
       return '';
     };
 
-    const root = (state as any).root;
-    if (!root) return '';
+    const root = state.root;
+    if (!isRecord(root)) return '';
     const segments = Array.isArray(root.children)
       ? root.children.map(collectText).filter(Boolean)
       : [];
@@ -155,19 +159,26 @@ function extractPlainTextFromEditorState(editorState: unknown): string {
   }
 }
 
-function normalizeContent(raw: any): NoteContent {
-  const editorVersion = (raw?.editor_version || raw?.editorVersion) as
+function normalizeContent(raw: NoteRecord | null | undefined): NoteContent {
+  const record = raw ?? {};
+  const editorVersion = (record.editor_version || record.editorVersion) as
     | NoteContentVersion
     | undefined;
-  const contentJson = safeParseJson(raw?.content_json ?? raw?.contentJson);
-  const legacyContent = typeof raw?.content === 'string' ? raw.content : undefined;
+  const contentJson = safeParseJson(record.content_json ?? record.contentJson);
+  const legacyContent = typeof record.content === 'string' ? record.content : undefined;
+  const contentText =
+    typeof record.content_text === 'string'
+      ? record.content_text
+      : typeof record.plain_text === 'string'
+        ? record.plain_text
+        : undefined;
 
   if (contentJson) {
     return {
       version: editorVersion || 'lexical_v1',
       editorState: contentJson,
       legacyHtml: legacyContent,
-      plainText: raw?.content_text || raw?.plain_text || stripHtml(legacyContent || ''),
+      plainText: contentText || stripHtml(legacyContent || ''),
     };
   }
 
@@ -178,27 +189,50 @@ function normalizeContent(raw: any): NoteContent {
   return { ...DEFAULT_CONTENT };
 }
 
-function toDomainNote(raw: any): Note {
+function toDomainNote(raw: NoteRecord | null | undefined): Note {
+  const record = raw ?? {};
   const content = normalizeContent(raw);
   const preview =
-    raw?.preview ||
-    raw?.content_text ||
+    (typeof record.preview === 'string' ? record.preview : undefined) ||
+    (typeof record.content_text === 'string' ? record.content_text : undefined) ||
     content.plainText ||
     extractPlainTextFromEditorState(content.editorState);
 
   return {
-    id: raw?.id ?? null,
-    title: raw?.title || 'Untitled note',
+    id: typeof record.id === 'string' ? record.id : null,
+    title: typeof record.title === 'string' && record.title ? record.title : 'Untitled note',
     content,
-    sourceUrl: raw?.source_url ?? raw?.sourceUrl ?? null,
-    sourceSelection: raw?.source_selection ?? raw?.sourceSelection ?? null,
-    courseCode: raw?.course_code ?? raw?.courseCode ?? null,
-    noteType: (raw?.note_type as NoteType) || raw?.noteType || 'manual',
-    tags: Array.isArray(raw?.tags) ? raw.tags : [],
-    createdAt: raw?.created_at ?? raw?.createdAt ?? null,
-    updatedAt: raw?.updated_at ?? raw?.updatedAt ?? null,
-    linkedLabel: raw?.linked_label ?? raw?.course_code ?? raw?.courseCode ?? undefined,
-    isStarred: Boolean(raw?.is_starred ?? raw?.isStarred),
+    sourceUrl:
+      (typeof record.source_url === 'string' ? record.source_url : undefined) ??
+      (typeof record.sourceUrl === 'string' ? record.sourceUrl : undefined) ??
+      null,
+    sourceSelection:
+      (typeof record.source_selection === 'string' ? record.source_selection : undefined) ??
+      (typeof record.sourceSelection === 'string' ? record.sourceSelection : undefined) ??
+      null,
+    courseCode:
+      (typeof record.course_code === 'string' ? record.course_code : undefined) ??
+      (typeof record.courseCode === 'string' ? record.courseCode : undefined) ??
+      null,
+    noteType:
+      ((typeof record.note_type === 'string' ? record.note_type : undefined) as NoteType) ||
+      ((typeof record.noteType === 'string' ? record.noteType : undefined) as NoteType) ||
+      'manual',
+    tags: Array.isArray(record.tags) ? (record.tags as string[]) : [],
+    createdAt:
+      (typeof record.created_at === 'string' ? record.created_at : undefined) ??
+      (typeof record.createdAt === 'string' ? record.createdAt : undefined) ??
+      null,
+    updatedAt:
+      (typeof record.updated_at === 'string' ? record.updated_at : undefined) ??
+      (typeof record.updatedAt === 'string' ? record.updatedAt : undefined) ??
+      null,
+    linkedLabel:
+      (typeof record.linked_label === 'string' ? record.linked_label : undefined) ??
+      (typeof record.course_code === 'string' ? record.course_code : undefined) ??
+      (typeof record.courseCode === 'string' ? record.courseCode : undefined) ??
+      undefined,
+    isStarred: Boolean(record.is_starred ?? record.isStarred),
     previewText: preview || '',
   };
 }
@@ -230,7 +264,10 @@ function toBackendPayload(content: NoteContent | undefined) {
   };
 }
 
-async function migrateLegacyNote(raw: any, apiClient: ApiClient): Promise<Note> {
+async function migrateLegacyNote(
+  raw: NoteRecord | null | undefined,
+  apiClient: ApiClient,
+): Promise<Note> {
   if (!raw?.id || raw?.content_json) {
     return toDomainNote(raw);
   }
@@ -240,13 +277,15 @@ async function migrateLegacyNote(raw: any, apiClient: ApiClient): Promise<Note> 
   }
 
   const legacyContent = legacyHtmlToNoteContent(raw.content);
+  const title =
+    typeof raw.title === 'string' && raw.title.trim().length > 0 ? raw.title : 'Untitled note';
   const payload = {
-    title: raw.title ?? 'Untitled note',
+    title,
     ...toBackendPayload(legacyContent),
   };
 
   try {
-    const updated = await apiClient.updateNote(raw.id, payload, undefined);
+    const updated = await apiClient.updateNote(raw.id as string, payload, undefined);
     return toDomainNote(updated);
   } catch {
     const augmentedRaw = {
@@ -264,7 +303,11 @@ function ensureService(apiClient: ApiClient | null | undefined): asserts apiClie
   }
 }
 
-export function createNotesService(apiClient: ApiClient | null | undefined): NotesService {
+export function createNotesService(
+  apiClient: ApiClient | null | undefined,
+  deps: NotesServiceDependencies = {},
+): NotesService {
+  const logger = deps.logger ?? createLogger('NotesService');
   async function listNotes(
     params: {
       courseCode?: string | null;
@@ -289,13 +332,14 @@ export function createNotesService(apiClient: ApiClient | null | undefined): Not
 
   async function getNote(noteId: string): Promise<Note> {
     ensureService(apiClient);
-    const raw = await apiClient.apiRequest<any>(`/api/notes/${noteId}`, {
+    const raw = await apiClient.apiRequest<unknown>(`/api/notes/${noteId}`, {
       method: 'GET',
     });
-    if (!raw?.content_json && raw?.content) {
-      return migrateLegacyNote(raw, apiClient);
+    const record = isRecord(raw) ? raw : null;
+    if (record && !record.content_json && typeof record.content === 'string') {
+      return migrateLegacyNote(record, apiClient);
     }
-    return toDomainNote(raw);
+    return toDomainNote(record);
   }
 
   async function createNote(initial: CreateNoteInput, options?: NoteRequestOptions): Promise<Note> {

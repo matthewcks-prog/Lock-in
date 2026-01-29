@@ -24,16 +24,21 @@ export default defineConfig({
       // These require backend dependencies (openai, @supabase/supabase-js)
       '**/backendOpenaiPrompt.test.ts',
       '**/backendChatPagination.test.ts',
-      '**/backendLockinController.test.ts',
+      '**/backendAssistantController.test.ts',
     ],
     globals: true,
     restoreMocks: true,
     clearMocks: true,
     // CI/CD optimizations
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        singleThread: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'json-summary'],
+      thresholds: {
+        statements: 35,
+        branches: 25,
+        functions: 30,
+        lines: 35,
       },
     },
     // Ensure tests run headless (default behavior)

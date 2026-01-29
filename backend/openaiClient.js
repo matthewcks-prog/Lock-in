@@ -10,8 +10,6 @@
  * @module openaiClient
  */
 
-const fs = require('fs');
-const path = require('path');
 const { buildInitialChatTitle, coerceGeneratedTitle } = require('./utils/chatTitle');
 const { getDeployment } = require('./config');
 const { createPrimaryClient, createFallbackClient } = require('./providers/llmProviderFactory');
@@ -54,23 +52,6 @@ async function createChatCompletion(options) {
     primaryProvider: primary.provider,
     fallbackProvider: fallback?.provider,
   });
-}
-
-const LANGUAGE_LABELS = {
-  en: 'English',
-  es: 'Spanish',
-  zh: 'Chinese',
-  fr: 'French',
-  de: 'German',
-  ja: 'Japanese',
-  ko: 'Korean',
-  pt: 'Portuguese',
-  it: 'Italian',
-  ru: 'Russian',
-};
-
-function toLanguageName(code = 'en') {
-  return LANGUAGE_LABELS[code.toLowerCase()] || code;
 }
 
 function normalizeSelection(selection) {

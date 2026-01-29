@@ -1,8 +1,35 @@
 import type { LockInContentRuntime } from './contentRuntime';
+import type { Logger } from './logger';
+import type { Messaging } from './messaging';
+import type { Storage } from './storage';
+import type { AuthClient } from '../../api/auth';
+import type { ApiClient } from '../../api/client';
+
+export type LockInConfig = {
+  APP_ENV: string;
+  IS_PRODUCTION: boolean;
+  BACKEND_URL: string;
+  SUPABASE_URL: string;
+  SUPABASE_ANON_KEY: string;
+  SUPABASE_ENVIRONMENT: 'development' | 'production';
+  SESSION_STORAGE_KEY: string;
+  TOKEN_EXPIRY_BUFFER_MS: number;
+  DEBUG_PANOPTO_RESOLVER: boolean;
+  DEBUG?: string | boolean;
+  SENTRY_DSN?: string;
+};
 
 declare global {
   interface Window {
-    LockInContent: LockInContentRuntime;
+    LOCKIN_CONFIG?: Partial<LockInConfig>;
+    LockInContent?: LockInContentRuntime;
+    LockInLogger?: Logger;
+    LockInMessaging?: Messaging;
+    LockInStorage?: Storage;
+    LockInAuth?: AuthClient;
+    LockInAPI?: ApiClient;
+    authClient?: AuthClient;
+    apiClient?: ApiClient;
   }
 }
 

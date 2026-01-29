@@ -13,7 +13,6 @@
  */
 
 const axios = require('axios');
-const FormData = require('form-data');
 
 /**
  * Azure Speech service configuration
@@ -154,7 +153,7 @@ class AzureSpeechClient {
       const silenceBuffer = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00]);
       await this.transcribe(silenceBuffer, { format: 'wav' });
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

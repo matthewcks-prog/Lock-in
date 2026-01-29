@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS } from '../storage';
+import type { LockInContentRuntime } from '../contentRuntime';
 
 describe('contentRuntime surface', () => {
-  let createContentRuntime: () => any;
+  let createContentRuntime: () => LockInContentRuntime;
+  let mockStorageLocalGet: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -13,8 +15,9 @@ describe('contentRuntime surface', () => {
       remove: vi.fn((_, cb) => cb()),
     };
 
+    mockStorageLocalGet = vi.fn((_, cb) => cb({}));
     const mockStorageLocal = {
-      get: vi.fn((_, cb) => cb({})),
+      get: mockStorageLocalGet,
       set: vi.fn((_, cb) => cb()),
       remove: vi.fn((_, cb) => cb()),
     };
@@ -46,7 +49,7 @@ describe('contentRuntime surface', () => {
 
     ({ createContentRuntime } = await import('../contentRuntime'));
     // ensure clean slate for window runtime
-    delete (window as any).LockInContent;
+    delete window.LockInContent;
   });
 
   it('exposes a versioned runtime with required keys on window', () => {
@@ -73,7 +76,7 @@ describe('contentRuntime surface', () => {
 
   it('provides storage helpers that can be called (regression for missing getLocal)', async () => {
     const mockChatId = 'chat-123';
-    (chrome.storage.local.get as any).mockImplementation(
+    mockStorageLocalGet.mockImplementation(
       (_keys: string | string[], cb: (value: Record<string, unknown>) => void) =>
         cb({ [STORAGE_KEYS.CURRENT_CHAT_ID]: mockChatId }),
     );
@@ -82,6 +85,6 @@ describe('contentRuntime surface', () => {
     const chatId = await runtime.session.loadChatId();
 
     expect(chatId).toBe(mockChatId);
-    expect(chrome.storage.local.get as any).toHaveBeenCalled();
+    expect(mockStorageLocalGet).toHaveBeenCalled();
   });
 });

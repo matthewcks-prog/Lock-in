@@ -4,6 +4,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const Module = require('node:module');
+const { TRANSCRIPT_CHUNK_MAX_BYTES } = require('../../config');
 
 function createRepoState() {
   return {
@@ -65,6 +67,12 @@ function createStubRepo(state) {
       const maxIndex = count ? Math.max(...indices) : null;
       return { count, minIndex, maxIndex };
     },
+    async deleteTranscriptJobChunk() {
+      return null;
+    },
+    async consumeTranscriptUploadBytes() {
+      return { allowed: true, remaining: 0, retryAfterSeconds: 0 };
+    },
   };
 }
 
@@ -75,9 +83,6 @@ function createStubService(flags) {
     },
     startTranscriptProcessing() {
       flags.started = true;
-    },
-    async cancelTranscriptProcessing() {
-      flags.canceled = true;
     },
   };
 }
@@ -109,17 +114,27 @@ function createReq({ userId, jobId, body, headers }) {
 function loadController({ repo, service }) {
   const repoPath = require.resolve('../../repositories/transcriptsRepository');
   const servicePath = require.resolve('../../services/transcriptsService');
-  const controllerPath = require.resolve('../../controllers/transcriptsController');
+  const controllerPath = require.resolve('../../controllers/transcripts');
 
   const originalRepo = require.cache[repoPath];
   const originalService = require.cache[servicePath];
   const originalController = require.cache[controllerPath];
 
-  require.cache[repoPath] = { exports: repo };
-  require.cache[servicePath] = { exports: service };
+  const repoModule = new Module(repoPath, module);
+  repoModule.filename = repoPath;
+  repoModule.exports = repo;
+  repoModule.loaded = true;
+
+  const serviceModule = new Module(servicePath, module);
+  serviceModule.filename = servicePath;
+  serviceModule.exports = service;
+  serviceModule.loaded = true;
+
+  require.cache[repoPath] = repoModule;
+  require.cache[servicePath] = serviceModule;
   delete require.cache[controllerPath];
 
-  const controller = require('../../controllers/transcriptsController');
+  const controller = require('../../controllers/transcripts');
 
   return {
     controller,
@@ -268,7 +283,7 @@ test('rejects chunk uploads after cancel', async () => {
 
 test('cancel mid-processing stops job', async () => {
   const state = createRepoState();
-  const flags = { started: false, canceled: false };
+  const flags = { started: false };
   const repo = createStubRepo(state);
   const service = createStubService(flags);
   const { controller, restore } = loadController({ repo, service });
@@ -286,7 +301,96 @@ test('cancel mid-processing stops job', async () => {
     await controller.cancelJob(createReq({ userId: 'user-1', jobId: 'job-4', body: {} }), res);
 
     assert.equal(state.jobs.get('job-4').status, 'canceled');
-    assert.equal(flags.canceled, true);
+  } finally {
+    restore();
+  }
+});
+
+test('rate limits transcript chunk uploads', async () => {
+  const state = createRepoState();
+  const flags = { started: false };
+  const repo = {
+    ...createStubRepo(state),
+    async consumeTranscriptUploadBytes() {
+      return { allowed: false, remaining: 0, retryAfterSeconds: 12 };
+    },
+  };
+  const service = createStubService(flags);
+  const { controller, restore } = loadController({ repo, service });
+
+  try {
+    state.jobs.set('job-5', {
+      id: 'job-5',
+      user_id: 'user-1',
+      status: 'created',
+      expected_total_chunks: 1,
+      bytes_received: 0,
+    });
+
+    const req = createReq({
+      userId: 'user-1',
+      jobId: 'job-5',
+      body: Buffer.from('x'),
+      headers: { 'x-chunk-index': '0', 'x-total-chunks': '1' },
+    });
+    const res = createRes();
+
+    await assert.rejects(
+      () => controller.uploadChunk(req, res),
+      (err) => {
+        assert.equal(err.code, 'TRANSCRIPT_RATE_LIMIT');
+        assert.equal(err.statusCode, 429);
+        assert.equal(err.details?.retryAfterSeconds, 12);
+        return true;
+      },
+    );
+  } finally {
+    restore();
+  }
+});
+
+test('rejects transcript chunks that exceed the max size', async (t) => {
+  if (!Number.isFinite(TRANSCRIPT_CHUNK_MAX_BYTES)) {
+    t.skip('TRANSCRIPT_CHUNK_MAX_BYTES is not configured');
+    return;
+  }
+  if (TRANSCRIPT_CHUNK_MAX_BYTES > 32 * 1024 * 1024) {
+    t.skip('TRANSCRIPT_CHUNK_MAX_BYTES is too large to allocate safely in unit tests');
+    return;
+  }
+
+  const state = createRepoState();
+  const flags = { started: false };
+  const repo = createStubRepo(state);
+  const service = createStubService(flags);
+  const { controller, restore } = loadController({ repo, service });
+
+  try {
+    state.jobs.set('job-6', {
+      id: 'job-6',
+      user_id: 'user-1',
+      status: 'created',
+      expected_total_chunks: 1,
+      bytes_received: 0,
+    });
+
+    const oversizedChunk = Buffer.alloc(TRANSCRIPT_CHUNK_MAX_BYTES + 1, 0);
+    const req = createReq({
+      userId: 'user-1',
+      jobId: 'job-6',
+      body: oversizedChunk,
+      headers: { 'x-chunk-index': '0', 'x-total-chunks': '1' },
+    });
+    const res = createRes();
+
+    await assert.rejects(
+      () => controller.uploadChunk(req, res),
+      (err) => {
+        assert.equal(err.code, 'TRANSCRIPT_CHUNK_TOO_LARGE');
+        assert.equal(err.statusCode, 413);
+        return true;
+      },
+    );
   } finally {
     restore();
   }

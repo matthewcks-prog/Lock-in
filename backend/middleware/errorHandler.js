@@ -153,7 +153,7 @@ function logError(err, req) {
  * Global error handler middleware
  * Must be registered last in the middleware chain
  */
-function errorHandler(err, req, res, next) {
+function errorHandler(err, req, res, _next) {
   // Log the error
   logError(err, req);
 
@@ -174,6 +174,12 @@ function errorHandler(err, req, res, next) {
 
   // Don't expose internal error details in production
   const errorResponse = formatErrorResponse(err, isDev);
+
+  if (err.updatedAt && typeof err.updatedAt === 'string') {
+    errorResponse.updatedAt = err.updatedAt;
+  } else if (err.details && typeof err.details.updatedAt === 'string') {
+    errorResponse.updatedAt = err.details.updatedAt;
+  }
 
   // Set appropriate headers for rate limit errors
   // Support both RATE_LIMIT and TRANSCRIPT_RATE_LIMIT error codes

@@ -1,0 +1,111 @@
+---
+# =============================================================================
+# Dependabot Configuration - Lock-in Project
+# Automated dependency updates for npm packages and GitHub Actions
+#
+# This ensures:
+#   - Security patches are applied promptly
+#   - Breaking changes are caught early via PRs
+#   - Workflow actions stay up-to-date (e.g., CodeQL v3 -> v4)
+#
+# GitHub will automatically create PRs when updates are available
+# =============================================================================
+
+version: 2
+updates:
+  # -------------------------------------------------------------------------
+  # NPM Packages (Root Workspace + All Workspaces)
+  # -------------------------------------------------------------------------
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Australia/Sydney'
+    open-pull-requests-limit: 10
+    versioning-strategy: increase
+    # Group dependencies to reduce PR noise
+    groups:
+      # Security updates always separate (high priority)
+      security-updates:
+        dependency-type: 'production'
+        update-types:
+          - 'patch'
+        patterns:
+          - '*'
+      # Dev dependencies together (lower priority)
+      dev-dependencies:
+        dependency-type: 'development'
+        update-types:
+          - 'minor'
+          - 'patch'
+      # Major updates separate (breaking changes, manual review)
+      major-updates:
+        update-types:
+          - 'major'
+    labels:
+      - 'dependencies'
+      - 'npm'
+    commit-message:
+      prefix: 'chore(deps)'
+      include: 'scope'
+    # Automatically rebase on conflicts
+    rebase-strategy: 'auto'
+    # Ignore legacy/pinned dependencies (add as needed)
+    ignore:
+      # Example: ignore major updates for stable packages
+      # - dependency-name: "express"
+      #   update-types: ["version-update:semver-major"]
+
+  # -------------------------------------------------------------------------
+  # GitHub Actions
+  # -------------------------------------------------------------------------
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '09:00'
+      timezone: 'Australia/Sydney'
+    open-pull-requests-limit: 5
+    labels:
+      - 'dependencies'
+      - 'github-actions'
+    commit-message:
+      prefix: 'ci'
+      include: 'scope'
+    # Automatically rebase on conflicts
+    rebase-strategy: 'auto'
+
+  # -------------------------------------------------------------------------
+  # Docker Base Images (Optional - uncomment if needed)
+  # -------------------------------------------------------------------------
+  # - package-ecosystem: "docker"
+  #   directory: "/backend"
+  #   schedule:
+  #     interval: "weekly"
+  #     day: "monday"
+  #     time: "09:00"
+  #     timezone: "Australia/Sydney"
+  #   open-pull-requests-limit: 3
+  #   labels:
+  #     - "dependencies"
+  #     - "docker"
+  #   commit-message:
+  #     prefix: "chore(docker)"
+
+# =============================================================================
+# Benefits of This Configuration:
+#
+# 1. Security: Automatic security patches via grouped PRs
+# 2. Stability: Separate major updates for careful manual review
+# 3. Reduced Noise: Dependency grouping minimizes PR spam
+# 4. CI/CD Health: GitHub Actions stay current (prevents deprecation)
+# 5. Automatic Rebasing: Keeps PRs up-to-date without manual intervention
+#
+# Review Strategy:
+#   - Security patches: Auto-merge after CI passes (use ruleset)
+#   - Minor/patch updates: Quick review + merge
+#   - Major updates: Thorough testing + migration guide review
+# =============================================================================

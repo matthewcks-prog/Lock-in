@@ -229,7 +229,7 @@ class AzureEmbeddingsClient {
     try {
       await this.embed('test');
       return true;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

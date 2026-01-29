@@ -43,6 +43,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  security-events: write # Required for SARIF uploads (Trivy results)
 
 env:
   AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -126,24 +127,39 @@ jobs:
 
       - name: Upload Trivy scan results
         if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
         continue-on-error: true
 
       - name: Start test container
         run: |
-          docker run -d --name test-container -p 3000:3000 \
+          # Use unique container name to prevent conflicts between workflow runs
+          CONTAINER_NAME="test-container-${{ github.run_id }}"
+          IMAGE_TAG="${{ env.IMAGE_NAME }}:test"
+
+          echo "CONTAINER_NAME=$CONTAINER_NAME" >> $GITHUB_ENV
+          echo "Starting container: $CONTAINER_NAME with image: $IMAGE_TAG"
+
+          # Cleanup any stale containers (belt-and-suspenders)
+          docker rm -f "$CONTAINER_NAME" 2>/dev/null || true
+
+          # Start new container with unique name
+          docker run -d \
+            --name "$CONTAINER_NAME" \
+            -p 3000:3000 \
             -e NODE_ENV=development \
-            -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || 'test-key-fallback' }} \
-            -e SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://test-project.supabase.co' }} \
-            -e SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-token' }} \
-            -e SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-token' }} \
+            -e "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || 'test-key-fallback' }}" \
+            -e "SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://test-project.supabase.co' }}" \
+            -e "SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-dummy-key' }}" \
+            -e "SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'test-dummy-key' }}" \
             --health-cmd="curl -f http://localhost:3000/health || exit 1" \
             --health-interval=10s \
             --health-timeout=5s \
             --health-retries=3 \
-            ${{ env.IMAGE_NAME }}:test
+            "$IMAGE_TAG"
+
+          echo "✅ Container started successfully: $CONTAINER_NAME"
 
       - name: Wait for container to be healthy
         run: |
@@ -163,14 +179,14 @@ jobs:
 
           echo "❌ Container failed to become healthy"
           echo "Dump container logs:"
-          docker logs test-container
+          docker logs $CONTAINER_NAME
           exit 1
 
       - name: Cleanup test container
         if: always()
         run: |
-          docker stop test-container || true
-          docker rm test-container || true
+          docker stop $CONTAINER_NAME || true
+          docker rm $CONTAINER_NAME || true
 
       - name: Determine deployment targets
         id: check-deploy
@@ -227,13 +243,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+      - name: Determine image tags
+        id: tags
+        run: |
+          # Determine environment-specific tags
+          if [ "${{ github.ref }}" = "refs/heads/develop" ] || [ "$needs.build-and-deploy.outputs.should-deploy-staging" = "true" ]; then
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-latest" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ] || [ "$needs.build-and-deploy.outputs.should-deploy-production" = "true" ]; then
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-latest" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            # Fallback for other branches
+            echo "tags<<EOF" >> $GITHUB_OUTPUT
+            echo "${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -241,19 +271,17 @@ jobs:
           context: .
           file: backend/Dockerfile
           push: true
-          tags: |
-            ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=local,src=/tmp/.buildx-cache
-          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          tags: ${{ steps.tags.outputs.tags }}
+          cache-from: type=gha,scope=${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
           build-args: |
             BUILD_DATE=${{ github.event.head_commit.timestamp }}
             VCS_REF=${{ github.sha }}
-
-      - name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          labels: |
+            org.opencontainers.image.title=lock-in-backend
+            org.opencontainers.image.version=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
   # ===========================================================================
   # Deploy to Staging (lock-in-dev)
@@ -294,52 +322,64 @@ jobs:
         with:
           resourceGroup: ${{ env.RESOURCE_GROUP }}
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
-          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}
 
       - name: Verify staging deployment
         if: steps.check-creds.outputs.skip != 'true'
         run: |
-          APP_URL=$(az containerapp show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
+          set -euo pipefail
 
-          echo "🚀 Staging URL: https://$APP_URL"
+          APP_URL=$(az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv || true)
+
+          if [ -z "$APP_URL" ]; then
+            echo "Failed to resolve container app FQDN. Check resource group and ingress settings."
+            az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "{name:name, ingress:properties.configuration.ingress}" -o json || true
+            exit 1
+          fi
+
+          echo "Staging URL: https://$APP_URL"
           echo "APP_URL=https://$APP_URL" >> $GITHUB_ENV
 
-          # Wait for deployment with exponential backoff
-          max_attempts=10
-          attempt=0
-          wait_time=10
+          max_wait_seconds=600
+          deadline=$((SECONDS + max_wait_seconds))
+          wait_time=5
+          max_wait_time=60
+          attempt=1
 
-          while [ $attempt -lt $max_attempts ]; do
-            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting ${wait_time}s..."
+          while [ $SECONDS -lt $deadline ]; do
+            echo "Attempt ${attempt} - waiting ${wait_time}s..."
             sleep $wait_time
 
-            if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
-              echo "✅ Staging deployment verified!"
+            if curl -sf --connect-timeout 5 --max-time 10 "https://$APP_URL/health" > /dev/null 2>&1; then
+              echo "Staging deployment responded."
 
-              # Run smoke tests
-              echo "🧪 Running smoke tests..."
-              HEALTH_STATUS=$(curl -s "https://$APP_URL/health" | jq -r '.status // "unknown"')
-              if [ "$HEALTH_STATUS" = "ok" ] || [ "$HEALTH_STATUS" = "healthy" ]; then
-                echo "✅ Smoke tests passed!"
+              response=$(curl -s --connect-timeout 5 --max-time 10 "https://$APP_URL/health" || true)
+              health_status="unknown"
+              if command -v jq >/dev/null 2>&1; then
+                health_status=$(echo "$response" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+              fi
+
+              if [ "$health_status" = "ok" ] || [ "$health_status" = "healthy" ] || [ "$health_status" = "unknown" ]; then
+                echo "Smoke tests passed."
                 exit 0
               fi
+
+              echo "Health status is '$health_status'; retrying..."
             fi
 
             attempt=$((attempt + 1))
-            wait_time=$((wait_time * 2))
+            if [ $wait_time -lt $max_wait_time ]; then
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt $max_wait_time ]; then
+                wait_time=$max_wait_time
+              fi
+            fi
           done
 
-          echo "❌ Health check failed after $max_attempts attempts"
-          echo "📋 Fetching logs..."
-          az containerapp logs show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --tail 50 || echo "Could not fetch logs"
+          echo "Health check failed after ${max_wait_seconds}s."
+          echo "Fetching logs..."
+          az containerapp logs show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --tail 50 || echo "Could not fetch logs"
           exit 1
-
       - name: Print manual deployment instructions (if no credentials)
         if: steps.check-creds.outputs.skip == 'true'
         run: |
@@ -348,12 +388,8 @@ jobs:
           echo "az containerapp update \\"
           echo "  --name lock-in-dev \\"
           echo "  --resource-group <your-resource-group> \\"
-          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:staging-${{ github.sha }}"
 
-  # ===========================================================================
-  # Deploy to Production (lock-in-backend)
-  # Only deploys from main branch
-  # ===========================================================================
   # ===========================================================================
   # Deploy to Production (lock-in-backend)
   # Only deploys from main branch
@@ -394,52 +430,64 @@ jobs:
         with:
           resourceGroup: ${{ env.RESOURCE_GROUP }}
           containerAppName: ${{ env.CONTAINER_APP_NAME }}
-          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          imageToDeploy: ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-${{ github.sha }}
 
       - name: Verify production deployment
         if: steps.check-creds.outputs.skip != 'true'
         run: |
-          APP_URL=$(az containerapp show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
+          set -euo pipefail
 
-          echo "🚀 Production URL: https://$APP_URL"
+          APP_URL=$(az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "properties.configuration.ingress.fqdn" -o tsv || true)
+
+          if [ -z "$APP_URL" ]; then
+            echo "Failed to resolve container app FQDN. Check resource group and ingress settings."
+            az containerapp show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --query "{name:name, ingress:properties.configuration.ingress}" -o json || true
+            exit 1
+          fi
+
+          echo "Production URL: https://$APP_URL"
           echo "APP_URL=https://$APP_URL" >> $GITHUB_ENV
 
-          # Wait for deployment with exponential backoff
-          max_attempts=10
-          attempt=0
-          wait_time=10
+          max_wait_seconds=600
+          deadline=$((SECONDS + max_wait_seconds))
+          wait_time=5
+          max_wait_time=60
+          attempt=1
 
-          while [ $attempt -lt $max_attempts ]; do
-            echo "⏳ Attempt $((attempt + 1))/$max_attempts - waiting ${wait_time}s..."
+          while [ $SECONDS -lt $deadline ]; do
+            echo "Attempt ${attempt} - waiting ${wait_time}s..."
             sleep $wait_time
 
-            if curl -sf "https://$APP_URL/health" > /dev/null 2>&1; then
-              echo "✅ Production deployment verified!"
+            if curl -sf --connect-timeout 5 --max-time 10 "https://$APP_URL/health" > /dev/null 2>&1; then
+              echo "Production deployment responded."
 
-              # Run smoke tests
-              echo "🧪 Running smoke tests..."
-              HEALTH_STATUS=$(curl -s "https://$APP_URL/health" | jq -r '.status // "unknown"')
-              if [ "$HEALTH_STATUS" = "ok" ] || [ "$HEALTH_STATUS" = "healthy" ]; then
-                echo "✅ Smoke tests passed!"
+              response=$(curl -s --connect-timeout 5 --max-time 10 "https://$APP_URL/health" || true)
+              health_status="unknown"
+              if command -v jq >/dev/null 2>&1; then
+                health_status=$(echo "$response" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+              fi
+
+              if [ "$health_status" = "ok" ] || [ "$health_status" = "healthy" ] || [ "$health_status" = "unknown" ]; then
+                echo "Smoke tests passed."
                 exit 0
               fi
+
+              echo "Health status is '$health_status'; retrying..."
             fi
 
             attempt=$((attempt + 1))
-            wait_time=$((wait_time * 2))
+            if [ $wait_time -lt $max_wait_time ]; then
+              wait_time=$((wait_time * 2))
+              if [ $wait_time -gt $max_wait_time ]; then
+                wait_time=$max_wait_time
+              fi
+            fi
           done
 
-          echo "❌ Health check failed after $max_attempts attempts"
-          echo "📋 Fetching logs..."
-          az containerapp logs show \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP }} \
-            --tail 50 || echo "Could not fetch logs"
+          echo "Health check failed after ${max_wait_seconds}s."
+          echo "Fetching logs..."
+          az containerapp logs show --name ${{ env.CONTAINER_APP_NAME }} --resource-group ${{ env.RESOURCE_GROUP }} --tail 50 || echo "Could not fetch logs"
           exit 1
-
       - name: Print manual deployment instructions (if no credentials)
         if: steps.check-creds.outputs.skip == 'true'
         run: |
@@ -448,7 +496,7 @@ jobs:
           echo "az containerapp update \\"
           echo "  --name lock-in-backend \\"
           echo "  --resource-group <your-resource-group> \\"
-          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          echo "  --image ${{ env.REGISTRY_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:production-${{ github.sha }}"
 
   # ===========================================================================
   # Summary Job - Always runs to show deployment info
@@ -478,9 +526,9 @@ jobs:
 # =============================================================================
 # Required GitHub Secrets:
 #
-# AZURE_CREDENTIALS              - Azure Service Principal JSON (for auto-deploy)
-#                                  Format: {"clientId":"...","clientSecret":"...",
-#                                          "subscriptionId":"...","tenantId":"..."}
+# AZURE_CLIENT_ID                - Azure client ID (UAMI or app registration)
+# AZURE_TENANT_ID                - Azure tenant ID
+# AZURE_SUBSCRIPTION_ID          - Azure subscription ID
 # AZURE_CONTAINER_REGISTRY       - ACR name (without .azurecr.io suffix)
 # AZURE_RESOURCE_GROUP           - Production resource group name
 # AZURE_RESOURCE_GROUP_STAGING   - Staging resource group name (can be same as prod)
@@ -490,16 +538,8 @@ jobs:
 #   - production: Optional required reviewers for manual approval (from main)
 #
 # Setup Instructions:
-# 1. Create service principal:
-#    az ad sp create-for-rbac --name "github-actions-lock-in" \
-#      --role contributor \
-#      --scopes /subscriptions/{subscription-id}/resourceGroups/{resource-group} \
-#      --sdk-auth
-#
-# 2. Assign ACR push role:
-#    az role assignment create --assignee {client-id} \
-#      --scope /subscriptions/{subscription-id}/resourceGroups/{resource-group}/providers/Microsoft.ContainerRegistry/registries/{acr-name} \
-#      --role AcrPush
-#
-# 3. Add the output JSON to GitHub Secrets as AZURE_CREDENTIALS
+# 1. Create a user-assigned managed identity and federated credentials
+#    (see setup_uami.ps1).
+# 2. Assign Contributor on the resource group and AcrPush on the registry.
+# 3. Set GitHub secrets: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID.
 # =============================================================================

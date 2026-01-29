@@ -31,7 +31,7 @@ This directory contains GitHub Actions workflows that implement industry-standar
 
 #### Stage 2: Push to ACR
 
-- Login to Azure using Service Principal
+- Login to Azure using OIDC (managed identity)
 - Login to Azure Container Registry
 - Build multi-platform image with Docker Buildx
 - Push image with SHA and latest tags
@@ -41,7 +41,7 @@ This directory contains GitHub Actions workflows that implement industry-standar
 
 - Login to Azure
 - Deploy to Container App (staging or production)
-- Wait for deployment with exponential backoff
+- Wait for deployment with bounded backoff + request timeouts (max 10 minutes)
 - Run smoke tests on health endpoint
 - Fetch logs on failure
 
@@ -85,20 +85,22 @@ Actions → Backend Rollback → Run workflow
 
 All sensitive credentials are stored as GitHub Secrets:
 
-| Secret                         | Purpose                | Format                                                     |
-| ------------------------------ | ---------------------- | ---------------------------------------------------------- |
-| `AZURE_CREDENTIALS`            | Service Principal auth | JSON with clientId, clientSecret, subscriptionId, tenantId |
-| `AZURE_CONTAINER_REGISTRY`     | ACR name               | String (e.g., "myregistry")                                |
-| `AZURE_RESOURCE_GROUP`         | Production RG          | String                                                     |
-| `AZURE_RESOURCE_GROUP_STAGING` | Staging RG             | String                                                     |
+| Secret                         | Purpose            | Format                                   |
+| ------------------------------ | ------------------ | ---------------------------------------- |
+| `AZURE_CLIENT_ID`              | OIDC client ID     | User-assigned managed identity client ID |
+| `AZURE_TENANT_ID`              | OIDC tenant ID     | Azure AD tenant ID                       |
+| `AZURE_SUBSCRIPTION_ID`        | Azure subscription | Subscription ID                          |
+| `AZURE_CONTAINER_REGISTRY`     | ACR name           | String (e.g., "myregistry")              |
+| `AZURE_RESOURCE_GROUP`         | Production RG      | String                                   |
+| `AZURE_RESOURCE_GROUP_STAGING` | Staging RG         | String                                   |
 
 ### 2. Authentication Methods
 
 **✅ Recommended (Current Implementation)**:
 
-- Azure Service Principal with RBAC
-- Scoped to specific resource groups
-- No admin passwords stored
+- Workload Identity Federation (OIDC) with user-assigned managed identity
+- Scoped to specific resource groups with least privilege
+- No client secrets stored
 
 **❌ Deprecated (Removed)**:
 
@@ -241,7 +243,7 @@ az containerapp update \
 
 The pipeline includes:
 
-- Health check polling with exponential backoff
+- Health check polling with bounded backoff and per-request timeouts
 - Smoke tests on critical endpoints
 - Automatic log fetching on failure
 
@@ -269,11 +271,11 @@ Recommended setup:
 
 **Cause**: Using `azure/docker-login@v2` without credentials.
 
-**Solution**: Workflow now uses `az acr login` with Service Principal.
+**Solution**: Workflow uses `az acr login` with OIDC credentials.
 
 ### Issue: "Permission denied" on ACR push
 
-**Cause**: Service Principal lacks ACR push role.
+**Cause**: Managed identity lacks AcrPush role.
 
 **Solution**:
 
@@ -323,29 +325,19 @@ az containerapp show \
 
 ## Setup Instructions
 
-### 1. Create Service Principal
+### 1. Create Managed Identity + Federated Credentials (OIDC)
 
-```bash
-# Create with contributor role
-az ad sp create-for-rbac \
-  --name "github-actions-lock-in" \
-  --role contributor \
-  --scopes /subscriptions/<subscription-id>/resourceGroups/<rg> \
-  --sdk-auth
-
-# Output will be JSON - save this
+```powershell
+# From repo root (edit config values at top if needed)
+.\setup_uami.ps1
 ```
 
 ### 2. Assign ACR Permissions
 
 ```bash
-# Get service principal app ID
-SP_APP_ID=$(az ad sp list --display-name "github-actions-lock-in" --query "[0].appId" -o tsv)
-
-# Assign AcrPush role
-az role assignment create \
-  --assignee $SP_APP_ID \
-  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.ContainerRegistry/registries/<acr-name> \
+az role assignment create \\
+  --assignee <managed-identity-client-id> \\
+  --scope /subscriptions/<sub-id>/resourceGroups/<rg>/providers/Microsoft.ContainerRegistry/registries/<acr-name> \\
   --role AcrPush
 ```
 
@@ -355,7 +347,9 @@ Go to: `Settings` → `Secrets and variables` → `Actions` → `New repository 
 
 Add:
 
-- `AZURE_CREDENTIALS`: The JSON from step 1
+- `AZURE_CLIENT_ID`: Managed identity client ID
+- `AZURE_TENANT_ID`: Azure AD tenant ID
+- `AZURE_SUBSCRIPTION_ID`: Azure subscription ID
 - `AZURE_CONTAINER_REGISTRY`: ACR name (e.g., "lockincr")
 - `AZURE_RESOURCE_GROUP`: Production resource group name
 - `AZURE_RESOURCE_GROUP_STAGING`: Staging resource group name
@@ -383,7 +377,7 @@ gh run watch
 
 ## Best Practices Checklist
 
-- [x] Use service principal authentication
+- [x] Use OIDC with managed identity authentication
 - [x] Enable Docker layer caching
 - [x] Run security scanning (Trivy)
 - [x] Implement health checks

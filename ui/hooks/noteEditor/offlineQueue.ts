@@ -1,4 +1,4 @@
-import type { NoteContent } from '@core/domain/Note';
+import type { NoteContent, NoteType } from '@core/domain/Note';
 import { OFFLINE_QUEUE_KEY } from './constants';
 import { createClientNoteId } from './noteUtils';
 
@@ -10,7 +10,7 @@ export interface PendingSave {
   courseCode: string | null;
   sourceUrl: string | null;
   sourceSelection: string | null;
-  noteType: string;
+  noteType: NoteType;
   tags: string[];
   expectedUpdatedAt: string | null;
   timestamp: number;
@@ -25,8 +25,13 @@ function normalizeOfflineQueue(queue: PendingSave[]): PendingSave[] {
   const latestByKey = new Map<string, PendingSave>();
 
   queue.forEach((item) => {
+    const noteType =
+      typeof item.noteType === 'string' && item.noteType.length > 0
+        ? (item.noteType as NoteType)
+        : 'manual';
     const normalized: PendingSave = {
       ...item,
+      noteType,
       clientNoteId: item.clientNoteId || item.noteId || createClientNoteId(),
       expectedUpdatedAt: item.expectedUpdatedAt ?? null,
       retryCount: item.retryCount ?? 0,

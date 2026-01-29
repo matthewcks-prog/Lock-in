@@ -11,6 +11,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 import { RateLimitError } from '@core/errors';
+import {
+  useTranscriptCache,
+  type TranscriptCacheInput,
+} from '../../transcripts/hooks/useTranscriptCache';
 import type {
   ChatMessage,
   SendMessageParams,
@@ -36,12 +40,16 @@ interface SendMessageWithAttachmentsParams extends SendMessageParams {
   userMessageOverride?: string;
   /** Idempotency key for de-duplication */
   idempotencyKey?: string;
+  /** Optional transcript context to cache before sending */
+  transcriptContext?: TranscriptCacheInput;
 }
 
 type SendMessageMutationParams = SendMessageWithAttachmentsParams & {
   currentMessages: ChatMessage[];
   activeChatId: string | null;
 };
+
+type ChatHistoryEntry = { role: ChatMessage['role']; content: string };
 
 const IDEMPOTENCY_BUCKET_MS = 5000;
 
@@ -89,6 +97,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
   const queryClient = useQueryClient();
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingSendKeyRef = useRef<string | null>(null);
+  const { cacheTranscript } = useTranscriptCache(apiClient);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -115,14 +124,20 @@ export function useSendMessage(options: UseSendMessageOptions) {
         throw new Error('API client not available');
       }
 
-      const baseHistory =
-        params.chatHistory ||
-        params.currentMessages.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
+      if (params.transcriptContext) {
+        cacheTranscript(params.transcriptContext).catch((error) => {
+          console.warn('[Lock-in] Failed to cache transcript for chat:', error);
+        });
+      }
 
-      const apiChatId = isValidUUID(params.chatId) ? params.chatId : undefined;
+      const baseHistorySource = params.chatHistory ?? params.currentMessages;
+      const baseHistory: ChatHistoryEntry[] = baseHistorySource.map((msg) => ({
+        role: msg.role === 'assistant' ? 'assistant' : 'user',
+        content: msg.content,
+      }));
+
+      const apiChatId =
+        typeof params.chatId === 'string' && isValidUUID(params.chatId) ? params.chatId : undefined;
       const selectionPayload =
         params.selectionOverride !== undefined ? params.selectionOverride : params.message;
       const userMessagePayload =
@@ -136,7 +151,7 @@ export function useSendMessage(options: UseSendMessageOptions) {
         newUserMessage: userMessagePayload,
         chatId: apiChatId,
         pageUrl: params.pageUrl || pageUrl,
-        courseCode: params.courseCode || courseCode || undefined,
+        courseCode: params.courseCode ?? courseCode ?? undefined,
         attachments: params.attachmentIds,
         idempotencyKey,
       });

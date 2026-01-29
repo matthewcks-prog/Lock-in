@@ -8,7 +8,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 - **Explain**: Get clear, plain-English explanations with concrete examples
 - **Sidebar Interface**: Modern right-hand sidebar with chat history and persistent conversations
-- **Split Layout**: Ctrl/Cmd + select to open, 65/35 split with mobile overlay
+- **Split Layout**: Context menu prefill opens the sidebar (65/35 split with mobile overlay)
 - **Chat History**: Persistent chat sessions saved to Supabase
 
 ### Notes
@@ -40,7 +40,7 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 **Core Components:**
 
-- `contentScript-react.js` - React-based content script that mounts the sidebar bundle, handles Ctrl/Cmd selection triggers, and syncs the 65/35 layout class
+- `contentScript-react.js` - React-based content script that mounts the sidebar bundle, handles context menu prefill messages + Escape close, and syncs the 65/35 layout class
 - `dist/ui/index.js` - Built React sidebar bundle (source lives in `/ui/extension`)
 - `background.js` - Service worker for context menus and session management
 - `popup.js` - Settings and authentication UI (reads `window.LockInAuth` from the bundled client)
@@ -59,8 +59,8 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 - `index.js` - Server entry point
 - `app.js` - Express application setup
 - `config.js` - Centralized configuration
-- `routes/lockinRoutes.js` - API route definitions
-- `controllers/lockinController.js` - Request handlers
+- `routes/assistantRoutes.js` - API route definitions
+- `controllers/assistant/ai.js` - Assistant request handlers
 - `openaiClient.js` - OpenAI API integration
 - `chatRepository.js` - Database operations
 - `supabaseClient.js` - Supabase client
@@ -78,29 +78,24 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 ### 1. Environment Setup
 
-**Important:** Follow the [ENV_SETUP.md](ENV_SETUP.md) guide for detailed environment variable configuration.
+Use the canonical environment guide: [docs/deployment/ENVIRONMENTS.md](docs/deployment/ENVIRONMENTS.md).
 
-1. Copy the environment template:
+1. Configure root environment variables (extension build):
 
    ```bash
    cp .env.example .env.local
    ```
 
-2. Edit `.env.local` with your actual credentials:
+   Then set your real `VITE_*` values in `.env.local`.
+
+2. Configure backend environment variables:
 
    ```bash
-   # Extension Build (VITE_ prefix required)
-   VITE_SUPABASE_URL_DEV=https://your-project.supabase.co
-   VITE_SUPABASE_ANON_KEY_DEV=your-dev-anon-key
-   VITE_BACKEND_URL_DEV=http://localhost:3000
-
-   # Backend Server (NO VITE_ prefix)
-   SUPABASE_URL_DEV=https://your-project.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY_DEV=your-service-role-key
-   OPENAI_API_KEY=sk-proj-your-openai-key
+   cd backend
+   cp .env.example .env
    ```
 
-   **Note:** `.env.local` is gitignored and contains your real secrets. Never commit it!
+   Then set your backend runtime values in `backend/.env`.
 
 3. Install dependencies:
 
@@ -141,18 +136,12 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 ### 3. Usage
 
-#### Method 1: Keyboard Selection
-
-1. Hold **Ctrl** (Windows/Linux) or **Cmd** (Mac) and highlight any text
-2. The sidebar will open automatically
-3. Choose your mode: **Explain** or **General**
-4. View the AI-generated result in the sidebar
-
-#### Method 2: Right-Click Context Menu
+#### Right-Click Context Menu
 
 1. Highlight any text on any webpage
 2. Right-click and select "Lock-in: Explain"
-3. The sidebar will open with the selected mode
+3. The sidebar opens and the chat input is prefilled with the highlighted text
+4. Edit the text if needed, then click **Send**
 
 #### Customizing Settings
 
@@ -252,11 +241,11 @@ The extension follows best practices:
 
 **Problem**: "OPENAI_API_KEY not found"
 
-- **Solution**: Make sure you created a `.env` file with your API key
+- **Solution**: Make sure you created `backend/.env` with your API key
 
 **Problem**: "Port 3000 already in use"
 
-- **Solution**: Change the PORT in `.env` or stop other services using port 3000
+- **Solution**: Change the `PORT` in `backend/.env` or stop other services using port 3000
 
 ### Extension Issues
 
@@ -269,11 +258,11 @@ The extension follows best practices:
 - **Solution**:
   1. Check that backend is running on `http://localhost:3000`
   2. Check Chrome DevTools Console for errors (F12)
-  3. Verify `VITE_BACKEND_URL_DEV` in `.env` matches your backend and rebuild
+  3. Verify `VITE_BACKEND_URL_DEV` in `.env.local` matches your backend and rebuild
 
 **Problem**: Authentication not working
 
-- **Solution**: Verify `VITE_SUPABASE_URL_DEV` and `VITE_SUPABASE_ANON_KEY_DEV` in `.env` and rebuild
+- **Solution**: Verify `VITE_SUPABASE_URL_DEV` and `VITE_SUPABASE_ANON_KEY_DEV` in `.env.local` and rebuild
 
 ## License
 

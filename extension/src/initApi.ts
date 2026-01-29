@@ -27,7 +27,7 @@ export interface LockInConfig {
  * Get config from window (set by config.js)
  */
 export function getConfig(): LockInConfig {
-  const config = (typeof window !== 'undefined' && (window as any).LOCKIN_CONFIG) || {};
+  const config = typeof window !== 'undefined' ? (window.LOCKIN_CONFIG ?? {}) : {};
   return {
     backendUrl: config.BACKEND_URL || 'http://localhost:3000',
     supabaseUrl: config.SUPABASE_URL || '',
@@ -42,6 +42,7 @@ export function getConfig(): LockInConfig {
  */
 export function initAuthClient(): AuthClient {
   const config = getConfig();
+  const fetcher = typeof globalThis.fetch === 'function' ? globalThis.fetch : undefined;
   return createAuthClient(
     {
       supabaseUrl: config.supabaseUrl,
@@ -50,6 +51,7 @@ export function initAuthClient(): AuthClient {
       tokenExpiryBufferMs: config.tokenExpiryBufferMs,
     },
     chromeStorage,
+    { fetcher },
   );
 }
 
@@ -58,9 +60,11 @@ export function initAuthClient(): AuthClient {
  */
 export function initApiClient(authClient: AuthClient): ApiClient {
   const config = getConfig();
+  const fetcher = typeof globalThis.fetch === 'function' ? globalThis.fetch : undefined;
   return createApiClient({
     backendUrl: config.backendUrl,
     authClient,
+    fetcher,
   });
 }
 
@@ -84,12 +88,12 @@ export function initClients(): { authClient: AuthClient; apiClient: ApiClient } 
 
   // Expose globally for legacy code and content scripts
   if (typeof window !== 'undefined') {
-    (window as any).LockInAuth = authClient;
-    (window as any).LockInAPI = apiClient;
+    window.LockInAuth = authClient;
+    window.LockInAPI = apiClient;
 
     // Also expose as authClient/apiClient for backward compatibility
-    (window as any).authClient = authClient;
-    (window as any).apiClient = apiClient;
+    window.authClient = authClient;
+    window.apiClient = apiClient;
   }
 
   return cachedClients;

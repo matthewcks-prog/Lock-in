@@ -12,9 +12,6 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Install dependencies
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
-# Stage 1: Builder - Install dependencies
-# -----------------------------------------------------------------------------
 FROM node:20.18-alpine AS builder
 
 WORKDIR /app
@@ -29,43 +26,36 @@ COPY backend/package*.json ./backend/
 # Install dependencies from root (hoisted structure)
 # This ensures all workspace dependencies are resolved correctly
 ENV NODE_ENV=production
-RUN npm ci --omit=dev --ignore-scripts
-
-# Create backend/node_modules directory to ensure COPY command in next stage never fails
-# (Module hoisting might mean this directory is empty or non-existent otherwise)
-RUN mkdir -p backend/node_modules
+RUN npm ci --omit=dev --ignore-scripts && \
+    npm cache clean --force && \
+    mkdir -p backend/node_modules
 
 # -----------------------------------------------------------------------------
 # Stage 2: Production - Minimal runtime image
 # -----------------------------------------------------------------------------
 FROM node:20.18-alpine
 
-# Install FFmpeg as fallback (ffmpeg-static should work, but belt-and-suspenders)
-# Also install curl for health checks
-RUN apk add --no-cache ffmpeg curl
-
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
+# Install runtime dependencies and create non-root user
+# FFmpeg: fallback for transcription (ffmpeg-static should work, but belt-and-suspenders)
+# curl: required for health checks
+RUN apk add --no-cache ffmpeg curl && \
+    addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 && \
+    mkdir -p /tmp/transcripts && \
+    chown nodejs:nodejs /tmp/transcripts
 
 WORKDIR /app
 
-# Copy hoisted node_modules from builder
-COPY --from=builder /app/node_modules ./node_modules
+# Copy hoisted node_modules from builder with correct ownership
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 # Copy nested backend node_modules (if any exist)
-COPY --from=builder /app/backend/node_modules ./backend/node_modules
+COPY --from=builder --chown=nodejs:nodejs /app/backend/node_modules ./backend/node_modules
 
 # Copy backend application code to /app/backend (Preserve monorepo structure)
-COPY backend/ ./backend/
+COPY --chown=nodejs:nodejs backend/ ./backend/
 
 # Copy required core config files
-COPY core/config/chatLimits.json ./core/config/chatLimits.json
-
-# Create temp directory for transcription jobs
-RUN mkdir -p /tmp/transcripts && \
-    chown -R nodejs:nodejs /tmp/transcripts && \
-    chown -R nodejs:nodejs /app && \
-    chown -R nodejs:nodejs ./core
+COPY --chown=nodejs:nodejs core/config/chatLimits.json ./core/config/chatLimits.json
 
 # Switch to non-root user
 USER nodejs

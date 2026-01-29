@@ -1,261 +1,612 @@
-﻿# Extension Folder AGENTS.md
+﻿# Extension AGENTS.md
+
+> **Inherits from**: [/AGENTS.md](../AGENTS.md)  
+> **Last Updated**: 2026-01-28  
+> **Purpose**: Chrome extension wrappers, god file prevention, content script patterns
+
+## Table of Contents
+
+- [Purpose](#purpose)
+- [Non-Goals](#non-goals)
+- [Architectural Boundaries](#architectural-boundaries)
+- [Allowed & Forbidden Imports](#allowed--forbidden-imports)
+- [Required Patterns](#required-patterns)
+- [God File Prevention](#god-file-prevention)
+- [Testing Rules](#testing-rules)
+- [Error Handling Rules](#error-handling-rules)
+- [Golden Path Workflows](#golden-path-workflows)
+- [Common Failure Modes](#common-failure-modes)
+- [PR Checklist](#pr-checklist)
+
+---
 
 ## Purpose
 
-The `/extension` folder contains **Chrome extension-specific code only**. This includes:
+The `/extension` directory contains **Chrome extension-specific code only**:
 
-- Extension manifest and configuration
-- Background service worker
-- Content script injection and orchestration
-- Popup UI (settings, auth)
-- Chrome API wrappers (storage, messaging)
+1. **Extension infrastructure** - manifest, background service worker, content scripts
+2. **Chrome API wrappers** - storage, messaging, tabs, context menus
+3. **Extension configuration** - config.js (generated from config.ts)
+4. **Content script orchestration** - sidebar mounting, page context resolution
 
-**This folder SHOULD contain**:
+**This directory SHOULD contain**:
 
-- Built extension bundles (`/extension/dist/ui`, `/extension/dist/libs`) used by manifest/background/popup
-- Chrome API wrappers and extension-specific utilities
+- `manifest.json` and extension configuration
+- Background service worker (`background.js`) and modular handlers (`background/`)
+- Content scripts (`contentScript-react.js`) and helpers (`content/`)
+- Popup UI (`popup/`)
+- Built bundles (`dist/ui`, `dist/libs`)
+- Chrome API wrappers (`storage.js`, `messaging.js`)
 
-**This folder should NOT contain**:
+**This directory MUST NOT contain**:
 
-- Business logic (that's in `/core`)
-- Site-specific adapters (that's in `/integrations`)
-- API client logic (that's in `/api`)
-
----
-
-## Living Docs Reminder
-
-- Update this file, root `AGENTS.md`, `AGENTS._LIVINGDOC.md`, and architecture docs whenever extension responsibilities change.
-- If you move content script helpers or UI entry points, reflect it here in the same change.
+- Business logic (that's `/core`)
+- Site adapters (that's `/integrations`)
+- API client logic (that's `/api`)
+- UI component source (source is `/ui/extension`, built output here)
 
 ---
 
-## File Responsibilities
+## Non-Goals
 
-### `manifest.json`
+**What this layer is NOT**:
 
-- Extension configuration
-- Content script declarations
-- Permissions
-- **DO NOT** add business logic here
-
-### `background.js`
-
-- Service worker (Chrome extension lifecycle)
-- Context menu handlers
-- Session management (per-tab)
-- Message routing
-- **DO NOT** contain business logic - delegate to core/services
-- **Transcript extraction**: Uses `ExtensionFetcher` class (Chrome-specific CORS/credentials) and delegates to core providers via fetcher interface. No extraction algorithm logic here - that's in `/core/transcripts/providers/`.
-
-### `contentScript-react.js`
-
-- **Active** content script (legacy `contentScript.js` removed)
-- Thin orchestrator only: detect site adapter, extract context, and mount React sidebar bundle from `/extension/dist/ui`
-- Delegates to helpers in `extension/content/` for page context, state store, sidebar host, session restore, and interactions
-- Handles Chrome-specific events (text selection, Ctrl/Cmd modifier, Escape close)
-- Applies body class `lockin-sidebar-open` so the injected `#lockin-page-wrapper` reserves space for the sidebar; a MutationObserver keeps new body nodes inside the wrapper; mobile overlays instead of resizing
-- **DO NOT** contain:
-  - Business logic (use `/core/services`)
-  - UI rendering (use React components from `/ui/extension`)
-  - Site-specific detection (use adapters from `/integrations`)
-
-### `content/`
-
-- `pageContext.js` (adapter + page context; bundled from `pageContext.ts` importing `/integrations`), `stateStore.js` (state + storage sync), `sidebarHost.js` (React mounting + body split), `sessionManager.js` (tab/session), `interactions.js` (selection + Escape).
-- Extend functionality by adding focused helpers here instead of inflating `contentScript-react.js`.
-- Rebuild `pageContext.js` when adapters/page context logic change: `node_modules/.bin/esbuild extension/content/pageContext.ts --bundle --format=iife --platform=browser --target=es2018 --global-name=LockInPageContext --outfile=extension/content/pageContext.js`.
-
-### `dist/ui/`
-
-- Built bundle lives here (`extension/dist/ui/index.js`), source lives under `/ui/extension`
-- Sidebar orchestrator: `ui/extension/LockInSidebar.tsx` (wraps chat + notes)
-- Notes UI: `ui/extension/notes/` (`NotesPanel`, Lexical `NoteEditor`, asset helpers)
-- Hooks: `useNoteEditor`, `useNoteAssets`, `useNotesList` in `/ui/hooks`
-- **These components are NOT shared with the web app** - they are specific to the extension sidebar
-
-### `popup/`
-
-- Popup HTML, JS, CSS
-- Settings UI
-- Auth UI
-- **DO NOT** contain business logic - call API/client functions
-
-### `dist/libs/`
-
-- `initApi.js` - Bundled API/auth client (LockInAPI/LockInAuth)
-- `contentLibs.js` - Bundled content helpers (LockInContent/Logger/Messaging/Storage)
-- `webvttParser.js` - Bundled WebVTT parser for background usage
-- **DO NOT** hand-edit; rebuild via Vite configs
+- NOT business logic (use `/core/services`)
+- NOT site detection (use `/integrations/adapters`)
+- NOT API client (use `/api`)
+- NOT UI source code (source is `/ui/extension`, this is built output + wrappers)
 
 ---
 
-## Rules for Editing Extension Files
+## Architectural Boundaries
 
-### âœ… DO
+### Extension Structure
 
-- Keep files small and focused
-- Delegate to `/core` for business logic
-- Use adapters from `/integrations` for site detection
-- Use React components from `/ui/extension` for rendering the sidebar
-- Use API client from `/api` for backend calls
-- Wrap Chrome APIs in thin wrappers
-- Keep extension UI components in `/ui/extension` (they are extension-specific)
-
-### âŒ DON'T
-
-- Put business logic in content scripts
-- Hardcode site-specific logic (use adapters)
-- Build HTML strings (use React components)
-- Use global variables for state (use React hooks)
-- Mix concerns (DOM manipulation + API calls + rendering)
-
----
-
-## Content Script Pattern
-
-The content script should follow this pattern:
-
-```javascript
-// 1. Get adapter + context via bundled helper
-const { adapter, pageContext } = window.LockInContent.resolveAdapterContext(Logger);
-
-// 2. Mount React component from extension UI
-// Note: In practice, this is loaded via script tag and accessed via window.LockInUI
-// The built bundle is at extension/dist/ui/index.js
-// const { LockInSidebar, createLockInSidebar } = window.LockInUI;
-const root = document.createElement('div');
-document.body.appendChild(root);
-ReactDOM.render(
-  <LockInSidebar courseContext={pageContext.courseContext} siteAdapter={adapter} />,
-  root,
-);
-
-// 4. Handle Chrome-specific events
-document.addEventListener('mouseup', handleTextSelection);
+```
+/extension
+├── manifest.json                   ← Extension config
+├── background.js                   ← Service worker entrypoint (<200 lines)
+├── background/                     ← Modular background implementation
+│   ├── index.js                    ← Assemble dependencies, register listeners
+│   ├── router.js                   ← Message routing
+│   ├── handlers/                   ← Message handlers (auth, settings, transcripts)
+│   ├── transcripts/                ← ExtensionFetcher, AI pipeline
+│   └── ...                         ← Other modules
+├── contentScript-react.js          ← Content script (<200 lines)
+├── content/                        ← Content script helpers
+│   ├── pageContext.js              ← Adapter resolution
+│   ├── stateStore.js               ← Sidebar state + storage sync
+│   ├── sidebarHost.js              ← React mounting, body split
+│   ├── sessionManager.js           ← Tab sessions
+│   └── interactions.js             ← Escape handling
+├── popup/                          ← Popup UI
+├── dist/ui/                        ← Built React sidebar (from /ui/extension)
+├── dist/libs/                      ← Built shared libs (API client, content helpers)
+├── src/                            ← TypeScript source for wrappers
+│   ├── config.ts                   ← Config generation (→ config.js)
+│   ├── networkUtils.js             ← Chrome-specific fetch wrappers
+│   ├── chromeStorage.ts            ← Chrome storage adapter
+│   └── ...
+└── ...
 ```
 
-**Keep it simple. Delegate everything else.**
+### Delegation Pattern
+
+```
+┌──────────────────────────────────────────────────┐
+│  manifest.json (Declarative)                     │
+│  - Defines permissions, scripts, icons           │
+└──────────────────────────────────────────────────┘
+         ↓                            ↓
+┌─────────────────────┐    ┌─────────────────────────┐
+│  background.js      │    │  contentScript-react.js │
+│  (Entrypoint)       │    │  (Entrypoint)           │
+│  - Load modules     │    │  - Detect site adapter  │
+│  - Register         │    │  - Mount React sidebar  │
+│    listeners        │    │  - Handle events        │
+│  - MAX 200 lines    │    │  - MAX 200 lines        │
+└──────────┬──────────┘    └───────────┬─────────────┘
+           ↓                            ↓
+┌──────────────────────┐    ┌─────────────────────────┐
+│  background/         │    │  content/               │
+│  - Modular handlers  │    │  - pageContext.js       │
+│  - ExtensionFetcher  │    │  - stateStore.js        │
+│  - Transcript        │    │  - sidebarHost.js       │
+│    services          │    │  - sessionManager.js    │
+│  - Auth, settings    │    │  - interactions.js      │
+└──────────────────────┘    └─────────────────────────┘
+           ↓                            ↓
+┌──────────────────────────────────────────────────┐
+│  SHARED LAYERS (Core, API, Integrations)         │
+│  - Business logic, domain models                 │
+│  - API client (window.LockInAPI)                 │
+│  - Site adapters (window.LockInContent)          │
+└──────────────────────────────────────────────────┘
+```
 
 ---
 
-## Background Script Pattern
+## Allowed & Forbidden Imports
 
-The background script should:
+### Background Scripts
 
-1. Handle Chrome extension lifecycle
-2. Route messages to appropriate handlers
-3. Manage per-tab sessions (thin wrapper)
-4. Delegate business logic to core/services
+**MUST import**:
+
+- Chrome APIs (`chrome.*`)
+- Core domain types (`/core/domain`)
+- Core error types (`/core/errors`)
+- Transcript providers (bundled to `dist/libs/transcriptProviders.js`)
+- Network utils (`extension/src/networkUtils.js`)
+
+**MUST NOT import**:
+
+- Express types
+- Browser DOM APIs directly (use message passing to content scripts)
+
+### Content Scripts
+
+**MUST import**:
+
+- Chrome APIs (`chrome.*`)
+- DOM APIs (`document`, `window`)
+- Bundled helpers (`window.LockInContent`, `window.LockInAPI`)
+- Content helpers (`content/` modules)
+
+**MUST NOT import**:
+
+- Backend modules (`/backend/*`)
+- Express types
+- Node.js-specific modules
+
+### Size Limits
+
+| File                     | Max Lines | Enforcement                                |
+| ------------------------ | --------- | ------------------------------------------ |
+| `background.js`          | 200       | **MUST** delegate to `background/` modules |
+| `contentScript-react.js` | 200       | **MUST** delegate to `content/` helpers    |
+| Background handlers      | 150       | **SHOULD** extract complex logic           |
+| Content helpers          | 150       | **SHOULD** keep focused                    |
+
+---
+
+## Required Patterns
+
+### 1. Background Script Modularization
+
+**MUST delegate to `background/` modules**:
 
 ```javascript
-// Example: Message routing
+// ✅ GOOD - background.js (entrypoint)
+// MAX 200 lines: load modules, register listeners
+
+importScripts('dist/libs/transcriptProviders.js', 'src/networkUtils.js');
+
+// Import modular background implementation
+const { registerListeners, initializeDependencies } = require('./background/index.js');
+
+// Initialize dependencies
+const deps = initializeDependencies();
+
+// Register all listeners
+registerListeners(deps);
+
+console.log('Background service worker initialized');
+```
+
+```javascript
+// ✅ GOOD - background/index.js (module orchestrator)
+const { createMessageRouter } = require('./router');
+const { createExtensionFetcher } = require('./transcripts/extensionFetcher');
+const { createTranscriptHandlers } = require('./handlers/transcriptHandlers');
+const { createAuthHandlers } = require('./handlers/authHandlers');
+
+function initializeDependencies() {
+  const fetcher = createExtensionFetcher();
+  const router = createMessageRouter();
+
+  return { fetcher, router };
+}
+
+function registerListeners(deps) {
+  // Runtime message listener
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    deps.router.route(message, sender, sendResponse);
+    return true; // Async response
+  });
+
+  // Install/update listeners
+  chrome.runtime.onInstalled.addListener((details) => {
+    // Handle install/update
+  });
+}
+
+module.exports = { initializeDependencies, registerListeners };
+```
+
+**❌ BAD - God background.js**:
+
+```javascript
+// background.js (1000+ lines)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  switch (message.type) {
-    case 'GET_SESSION':
-      // Thin wrapper - delegate to core service
-      const session = sessionService.getSession(sender.tab.id);
-      sendResponse({ ok: true, data: session });
-      break;
-    // ...
+  if (message.type === 'FETCH_TRANSCRIPT') {
+    // 200 lines of transcript logic inline
+  } else if (message.type === 'AUTH_LOGIN') {
+    // 100 lines of auth logic
+  }
+  // ... 700 more lines
+});
+```
+
+### 2. Content Script Delegation
+
+**MUST delegate to `content/` helpers**:
+
+```javascript
+// ✅ GOOD - contentScript-react.js (<200 lines)
+import { Logger } from './dist/libs/contentLibs.js';
+
+// 1. Page context via helper
+const { adapter, pageContext } = window.LockInContent.resolveAdapterContext(Logger);
+
+// 2. State management via helper
+const stateStore = window.LockInContent.createStateStore();
+
+// 3. Sidebar mounting via helper
+const sidebarHost = window.LockInContent.createSidebarHost();
+sidebarHost.mount({ adapter, pageContext });
+
+// 4. Session restore via helper
+const sessionManager = window.LockInContent.createSessionManager();
+sessionManager.restoreSession();
+
+// 5. Event handlers via helper
+const interactions = window.LockInContent.createInteractions(sidebarHost);
+interactions.registerEscapeHandler();
+
+console.log('Lock-in content script initialized');
+```
+
+**❌ BAD - God contentScript**:
+
+```javascript
+// contentScript.js (800 lines)
+// Inline adapter detection (100 lines)
+let adapter = null;
+if (url.includes('moodle')) {
+  adapter = { getCourseCode: () => { /* 50 lines */ } };
+}
+
+// Inline React mounting (200 lines)
+const root = document.createElement('div');
+// ... 200 lines of DOM manipulation
+
+// Inline state management (300 lines)
+let sidebarState = { ... };
+// ... event listeners, storage sync
+
+// Inline session management (200 lines)
+// ... tab ID, session restore
+```
+
+### 3. ChromeAPI Wrappers
+
+**MUST wrap Chrome APIs in thin adapters**:
+
+```javascript
+// ✅ GOOD - extension/src/chromeStorage.ts
+export class ChromeStorageAdapter implements StorageInterface {
+  async get<T>(key: string): Promise<T | null> {
+    const result = await chrome.storage.local.get(key);
+    return result[key] ?? null;
+  }
+
+  async set<T>(key: string, value: T): Promise<void> {
+    await chrome.storage.local.set({ [key]: value });
+  }
+
+  async remove(key: string): Promise<void> {
+    await chrome.storage.local.remove(key);
+  }
+}
+```
+
+### 4. Message Passing Pattern
+
+**MUST use typed messages**:
+
+```javascript
+// ✅ GOOD - Typed message
+const message = {
+  type: 'FETCH_TRANSCRIPT',
+  payload: { videoId, captionUrl },
+  requestId: crypto.randomUUID(),
+};
+
+chrome.runtime.sendMessage(message, (response) => {
+  if (response.ok) {
+    console.log('Transcript fetched', response.data);
+  } else {
+    console.error('Fetch failed', response.error);
   }
 });
 ```
 
 ---
 
-## Popup Pattern
+## God File Prevention
 
-The popup should:
+### Background.js Rules
 
-1. Load settings from storage
-2. Display UI
-3. Save settings to storage
-4. Handle auth (via API client)
+**MUST follow**:
 
-**DO NOT** contain business logic - just UI and storage operations.
+1. **MAX 200 lines** - If exceeded, extract to `background/` modules
+2. **Load modules** - Use `importScripts()` for bundled libs
+3. **Register listeners** - Call modular registration functions
+4. **NO business logic** - Delegate to handlers/services
+
+**Extraction pattern**:
+
+```
+background.js (200 lines)
+  ↓ delegates to
+background/index.js (150 lines)
+  ↓ delegates to
+background/handlers/transcriptHandlers.js (100 lines)
+background/handlers/authHandlers.js (80 lines)
+background/transcripts/extensionFetcher.js (120 lines)
+```
+
+### ContentScript Rules
+
+**MUST follow**:
+
+1. **MAX 200 lines** - If exceeded, extract to `content/` helpers
+2. **Thin orchestrator** - Detect, mount, handle events only
+3. **NO inline detection** - Use bundled adapter resolver
+4. **NO inline rendering** - Use React bundle from `dist/ui`
+
+**Extraction pattern**:
+
+```
+contentScript-react.js (180 lines)
+  ↓ delegates to
+content/pageContext.js (bundled from .ts, includes /integrations)
+content/stateStore.js (sidebar state + storage sync)
+content/sidebarHost.js (React mounting + body split)
+content/sessionManager.js (tab sessions)
+content/interactions.js (event handlers)
+```
 
 ---
 
-## Adding New Chrome Features
+## Testing Rules
 
-When adding new Chrome extension features:
+### Mock Chrome APIs
 
-1. **Check if it's Chrome-specific**: If yes, add to `/extension`
-2. **Check if logic is reusable**: If yes, put in `/core` and call from extension
-3. **Use existing patterns**: Follow the thin wrapper pattern
-4. **Document**: Add comments explaining Chrome-specific behavior
-
----
-
-## Testing Extension Code
-
-- **Manual testing**: Load extension in Chrome, test on supported sites
-- **Unit tests**: For utility functions (if any)
-- **Integration tests**: For message passing, storage operations
-
-**Note**: Extension code is harder to test than core code. Keep it thin and delegate to testable core code.
-
----
-
-## Common Mistakes
-
-### âŒ Putting business logic in content script
+**MUST mock `chrome.*` in tests**:
 
 ```javascript
-// BAD
+// __tests__/chromeStorage.test.js
+import { test } from 'node:test';
+import { assert } from 'node:assert';
+
+test('ChromeStorageAdapter gets value from chrome.storage', async () => {
+  // Mock chrome.storage
+  global.chrome = {
+    storage: {
+      local: {
+        get: async (key) => ({ [key]: 'test-value' }),
+      },
+    },
+  };
+
+  const storage = new ChromeStorageAdapter();
+  const value = await storage.get('test-key');
+
+  assert.equal(value, 'test-value');
+});
+```
+
+### No Network Calls in Unit Tests
+
+**MUST mock fetch/network**:
+
+```javascript
+test('ExtensionFetcher makes CORS request', async () => {
+  global.fetch = async (url, options) => {
+    assert.equal(options.credentials, 'include'); // Verify CORS
+    return { ok: true, text: async () => 'response' };
+  };
+
+  const fetcher = createExtensionFetcher();
+  const result = await fetcher.fetch('https://example.com');
+
+  assert.equal(result.text(), 'response');
+});
+```
+
+---
+
+## Error Handling Rules
+
+### Use Centralized Error Types
+
+**MUST use `/core/errors`**:
+
+```javascript
+import { NetworkError, AuthError } from '../core/errors';
+
+async function fetchTranscript(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new NetworkError(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return response.text();
+  } catch (error) {
+    if (error instanceof NetworkError) throw error;
+    throw new NetworkError('Transcript fetch failed', { cause: error });
+  }
+}
+```
+
+### Log Errors with Context
+
+```javascript
+// ✅ GOOD
+try {
+  await processMessage(message);
+} catch (error) {
+  logger.error('Message processing failed', {
+    messageType: message.type,
+    tabId: sender.tab?.id,
+    error: error.message,
+  });
+  sendResponse({ ok: false, error: error.message });
+}
+```
+
+---
+
+## Golden Path Workflows
+
+### Adding a New Background Message Handler
+
+1. **Create handler** (`background/handlers/newFeatureHandler.js`):
+
+```javascript
+export async function handleNewFeature(payload, sender) {
+  // Business logic delegation
+  const result = await coreService.processNewFeature(payload);
+  return { ok: true, data: result };
+}
+```
+
+2. **Register in router** (`background/router.js`):
+
+```javascript
+case 'NEW_FEATURE':
+  return handleNewFeature(message.payload, sender);
+```
+
+3. **Test handler**:
+
+```javascript
+test('handleNewFeature processes payload', async () => {
+  const mockService = { processNewFeature: async (p) => ({ id: '123' }) };
+  const result = await handleNewFeature({ input: 'test' });
+  assert.ok(result.ok);
+});
+```
+
+### Adding Content Script Helper
+
+1. **Create helper** (`content/newHelper.js`):
+
+```javascript
+export function createNewHelper(config) {
+  return {
+    doSomething: () => {
+      /* logic */
+    },
+  };
+}
+```
+
+2. **Export from contentLibs** (`extension/src/contentRuntime.ts`):
+
+```typescript
+export const LockInContent = {
+  // ... existing
+  createNewHelper,
+};
+```
+
+3. **Use in contentScript**:
+
+```javascript
+const helper = window.LockInContent.createNewHelper(config);
+helper.doSomething();
+```
+
+---
+
+## Common Failure Modes
+
+### 1. God Background Script
+
+**Symptom**: `background.js` >500 lines with inline handlers
+
+**Fix**: Extract to `background/` modules (see [God File Prevention](#god-file-prevention))
+
+### 2. Business Logic in Content Script
+
+**Symptom**: Content script contains domain logic
+
+```javascript
+// ❌ BAD
 function createNote(title, content) {
-  // Business logic here
-  const note = { title, content, ... };
-  // ...
+  // Business logic in content script
+  const note = { id: uuid(), title, content /* ... */ };
+  chrome.runtime.sendMessage({ type: 'SAVE_NOTE', note });
 }
-```
 
-```javascript
-// GOOD
+// ✅ GOOD
 import { noteService } from '../../core/services/noteService';
-const note = await noteService.createNote({ title, content });
+const note = noteService.create({ title, content });
+chrome.runtime.sendMessage({ type: 'SAVE_NOTE', note });
 ```
 
-### âŒ Hardcoding site detection
+**Fix**: Move to `/core/services`, call from content script
 
-```javascript
-// BAD
-if (url.includes('learning.monash.edu')) {
-  // Moodle-specific logic
-}
-```
+### 3. Direct Chrome API Usage in Shared Code
 
-```javascript
-// GOOD
-const { adapter, pageContext } = window.LockInContent.resolveAdapterContext(Logger);
-const context = pageContext.courseContext;
-```
+**Symptom**: `/core` or `/api` imports `chrome`
 
-### âŒ Building HTML strings
+**Fix**: Pass Chrome APIs as parameters or use DI (see `/core/AGENTS.md`)
 
-```javascript
-// BAD
-function renderChat(messages) {
-  return messages.map((m) => `<div>${m.content}</div>`).join('');
-}
-```
+---
 
-```javascript
-// GOOD
-// Using built bundle (loaded via manifest):
-// const { ChatPanel } = window.LockInUI;
-// Or in source code:
-// import { ChatPanel } from './ui/extension/components/ChatPanel';
-<ChatPanel messages={messages} />
-```
+## PR Checklist
+
+Before merging `/extension` changes, verify:
+
+### God File Prevention
+
+- [ ] `background.js` <200 lines (delegated to `background/`)
+- [ ] `contentScript-react.js` <200 lines (delegated to `content/`)
+- [ ] Background handlers <150 lines each
+- [ ] Content helpers <150 lines each
+
+### Boundaries
+
+- [ ] No business logic in extension code (delegated to `/core`)
+- [ ] No site detection in content scripts (use `/integrations` adapters)
+- [ ] No API client code (use `/api` via `window.LockInAPI`)
+
+### Chrome APIs
+
+- [ ] Chrome APIs wrapped in adapters where needed
+- [ ] Typed messages for `chrome.runtime.sendMessage`
+- [ ] Error handling for async Chrome API calls
+
+### Testing
+
+- [ ] Chrome APIs mocked in tests
+- [ ] No real network calls in unit tests
+- [ ] Test coverage >70% for helpers/handlers
+
+### Documentation
+
+- [ ] `docs/reference/CODE_OVERVIEW.md` updated if structure changed
+- [ ] Comments explain Chrome-specific quirks
 
 ---
 
 ## Questions?
 
-- Check `/AGENTS.md` for project-wide rules
-- Review existing code for patterns
-- Keep it simple: extension code should be thin wrappers
+1. Check [/AGENTS.md](../AGENTS.md) for project-wide principles
+2. Review existing handlers in `background/` for patterns
+3. Keep extension code thin - delegate to `/core` and `/api`
 
-**Remember**: Extension code is Chrome-specific glue. Business logic lives in `/core`.
+**Remember**: Extension code is Chrome-specific glue. Business logic lives in `/core`. Keep files <200 lines by extracting modules.
