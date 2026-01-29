@@ -133,12 +133,16 @@ jobs:
 
       - name: Start test container
         run: |
+          # Cleanup any existing container to avoid name conflict
+          docker rm -f test-container || true
+
+          # Start new container
           docker run -d --name test-container -p 3000:3000 \
             -e NODE_ENV=development \
             -e OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY || 'test-key-fallback' }} \
             -e SUPABASE_URL_DEV=${{ secrets.SUPABASE_URL_DEV || 'https://test-project.supabase.co' }} \
-            -e SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-token' }} \
-            -e SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-token' }} \
+            -e SUPABASE_SERVICE_ROLE_KEY_DEV=${{ secrets.SUPABASE_SERVICE_ROLE_KEY_DEV || 'test-dummy-key' }} \
+            -e SUPABASE_ANON_KEY_DEV=${{ secrets.SUPABASE_ANON_KEY_DEV || 'test-dummy-key' }} \
             --health-cmd="curl -f http://localhost:3000/health || exit 1" \
             --health-interval=10s \
             --health-timeout=5s \

@@ -15,6 +15,9 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Install dependencies
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Stage 1: Builder - Install dependencies
+# -----------------------------------------------------------------------------
 FROM node:20.18-alpine AS builder
 
 WORKDIR /app
@@ -32,7 +35,6 @@ ENV NODE_ENV=production
 RUN npm ci --omit=dev --ignore-scripts
 
 # Create backend/node_modules directory to ensure COPY command in next stage never fails
-# (Module hoisting might mean this directory is empty or non-existent otherwise)
 RUN mkdir -p backend/node_modules
 
 # -----------------------------------------------------------------------------
@@ -50,22 +52,20 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Copy hoisted node_modules from builder
-COPY --from=builder /app/node_modules ./node_modules
+# Copy hoisted node_modules from builder with correct ownership
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
 # Copy nested backend node_modules (if any exist)
-COPY --from=builder /app/backend/node_modules ./backend/node_modules
+COPY --from=builder --chown=nodejs:nodejs /app/backend/node_modules ./backend/node_modules
 
 # Copy backend application code to /app/backend (Preserve monorepo structure)
-COPY backend/ ./backend/
+COPY --chown=nodejs:nodejs backend/ ./backend/
 
 # Copy required core config files
-COPY core/config/chatLimits.json ./core/config/chatLimits.json
+COPY --chown=nodejs:nodejs core/config/chatLimits.json ./core/config/chatLimits.json
 
-# Create temp directory for transcription jobs
+# Create temp directory for transcription jobs with correct permissions
 RUN mkdir -p /tmp/transcripts && \
-    chown -R nodejs:nodejs /tmp/transcripts && \
-    chown -R nodejs:nodejs /app && \
-    chown -R nodejs:nodejs ./core
+    chown nodejs:nodejs /tmp/transcripts
 
 # Switch to non-root user
 USER nodejs
