@@ -1,8 +1,9 @@
 /**
- * OpenAI Client Module - Chat Completions Only
+ * LLM Client Module - Provider-Agnostic Chat Completions
  *
  * Strategy:
- * - Chat Completions: OpenAI (Primary) - gpt-4o-mini (~$0.23/month)
+ * - Chat Completions: Gemini (Primary) → OpenAI (Fallback)
+ * - Uses new multi-provider abstraction with automatic fallback
  *
  * Note: Embeddings → services/embeddings.js (Azure primary, OpenAI fallback)
  *       Transcription → services/transcripts/transcriptionService.js (Azure Speech primary, Whisper fallback)
@@ -11,47 +12,53 @@
  */
 
 const { buildInitialChatTitle, coerceGeneratedTitle } = require('../utils/chatTitle');
-const { getDeployment } = require('../config');
-const { createPrimaryClient, createFallbackClient } = require('../providers/llmProviderFactory');
-const { withRetryAndFallback } = require('../providers/withFallback');
+const { createChatProviderChain } = require('../providers/llm');
 const MAX_HISTORY_MESSAGES = 30;
 const MAX_ATTACHMENT_CONTEXT_CHARS = 5000;
 const MIN_SELECTION_PRIMARY_CHARS = 20;
 const ATTACHMENT_ONLY_SELECTION_PLACEHOLDER = '[Document-based question - see attached files]';
 
-function getLlmClients() {
-  const primary = createPrimaryClient();
-  const fallback = createFallbackClient();
-  return { primary, fallback };
-}
+// Provider chain singleton
+let providerChain = null;
 
-function createChatCompletionRequest(client, provider, options) {
-  const payload = {
-    model: getDeployment('chat', provider),
-    messages: options.messages,
-    temperature: options.temperature,
-    max_tokens: options.maxTokens,
-  };
-
-  if (options.responseFormat) {
-    payload.response_format = options.responseFormat;
+/**
+ * Get or create the provider chain
+ * @returns {import('../providers/llm').ProviderChain}
+ */
+function getProviderChain() {
+  if (!providerChain) {
+    providerChain = createChatProviderChain();
   }
-
-  return () => client.chat.completions.create(payload);
+  return providerChain;
 }
 
+/**
+ * Execute chat completion via provider chain
+ * @param {Object} options
+ * @param {Array} options.messages - Chat messages
+ * @param {number} [options.temperature] - Sampling temperature
+ * @param {number} [options.maxTokens] - Max tokens
+ * @param {Object} [options.responseFormat] - Response format
+ * @param {string} [options.operation] - Operation name for logging
+ * @returns {Promise<Object>}
+ */
 async function createChatCompletion(options) {
-  const { primary, fallback } = getLlmClients();
-  const primaryRequest = createChatCompletionRequest(primary.client, primary.provider, options);
-  const fallbackRequest = fallback
-    ? createChatCompletionRequest(fallback.client, fallback.provider, options)
-    : null;
+  const chain = getProviderChain();
 
-  return withRetryAndFallback(primaryRequest, fallbackRequest, {
+  const result = await chain.chatCompletion(options.messages, {
+    temperature: options.temperature,
+    maxTokens: options.maxTokens,
+    responseFormat: options.responseFormat,
     operation: options.operation || 'chat.completions.create',
-    primaryProvider: primary.provider,
-    fallbackProvider: fallback?.provider,
   });
+
+  // Return in legacy format for backward compatibility
+  return {
+    choices: [{ message: { role: 'assistant', content: result.content } }],
+    usage: result.usage,
+    model: result.model,
+    provider: result.provider,
+  };
 }
 
 function normalizeSelection(selection) {

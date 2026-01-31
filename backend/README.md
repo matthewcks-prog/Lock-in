@@ -124,7 +124,11 @@ backend/
 │   ├── feedbackRepository.js   # Feedback storage
 │   └── rateLimitRepository.js  # Rate limit counters
 ├── providers/
-│   ├── llmProviderFactory.js   # Chat client factory
+│   ├── llm/                    # LLM providers (Gemini, Groq, OpenAI)
+│   │   ├── index.js            # Main entry point
+│   │   ├── providerChain.js    # Fallback & retry logic
+│   │   ├── rateLimiter.js      # Rate limiting & cost tracking
+│   │   └── adapters/           # Provider implementations
 │   ├── embeddingsFactory.js    # Embeddings client factory
 │   ├── transcriptionFactory.js # Transcription client factory
 │   ├── storageRepository.js  # Supabase Storage wrapper (via repositories/)
@@ -492,6 +496,130 @@ curl -X POST http://localhost:3000/api/lockin \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{"selection":"Photosynthesis is the process","mode":"explain"}'
+```
+
+## LLM Rate Limiting
+
+The backend implements industry-grade rate limiting for all LLM providers using token bucket algorithm with request queue smoothing.
+
+### Features
+
+- **Per-provider rate limits**: Gemini (200 RPM), Groq (30 RPM), OpenAI (50 RPM)
+- **Request queue smoothing**: Prevents API burst overload
+- **Retry-After header parsing**: Respects API rate limit signals
+- **Automatic fallback**: Gemini → Groq → OpenAI on rate limit
+- **Usage tracking**: Per-model token usage and cost visibility
+- **Queue overflow protection**: Rejects requests when queue is full
+
+### Configuration
+
+Rate limits are configured in `providers/llm/rateLimiter.js`:
+
+```javascript
+const DEFAULT_LIMITS = {
+  gemini: {
+    reservoir: 200, // Requests per minute (paid tier, conservative)
+    maxConcurrent: 10, // Max concurrent requests
+    minTime: 50, // Minimum 50ms between requests
+    highWater: 30, // Max queued jobs before rejecting
+  },
+  groq: {
+    reservoir: 30, // Free tier: 30 RPM
+    maxConcurrent: 3,
+    minTime: 200,
+    highWater: 10,
+  },
+  openai: {
+    reservoir: 50, // Conservative (last resort)
+    maxConcurrent: 5,
+    minTime: 150,
+    highWater: 15,
+  },
+};
+```
+
+### Usage
+
+Rate limiting is automatically applied to all LLM requests:
+
+```javascript
+const { createChatProviderChain } = require('./providers/llm');
+
+const chain = createChatProviderChain();
+const result = await chain.chatCompletion(messages, options);
+```
+
+### Testing
+
+**Unit tests:**
+
+```bash
+npm test  # Runs all tests including rateLimiter.test.js
+```
+
+**Integration tests:**
+
+```bash
+# Run integration tests (mock-based)
+node --test backend/providers/llm/__tests__/rateLimiter.integration.test.js
+```
+
+**Real API testing:**
+
+```bash
+# Basic rate limiting test (10 requests)
+node backend/providers/llm/__tests__/realApiTest.js
+
+# Rate limit recovery test (50 rapid requests)
+node backend/providers/llm/__tests__/realApiTest.js recovery
+```
+
+**Warning:** Real API tests consume API credits. Use sparingly.
+
+### Monitoring
+
+Usage statistics are logged every 5 minutes:
+
+```json
+{
+  "message": "LLM usage stats",
+  "models": [
+    {
+      "provider": "gemini",
+      "model": "gemini-2.0-flash",
+      "requests": 42,
+      "tokens": 15234
+    }
+  ]
+}
+```
+
+Get current queue stats programmatically:
+
+```javascript
+const { getRateLimiterManager } = require('./providers/llm/rateLimiter');
+const manager = getRateLimiterManager();
+const stats = manager.getQueueStats();
+// { gemini: { running: 2, queued: 5, reservoir: 195 } }
+```
+
+### Error Handling
+
+When rate limits are exceeded:
+
+1. **Queue smoothing**: Requests are queued and executed when capacity is available
+2. **Retry-After parsing**: System respects API-provided retry delays
+3. **Automatic fallback**: Falls back to next provider (Groq, then OpenAI)
+4. **Queue overflow**: Returns 429 with `X-Retry-After` header when queue is full
+
+Example error response:
+
+```json
+{
+  "error": "Rate limit queue full for gemini. Try again in a few seconds.",
+  "status": 429,
+  "retryAfter": 5
+}
 ```
 
 ## License

@@ -271,8 +271,8 @@ This is a living overview of the current codebase. Update it whenever files move
 
 ### Providers
 
-- **`providers/llmProviderFactory.js`**
-  - Creates the primary Azure OpenAI client and optional OpenAI fallback client.
+- **`providers/llm/`**
+  - Manages LLM providers (Gemini, Groq, OpenAI) with token-bucket rate limiting (`rateLimiter.js`) and smart fallback chains (`providerChain.js`).
 
 - **`providers/embeddingsFactory.js`**
   - Embeddings client factory with Azure primary + OpenAI fallback.

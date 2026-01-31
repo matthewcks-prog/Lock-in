@@ -207,11 +207,15 @@ async function createNote(req, res) {
 // ✅ GOOD
 const { notesRepository } = require('../repositories/notesRepository');
 const { buildChatPrompt } = require('../utils/prompts/chatPrompts');
-const { llmProvider } = require('../providers/llmProviderFactory');
+const { getPrimaryProvider } = require('../providers/llm');
 
 async function generateChatResponse(input, context, userId) {
   const prompt = buildChatPrompt({ input, context });
-  const response = await llmProvider.chat(prompt);
+  const provider = getPrimaryProvider();
+  const response = await provider.chatCompletion(prompt.messages, {
+    model: prompt.model,
+    temperature: prompt.temperature,
+  });
   return response;
 }
 

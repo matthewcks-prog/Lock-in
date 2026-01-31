@@ -163,6 +163,28 @@ const ALLOWED_CHAT_ASSET_MIME_TYPES = Object.values(CHAT_ASSET_MIME_GROUPS).flat
 // LLM Provider Configuration
 // =============================================================================
 
+// Gemini Configuration (Primary chat provider)
+// Model hierarchy: gemini-2.0-flash → gemini-2.5-flash → gemini-2.5-pro
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_UPGRADED_MODEL = process.env.GEMINI_UPGRADED_MODEL || 'gemini-2.5-flash';
+const GEMINI_PREMIUM_MODEL = process.env.GEMINI_PREMIUM_MODEL || 'gemini-2.5-pro';
+
+function isGeminiEnabled() {
+  return Boolean(GEMINI_API_KEY);
+}
+
+// Groq Configuration (Secondary fallback provider)
+// Model hierarchy: llama-3.1-8b-instant → llama-3.3-70b-versatile
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+const GROQ_FALLBACK_MODEL = process.env.GROQ_FALLBACK_MODEL || 'llama-3.3-70b-versatile';
+
+function isGroqEnabled() {
+  return Boolean(GROQ_API_KEY);
+}
+
+// OpenAI Configuration (Tertiary fallback provider)
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OPENAI_EMBEDDINGS_MODEL = process.env.OPENAI_EMBEDDINGS_MODEL || 'text-embedding-3-small';
@@ -360,7 +382,20 @@ module.exports = {
   ALLOWED_CHAT_ASSET_MIME_TYPES,
   MIME_EXTENSION_MAP,
 
-  // LLM Providers
+  // LLM Providers - Gemini (Primary)
+  GEMINI_API_KEY,
+  GEMINI_MODEL,
+  GEMINI_UPGRADED_MODEL,
+  GEMINI_PREMIUM_MODEL,
+  isGeminiEnabled,
+
+  // LLM Providers - Groq (Secondary Fallback)
+  GROQ_API_KEY,
+  GROQ_MODEL,
+  GROQ_FALLBACK_MODEL,
+  isGroqEnabled,
+
+  // LLM Providers - OpenAI (Fallback)
   OPENAI_API_KEY,
   OPENAI_MODEL,
   OPENAI_EMBEDDINGS_MODEL,

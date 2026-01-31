@@ -12,23 +12,23 @@ Lock-in uses a **provider factory pattern** with **automatic fallback** for AI s
 
 ### 1. Chat Completions â†’ OpenAI (Primary Only)
 
-**Provider:** OpenAI  
-**Model:** `gpt-4o-mini`  
-**Cost:** ~$0.23/month  
-**Rationale:** No Azure GPT quota available on student accounts  
-**Fallback:** None (student budget optimized for single provider)
+**Provider:** Gemini (Primary) → Groq → OpenAI (Fallback)
+**Model:** `gemini-2.0-flash`, `llama-3.3-70b`, `gpt-4o-mini`
+**Rationale:** Optimized for cost (free tiers) and performance
+**Fallback:** Enforced via `ProviderChain` and `shouldFallback` contracts
 
 **Architecture:**
 
-- Factory: `backend/providers/llmProviderFactory.js`
+- Factory: `backend/providers/llm/factory.js`
+- Chain: `backend/providers/llm/providerChain.js` (Orchestration)
+- Rate Limiter: `backend/providers/llm/rateLimiter.js`
 - Consumer: `backend/services/llmClient.js`
-- Line count: 492 lines (chat orchestration + prompt building)
 
 **Key Files:**
 
 ```
-backend/providers/llmProviderFactory.js  (chat client factory)
-backend/services/llmClient.js            (chat orchestration & prompts)
+backend/providers/llm/               (Modular provider system)
+backend/services/llmClient.js        (Chat orchestration & prompts)
 ```
 
 ---
@@ -104,9 +104,9 @@ backend/services/transcripts/transcriptsService.js   (consumer: job orchestratio
 ### Provider Layer (`backend/providers/`)
 
 - **Purpose:** Client instantiation, fallback logic, error handling
-- **Pattern:** Factory pattern with dependency injection
+- **Pattern:** Factory pattern with dependency injection & rate limiting
 - **Files:**
-  - `llmProviderFactory.js` - Chat completion clients
+  - `llm/` - Modular LLM providers (Gemini, Groq, OpenAI)
   - `embeddingsFactory.js` - Embeddings clients (Azure + OpenAI)
   - `transcriptionFactory.js` - Transcription clients (Azure Speech + Whisper)
   - `azureEmbeddingsClient.js` - Azure-specific embeddings implementation

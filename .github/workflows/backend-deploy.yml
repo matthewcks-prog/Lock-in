@@ -19,7 +19,7 @@ name: Backend Build & Deploy
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main] #exclude develop for now
     paths:
       - 'backend/**'
       - 'core/config/**'
