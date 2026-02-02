@@ -2,7 +2,7 @@
 
 > **📦 ARCHIVED**: This document was moved to archive on 2026-02-02.
 > The JWT verification strategy described here is now implemented in `backend/services/auth/`.
-> For current setup instructions, see [docs/setup/LOCAL_DEVELOPMENT.md](../setup/LOCAL_DEVELOPMENT.md).
+> For current setup instructions, see [Local Development Guide](../setup/LOCAL_DEVELOPMENT.md).
 
 ## Overview
 
@@ -637,9 +637,9 @@ The solution is **production-ready** and can scale from single developer (local 
 
 **Next Steps:**
 
-1. Review [Local Development Guide](../docs/setup/LOCAL_DEVELOPMENT.md) for daily workflow
-2. Read [Backend AGENTS](../backend/AGENTS.md) for coding standards
-3. Check [Database Schema](../docs/reference/DATABASE.md) for data model
-4. Follow [Contributing Guide](../CONTRIBUTING_AI.md) for PR process
+1. Review [Local Development Guide](../setup/LOCAL_DEVELOPMENT.md) for daily workflow
+2. Read [Backend AGENTS](../../backend/AGENTS.md) for coding standards
+3. Check [Database Schema](../reference/DATABASE.md) for data model
+4. Follow [Contributing Guide](../../CONTRIBUTING_AI.md) for PR process
 
-**Questions?** Open an issue or check [Troubleshooting Guide](../docs/setup/TROUBLESHOOTING.md)
+**Questions?** Open an issue or check [Troubleshooting Guide](../setup/TROUBLESHOOTING.md)
