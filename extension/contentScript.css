@@ -2978,6 +2978,10 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   background: #f8fafc;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   max-width: 100%;
 }
@@ -3017,7 +3021,8 @@ html.lockin-sidebar-resizing #lockin-sidebar {
   font-size: 13px;
   line-height: 1.6;
   color: #374151;
-  max-height: 500px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
@@ -3215,8 +3220,11 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 }
 
 .lockin-tool-content {
+  display: flex;
   flex: 1;
-  overflow-y: auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   padding: 16px;
 }
 
@@ -3234,7 +3242,9 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 .lockin-transcript-tool {
   display: flex;
   flex-direction: column;
+  flex: 1;
   gap: 16px;
+  min-height: 0;
 }
 
 .lockin-transcript-change-video {
