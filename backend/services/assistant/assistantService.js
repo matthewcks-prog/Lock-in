@@ -1,16 +1,16 @@
+/**
+ * Assistant Service
+ *
+ * Business logic for the Lock-in AI assistant.
+ * Assumes request is ALREADY VALIDATED by Zod middleware in routes.
+ *
+ * IMPORTANT: Do NOT add duplicate validation here.
+ * All input validation is handled by Zod schemas in /backend/validators/assistantValidators.js
+ */
+
 const { logger: baseLogger } = require('../../observability');
-const {
-  MAX_SELECTION_LENGTH,
-  MAX_USER_MESSAGE_LENGTH,
-  DAILY_REQUEST_LIMIT,
-} = require('../../config');
+const { DAILY_REQUEST_LIMIT } = require('../../config');
 const { createIdempotencyStore } = require('../../utils/idempotency');
-const {
-  validateMode,
-  validateUUID,
-  validateChatHistory,
-  validateText,
-} = require('../../utils/validation');
 const {
   buildInitialChatTitle,
   extractFirstUserMessage,
@@ -47,9 +47,9 @@ function createAssistantService(deps = {}) {
   };
 
   async function handleLockinRequest({ userId, payload, idempotencyKey } = {}) {
+    // Payload is ALREADY validated by Zod middleware - no duplicate validation needed
     const {
-      selection: selectionFromBody,
-      text: legacyText,
+      selection = '',
       mode,
       chatHistory = [],
       newUserMessage,
@@ -61,70 +61,22 @@ function createAssistantService(deps = {}) {
       attachments = [],
     } = payload || {};
 
-    const modeValidation = validateMode(mode);
-    if (!modeValidation.valid) {
-      throw createRequestError(400, modeValidation.error);
-    }
-
-    const historyValidation = validateChatHistory(chatHistory);
-    if (!historyValidation.valid) {
-      throw createRequestError(400, historyValidation.error);
-    }
-    const sanitizedHistory = historyValidation.sanitized;
-    const isInitialRequest = sanitizedHistory.length === 0;
+    // Determine request type based on chat history
+    const isInitialRequest = chatHistory.length === 0;
     const effectiveMode = isInitialRequest ? mode : 'general';
 
-    const selection = selectionFromBody || legacyText || '';
+    // Prepare text values
     const trimmedSelection = typeof selection === 'string' ? selection.trim() : '';
+    const trimmedUserMessage = newUserMessage ? newUserMessage.trim() : '';
     const hasAttachmentIds = Array.isArray(attachments) && attachments.length > 0;
 
-    if (isInitialRequest) {
-      if (!trimmedSelection && !hasAttachmentIds) {
-        throw createRequestError(400, 'Selection or attachments are required for initial requests');
-      }
-      if (trimmedSelection) {
-        const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, 'Selection');
-        if (!selectionValidation.valid) {
-          throw createRequestError(400, selectionValidation.error);
-        }
-      }
-    } else if (trimmedSelection) {
-      const selectionValidation = validateText(selection, MAX_SELECTION_LENGTH, 'Selection');
-      if (!selectionValidation.valid) {
-        throw createRequestError(400, selectionValidation.error);
-      }
-    }
-
-    if (!mode) {
-      throw createRequestError(400, 'Mode is required');
-    }
-
-    let trimmedUserMessage = '';
-    if (newUserMessage) {
-      const messageValidation = validateText(
-        newUserMessage,
-        MAX_USER_MESSAGE_LENGTH,
-        'Follow-up message',
-      );
-      if (!messageValidation.valid) {
-        throw createRequestError(400, messageValidation.error);
-      }
-      trimmedUserMessage = messageValidation.sanitized;
-    }
-
-    if (incomingChatId) {
-      const chatIdValidation = validateUUID(incomingChatId);
-      if (!chatIdValidation.valid) {
-        throw createRequestError(400, chatIdValidation.error);
-      }
-    }
-
+    // Build title seed
     const userInputText =
       trimmedUserMessage ||
       trimmedSelection ||
       (hasAttachmentIds ? ATTACHMENT_ONLY_TITLE_SEED : '');
     const initialTitle = buildInitialChatTitle(userInputText || '');
-    const firstUserMessage = extractFirstUserMessage(sanitizedHistory);
+    const firstUserMessage = extractFirstUserMessage(chatHistory);
     const initialTitleFromHistory = buildInitialChatTitle(firstUserMessage || userInputText || '');
 
     if (!userId) {
@@ -175,7 +127,7 @@ function createAssistantService(deps = {}) {
           pageUrl,
           courseCode,
           language,
-          chatHistory: sanitizedHistory,
+          chatHistory,
           newUserMessage: trimmedUserMessage || undefined,
           attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
         });

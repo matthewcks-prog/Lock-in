@@ -1,6 +1,12 @@
 const { chatService } = require('../../services/assistant/chatService');
 const { DEFAULT_CHAT_LIST_LIMIT, MAX_CHAT_LIST_LIMIT } = require('../../config');
-const { validateUUID } = require('../../utils/validation');
+
+/**
+ * Chat Controllers - Thin HTTP layer
+ *
+ * Validation handled by Zod middleware in routes.
+ * Business logic delegated to services.
+ */
 
 function parseChatCursor(rawCursor) {
   if (typeof rawCursor !== 'string') return null;
@@ -19,11 +25,11 @@ function parseChatCursor(rawCursor) {
   return new Date(parsed).toISOString();
 }
 
-async function listChats(req, res) {
+async function listChats(req, res, next) {
   try {
     const userId = req.user?.id;
-    const requestedLimit = parseInt(req.query.limit, 10);
-    const cursorParam = typeof req.query.cursor === 'string' ? req.query.cursor : '';
+    // Query params already validated by Zod middleware
+    const { limit: requestedLimit, cursor: cursorParam } = req.query;
     const cursor = parseChatCursor(cursorParam);
 
     if (cursorParam && !cursor) {
@@ -47,19 +53,19 @@ async function listChats(req, res) {
       pagination,
     });
   } catch (error) {
-    console.error('Error fetching chats:', error);
-    return res.status(500).json({ error: 'Failed to load chats' });
+    next(error);
   }
 }
 
-async function createChatSession(req, res) {
+async function createChatSession(req, res, next) {
   try {
     const userId = req.user?.id;
     if (!userId) {
       return res.status(500).json({ error: 'User context missing.' });
     }
 
-    const { title, initialMessage } = req.body || {};
+    // Body already validated by Zod middleware
+    const { title, initialMessage } = req.body;
     const seed =
       typeof title === 'string' && title.trim().length > 0
         ? title
@@ -77,23 +83,15 @@ async function createChatSession(req, res) {
       lastMessageAt: chat.last_message_at,
     });
   } catch (error) {
-    console.error('Error creating chat:', error);
-    return res.status(500).json({ error: 'Failed to create chat' });
+    next(error);
   }
 }
 
-async function deleteChat(req, res) {
+async function deleteChat(req, res, next) {
   try {
     const userId = req.user?.id;
-    const chatId = req.params.chatId;
-
-    const chatIdValidation = validateUUID(chatId);
-    if (!chatIdValidation.valid) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: chatIdValidation.error,
-      });
-    }
+    // chatId already validated by Zod validateParams middleware
+    const { chatId } = req.params;
 
     const result = await chatService.deleteChat({ userId, chatId });
     if (result?.notFound) {
@@ -107,26 +105,15 @@ async function deleteChat(req, res) {
       message: 'Chat deleted successfully',
     });
   } catch (error) {
-    console.error('Error in delete chat endpoint:', error);
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Failed to delete chat',
-    });
+    next(error);
   }
 }
 
-async function listChatMessages(req, res) {
+async function listChatMessages(req, res, next) {
   try {
     const userId = req.user?.id;
+    // chatId already validated by Zod validateParams middleware
     const { chatId } = req.params;
-
-    const chatIdValidation = validateUUID(chatId);
-    if (!chatIdValidation.valid) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: chatIdValidation.error,
-      });
-    }
 
     const result = await chatService.listChatMessages({ userId, chatId });
     if (result?.notFound) {
@@ -135,8 +122,7 @@ async function listChatMessages(req, res) {
 
     return res.json(result.messages);
   } catch (error) {
-    console.error('Error fetching chat messages:', error);
-    return res.status(500).json({ error: 'Failed to load chat messages' });
+    next(error);
   }
 }
 

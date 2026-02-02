@@ -43,7 +43,7 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 
 ### Setup (`docs/setup/`)
 
-- `LOCAL_SUPABASE_SETUP.md` - Local Supabase CLI workflow
+- `LOCAL_DEVELOPMENT.md` - Complete local development setup (primary)
 - `CODE_FORMATTING.md` - Formatting conventions
 - Environment configuration: see `docs/deployment/ENVIRONMENTS.md`
 

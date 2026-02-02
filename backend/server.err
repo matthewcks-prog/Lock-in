@@ -1,0 +1,19 @@
+TypeError: fetch failed
+    at node:internal/deps/undici/undici:15845:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async _handleRequest (C:\Users\matth\Lock-in\node_modules\@supabase\auth-js\dist\main\lib\fetch.js:101:18)
+    at async _request (C:\Users\matth\Lock-in\node_modules\@supabase\auth-js\dist\main\lib\fetch.js:91:18)
+    at async SupabaseAuthClient._getUser (C:\Users\matth\Lock-in\node_modules\@supabase\auth-js\dist\main\GoTrueClient.js:1263:24)
+    at async SupabaseAuthClient.getUser (C:\Users\matth\Lock-in\node_modules\@supabase\auth-js\dist\main\GoTrueClient.js:1249:20)
+    at async SupabaseSdkVerifierStrategy.verify (C:\Users\matth\Lock-in\backend\services\auth\strategies.js:290:31)
+    at async JwtVerificationService.verify (C:\Users\matth\Lock-in\backend\services\auth\jwtVerificationService.js:115:24)
+    at async requireSupabaseUser (C:\Users\matth\Lock-in\backend\middleware\authMiddleware.js:108:20) {
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:54321
+      at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16) {
+    errno: -4078,
+    code: 'ECONNREFUSED',
+    syscall: 'connect',
+    address: '127.0.0.1',
+    port: 54321
+  }
+}

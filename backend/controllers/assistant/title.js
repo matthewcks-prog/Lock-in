@@ -1,26 +1,20 @@
 const { chatService } = require('../../services/assistant/chatService');
 const { chatTitleService } = require('../../services/assistant/chatTitleService');
 const { buildInitialChatTitle } = require('../../utils/chatTitle');
-const { validateUUID } = require('../../utils/validation');
 
 /**
  * POST /api/chats/:chatId/title
  * Generate and persist a short chat title using OpenAI, with a safe fallback.
+ *
+ * Validation handled by Zod validateParams middleware in routes.
  */
-async function generateChatTitle(req, res) {
+async function generateChatTitle(req, res, _next) {
   const userId = req.user?.id;
+  // chatId already validated by Zod validateParams middleware
   const { chatId } = req.params;
   let fallbackTitle = chatTitleService.FALLBACK_TITLE;
 
   try {
-    const chatIdValidation = validateUUID(chatId);
-    if (!chatIdValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: { message: chatIdValidation.error },
-      });
-    }
-
     const chat = await chatService.getChatById({ userId, chatId });
     if (!chat) {
       return res.status(404).json({ success: false, error: { message: 'Chat not found' } });

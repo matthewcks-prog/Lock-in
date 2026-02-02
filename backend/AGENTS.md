@@ -430,32 +430,59 @@ function errorHandler(err, req, res, next) {
 }
 ```
 
-### 4. Input Validation at Boundary
+### 4. Input Validation at Boundary (Zod Middleware)
 
-**MUST validate at controller entry**:
+**MUST use Zod schemas with validation middleware** - NO imperative validation in controllers:
 
 ```javascript
-// ✅ GOOD - Validation utility
-function validateNoteInput(body) {
-  const { title, content, tags = [] } = body;
+// ✅ GOOD - Zod schema in validators/featureValidators.js
+const { z } = require('zod');
 
-  if (!title || typeof title !== 'string') {
-    throw new ValidationError('title is required and must be a string');
+const createFeatureSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(200, 'Title must be ≤200 characters'),
+  content: z.string().max(50000, 'Content must be ≤50,000 characters').optional(),
+  tags: z.array(z.string().max(50)).max(20, 'Max 20 tags allowed').optional().default([]),
+});
+
+module.exports = { createFeatureSchema };
+```
+
+**Apply in routes, NOT controllers**:
+
+```javascript
+// ✅ GOOD - routes/featureRoutes.js
+const { validate, validateParams, validateQuery } = require('../validators/middleware');
+const { createFeatureSchema, featureIdParamSchema } = require('../validators/featureValidators');
+
+router.post('/features', authenticate, validate(createFeatureSchema), createFeature);
+router.get('/features/:id', authenticate, validateParams(featureIdParamSchema), getFeature);
+```
+
+**Controller stays thin** (no validation logic):
+
+```javascript
+// ✅ GOOD - Thin controller, body pre-validated by middleware
+async function createFeature(req, res, next) {
+  try {
+    const userId = req.user.id;
+    // req.body already validated and sanitized by Zod middleware
+    const result = await featureService.create({ userId, payload: req.body });
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
   }
+}
+```
 
-  if (title.length > 200) {
-    throw new ValidationError('title must be ≤200 characters');
+**MUST NOT use imperative validation in controllers**:
+
+```javascript
+// ❌ BAD - Imperative validation in controller
+async function createFeature(req, res) {
+  if (!req.body.title || typeof req.body.title !== 'string') {
+    return res.status(400).json({ error: 'Title required' }); // NO!
   }
-
-  if (content && content.length > 50000) {
-    throw new ValidationError('content must be ≤50,000 characters');
-  }
-
-  if (!Array.isArray(tags) || tags.length > 20) {
-    throw new ValidationError('tags must be an array with ≤20 items');
-  }
-
-  return { title: title.trim(), content, tags };
+  // ...
 }
 ```
 
@@ -781,46 +808,68 @@ const RATE_LIMITS = {
 
 **Step-by-step**:
 
-1. **Define route** (`routes/featureRoutes.js`):
+1. **Define Zod schemas** (`validators/featureValidators.js`):
 
 ```javascript
-router.post('/feature', authenticate, handleFeature);
+const { z } = require('zod');
+
+const uuidSchema = z.string().uuid({ message: 'Must be a valid UUID' });
+
+// POST /api/features body schema
+const createFeatureSchema = z.object({
+  name: z.string().min(1, 'Name required').max(200),
+  data: z.object({}).passthrough().optional(),
+});
+
+// GET/DELETE /api/features/:id params schema
+const featureIdParamSchema = z.object({
+  id: uuidSchema,
+});
+
+module.exports = { createFeatureSchema, featureIdParamSchema };
 ```
 
-2. **Create controller** (`controllers/featureController.js`):
+2. **Define route with validation middleware** (`routes/featureRoutes.js`):
 
 ```javascript
-async function handleFeature(req, res) {
-  const validated = validateFeatureInput(req.body);
-  const result = await featureService.process(validated, req.user.id);
-  res.status(200).json(result);
+const { validate, validateParams } = require('../validators/middleware');
+const { createFeatureSchema, featureIdParamSchema } = require('../validators/featureValidators');
+const { createFeature, getFeature } = require('../controllers/featureController');
+
+router.post('/features', authenticate, validate(createFeatureSchema), createFeature);
+router.get('/features/:id', authenticate, validateParams(featureIdParamSchema), getFeature);
+```
+
+3. **Create thin controller** (`controllers/featureController.js`):
+
+```javascript
+// Validation already done by middleware - controller just orchestrates
+async function createFeature(req, res, next) {
+  try {
+    const userId = req.user.id;
+    const result = await featureService.create({ userId, payload: req.body });
+    res.status(201).json(result);
+  } catch (err) {
+    next(err);
+  }
 }
 ```
 
-3. **Create service** (`services/featureService.js`):
+4. **Create service** (`services/featureService.js`):
 
 ```javascript
-async function process(input, userId) {
+async function create({ userId, payload }) {
   const data = await repository.getData(userId);
-  const result = await provider.callExternalAPI(input, data);
+  const result = await provider.callExternalAPI(payload, data);
   await repository.saveResult(userId, result);
   return result;
 }
 ```
 
-4. **Add validation** (`utils/validation.js`):
-
-```javascript
-function validateFeatureInput(body) {
-  // Validate types, lengths, formats
-  return sanitized;
-}
-```
-
 5. **Write tests**:
+   - Validator test (schema accepts/rejects correctly)
    - Controller test (mock service)
    - Service test (mock repo + provider)
-   - Validation test
 
 6. **Update docs**:
    - `docs/reference/CODE_OVERVIEW.md` (new controller/service)

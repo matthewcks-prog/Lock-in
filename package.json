@@ -57,7 +57,21 @@
     "// Infrastructure Scripts": "",
     "infra:setup": "pwsh ./scripts/infra/azure-setup.ps1",
     "infra:setup-oidc": "pwsh ./scripts/infra/setup-uami.ps1",
-    "infra:setup-branch-protection": "pwsh ./scripts/infra/setup-branch-protection.ps1"
+    "infra:setup-branch-protection": "pwsh ./scripts/infra/setup-branch-protection.ps1",
+    "// Database Management": "",
+    "db:start": "npx supabase start",
+    "db:stop": "npx supabase stop",
+    "db:reset": "npx supabase db reset",
+    "db:pull": "npx supabase db pull",
+    "db:push": "npx supabase db push",
+    "db:status": "npx supabase status",
+    "db:keys": "npx supabase status -o env",
+    "dev:db": "npm run db:start && npm run dev",
+    "// Docker Development": "",
+    "docker:up": "docker compose --env-file .env.local up",
+    "docker:down": "docker compose --env-file .env.local down",
+    "docker:logs": "docker compose --env-file .env.local logs -f",
+    "docker:restart": "docker compose --env-file .env.local down && docker compose --env-file .env.local up"
   },
   "dependencies": {
     "@lexical/code": "^0.17.0",

@@ -1,5 +1,16 @@
 /**
  * Validation utilities for Lock-in backend
+ *
+ * @deprecated These imperative validation functions are LEGACY.
+ *
+ * NEW CODE MUST USE Zod schemas with validation middleware:
+ *   - Define schemas in /backend/validators/*.js
+ *   - Apply via validate(), validateQuery(), validateParams() middleware in routes
+ *   - See /backend/validators/noteValidators.js for examples
+ *
+ * These utilities remain for backwards compatibility in services that still
+ * need runtime validation (e.g., sanitizing external data, chat history parsing).
+ * Controllers MUST NOT use these - use Zod middleware instead.
  */
 
 const VALID_MODES = ['explain', 'general'];

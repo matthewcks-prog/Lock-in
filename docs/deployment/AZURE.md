@@ -42,21 +42,28 @@ The backend automatically selects the correct Supabase project based on `NODE_EN
 
 ### 1.1 Database Migrations
 
-Run all migrations in order via Supabase SQL Editor:
+Push migrations to production using Supabase CLI:
 
 ```bash
-# Location: backend/migrations/
-001_note_assets.sql          # Note attachments table + RLS
-002_performance_indexes.sql  # Query performance indexes
-003_row_level_security.sql   # RLS policies for all tables
-004_vector_extension_schema.sql  # pgvector schema fix
-005_starred_notes.sql        # Starred notes feature
-006_transcripts.sql          # Transcript tables + RLS
-007_transcripts_hardening.sql    # State machine + chunk tracking
-008_transcript_privacy_hardening.sql  # Privacy: TTL + URL redaction
-009_feedback.sql             # User feedback table
-010_chat_assets.sql          # Chat message attachments
-011_chat_assets_cleanup.sql  # Orphan cleanup function
+# Link to production project (one-time)
+npx supabase link --project-ref vtuflatvllpldohhimao
+
+# Push all migrations to production
+npx supabase db push
+
+# Migrations location: supabase/migrations/
+# 001_note_assets.sql          - Note attachments table + RLS
+# 002_performance_indexes.sql  - Query performance indexes
+# 003_row_level_security.sql   - RLS policies for all tables
+# 004_vector_extension_schema.sql  - pgvector schema fix
+# 005_starred_notes.sql        - Starred notes feature
+# 006_transcripts.sql          - Transcript tables + RLS
+# 007_transcripts_hardening.sql    - State machine + chunk tracking
+# 008_transcript_privacy_hardening.sql  - Privacy: TTL + URL redaction
+# 009_feedback.sql             - User feedback table
+# 010_chat_assets.sql          - Chat message attachments
+# 011_chat_assets_cleanup.sql  - Orphan cleanup function
+# 012_transcript_storage_and_limits.sql - Transcript durability
 ```
 
 > **Note**: All migrations are idempotent and safe to re-run. They use

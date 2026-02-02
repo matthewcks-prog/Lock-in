@@ -235,6 +235,31 @@ This project uses a **stable contract + living snapshot** documentation approach
   }
   ```
 
+### Docker Development
+
+**MUST** use the standard multi-stage Dockerfile for all environments.
+
+**Naming Convention**:
+
+- **MUST**: Use `lock-in-backend` (lowercase, kebab-case) for the backend container name.
+- **MUST NOT**: Use `Lock-in` or other capitalized variants for Docker resources.
+
+**Workflow**:
+
+1. **Local Development**:
+   - Use `docker-compose up` (targets the `development` stage).
+   - Supports hot-reloading via volume mounts (`./backend:/app/backend`).
+   - Resolves `EADDRINUSE` by running completely inside Docker (ensure local `npm run dev` is stopped).
+
+2. **Production Build**:
+   - Use direct build command: `docker build --target production ...`.
+   - Runs as non-root user (`nodejs`) for security.
+   - Prunes devDependencies.
+
+3. **Port Conflicts**:
+   - **MUST**: Stop any local processes on port 3000 before starting Docker.
+   - **MUST**: Ensure `docker-compose.yml` maps `3000:3000`.
+
 **Validators (`/backend/validators`):**
 
 - **TOOL**: Zod schemas for declarative validation

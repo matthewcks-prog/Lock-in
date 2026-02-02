@@ -4,51 +4,71 @@ Express.js backend server that powers the Lock-in Chrome extension. Provides AI-
 
 ## Quick Start
 
-1. **Install dependencies:**
+### Local Development (Recommended)
 
-   ```bash
-   npm install
-   ```
+**Prerequisites:** Node.js >= 18, npm >= 9, Docker (optional)
 
-2. **Set up environment:**
+```bash
+# 1. Run automated setup script
+.\scripts\dev\setup-local.ps1
 
-   ```bash
-   # Copy template
-   cp .env.example .env
+# 2. Start backend
+cd backend
+npm run dev
 
-   # Edit .env with your credentials
-   # See docs/deployment/ENVIRONMENTS.md for full guide
-   ```
+# 3. Verify health
+curl http://localhost:3000/health
+```
 
-   **Minimum required:**
+**What the script does:**
 
-   ```env
-   NODE_ENV=development
-   SUPABASE_URL_DEV=https://your-dev-project.supabase.co
-   SUPABASE_SERVICE_ROLE_KEY_DEV=your_service_role_key
-   AZURE_OPENAI_API_KEY=your_azure_openai_key
-   AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-   AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o-mini
-   ```
+- ✅ Starts local Supabase (http://127.0.0.1:54321)
+- ✅ Creates `.env.local` from template
+- ✅ Installs dependencies
+- ✅ Applies database migrations
 
-Full documentation:
+**Manual setup:** See [Local Development Guide](../docs/setup/LOCAL_DEVELOPMENT.md)
 
-- [Environment Guide](../docs/deployment/ENVIRONMENTS.md) - Canonical environment strategy
-- [Local Supabase Setup](../docs/setup/LOCAL_SUPABASE_SETUP.md) - Local database workflow
-- [Migration Checklist](./docs/MIGRATION_CHECKLIST.md) - Upgrade from legacy .env
-- [Azure Embeddings Setup](./docs/AZURE_EMBEDDINGS_SETUP.md) - Azure embeddings verification tips
+### Cloud Development
 
-3. **Run development server:**
+If you prefer using cloud Supabase (staging environment):
 
-   ```bash
-   npm start  # Validates environment + starts server
-   ```
+```bash
+# 1. Copy template
+cp .env.example .env
 
-   Or with nodemon (auto-reload):
+# 2. Add cloud credentials
+# See docs/deployment/ENVIRONMENTS.md for full guide
+```
 
-   ```bash
-   npm run dev
-   ```
+**Minimum required:**
+
+```env
+NODE_ENV=development
+SUPABASE_URL_DEV=https://your-dev-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY_DEV=your_service_role_key
+AZURE_OPENAI_API_KEY=your_azure_openai_key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
+AZURE_OPENAI_CHAT_DEPLOYMENT=gpt-4o-mini
+```
+
+**Full documentation:**
+
+- [Local Development Guide](../docs/setup/LOCAL_DEVELOPMENT.md) - **START HERE** for local Supabase
+- [Environment Guide](../docs/deployment/ENVIRONMENTS.md) - Cloud environment strategy
+- [Azure Embeddings Setup](./docs/AZURE_EMBEDDINGS_SETUP.md) - Azure embeddings verification
+
+### Run Development Server
+
+```bash
+npm start  # Validates environment + starts server
+```
+
+Or with nodemon (auto-reload):
+
+```bash
+npm run dev
+```
 
 4. **For production:**
    ```bash
@@ -87,8 +107,7 @@ backend/
 ├── db/
 │   └── supabaseClient.js       # Supabase client configuration
 ├── docs/
-│   ├── AZURE_EMBEDDINGS_SETUP.md
-│   └── MIGRATION_CHECKLIST.md
+│   └── AZURE_EMBEDDINGS_SETUP.md
 ├── middleware/
 │   ├── authMiddleware.js       # Authentication middleware
 │   ├── errorHandler.js         # Error response mapping

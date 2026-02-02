@@ -73,12 +73,20 @@ An AI-powered Chrome extension that helps students learn by providing instant ex
 
 - Node.js 18+ and npm
 - Chrome browser
-- Supabase account (free tier works)
-- OpenAI API key
+- Supabase account (free tier works) OR local Supabase via Docker
+- AI API key (Gemini, OpenAI, Groq, or Azure OpenAI)
 
 ### 1. Environment Setup
 
-Use the canonical environment guide: [docs/deployment/ENVIRONMENTS.md](docs/deployment/ENVIRONMENTS.md).
+**Recommended: Use the automated setup script:**
+
+```bash
+.\scripts\dev\setup-local.ps1
+```
+
+This starts local Supabase, creates `.env.local`, installs dependencies, and applies migrations.
+
+**Manual setup:**
 
 1. Configure root environment variables (extension build):
 
@@ -86,36 +94,52 @@ Use the canonical environment guide: [docs/deployment/ENVIRONMENTS.md](docs/depl
    cp .env.example .env.local
    ```
 
-   Then set your real `VITE_*` values in `.env.local`.
+   Set your `VITE_*` values in `.env.local` (see [.env.example](.env.example) for hierarchy docs).
 
 2. Configure backend environment variables:
 
    ```bash
    cd backend
-   cp .env.example .env
+   cp .env.local.example .env.local  # For local Supabase
+   # OR
+   cp .env.example .env              # For cloud Supabase
    ```
 
-   Then set your backend runtime values in `backend/.env`.
+   > ⚠️ **Key format**: Use JWT format keys (`eyJ...`), NOT short format (`sb_secret_...`)
 
 3. Install dependencies:
 
    ```bash
    npm install
-   cd backend && npm install && cd ..
    ```
 
-### 2. Backend Setup
+For full environment documentation: [docs/deployment/ENVIRONMENTS.md](docs/deployment/ENVIRONMENTS.md)
 
-1. Start the development server:
+### 2. Database Setup
 
-   ```bash
-   cd backend
-   npm run dev
-   ```
+Start local Supabase (recommended for development):
 
-   The server will start at `http://localhost:3000`
+```bash
+npm run db:start    # Start local Supabase containers
+npm run db:keys     # Get credentials for .env.local
+npm run db:reset    # Apply migrations and seed data
+```
 
-### 3. Chrome Extension Setup
+See [docs/reference/DATABASE.md](docs/reference/DATABASE.md) for all database commands.
+
+### 3. Backend Setup
+
+Start the development server:
+
+```bash
+npm run dev:backend   # From root
+# OR
+cd backend && npm run dev
+```
+
+The server will start at `http://localhost:3000`
+
+### 4. Chrome Extension Setup
 
 1. Build the extension:
 

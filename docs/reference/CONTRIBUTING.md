@@ -12,7 +12,7 @@ Thank you for your interest in contributing to Lock-in! This document provides g
    - [docs/README.md](../README.md) - Documentation structure
 
 2. **Set up your development environment**:
-   - Follow [docs/setup/LOCAL_SUPABASE_SETUP.md](../setup/LOCAL_SUPABASE_SETUP.md) for local development
+   - Follow [docs/setup/LOCAL_DEVELOPMENT.md](../setup/LOCAL_DEVELOPMENT.md) for local development
    - Ensure you have Node.js 18+ installed
    - Install dependencies: `npm install` (installs all workspaces)
 
