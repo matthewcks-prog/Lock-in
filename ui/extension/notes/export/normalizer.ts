@@ -23,72 +23,28 @@ import {
   type TextRun,
 } from './types';
 
-// ============================================================================
-// Lexical Format Bitmask Constants
-// ============================================================================
+import {
+  FORMAT_BOLD,
+  FORMAT_CODE,
+  FORMAT_ITALIC,
+  FORMAT_STRIKETHROUGH,
+  FORMAT_UNDERLINE,
+  isCodeNode,
+  isHeadingNode,
+  isLineBreakNode,
+  isLinkNode,
+  isListItemNode,
+  isListNode,
+  isParagraphNode,
+  isQuoteNode,
+  isTextNode,
+  type LexicalEditorState,
+  type LexicalNode,
+} from './lexicalTypes';
 
-const FORMAT_BOLD = 1;
-const FORMAT_ITALIC = 2;
-const FORMAT_STRIKETHROUGH = 4;
-const FORMAT_UNDERLINE = 8;
-const FORMAT_CODE = 16;
-
-// ============================================================================
-// Type Guards for Lexical Nodes
-// ============================================================================
-
-interface LexicalNode {
-  type: string;
-  children?: LexicalNode[];
-  text?: string;
-  format?: number;
-  url?: string;
-  tag?: string;
-  listType?: string;
-  language?: string;
-}
-
-interface LexicalEditorState {
-  root?: {
-    children?: LexicalNode[];
-  };
-}
-
-function isTextNode(node: LexicalNode): boolean {
-  return node.type === 'text';
-}
-
-function isLinkNode(node: LexicalNode): boolean {
-  return node.type === 'link';
-}
-
-function isLineBreakNode(node: LexicalNode): boolean {
-  return node.type === 'linebreak';
-}
-
-function isParagraphNode(node: LexicalNode): boolean {
-  return node.type === 'paragraph';
-}
-
-function isHeadingNode(node: LexicalNode): boolean {
-  return node.type === 'heading';
-}
-
-function isListNode(node: LexicalNode): boolean {
-  return node.type === 'list';
-}
-
-function isListItemNode(node: LexicalNode): boolean {
-  return node.type === 'listitem';
-}
-
-function isQuoteNode(node: LexicalNode): boolean {
-  return node.type === 'quote';
-}
-
-function isCodeNode(node: LexicalNode): boolean {
-  return node.type === 'code';
-}
+// Re-export utilities for backward compatibility
+export { documentHasContent, extractPlainText, flattenInlineContent } from './inlineUtils';
+export type { FlattenOptions } from './inlineUtils';
 
 // ============================================================================
 // Format Parsing
@@ -137,7 +93,6 @@ function normalizeInlineChildren(children: LexicalNode[] | undefined): InlineCon
       };
       result.push(linkNode);
     } else if (isLineBreakNode(child)) {
-      // Represent line breaks as text with newline for inline contexts
       result.push({
         type: 'text',
         text: '\n',
@@ -163,9 +118,6 @@ function parseHeadingLevel(tag: string | undefined): 1 | 2 | 3 | 4 | 5 | 6 {
   return 1;
 }
 
-/**
- * Normalizes a paragraph node.
- */
 function normalizeParagraph(node: LexicalNode): ParagraphBlock {
   return {
     type: 'paragraph',
@@ -173,9 +125,6 @@ function normalizeParagraph(node: LexicalNode): ParagraphBlock {
   };
 }
 
-/**
- * Normalizes a heading node.
- */
 function normalizeHeading(node: LexicalNode): HeadingBlock {
   return {
     type: 'heading',
@@ -184,9 +133,6 @@ function normalizeHeading(node: LexicalNode): HeadingBlock {
   };
 }
 
-/**
- * Normalizes a list node.
- */
 function normalizeList(node: LexicalNode): ListBlock {
   const items: ListItemBlock[] = [];
 
@@ -206,9 +152,6 @@ function normalizeList(node: LexicalNode): ListBlock {
   };
 }
 
-/**
- * Normalizes a quote node.
- */
 function normalizeQuote(node: LexicalNode): QuoteBlock {
   return {
     type: 'quote',
@@ -216,11 +159,7 @@ function normalizeQuote(node: LexicalNode): QuoteBlock {
   };
 }
 
-/**
- * Normalizes a code block node.
- */
 function normalizeCode(node: LexicalNode): CodeBlock {
-  // Extract text content from code block children
   const codeText = (node.children || []).map((child) => child.text || '').join('\n');
 
   return {
@@ -230,30 +169,14 @@ function normalizeCode(node: LexicalNode): CodeBlock {
   };
 }
 
-/**
- * Normalizes a single Lexical block node.
- */
 function normalizeBlockNode(node: LexicalNode): Block | null {
-  if (isParagraphNode(node)) {
-    return normalizeParagraph(node);
-  }
-  if (isHeadingNode(node)) {
-    return normalizeHeading(node);
-  }
-  if (isListNode(node)) {
-    return normalizeList(node);
-  }
-  if (isQuoteNode(node)) {
-    return normalizeQuote(node);
-  }
-  if (isCodeNode(node)) {
-    return normalizeCode(node);
-  }
-  if (isLineBreakNode(node)) {
-    return { type: 'linebreak' } as LineBreakBlock;
-  }
+  if (isParagraphNode(node)) return normalizeParagraph(node);
+  if (isHeadingNode(node)) return normalizeHeading(node);
+  if (isListNode(node)) return normalizeList(node);
+  if (isQuoteNode(node)) return normalizeQuote(node);
+  if (isCodeNode(node)) return normalizeCode(node);
+  if (isLineBreakNode(node)) return { type: 'linebreak' } as LineBreakBlock;
 
-  // Unknown node type - skip
   return null;
 }
 
@@ -261,9 +184,6 @@ function normalizeBlockNode(node: LexicalNode): Block | null {
 // Main Normalizer Function
 // ============================================================================
 
-/**
- * Creates an empty normalized document.
- */
 function emptyDocument(): NormalizedDocument {
   return { version: AST_VERSION, blocks: [] };
 }
@@ -275,12 +195,10 @@ function emptyDocument(): NormalizedDocument {
  * @returns NormalizedDocument ready for export
  */
 export function normalizeEditorState(editorState: unknown): NormalizedDocument {
-  // Handle null/undefined
   if (!editorState) {
     return emptyDocument();
   }
 
-  // Parse string if needed
   let state: LexicalEditorState;
   try {
     state = typeof editorState === 'string' ? JSON.parse(editorState) : editorState;
@@ -288,13 +206,11 @@ export function normalizeEditorState(editorState: unknown): NormalizedDocument {
     return emptyDocument();
   }
 
-  // Extract root children
   const rootChildren = state?.root?.children;
   if (!Array.isArray(rootChildren)) {
     return emptyDocument();
   }
 
-  // Normalize each block
   const blocks: Block[] = [];
   for (const node of rootChildren) {
     const block = normalizeBlockNode(node);
@@ -304,118 +220,4 @@ export function normalizeEditorState(editorState: unknown): NormalizedDocument {
   }
 
   return { version: AST_VERSION, blocks };
-}
-
-// ============================================================================
-// Inline Content Utilities (Shared by Exporters)
-// ============================================================================
-
-/**
- * Options for flattening inline content to plain text.
- */
-export interface FlattenOptions {
-  /** Whether to include link URLs in output (default: false) */
-  includeLinkUrls?: boolean;
-}
-
-/**
- * Flattens inline content to plain text.
- * This is the shared utility used by all exporters for consistent text extraction.
- *
- * @param content - Array of inline content nodes
- * @param options - Flattening options
- * @returns Plain text representation
- */
-export function flattenInlineContent(
-  content: InlineContent[],
-  options: FlattenOptions = {},
-): string {
-  const { includeLinkUrls = false } = options;
-
-  return content
-    .map((item) => {
-      if (item.type === 'text') {
-        return item.text;
-      }
-      if (item.type === 'link') {
-        const linkText = item.children.map((c) => c.text).join('');
-        return includeLinkUrls ? `${linkText} (${item.url})` : linkText;
-      }
-      return '';
-    })
-    .join('');
-}
-
-/**
- * Extracts plain text from a normalized document.
- * Useful for text export or preview generation.
- */
-export function extractPlainText(document: NormalizedDocument): string {
-  const lines: string[] = [];
-
-  for (const block of document.blocks) {
-    switch (block.type) {
-      case 'paragraph':
-      case 'heading':
-      case 'quote':
-        lines.push(flattenInlineContent(block.children));
-        break;
-      case 'list':
-        for (let i = 0; i < block.children.length; i++) {
-          const prefix = block.ordered ? `${i + 1}. ` : '- ';
-          lines.push(prefix + flattenInlineContent(block.children[i].children));
-        }
-        break;
-      case 'code':
-        lines.push(block.code);
-        break;
-      case 'linebreak':
-        lines.push('');
-        break;
-    }
-  }
-
-  return lines.join('\n');
-}
-
-// ============================================================================
-// Content Validation
-// ============================================================================
-
-/**
- * Checks if inline content has any meaningful text.
- */
-function hasInlineText(content: InlineContent[]): boolean {
-  return content.some((item) => {
-    if (item.type === 'text') {
-      return item.text.trim().length > 0;
-    }
-    if (item.type === 'link') {
-      return item.children.some((c) => c.text.trim().length > 0);
-    }
-    return false;
-  });
-}
-
-/**
- * Checks if a normalized document has any exportable content.
- * Used to prevent exporting empty notes.
- */
-export function documentHasContent(document: NormalizedDocument): boolean {
-  return document.blocks.some((block) => {
-    switch (block.type) {
-      case 'linebreak':
-        return false;
-      case 'code':
-        return block.code.trim().length > 0;
-      case 'list':
-        return block.children.some((item) => hasInlineText(item.children));
-      case 'paragraph':
-      case 'heading':
-      case 'quote':
-        return hasInlineText(block.children);
-      default:
-        return false;
-    }
-  });
 }

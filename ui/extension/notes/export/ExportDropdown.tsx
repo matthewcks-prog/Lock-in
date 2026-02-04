@@ -155,7 +155,7 @@ export function ExportDropdown({
             <Download size={14} />
             <span>Export</span>
             <span className="lockin-export-chevron" aria-hidden="true">
-              ▼
+              {'\u25BC'}
             </span>
           </>
         )}
