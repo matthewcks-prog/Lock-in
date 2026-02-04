@@ -172,16 +172,7 @@ class GeminiAdapter extends BaseAdapter {
     return '';
   }
 
-  /**
-   * Execute chat completion via Gemini REST API
-   * @param {import('../contracts').ChatMessage[]} messages
-   * @param {import('../contracts').ChatCompletionOptions} [options]
-   * @returns {Promise<import('../contracts').ChatCompletionResult>}
-   */
-  async chatCompletion(messages, options = {}) {
-    const { systemInstruction, contents } = this._convertMessages(messages);
-    const selectedModel = this._selectModel(messages, options);
-
+  _buildRequestBody(systemInstruction, contents, options) {
     const requestBody = {
       contents,
       generationConfig: {
@@ -190,22 +181,40 @@ class GeminiAdapter extends BaseAdapter {
       },
     };
 
-    // Add system instruction if present
     if (systemInstruction) {
       requestBody.systemInstruction = systemInstruction;
     }
 
-    // Add JSON mode if requested
     if (options.responseFormat?.type === 'json_object') {
       requestBody.generationConfig.responseMimeType = 'application/json';
     }
 
-    const url = `${this.baseUrl}/models/${selectedModel}:generateContent`;
+    return requestBody;
+  }
+
+  _parseErrorDetails(errorBody) {
+    if (!errorBody) return '';
+    try {
+      const parsed = JSON.parse(errorBody);
+      return parsed.error?.message || errorBody.substring(0, 200);
+    } catch {
+      return errorBody.substring(0, 200);
+    }
+  }
+
+  async _buildHttpError(response) {
+    const errorBody = await response.text();
+    const errorDetails = this._parseErrorDetails(errorBody);
+    const error = new Error(`Gemini API error: ${response.status} - ${errorDetails}`);
+    error.status = response.status;
+    return this.wrapError('chatCompletion', error);
+  }
+
+  async _executeRequest(url, requestBody) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -216,40 +225,61 @@ class GeminiAdapter extends BaseAdapter {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
-        const errorBody = await response.text();
-        let errorDetails = '';
-        try {
-          const parsed = JSON.parse(errorBody);
-          errorDetails = parsed.error?.message || errorBody.substring(0, 200);
-        } catch {
-          errorDetails = errorBody.substring(0, 200);
-        }
-        const error = new Error(`Gemini API error: ${response.status} - ${errorDetails}`);
-        error.status = response.status;
-        throw this.wrapError('chatCompletion', error);
+        throw await this._buildHttpError(response);
       }
 
-      const data = await response.json();
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 
-      // Extract response content
-      const candidate = data.candidates?.[0];
-      if (!candidate?.content?.parts?.[0]?.text) {
-        throw this.wrapError('chatCompletion', new Error('No content in Gemini response'));
-      }
+  _extractContent(data) {
+    const candidate = data.candidates?.[0];
+    if (!candidate?.content?.parts?.[0]?.text) {
+      throw this.wrapError('chatCompletion', new Error('No content in Gemini response'));
+    }
+    return candidate.content.parts[0].text;
+  }
 
-      const content = candidate.content.parts[0].text;
+  _extractUsage(data) {
+    if (!data.usageMetadata) {
+      return null;
+    }
+    return {
+      prompt_tokens: data.usageMetadata.promptTokenCount || 0,
+      completion_tokens: data.usageMetadata.candidatesTokenCount || 0,
+      total_tokens: data.usageMetadata.totalTokenCount || 0,
+    };
+  }
 
-      // Build usage stats (Gemini includes these)
-      const usage = data.usageMetadata
-        ? {
-            prompt_tokens: data.usageMetadata.promptTokenCount || 0,
-            completion_tokens: data.usageMetadata.candidatesTokenCount || 0,
-            total_tokens: data.usageMetadata.totalTokenCount || 0,
-          }
-        : null;
+  _wrapChatCompletionError(error) {
+    if (error.provider === this.getProviderName()) {
+      return error;
+    }
+    if (error.name === 'AbortError') {
+      return this.wrapError('chatCompletion', new Error('Request timed out after 60s'));
+    }
+    return this.wrapError('chatCompletion', error);
+  }
+
+  /**
+   * Execute chat completion via Gemini REST API
+   * @param {import('../contracts').ChatMessage[]} messages
+   * @param {import('../contracts').ChatCompletionOptions} [options]
+   * @returns {Promise<import('../contracts').ChatCompletionResult>}
+   */
+  async chatCompletion(messages, options = {}) {
+    const { systemInstruction, contents } = this._convertMessages(messages);
+    const selectedModel = this._selectModel(messages, options);
+    const requestBody = this._buildRequestBody(systemInstruction, contents, options);
+    const url = `${this.baseUrl}/models/${selectedModel}:generateContent`;
+
+    try {
+      const data = await this._executeRequest(url, requestBody);
+      const content = this._extractContent(data);
+      const usage = this._extractUsage(data);
 
       return {
         content,
@@ -258,16 +288,7 @@ class GeminiAdapter extends BaseAdapter {
         usage,
       };
     } catch (error) {
-      if (error.provider === this.getProviderName()) {
-        throw error; // Already wrapped
-      }
-
-      // Handle abort/timeout
-      if (error.name === 'AbortError') {
-        throw this.wrapError('chatCompletion', new Error('Request timed out after 60s'));
-      }
-
-      throw this.wrapError('chatCompletion', error);
+      throw this._wrapChatCompletionError(error);
     }
   }
 }

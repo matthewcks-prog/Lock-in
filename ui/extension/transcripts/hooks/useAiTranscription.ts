@@ -41,6 +41,90 @@ export interface UseAiTranscriptionResult {
   resetAiTranscription: () => void;
 }
 
+async function resolvePanoptoMediaUrl(
+  video: DetectedVideo,
+  setState: React.Dispatch<React.SetStateAction<AiTranscriptionState>>,
+): Promise<DetectedVideo | null> {
+  if (video.provider !== 'panopto' || video.mediaUrl) {
+    return video;
+  }
+
+  setState({
+    status: 'starting',
+    requestId: null,
+    jobId: null,
+    video,
+    progressMessage: 'Finding downloadable video URL... (checking if podcast download is enabled)',
+    progressPercent: null,
+    error: null,
+  });
+
+  try {
+    const mediaUrlResponse = await sendToBackground<PanoptoMediaUrlResponse>({
+      type: 'FETCH_PANOPTO_MEDIA_URL',
+      payload: { video },
+    });
+
+    if (!mediaUrlResponse.success || !mediaUrlResponse.mediaUrl) {
+      const errorMsg =
+        mediaUrlResponse.error ||
+        'Could not find video URL. The video may be restricted or require authentication.';
+      setState({
+        status: 'failed',
+        requestId: null,
+        jobId: null,
+        video,
+        progressMessage: null,
+        progressPercent: null,
+        error: errorMsg,
+      });
+      return null;
+    }
+
+    return { ...video, mediaUrl: mediaUrlResponse.mediaUrl };
+  } catch (error) {
+    const errorMsg =
+      error instanceof Error ? error.message : 'Failed to prepare video for AI transcription';
+    setState({
+      status: 'failed',
+      requestId: null,
+      jobId: null,
+      video,
+      progressMessage: null,
+      progressPercent: null,
+      error: errorMsg,
+    });
+    return null;
+  }
+}
+
+function ensureVideoHasMediaUrl(
+  video: DetectedVideo,
+  setState: React.Dispatch<React.SetStateAction<AiTranscriptionState>>,
+) {
+  if (video.mediaUrl) return true;
+  setState({
+    status: 'failed',
+    requestId: null,
+    jobId: null,
+    video,
+    progressMessage: null,
+    progressPercent: null,
+    error: 'AI transcription is not available for this video.',
+  });
+  return false;
+}
+
+function buildConfirmMessage(video: DetectedVideo): string {
+  const durationLabel = formatDurationForConfirm(video.durationMs);
+  const isLong =
+    typeof video.durationMs === 'number' && video.durationMs >= LONG_DURATION_CONFIRM_MS;
+
+  return isLong
+    ? `This ${durationLabel ? `${durationLabel} ` : ''}video will be uploaded to Lock-in for AI transcription. This may take several minutes. Continue?`
+    : 'This video will be uploaded to Lock-in for AI transcription. Continue?';
+}
+
 // -----------------------------------------------------------------------------
 // Hook Implementation
 // -----------------------------------------------------------------------------
@@ -104,89 +188,16 @@ export function useAiTranscription(
     ): Promise<TranscriptResult | null> => {
       if (isAiTranscriptionBusy(state.status)) return null;
 
-      // For Panopto videos, fetch the media URL first if not available
-      let videoWithMediaUrl = video;
-      if (video.provider === 'panopto' && !video.mediaUrl) {
-        setState({
-          status: 'starting',
-          requestId: null,
-          jobId: null,
-          video,
-          progressMessage:
-            'Finding downloadable video URL... (checking if podcast download is enabled)',
-          progressPercent: null,
-          error: null,
-        });
+      const resolvedVideo = await resolvePanoptoMediaUrl(video, setState);
+      if (!resolvedVideo) return null;
 
-        try {
-          const mediaUrlResponse = await sendToBackground<PanoptoMediaUrlResponse>({
-            type: 'FETCH_PANOPTO_MEDIA_URL',
-            payload: { video },
-          });
-
-          if (!mediaUrlResponse.success || !mediaUrlResponse.mediaUrl) {
-            const errorMsg =
-              mediaUrlResponse.error ||
-              'Could not find video URL. The video may be restricted or require authentication.';
-            setState({
-              status: 'failed',
-              requestId: null,
-              jobId: null,
-              video,
-              progressMessage: null,
-              progressPercent: null,
-              error: errorMsg,
-            });
-            return null;
-          }
-
-          videoWithMediaUrl = {
-            ...video,
-            mediaUrl: mediaUrlResponse.mediaUrl,
-          };
-        } catch (error) {
-          const errorMsg =
-            error instanceof Error ? error.message : 'Failed to prepare video for AI transcription';
-          setState({
-            status: 'failed',
-            requestId: null,
-            jobId: null,
-            video,
-            progressMessage: null,
-            progressPercent: null,
-            error: errorMsg,
-          });
-          return null;
-        }
-      }
-
-      if (!videoWithMediaUrl.mediaUrl) {
-        const message = 'AI transcription is not available for this video.';
-        setState({
-          status: 'failed',
-          requestId: null,
-          jobId: null,
-          video: videoWithMediaUrl,
-          progressMessage: null,
-          progressPercent: null,
-          error: message,
-        });
+      if (!ensureVideoHasMediaUrl(resolvedVideo, setState)) {
         return null;
       }
-
-      const durationLabel = formatDurationForConfirm(videoWithMediaUrl.durationMs);
-      const isLong =
-        typeof videoWithMediaUrl.durationMs === 'number' &&
-        videoWithMediaUrl.durationMs >= LONG_DURATION_CONFIRM_MS;
 
       // Ethical consent: Explain external processing clearly
-      const confirmMessage = isLong
-        ? `This ${durationLabel ? `${durationLabel} ` : ''}video will be uploaded to Lock-in for AI transcription. This may take several minutes. Continue?`
-        : 'This video will be uploaded to Lock-in for AI transcription. Continue?';
-
-      if (!window.confirm(confirmMessage)) {
-        return null;
-      }
+      const confirmMessage = buildConfirmMessage(resolvedVideo);
+      if (!window.confirm(confirmMessage)) return null;
 
       const requestId = `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
       activeAiRequestIdRef.current = requestId;
@@ -195,7 +206,7 @@ export function useAiTranscription(
         status: 'starting',
         requestId,
         jobId: null,
-        video: videoWithMediaUrl,
+        video: resolvedVideo,
         progressMessage:
           'No transcript available - transcribing with AI... This may take a minute.',
         progressPercent: null,
@@ -205,7 +216,7 @@ export function useAiTranscription(
       try {
         const response = await sendToBackground<AiTranscriptionResponse>({
           type: 'TRANSCRIBE_MEDIA_AI',
-          payload: { video: videoWithMediaUrl, options, requestId },
+          payload: { video: resolvedVideo, options, requestId },
         });
 
         if (activeAiRequestIdRef.current !== requestId) {
@@ -219,15 +230,15 @@ export function useAiTranscription(
             status: 'completed',
             requestId,
             jobId: response.jobId || null,
-            video: videoWithMediaUrl,
+            video: resolvedVideo,
             progressMessage: 'Transcript ready',
             progressPercent: 100,
             error: null,
           });
 
           // Notify callbacks
-          onTranscriptReady?.(videoWithMediaUrl, transcript);
-          onExtractionResult?.(videoWithMediaUrl.id, { success: true, transcript });
+          onTranscriptReady?.(resolvedVideo, transcript);
+          onExtractionResult?.(resolvedVideo.id, { success: true, transcript });
 
           activeAiRequestIdRef.current = null;
           return transcript;
@@ -241,7 +252,7 @@ export function useAiTranscription(
           status: nextStatus,
           requestId,
           jobId: response.jobId || prev.jobId,
-          video: videoWithMediaUrl,
+          video: resolvedVideo,
           progressMessage: null,
           progressPercent: null,
           error: errorMessage,
@@ -258,7 +269,7 @@ export function useAiTranscription(
           status: 'failed',
           requestId,
           jobId: prev.jobId,
-          video: videoWithMediaUrl,
+          video: resolvedVideo,
           progressMessage: null,
           progressPercent: null,
           error: message,

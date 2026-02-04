@@ -30,39 +30,63 @@
     return;
   }
 
-  const appEnv = (import.meta.env.VITE_APP_ENV || 'development').toLowerCase();
+  function getAppEnv() {
+    return (import.meta.env.VITE_APP_ENV || 'development').toLowerCase();
+  }
+
+  function buildConfigByEnv() {
+    return {
+      development: {
+        url: import.meta.env.VITE_SUPABASE_URL_DEV || '',
+        anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_DEV || '',
+        environment: 'development',
+        backendUrl: import.meta.env.VITE_BACKEND_URL_DEV || 'http://localhost:3000',
+      },
+      production: {
+        url: import.meta.env.VITE_SUPABASE_URL_PROD || '',
+        anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_PROD || '',
+        environment: 'production',
+        backendUrl:
+          import.meta.env.VITE_BACKEND_URL_PROD ||
+          'https://lock-in-backend.australiaeast.azurecontainerapps.io',
+      },
+    } as const;
+  }
+
+  function collectMissingEnvVars(envConfig: { url: string; anonKey: string }, isProd: boolean) {
+    const missing: string[] = [];
+    if (!envConfig.url) {
+      missing.push(isProd ? 'VITE_SUPABASE_URL_PROD' : 'VITE_SUPABASE_URL_DEV');
+    }
+    if (!envConfig.anonKey) {
+      missing.push(isProd ? 'VITE_SUPABASE_ANON_KEY_PROD' : 'VITE_SUPABASE_ANON_KEY_DEV');
+    }
+    return missing;
+  }
+
+  function logMissingEnvVars(missing: string[]) {
+    if (missing.length > 0 && typeof console !== 'undefined') {
+      console.warn('[Lock-in] Missing extension env vars:', missing);
+    }
+  }
+
+  function logDevConfig(env: string, isProd: boolean, config: LockInConfig) {
+    if (!isProd && typeof console !== 'undefined') {
+      console.log('[Lock-in] Extension config loaded:', {
+        environment: env,
+        supabase: config.SUPABASE_ENVIRONMENT,
+        backendUrl: config.BACKEND_URL,
+      });
+    }
+  }
+
+  const appEnv = getAppEnv();
   const isProduction = appEnv === 'production';
-
-  const configByEnv = {
-    development: {
-      url: import.meta.env.VITE_SUPABASE_URL_DEV || '',
-      anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_DEV || '',
-      environment: 'development',
-      backendUrl: import.meta.env.VITE_BACKEND_URL_DEV || 'http://localhost:3000',
-    },
-    production: {
-      url: import.meta.env.VITE_SUPABASE_URL_PROD || '',
-      anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_PROD || '',
-      environment: 'production',
-      backendUrl:
-        import.meta.env.VITE_BACKEND_URL_PROD ||
-        'https://lock-in-backend.australiaeast.azurecontainerapps.io',
-    },
-  } as const;
-
+  const configByEnv = buildConfigByEnv();
   const supabaseConfig = isProduction ? configByEnv.production : configByEnv.development;
-  const missingEnvVars: string[] = [];
+  const missingEnvVars = collectMissingEnvVars(supabaseConfig, isProduction);
 
-  if (!supabaseConfig.url) {
-    missingEnvVars.push(isProduction ? 'VITE_SUPABASE_URL_PROD' : 'VITE_SUPABASE_URL_DEV');
-  }
-  if (!supabaseConfig.anonKey) {
-    missingEnvVars.push(
-      isProduction ? 'VITE_SUPABASE_ANON_KEY_PROD' : 'VITE_SUPABASE_ANON_KEY_DEV',
-    );
-  }
-
-  root.LOCKIN_CONFIG = {
+  const runtimeConfig: LockInConfig = {
     APP_ENV: appEnv,
     IS_PRODUCTION: isProduction,
     BACKEND_URL: supabaseConfig.backendUrl,
@@ -76,15 +100,8 @@
     SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN || undefined,
   };
 
-  if (missingEnvVars.length > 0 && typeof console !== 'undefined') {
-    console.warn('[Lock-in] Missing extension env vars:', missingEnvVars);
-  }
+  root.LOCKIN_CONFIG = runtimeConfig;
 
-  if (!isProduction && typeof console !== 'undefined') {
-    console.log('[Lock-in] Extension config loaded:', {
-      environment: appEnv,
-      supabase: supabaseConfig.environment,
-      backendUrl: root.LOCKIN_CONFIG.BACKEND_URL,
-    });
-  }
+  logMissingEnvVars(missingEnvVars);
+  logDevConfig(appEnv, isProduction, runtimeConfig);
 })();

@@ -7,7 +7,7 @@
  * @module services/auth/__tests__/jwksProvider.test
  */
 
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { JwksProvider } = require('../jwksProvider');
 

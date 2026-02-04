@@ -11,6 +11,47 @@ const { shouldFallback, parseRetryAfter } = require('./contracts');
 const { logger } = require('../../observability');
 const { getRateLimiterManager } = require('./rateLimiter');
 
+const STATUS_CATEGORY_RULES = [
+  { category: 'rate_limit', statuses: new Set([429]) },
+  { category: 'auth_error', statuses: new Set([401, 403]) },
+  { category: 'bad_request', statuses: new Set([400]) },
+];
+
+const MESSAGE_CATEGORY_RULES = [
+  { category: 'rate_limit', patterns: ['rate limit', 'quota'] },
+  { category: 'auth_error', patterns: ['auth', 'invalid api key'] },
+  { category: 'server_error', patterns: ['server error', 'internal'] },
+  { category: 'timeout', patterns: ['timeout', 'timed out'] },
+  { category: 'network_error', patterns: ['network', 'econnreset', 'socket'] },
+  { category: 'bad_request', patterns: ['bad request', 'invalid'] },
+];
+
+function normalizeErrorMessage(error) {
+  return (error?.message || '').toLowerCase();
+}
+
+function matchStatusCategory(status) {
+  if (typeof status !== 'number') return null;
+  for (const rule of STATUS_CATEGORY_RULES) {
+    if (rule.statuses.has(status)) {
+      return rule.category;
+    }
+  }
+  return null;
+}
+
+function matchMessageCategory(message, errorName) {
+  if (errorName === 'AbortError') {
+    return 'timeout';
+  }
+  for (const rule of MESSAGE_CATEGORY_RULES) {
+    if (rule.patterns.some((pattern) => message.includes(pattern))) {
+      return rule.category;
+    }
+  }
+  return null;
+}
+
 /**
  * Provider chain for LLM requests with fallback support
  */
@@ -232,40 +273,19 @@ class ProviderChain {
    */
   _categorizeError(error) {
     const status = error.status;
-    const message = (error.message || '').toLowerCase();
+    const message = normalizeErrorMessage(error);
 
-    if (status === 429 || message.includes('rate limit') || message.includes('quota')) {
-      return 'rate_limit';
+    const statusCategory = matchStatusCategory(status);
+    if (statusCategory) {
+      return statusCategory;
     }
-    if (
-      status === 401 ||
-      status === 403 ||
-      message.includes('auth') ||
-      message.includes('invalid api key')
-    ) {
-      return 'auth_error';
-    }
-    if (status >= 500 || message.includes('server error') || message.includes('internal')) {
+
+    if (typeof status === 'number' && status >= 500) {
       return 'server_error';
     }
-    if (
-      message.includes('timeout') ||
-      message.includes('timed out') ||
-      error.name === 'AbortError'
-    ) {
-      return 'timeout';
-    }
-    if (
-      message.includes('network') ||
-      message.includes('econnreset') ||
-      message.includes('socket')
-    ) {
-      return 'network_error';
-    }
-    if (status === 400 || message.includes('bad request') || message.includes('invalid')) {
-      return 'bad_request';
-    }
-    return 'unknown';
+
+    const messageCategory = matchMessageCategory(message, error.name);
+    return messageCategory || 'unknown';
   }
 
   /**

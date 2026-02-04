@@ -7,7 +7,7 @@
  * @module services/auth/__tests__/jwtVerificationService.test
  */
 
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { JwtVerificationService } = require('../jwtVerificationService');
 

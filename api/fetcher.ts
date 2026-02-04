@@ -143,6 +143,159 @@ function createAbortError(): AppError {
   return new AppError('Request was aborted', ErrorCodes.ABORTED);
 }
 
+function ensureNotAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function isFormDataBody(body: unknown): boolean {
+  return typeof FormData !== 'undefined' && body instanceof FormData;
+}
+
+function resolveRequestUrl(backendUrl: string, endpoint: string): string {
+  return endpoint.startsWith('http') ? endpoint : `${backendUrl}${endpoint}`;
+}
+
+async function getAccessToken(authClient: AuthClient, signal?: AbortSignal): Promise<string> {
+  ensureNotAborted(signal);
+  const accessToken = await authClient.getValidAccessToken();
+  if (!accessToken) {
+    throw new AuthError(
+      'Please sign in via the Lock-in popup before using the assistant.',
+      ErrorCodes.AUTH_REQUIRED,
+    );
+  }
+  ensureNotAborted(signal);
+  return accessToken;
+}
+
+function buildRequestHeaders(
+  accessToken: string,
+  fetchOptions: ApiRequestOptions,
+  ifUnmodifiedSince?: string,
+): HeadersInit {
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${accessToken}`,
+  };
+
+  if (!isFormDataBody(fetchOptions.body)) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  if (ifUnmodifiedSince) {
+    headers['If-Unmodified-Since'] = ifUnmodifiedSince;
+  }
+
+  return {
+    ...headers,
+    ...(fetchOptions.headers || {}),
+  };
+}
+
+async function extractConflictVersion(response: Response): Promise<string | undefined> {
+  try {
+    const body: unknown = await response.json();
+    if (isRecord(body)) {
+      if (typeof body.updatedAt === 'string') {
+        return body.updatedAt;
+      }
+      if (typeof body.updated_at === 'string') {
+        return body.updated_at;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+async function maybeThrowConflictError(response: Response): Promise<void> {
+  if (response.status !== 409) return;
+  const serverVersion = await extractConflictVersion(response);
+  throw new ConflictError(
+    'Note was modified by another session. Please refresh and try again.',
+    serverVersion,
+  );
+}
+
+function shouldRetryResponse(
+  response: Response,
+  retryConfig: RetryConfig,
+  retryEnabled: boolean,
+  attempt: number,
+): boolean {
+  return (
+    retryEnabled &&
+    retryConfig.retryableStatuses.includes(response.status) &&
+    attempt < retryConfig.maxRetries
+  );
+}
+
+function shouldSignOut(response: Response): boolean {
+  return response.status === 401 || response.status === 403;
+}
+
+function firstString(candidates: Array<unknown>, fallback: string): string {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) {
+      return candidate;
+    }
+  }
+  return fallback;
+}
+
+function buildAppErrorFromPayload(status: number, payload: unknown): AppError | null {
+  if (!isRecord(payload) || payload.success !== false) {
+    return null;
+  }
+  const errorValue = payload.error;
+  const errorDetails = isRecord(errorValue) ? errorValue : undefined;
+  const message = firstString(
+    [typeof errorValue === 'string' ? errorValue : undefined, errorDetails?.message],
+    'Request failed',
+  );
+  const errorCode = isRecord(errorValue) ? errorValue.code : undefined;
+  return new AppError(
+    message,
+    resolveErrorCode(status, typeof errorCode === 'string' ? errorCode : undefined),
+    { status, details: errorDetails },
+  );
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
+  try {
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    const contentLength = response.headers.get('content-length');
+    const contentType = response.headers.get('content-type');
+
+    if (contentLength === '0' || !contentType?.includes('application/json')) {
+      return undefined as T;
+    }
+
+    const data: unknown = await response.json();
+    const appError = buildAppErrorFromPayload(response.status, data);
+    if (appError) {
+      throw appError;
+    }
+
+    return data as T;
+  } catch (parseError) {
+    if (parseError instanceof AppError) {
+      throw parseError;
+    }
+    const cause = parseError instanceof Error ? parseError : undefined;
+    throw new AppError('Failed to parse API response', ErrorCodes.PARSE_ERROR, { cause });
+  }
+}
+
 export interface ApiRequestOptions extends RequestInit {
   signal?: AbortSignal;
   retry?: boolean;
@@ -237,31 +390,10 @@ export function createFetcher(config: FetcherConfig) {
     } = options;
 
     const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...customRetryConfig };
-    const url = endpoint.startsWith('http') ? endpoint : `${backendUrl}${endpoint}`;
-
-    if (fetchOptions.signal?.aborted) {
-      throw createAbortError();
-    }
-
-    const accessToken = await authClient.getValidAccessToken();
-    if (!accessToken) {
-      throw new AuthError(
-        'Please sign in via the Lock-in popup before using the assistant.',
-        ErrorCodes.AUTH_REQUIRED,
-      );
-    }
-
-    if (fetchOptions.signal?.aborted) {
-      throw createAbortError();
-    }
-
-    const isFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
-    const headers: HeadersInit = {
-      Authorization: `Bearer ${accessToken}`,
-      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(ifUnmodifiedSince ? { 'If-Unmodified-Since': ifUnmodifiedSince } : {}),
-      ...(fetchOptions.headers || {}),
-    };
+    const url = resolveRequestUrl(backendUrl, endpoint);
+    ensureNotAborted(fetchOptions.signal);
+    const accessToken = await getAccessToken(authClient, fetchOptions.signal);
+    const headers = buildRequestHeaders(accessToken, fetchOptions, ifUnmodifiedSince);
 
     const requestOptions: RequestInit = {
       ...fetchOptions,
@@ -270,30 +402,23 @@ export function createFetcher(config: FetcherConfig) {
     };
 
     let lastError: AppError | null = null;
-    for (let attempt = 0; attempt <= (retry ? retryConfig.maxRetries : 0); attempt++) {
-      if (fetchOptions.signal?.aborted) {
-        throw createAbortError();
-      }
+    const maxAttempts = retry ? retryConfig.maxRetries : 0;
+    for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+      ensureNotAborted(fetchOptions.signal);
 
       if (attempt > 0) {
         const delay = calculateRetryDelay(attempt - 1, retryConfig);
         logger.debug(`Retry attempt ${attempt}/${retryConfig.maxRetries} after ${delay}ms`);
         await sleep(delay);
 
-        if (fetchOptions.signal?.aborted) {
-          throw createAbortError();
-        }
+        ensureNotAborted(fetchOptions.signal);
       }
 
       let response: Response;
       try {
         response = await fetcher(url, requestOptions);
       } catch (networkError) {
-        if (fetchOptions.signal?.aborted) {
-          throw createAbortError();
-        }
-
-        if (networkError instanceof Error && networkError.name === 'AbortError') {
+        if (fetchOptions.signal?.aborted || isAbortError(networkError)) {
           throw createAbortError();
         }
 
@@ -308,36 +433,14 @@ export function createFetcher(config: FetcherConfig) {
         throw lastError;
       }
 
-      if (response.status === 409) {
-        let serverVersion: string | undefined;
-        try {
-          const body: unknown = await response.json();
-          if (isRecord(body)) {
-            if (typeof body.updatedAt === 'string') {
-              serverVersion = body.updatedAt;
-            } else if (typeof body.updated_at === 'string') {
-              serverVersion = body.updated_at;
-            }
-          }
-        } catch {
-          // ignore parse errors
-        }
-        throw new ConflictError(
-          'Note was modified by another session. Please refresh and try again.',
-          serverVersion,
-        );
-      }
+      await maybeThrowConflictError(response);
 
-      if (
-        retry &&
-        retryConfig.retryableStatuses.includes(response.status) &&
-        attempt < retryConfig.maxRetries
-      ) {
+      if (shouldRetryResponse(response, retryConfig, retry, attempt)) {
         lastError = await createApiError(response);
         continue;
       }
 
-      if (response.status === 401 || response.status === 403) {
+      if (shouldSignOut(response)) {
         await authClient.signOut().catch(() => {});
       }
 
@@ -345,44 +448,7 @@ export function createFetcher(config: FetcherConfig) {
         throw await createApiError(response);
       }
 
-      if (response.status === 204) {
-        return undefined as T;
-      }
-
-      try {
-        const contentLength = response.headers.get('content-length');
-        const contentType = response.headers.get('content-type');
-
-        if (contentLength === '0' || !contentType?.includes('application/json')) {
-          return undefined as T;
-        }
-
-        const data: unknown = await response.json();
-        if (isRecord(data) && data.success === false) {
-          const errorValue = data.error;
-          const errorDetails = isRecord(errorValue) ? errorValue : undefined;
-          const message =
-            (typeof errorValue === 'string' && errorValue) ||
-            (errorDetails && typeof errorDetails.message === 'string' && errorDetails.message) ||
-            'Request failed';
-          const errorCode = isRecord(errorValue) ? errorValue.code : undefined;
-          throw new AppError(
-            message,
-            resolveErrorCode(
-              response.status,
-              typeof errorCode === 'string' ? errorCode : undefined,
-            ),
-            { status: response.status, details: errorDetails },
-          );
-        }
-        return data as T;
-      } catch (parseError) {
-        if (parseError instanceof AppError) {
-          throw parseError;
-        }
-        const cause = parseError instanceof Error ? parseError : undefined;
-        throw new AppError('Failed to parse API response', ErrorCodes.PARSE_ERROR, { cause });
-      }
+      return await parseJsonResponse<T>(response);
     }
 
     throw lastError || new AppError('Request failed after retries', ErrorCodes.INTERNAL_ERROR);

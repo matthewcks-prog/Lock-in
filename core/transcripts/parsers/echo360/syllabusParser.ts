@@ -166,6 +166,203 @@ function logMediaStatus(
   });
 }
 
+type LessonContext = {
+  lessonRecord: UnknownRecord | null;
+  lessonWrapper: UnknownRecord | null;
+  lessonId: string | null;
+  lessonName: string;
+  dateLabel: string;
+  isFolderLesson: boolean;
+};
+
+function extractLessonContext(entryRecord: UnknownRecord): LessonContext {
+  const lessonWrapper = asRecord(entryRecord.lesson);
+  const nestedLesson = lessonWrapper ? asRecord(lessonWrapper.lesson) : null;
+  const lessonRecord = nestedLesson || lessonWrapper || entryRecord;
+  const lessonId =
+    extractLessonIdFromRecord(nestedLesson) ||
+    extractLessonIdFromRecord(lessonWrapper) ||
+    extractLessonIdFromRecord(entryRecord);
+  const lessonName = extractLessonNameFromRecord(lessonRecord);
+  const timingStart = extractTimingStart(lessonRecord) || extractTimingStart(lessonWrapper);
+  const dateLabel = formatLessonDateLabel(timingStart);
+  const isFolderLesson =
+    (lessonRecord as Echo360SyllabusLesson | null)?.isFolderLesson === true ||
+    (lessonWrapper as Echo360SyllabusLesson | null)?.isFolderLesson === true;
+
+  return {
+    lessonRecord,
+    lessonWrapper,
+    lessonId,
+    lessonName,
+    dateLabel,
+    isFolderLesson,
+  };
+}
+
+function getMediaTypeInfo(mediaRecord: UnknownRecord) {
+  const mediaTypeRaw = extractMediaTypeRaw(mediaRecord);
+  const mediaType = normalizeMediaType(mediaTypeRaw);
+  const isAudioOnly = readBoolean(mediaRecord.isAudioOnly) === true;
+  const isVideoType =
+    mediaTypeRaw === 'Video' ||
+    mediaType === 'video' ||
+    (mediaType ? mediaType.startsWith('video/') : false);
+  const isAudioType =
+    mediaTypeRaw === 'Audio' ||
+    mediaType === 'audio' ||
+    (mediaType ? mediaType.startsWith('audio/') : false);
+  const isSupported = isVideoType || isAudioType || isAudioOnly || (!mediaTypeRaw && !mediaType);
+
+  return { mediaTypeRaw, mediaType, isAudioOnly, isAudioType, isSupported };
+}
+
+function buildVideoEntry({
+  mediaId,
+  mediaLessonId,
+  baseUrl,
+  lessonName,
+  dateLabel,
+  mediaRecord,
+  isAudioContent,
+}: {
+  mediaId: string;
+  mediaLessonId: string;
+  baseUrl: string;
+  lessonName: string;
+  dateLabel: string;
+  mediaRecord: UnknownRecord;
+  isAudioContent: boolean;
+}): DetectedVideo {
+  const mediaTitle = lessonName || extractMediaTitle(mediaRecord) || '';
+  const titleWithDate = appendAudioSuffix(
+    buildSyllabusTitle(mediaTitle, dateLabel, 'Echo360 video'),
+    isAudioContent,
+  );
+
+  return {
+    id: mediaId,
+    provider: 'echo360',
+    title: titleWithDate,
+    embedUrl: buildLessonPageUrl(baseUrl, mediaLessonId),
+    echoLessonId: mediaLessonId,
+    echoMediaId: mediaId,
+    echoBaseUrl: baseUrl,
+  };
+}
+
+function processMediaRecords({
+  mediaRecords,
+  lessonContext,
+  baseUrl,
+  requestId,
+  seenIds,
+  videos,
+}: {
+  mediaRecords: UnknownRecord[];
+  lessonContext: LessonContext;
+  baseUrl: string;
+  requestId: string;
+  seenIds: Set<string>;
+  videos: DetectedVideo[];
+}): { addedMedia: boolean; hasMediaId: boolean } {
+  let addedMedia = false;
+  let hasMediaId = false;
+
+  for (const mediaRecord of mediaRecords) {
+    const mediaId = extractMediaIdFromRecord(mediaRecord);
+    if (!mediaId) continue;
+    hasMediaId = true;
+
+    const typeInfo = getMediaTypeInfo(mediaRecord);
+    if (!typeInfo.isSupported) {
+      log('info', requestId, 'Skipping non-video/non-audio media', {
+        mediaId,
+        mediaType: typeInfo.mediaTypeRaw ?? typeInfo.mediaType,
+        mediaTypeNormalized: typeInfo.mediaType,
+        isAudioOnly: typeInfo.isAudioOnly,
+      });
+      logMediaStatus(requestId, mediaRecord, mediaId, {
+        skipReason: 'UNSUPPORTED_MEDIA_TYPE',
+      });
+      continue;
+    }
+
+    if (!isMediaReadyForTranscript(mediaRecord)) {
+      const skipReason = getMediaStatusSkipReason(mediaRecord);
+      log('info', requestId, 'Skipping media due to status', {
+        mediaId,
+        reason: skipReason?.reason,
+        errorCode: skipReason?.code,
+      });
+      logMediaStatus(requestId, mediaRecord, mediaId, {
+        skipReason: skipReason?.code,
+      });
+      continue;
+    }
+
+    const mediaLessonId = lessonContext.lessonId || extractLessonIdFromRecord(mediaRecord);
+    if (!mediaLessonId) {
+      log('warn', requestId, 'Media entry missing lessonId', { mediaId });
+      continue;
+    }
+
+    const key = getUniqueKey(mediaId, mediaLessonId);
+    if (key && seenIds.has(key)) continue;
+    if (key) seenIds.add(key);
+
+    videos.push(
+      buildVideoEntry({
+        mediaId,
+        mediaLessonId,
+        baseUrl,
+        lessonName: lessonContext.lessonName,
+        dateLabel: lessonContext.dateLabel,
+        mediaRecord,
+        isAudioContent: typeInfo.isAudioOnly || typeInfo.isAudioType,
+      }),
+    );
+    addedMedia = true;
+  }
+
+  return { addedMedia, hasMediaId };
+}
+
+function maybeAddLessonFallback({
+  lessonContext,
+  baseUrl,
+  seenIds,
+  videos,
+}: {
+  lessonContext: LessonContext;
+  baseUrl: string;
+  seenIds: Set<string>;
+  videos: DetectedVideo[];
+}): void {
+  if (!lessonContext.lessonId || lessonContext.isFolderLesson) {
+    return;
+  }
+  const key = getUniqueKey(null, lessonContext.lessonId);
+  if (key && seenIds.has(key)) return;
+  if (key) seenIds.add(key);
+
+  const titleWithDate = buildSyllabusTitle(
+    lessonContext.lessonName,
+    lessonContext.dateLabel,
+    'Echo360 lesson',
+  );
+
+  videos.push({
+    id: lessonContext.lessonId,
+    provider: 'echo360',
+    title: titleWithDate,
+    embedUrl: buildLessonPageUrl(baseUrl, lessonContext.lessonId),
+    echoLessonId: lessonContext.lessonId,
+    echoMediaId: undefined,
+    echoBaseUrl: baseUrl,
+  });
+}
+
 /**
  * Parse syllabus response and extract video information
  */
@@ -206,123 +403,27 @@ export function parseSyllabusResponse(
     const entryRecord = asRecord(entry);
     if (!entryRecord) continue;
 
-    const lessonWrapper = asRecord(entryRecord.lesson);
-    const nestedLesson = lessonWrapper ? asRecord(lessonWrapper.lesson) : null;
-    const lessonRecord = nestedLesson || lessonWrapper || entryRecord;
-    const lessonId =
-      extractLessonIdFromRecord(nestedLesson) ||
-      extractLessonIdFromRecord(lessonWrapper) ||
-      extractLessonIdFromRecord(entryRecord);
-    const lessonName = extractLessonNameFromRecord(lessonRecord);
-    const timingStart = extractTimingStart(lessonRecord) || extractTimingStart(lessonWrapper);
-    const dateLabel = formatLessonDateLabel(timingStart);
-    const isFolderLesson =
-      (lessonRecord as Echo360SyllabusLesson | null)?.isFolderLesson === true ||
-      (lessonWrapper as Echo360SyllabusLesson | null)?.isFolderLesson === true;
-
+    const lessonContext = extractLessonContext(entryRecord);
     const mediaRecords = collectMediaRecords(
       entryRecord.medias,
       entryRecord.media,
-      lessonWrapper?.medias,
-      lessonWrapper?.media,
-      (lessonRecord as UnknownRecord | null)?.medias,
-      (lessonRecord as UnknownRecord | null)?.media,
+      lessonContext.lessonWrapper?.medias,
+      lessonContext.lessonWrapper?.media,
+      (lessonContext.lessonRecord as UnknownRecord | null)?.medias,
+      (lessonContext.lessonRecord as UnknownRecord | null)?.media,
     );
 
-    let addedMedia = false;
-    let hasMediaId = false;
+    const { addedMedia, hasMediaId } = processMediaRecords({
+      mediaRecords,
+      lessonContext,
+      baseUrl,
+      requestId,
+      seenIds,
+      videos,
+    });
 
-    for (const mediaRecord of mediaRecords) {
-      const mediaId = extractMediaIdFromRecord(mediaRecord);
-      if (!mediaId) continue;
-      hasMediaId = true;
-
-      const mediaTypeRaw = extractMediaTypeRaw(mediaRecord);
-      const mediaType = normalizeMediaType(mediaTypeRaw);
-      const isAudioOnly = readBoolean(mediaRecord.isAudioOnly) === true;
-      const isVideoType =
-        mediaTypeRaw === 'Video' ||
-        mediaType === 'video' ||
-        (mediaType ? mediaType.startsWith('video/') : false);
-      const isAudioType =
-        mediaTypeRaw === 'Audio' ||
-        mediaType === 'audio' ||
-        (mediaType ? mediaType.startsWith('audio/') : false);
-      const isSupported =
-        isVideoType || isAudioType || isAudioOnly || (!mediaTypeRaw && !mediaType);
-
-      if (!isSupported) {
-        log('info', requestId, 'Skipping non-video/non-audio media', {
-          mediaId,
-          mediaType: mediaTypeRaw ?? mediaType,
-          mediaTypeNormalized: mediaType,
-          isAudioOnly,
-        });
-        logMediaStatus(requestId, mediaRecord, mediaId, {
-          skipReason: 'UNSUPPORTED_MEDIA_TYPE',
-        });
-        continue;
-      }
-
-      if (!isMediaReadyForTranscript(mediaRecord)) {
-        const skipReason = getMediaStatusSkipReason(mediaRecord);
-        log('info', requestId, 'Skipping media due to status', {
-          mediaId,
-          reason: skipReason?.reason,
-          errorCode: skipReason?.code,
-        });
-        logMediaStatus(requestId, mediaRecord, mediaId, {
-          skipReason: skipReason?.code,
-        });
-        continue;
-      }
-
-      const mediaLessonId = lessonId || extractLessonIdFromRecord(mediaRecord);
-      if (!mediaLessonId) {
-        log('warn', requestId, 'Media entry missing lessonId', { mediaId });
-        continue;
-      }
-
-      const key = getUniqueKey(mediaId, mediaLessonId);
-      if (key && seenIds.has(key)) continue;
-      if (key) seenIds.add(key);
-
-      // Prefer lesson's displayName over media title for consistency
-      const mediaTitle = lessonName || extractMediaTitle(mediaRecord) || '';
-      const titleWithDate = appendAudioSuffix(
-        buildSyllabusTitle(mediaTitle, dateLabel, 'Echo360 video'),
-        isAudioOnly || isAudioType,
-      );
-
-      videos.push({
-        id: mediaId,
-        provider: 'echo360',
-        title: titleWithDate,
-        embedUrl: buildLessonPageUrl(baseUrl, mediaLessonId),
-        echoLessonId: mediaLessonId,
-        echoMediaId: mediaId,
-        echoBaseUrl: baseUrl,
-      });
-
-      addedMedia = true;
-    }
-
-    if (!addedMedia && !hasMediaId && lessonId && !isFolderLesson) {
-      const key = getUniqueKey(null, lessonId);
-      if (key && seenIds.has(key)) continue;
-      if (key) seenIds.add(key);
-
-      const titleWithDate = buildSyllabusTitle(lessonName, dateLabel, 'Echo360 lesson');
-
-      videos.push({
-        id: lessonId,
-        provider: 'echo360',
-        title: titleWithDate,
-        embedUrl: buildLessonPageUrl(baseUrl, lessonId),
-        echoLessonId: lessonId,
-        echoMediaId: undefined,
-        echoBaseUrl: baseUrl,
-      });
+    if (!addedMedia && !hasMediaId) {
+      maybeAddLessonFallback({ lessonContext, baseUrl, seenIds, videos });
     }
   }
 

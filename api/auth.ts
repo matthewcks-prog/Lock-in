@@ -43,6 +43,68 @@ export interface AuthDependencies {
   logger?: Logger;
 }
 
+type RecordValue = Record<string, unknown>;
+
+const AUTH_ERROR_CODE_RULES: Array<{ pattern: string; code: string }> = [
+  { pattern: 'already registered', code: 'USER_ALREADY_REGISTERED' },
+  { pattern: 'invalid login', code: 'INVALID_LOGIN' },
+  { pattern: 'email not confirmed', code: 'EMAIL_NOT_CONFIRMED' },
+  { pattern: 'invalid email', code: 'INVALID_EMAIL' },
+];
+
+function asRecord(value: unknown): RecordValue | null {
+  return typeof value === 'object' && value !== null ? (value as RecordValue) : null;
+}
+
+function firstString(candidates: Array<unknown>): string | undefined {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+async function readErrorPayload(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch (_) {
+    try {
+      const text = await response.text();
+      return text ? { message: text } : null;
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+function resolveAuthErrorMessage(
+  payloadRecord: RecordValue | null,
+  nestedRecord: RecordValue | null,
+  fallbackMessage: string,
+): string {
+  const nestedError = payloadRecord?.error;
+  const message =
+    firstString([
+      payloadRecord?.error_description,
+      nestedRecord?.message,
+      typeof nestedError === 'string' ? nestedError : undefined,
+      payloadRecord?.message,
+    ]) || fallbackMessage;
+
+  return message || fallbackMessage;
+}
+
+function mapAuthErrorCode(message: string): string {
+  const normalized = (message || '').toLowerCase();
+  for (const rule of AUTH_ERROR_CODE_RULES) {
+    if (normalized.includes(rule.pattern)) {
+      return rule.code;
+    }
+  }
+  return 'AUTH_ERROR';
+}
+
 /**
  * Create auth error with code
  */
@@ -66,46 +128,11 @@ async function parseErrorResponse(
   response: Response,
   fallbackMessage: string,
 ): Promise<{ message: string; code: string; details?: Record<string, unknown> }> {
-  let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch (_) {
-    try {
-      const text = await response.text();
-      if (text) {
-        payload = { message: text };
-      }
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  const payloadRecord =
-    typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : null;
-  const nestedError = payloadRecord?.error;
-  const nestedRecord =
-    typeof nestedError === 'object' && nestedError !== null
-      ? (nestedError as Record<string, unknown>)
-      : null;
-  const message =
-    (typeof payloadRecord?.error_description === 'string' && payloadRecord.error_description) ||
-    (typeof nestedRecord?.message === 'string' && nestedRecord.message) ||
-    (typeof nestedError === 'string' && nestedError) ||
-    (typeof payloadRecord?.message === 'string' && payloadRecord.message) ||
-    fallbackMessage;
-  const normalized = (message || '').toLowerCase();
-
-  let code = 'AUTH_ERROR';
-  if (normalized.includes('already registered')) {
-    code = 'USER_ALREADY_REGISTERED';
-  } else if (normalized.includes('invalid login')) {
-    code = 'INVALID_LOGIN';
-  } else if (normalized.includes('email not confirmed')) {
-    code = 'EMAIL_NOT_CONFIRMED';
-  } else if (normalized.includes('invalid email')) {
-    code = 'INVALID_EMAIL';
-  }
-
+  const payload = await readErrorPayload(response);
+  const payloadRecord = asRecord(payload);
+  const nestedRecord = asRecord(payloadRecord?.error);
+  const message = resolveAuthErrorMessage(payloadRecord, nestedRecord, fallbackMessage);
+  const code = mapAuthErrorCode(message);
   return { message, code, details: payloadRecord || undefined };
 }
 

@@ -169,23 +169,10 @@ function clampHistory(messages) {
   return systemMessage ? [systemMessage, ...recent] : recent;
 }
 
-function buildStructuredStudyMessages(options) {
-  const {
-    mode = 'explain',
-    selection,
-    pageContext,
-    pageUrl,
-    courseCode,
-    language = 'en',
-    chatHistory = [],
-    newUserMessage,
-    attachments = [],
-  } = options;
-
+function resolveSelectionContext(selection, attachments) {
   const selectionText = normalizeSelection(selection);
   const hasSelection = selectionText.length > 0;
   const hasAttachments = Array.isArray(attachments) && attachments.length > 0;
-  const hasUserQuestion = typeof newUserMessage === 'string' && newUserMessage.trim().length > 0;
   const selectionIsShort =
     selectionText.length > 0 && selectionText.length < MIN_SELECTION_PRIMARY_CHARS;
   const selectionForPrompt = hasSelection
@@ -194,26 +181,35 @@ function buildStructuredStudyMessages(options) {
       ? ATTACHMENT_ONLY_SELECTION_PLACEHOLDER
       : '';
 
-  if (!hasSelection && !hasAttachments) {
-    throw new Error('Selection or attachments are required to generate a response');
-  }
+  return {
+    selectionText,
+    hasSelection,
+    hasAttachments,
+    selectionIsShort,
+    selectionForPrompt,
+  };
+}
 
-  // Build system prompt that adapts by mode
-  let modeInstruction = '';
+function resolveUserQuestion(newUserMessage) {
+  const trimmed = typeof newUserMessage === 'string' ? newUserMessage.trim() : '';
+  return {
+    hasUserQuestion: trimmed.length > 0,
+    userQuestion: trimmed,
+  };
+}
+
+function buildModeInstruction(mode) {
   switch (mode) {
     case 'explain':
-      modeInstruction =
-        "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
-      break;
+      return "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
     case 'general':
-      modeInstruction =
-        "Treat this as general Q&A about the selection/context. Provide a helpful explanation in the 'explanation' field.";
-      break;
+      return "Treat this as general Q&A about the selection/context. Provide a helpful explanation in the 'explanation' field.";
     default:
-      modeInstruction =
-        "Provide a clear explanation in the 'explanation' field. Create notes and todos if relevant.";
+      return "Provide a clear explanation in the 'explanation' field. Create notes and todos if relevant.";
   }
+}
 
+function buildContextInfo({ pageContext, pageUrl, courseCode }) {
   const contextParts = [];
   if (pageContext) {
     contextParts.push(`Page context: ${pageContext}`);
@@ -224,19 +220,38 @@ function buildStructuredStudyMessages(options) {
   if (courseCode) {
     contextParts.push(`Course code: ${courseCode}`);
   }
-  const contextInfo = contextParts.length > 0 ? `\n\n${contextParts.join('\n')}` : '';
+  return contextParts.length > 0 ? `\n\n${contextParts.join('\n')}` : '';
+}
 
-  const focusInstruction = hasUserQuestion
-    ? 'Treat the student question as the primary task. Use the selected text and any attachments as supporting evidence.'
-    : hasAttachments && (!hasSelection || selectionIsShort)
-      ? 'The attached files/images are the primary source of context. The selected text is minimal or missing; focus on the attachments first.'
-      : 'The selected text is the primary source of context. Use attachments as supporting evidence when available.';
+function buildFocusInstruction({
+  hasUserQuestion,
+  hasAttachments,
+  hasSelection,
+  selectionIsShort,
+}) {
+  if (hasUserQuestion) {
+    return 'Treat the student question as the primary task. Use the selected text and any attachments as supporting evidence.';
+  }
+  if (hasAttachments && (!hasSelection || selectionIsShort)) {
+    return 'The attached files/images are the primary source of context. The selected text is minimal or missing; focus on the attachments first.';
+  }
+  return 'The selected text is the primary source of context. Use attachments as supporting evidence when available.';
+}
 
-  const attachmentNote = hasAttachments
+function buildAttachmentNote(hasAttachments) {
+  return hasAttachments
     ? '\n\nThe student may also attach images, documents, or code files. For images, describe what you see and how it relates to the topic.'
     : '';
+}
 
-  const systemPrompt = `You are Lock-in, a helpful AI study assistant. Your task is to analyze the selected text and return a structured JSON response.
+function buildSystemPrompt({
+  modeInstruction,
+  focusInstruction,
+  contextInfo,
+  attachmentNote,
+  selectionForPrompt,
+}) {
+  return `You are Lock-in, a helpful AI study assistant. Your task is to analyze the selected text and return a structured JSON response.
 
 ${modeInstruction}
 ${focusInstruction ? `\n${focusInstruction}` : ''}
@@ -263,6 +278,96 @@ Guidelines:
 
 Selected text:
 ${selectionForPrompt}${contextInfo}`;
+}
+
+function buildAttachmentContext(attachments) {
+  const textAttachments = (attachments || []).filter((a) => a.type !== 'image' && a.textContent);
+  if (textAttachments.length === 0) {
+    return '';
+  }
+  const attachmentTexts = textAttachments.map((a) => {
+    const label = a.fileName || `${a.type} file`;
+    const content = buildAttachmentSnippet(a.textContent);
+    return `\n--- ${label} ---\n${content}`;
+  });
+  return `\n\nAttached files:${attachmentTexts.join('\n')}`;
+}
+
+function buildUserTextContent({
+  hasUserQuestion,
+  userQuestion,
+  hasAttachments,
+  hasSelection,
+  selectionIsShort,
+  attachmentContext,
+}) {
+  if (hasUserQuestion) {
+    return `The student has asked a follow-up question about the selected text and previous explanation:
+
+"${userQuestion}"${attachmentContext}
+
+Using the selected text, the previous conversation, any attached files/images, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
+  }
+
+  if (hasAttachments && (!hasSelection || selectionIsShort)) {
+    return `Analyze the attached files/images as the primary source of context. The selected text is minimal or missing, so treat it as optional background. Return ONLY the structured JSON response described in the system message.${attachmentContext}`;
+  }
+
+  return `Analyze the selected text${attachmentContext ? ' and the attached files/images' : ''} and return the structured JSON response described in the system message.${attachmentContext}`;
+}
+
+function buildUserMessage(userTextContent, attachments) {
+  const imageAttachments = (attachments || []).filter((a) => a.type === 'image' && a.base64);
+  if (imageAttachments.length === 0) {
+    return { role: 'user', content: userTextContent };
+  }
+
+  const contentParts = [{ type: 'text', text: userTextContent }];
+  for (const img of imageAttachments.slice(0, 4)) {
+    contentParts.push({
+      type: 'image_url',
+      image_url: {
+        url: `data:${img.mimeType};base64,${img.base64}`,
+        detail: 'auto',
+      },
+    });
+  }
+
+  return { role: 'user', content: contentParts };
+}
+
+function buildStructuredStudyMessages(options) {
+  const {
+    mode = 'explain',
+    selection,
+    pageContext,
+    pageUrl,
+    courseCode,
+    language = 'en',
+    chatHistory = [],
+    newUserMessage,
+    attachments = [],
+  } = options;
+
+  const selectionContext = resolveSelectionContext(selection, attachments);
+  const userQuestion = resolveUserQuestion(newUserMessage);
+
+  if (!selectionContext.hasSelection && !selectionContext.hasAttachments) {
+    throw new Error('Selection or attachments are required to generate a response');
+  }
+
+  const systemPrompt = buildSystemPrompt({
+    modeInstruction: buildModeInstruction(mode),
+    focusInstruction: buildFocusInstruction({
+      hasUserQuestion: userQuestion.hasUserQuestion,
+      hasAttachments: selectionContext.hasAttachments,
+      hasSelection: selectionContext.hasSelection,
+      selectionIsShort: selectionContext.selectionIsShort,
+    }),
+    contextInfo: buildContextInfo({ pageContext, pageUrl, courseCode }),
+    attachmentNote: buildAttachmentNote(selectionContext.hasAttachments),
+    selectionForPrompt: selectionContext.selectionForPrompt,
+  });
 
   // Build messages array starting with system prompt
   const messages = [{ role: 'system', content: systemPrompt }];
@@ -274,62 +379,23 @@ ${selectionForPrompt}${contextInfo}`;
   }
 
   // Build attachment context for text-based attachments (documents, code)
-  const textAttachments = (attachments || []).filter((a) => a.type !== 'image' && a.textContent);
-  let attachmentContext = '';
-  if (textAttachments.length > 0) {
-    const attachmentTexts = textAttachments.map((a) => {
-      const label = a.fileName || `${a.type} file`;
-      const content = buildAttachmentSnippet(a.textContent);
-      return `\n--- ${label} ---\n${content}`;
-    });
-    attachmentContext = `\n\nAttached files:${attachmentTexts.join('\n')}`;
-  }
-
-  // Add final user message (either follow-up or initial request)
-  let userTextContent;
-  if (hasUserQuestion) {
-    userTextContent = `The student has asked a follow-up question about the selected text and previous explanation:
-
-"${newUserMessage.trim()}"${attachmentContext}
-
-Using the selected text, the previous conversation, any attached files/images, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
-  } else if (hasAttachments && (!hasSelection || selectionIsShort)) {
-    userTextContent = `Analyze the attached files/images as the primary source of context. The selected text is minimal or missing, so treat it as optional background. Return ONLY the structured JSON response described in the system message.${attachmentContext}`;
-  } else {
-    userTextContent = `Analyze the selected text${attachmentContext ? ' and the attached files/images' : ''} and return the structured JSON response described in the system message.${attachmentContext}`;
-  }
-
-  // Check if we have image attachments for vision
-  const imageAttachments = (attachments || []).filter((a) => a.type === 'image' && a.base64);
-
-  // Build user message - use multimodal format if we have images
-  if (imageAttachments.length > 0) {
-    // Build multimodal content array for vision
-    const contentParts = [{ type: 'text', text: userTextContent }];
-
-    // Add image parts
-    for (const img of imageAttachments.slice(0, 4)) {
-      // Limit to 4 images
-      contentParts.push({
-        type: 'image_url',
-        image_url: {
-          url: `data:${img.mimeType};base64,${img.base64}`,
-          detail: 'auto', // Let the model decide detail level
-        },
-      });
-    }
-
-    messages.push({ role: 'user', content: contentParts });
-  } else {
-    messages.push({ role: 'user', content: userTextContent });
-  }
+  const attachmentContext = buildAttachmentContext(attachments);
+  const userTextContent = buildUserTextContent({
+    hasUserQuestion: userQuestion.hasUserQuestion,
+    userQuestion: userQuestion.userQuestion,
+    hasAttachments: selectionContext.hasAttachments,
+    hasSelection: selectionContext.hasSelection,
+    selectionIsShort: selectionContext.selectionIsShort,
+    attachmentContext,
+  });
+  messages.push(buildUserMessage(userTextContent, attachments));
 
   return {
     messages,
-    selectionForPrompt,
+    selectionForPrompt: selectionContext.selectionForPrompt,
     userTextContent,
-    hasAttachments,
-    hasUserQuestion,
+    hasAttachments: selectionContext.hasAttachments,
+    hasUserQuestion: userQuestion.hasUserQuestion,
     language,
   };
 }

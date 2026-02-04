@@ -105,6 +105,65 @@ async function buildFingerprint({
   return hashStringSha256(source);
 }
 
+function setCacheError(
+  setState: React.Dispatch<React.SetStateAction<TranscriptCacheState>>,
+  message: string,
+) {
+  setState((prev) => ({
+    ...prev,
+    status: 'error',
+    error: message,
+  }));
+}
+
+function ensureCacheReady(
+  apiClient: ApiClient | null,
+  input: TranscriptCacheInput,
+  setState: React.Dispatch<React.SetStateAction<TranscriptCacheState>>,
+): boolean {
+  if (!apiClient?.cacheTranscript) {
+    setCacheError(setState, 'Transcript caching is unavailable.');
+    return false;
+  }
+  if (!input?.transcript || !input?.video) {
+    setCacheError(setState, 'Transcript context is missing.');
+    return false;
+  }
+  return true;
+}
+
+async function resolveCachePayload(input: TranscriptCacheInput) {
+  const provider = input.video.provider || 'unknown';
+  const videoId = input.video.id || '';
+  const mediaUrl = resolveMediaUrl(input.video, input.meta);
+  const mediaUrlNormalized =
+    typeof input.meta?.mediaUrlNormalized === 'string'
+      ? normalizeMediaUrlForCache(input.meta.mediaUrlNormalized)
+      : normalizeMediaUrlForCache(mediaUrl);
+  const durationMs =
+    coerceNumber(input.meta?.durationMs) ??
+    coerceNumber(input.transcript.durationMs) ??
+    coerceNumber(input.video.durationMs);
+
+  const fingerprint =
+    input.fingerprint ||
+    (await buildFingerprint({
+      provider,
+      videoId,
+      mediaUrlNormalized,
+      durationMs,
+    }));
+
+  return {
+    provider,
+    videoId,
+    mediaUrl,
+    mediaUrlNormalized,
+    durationMs,
+    fingerprint,
+  };
+}
+
 export function useTranscriptCache(apiClient: ApiClient | null) {
   const [state, setState] = useState<TranscriptCacheState>(INITIAL_STATE);
   const cachedFingerprintsRef = useRef<Set<string>>(new Set());
@@ -112,44 +171,16 @@ export function useTranscriptCache(apiClient: ApiClient | null) {
 
   const cacheTranscript = useCallback(
     async (input: TranscriptCacheInput): Promise<{ fingerprint: string } | null> => {
-      if (!apiClient?.cacheTranscript) {
-        setState((prev) => ({
-          ...prev,
-          status: 'error',
-          error: 'Transcript caching is unavailable.',
-        }));
+      const client = apiClient;
+      if (!ensureCacheReady(client, input, setState)) {
+        return null;
+      }
+      if (!client?.cacheTranscript) {
         return null;
       }
 
-      if (!input?.transcript || !input?.video) {
-        setState((prev) => ({
-          ...prev,
-          status: 'error',
-          error: 'Transcript context is missing.',
-        }));
-        return null;
-      }
-
-      const provider = input.video.provider || 'unknown';
-      const videoId = input.video.id || '';
-      const mediaUrl = resolveMediaUrl(input.video, input.meta);
-      const mediaUrlNormalized =
-        typeof input.meta?.mediaUrlNormalized === 'string'
-          ? normalizeMediaUrlForCache(input.meta.mediaUrlNormalized)
-          : normalizeMediaUrlForCache(mediaUrl);
-      const durationMs =
-        coerceNumber(input.meta?.durationMs) ??
-        coerceNumber(input.transcript.durationMs) ??
-        coerceNumber(input.video.durationMs);
-
-      const fingerprint =
-        input.fingerprint ||
-        (await buildFingerprint({
-          provider,
-          videoId,
-          mediaUrlNormalized,
-          durationMs,
-        }));
+      const { provider, mediaUrl, mediaUrlNormalized, durationMs, fingerprint } =
+        await resolveCachePayload(input);
 
       if (cachedFingerprintsRef.current.has(fingerprint)) {
         setState((prev) => ({
@@ -180,7 +211,7 @@ export function useTranscriptCache(apiClient: ApiClient | null) {
           durationMs,
         };
 
-        await apiClient.cacheTranscript({
+        await client.cacheTranscript({
           fingerprint,
           provider,
           transcript: input.transcript,

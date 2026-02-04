@@ -6,10 +6,9 @@
  * @module services/auth/__tests__/strategies.test
  */
 
-const { describe, it, beforeEach, mock } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
 const {
   SymmetricVerifierStrategy,
   SupabaseSdkVerifierStrategy,

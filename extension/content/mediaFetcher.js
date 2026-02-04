@@ -54,6 +54,131 @@ function isCdnUrl(url) {
   }
 }
 
+function isRedirectResponse(response) {
+  return (
+    response.type === 'opaqueredirect' ||
+    response.status === 0 ||
+    (response.status >= 300 && response.status < 400)
+  );
+}
+
+async function fetchWithRedirectHandling(mediaUrl, signal) {
+  console.log('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
+  let response = await fetch(mediaUrl, {
+    method: 'GET',
+    credentials: 'include',
+    redirect: 'manual',
+    signal,
+  });
+
+  console.log('[Lock-in MediaFetcher] Initial response:', response.status, response.type);
+
+  if (!isRedirectResponse(response)) {
+    return { response };
+  }
+
+  const location = response.headers.get('location');
+  console.log('[Lock-in MediaFetcher] Redirect detected, location:', location);
+
+  if (location) {
+    if (isSsoRedirect(location)) {
+      console.log('[Lock-in MediaFetcher] SSO redirect detected - session expired');
+      return {
+        error: 'Your session has expired. Please refresh the page and log in again.',
+        errorCode: 'SESSION_EXPIRED',
+      };
+    }
+
+    const useCredentials = !isCdnUrl(location);
+    console.log(
+      '[Lock-in MediaFetcher] Following redirect to:',
+      location,
+      'with credentials:',
+      useCredentials,
+    );
+
+    response = await fetch(location, {
+      method: 'GET',
+      credentials: useCredentials ? 'include' : 'omit',
+      signal,
+    });
+    console.log('[Lock-in MediaFetcher] Redirect response:', response.status, response.statusText);
+    return { response };
+  }
+
+  console.log(
+    '[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials',
+  );
+  try {
+    response = await fetch(mediaUrl, {
+      method: 'GET',
+      credentials: 'same-origin',
+      signal,
+    });
+    console.log('[Lock-in MediaFetcher] Same-origin credentials fetch succeeded:', response.status);
+    return { response };
+  } catch (sameOriginError) {
+    console.log('[Lock-in MediaFetcher] Same-origin fetch failed:', sameOriginError.message);
+    console.log('[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)');
+    response = await fetch(mediaUrl, {
+      method: 'GET',
+      credentials: 'omit',
+      signal,
+    });
+  }
+
+  return { response };
+}
+
+async function streamResponseAsChunks(response, onChunk) {
+  const reader = response.body.getReader();
+  let buffer = new Uint8Array(0);
+  let chunkIndex = 0;
+  let totalBytesRead = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      if (buffer.length > 0) {
+        console.log(
+          '[Lock-in MediaFetcher] Sending final chunk:',
+          chunkIndex,
+          'size:',
+          buffer.length,
+        );
+        await onChunk(buffer, chunkIndex, true);
+      } else {
+        console.log(
+          '[Lock-in MediaFetcher] Buffer empty at end (exact chunk boundary), sending completion signal',
+        );
+        await onChunk(null, chunkIndex, true);
+      }
+      break;
+    }
+
+    const newBuffer = new Uint8Array(buffer.length + value.length);
+    newBuffer.set(buffer);
+    newBuffer.set(value, buffer.length);
+    buffer = newBuffer;
+    totalBytesRead += value.length;
+
+    while (buffer.length >= CHUNK_SIZE) {
+      const chunk = buffer.slice(0, CHUNK_SIZE);
+      buffer = buffer.slice(CHUNK_SIZE);
+
+      console.log('[Lock-in MediaFetcher] Sending chunk:', chunkIndex, 'size:', chunk.length);
+      await onChunk(chunk, chunkIndex, false);
+      chunkIndex++;
+    }
+  }
+
+  return {
+    totalBytesRead,
+    chunksCount: buffer.length > 0 ? chunkIndex + 1 : chunkIndex,
+  };
+}
+
 async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
   console.log('[Lock-in MediaFetcher] Starting media fetch:', mediaUrl);
 
@@ -65,92 +190,16 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
     // 4. credentials: 'include' + ACAO: * = CORS error
     // Solution: Handle redirects manually, use credentials for origin, omit for CDN
 
-    console.log('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
-    let response = await fetch(mediaUrl, {
-      method: 'GET',
-      credentials: 'include',
-      redirect: 'manual', // Don't auto-follow redirects
-      signal,
-    });
-
-    console.log('[Lock-in MediaFetcher] Initial response:', response.status, response.type);
-
-    // Handle redirects manually
-    if (
-      response.type === 'opaqueredirect' ||
-      response.status === 0 ||
-      (response.status >= 300 && response.status < 400)
-    ) {
-      // Try to get the redirect URL from headers (may not be available due to CORS)
-      const location = response.headers.get('location');
-      console.log('[Lock-in MediaFetcher] Redirect detected, location:', location);
-
-      if (location) {
-        // Check if redirecting to SSO (session expired)
-        if (isSsoRedirect(location)) {
-          console.log('[Lock-in MediaFetcher] SSO redirect detected - session expired');
-          return {
-            success: false,
-            error: 'Your session has expired. Please refresh the page and log in again.',
-            errorCode: 'SESSION_EXPIRED',
-          };
-        }
-
-        // Follow the redirect - use appropriate credentials mode
-        const useCredentials = !isCdnUrl(location);
-        console.log(
-          '[Lock-in MediaFetcher] Following redirect to:',
-          location,
-          'with credentials:',
-          useCredentials,
-        );
-
-        response = await fetch(location, {
-          method: 'GET',
-          credentials: useCredentials ? 'include' : 'omit',
-          signal,
-        });
-        console.log(
-          '[Lock-in MediaFetcher] Redirect response:',
-          response.status,
-          response.statusText,
-        );
-      } else {
-        // Can't get location header due to CORS - the redirect destination is cross-origin
-        // This typically means: Moodle (same-origin) redirects to CDN (cross-origin)
-        //
-        // Strategy: Use 'same-origin' credentials mode
-        // - This sends cookies to Moodle (same-origin) for auth
-        // - But omits cookies for the CDN (cross-origin), avoiding the CORS conflict
-        //   where CDN returns Access-Control-Allow-Origin: * which is incompatible with credentials
-        console.log(
-          '[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials',
-        );
-        try {
-          response = await fetch(mediaUrl, {
-            method: 'GET',
-            credentials: 'same-origin', // Credentials for origin only, not for CDN
-            signal,
-          });
-          console.log(
-            '[Lock-in MediaFetcher] Same-origin credentials fetch succeeded:',
-            response.status,
-          );
-        } catch (sameOriginError) {
-          // If same-origin also fails, the server might require 'include' for the initial request
-          // Try a two-step approach: HEAD to warm up auth, then GET without credentials
-          console.log('[Lock-in MediaFetcher] Same-origin fetch failed:', sameOriginError.message);
-          console.log(
-            '[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)',
-          );
-          response = await fetch(mediaUrl, {
-            method: 'GET',
-            credentials: 'omit',
-            signal,
-          });
-        }
-      }
+    const resolved = await fetchWithRedirectHandling(mediaUrl, signal);
+    if (resolved.errorCode) {
+      return {
+        success: false,
+        error: resolved.error,
+        errorCode: resolved.errorCode,
+      };
     }
+
+    const response = resolved.response;
 
     // Check final response
     if (!response.ok) {
@@ -180,56 +229,8 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
     const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
     console.log('[Lock-in MediaFetcher] Content-Length:', totalBytes);
 
-    const reader = response.body.getReader();
-    let buffer = new Uint8Array(0);
-    let chunkIndex = 0;
-    let totalBytesRead = 0;
-
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        // Send any remaining buffer as the last chunk
-        if (buffer.length > 0) {
-          console.log(
-            '[Lock-in MediaFetcher] Sending final chunk:',
-            chunkIndex,
-            'size:',
-            buffer.length,
-          );
-          await onChunk(buffer, chunkIndex, true);
-        } else {
-          // Edge case: media size was exactly a multiple of CHUNK_SIZE
-          // Buffer is empty but we still need to emit completion signal
-          // Send a completion signal without a payload
-          console.log(
-            '[Lock-in MediaFetcher] Buffer empty at end (exact chunk boundary), sending completion signal',
-          );
-          await onChunk(null, chunkIndex, true);
-        }
-        break;
-      }
-
-      // Append new data to buffer
-      const newBuffer = new Uint8Array(buffer.length + value.length);
-      newBuffer.set(buffer);
-      newBuffer.set(value, buffer.length);
-      buffer = newBuffer;
-      totalBytesRead += value.length;
-
-      // Send full chunks
-      while (buffer.length >= CHUNK_SIZE) {
-        const chunk = buffer.slice(0, CHUNK_SIZE);
-        buffer = buffer.slice(CHUNK_SIZE);
-
-        console.log('[Lock-in MediaFetcher] Sending chunk:', chunkIndex, 'size:', chunk.length);
-        await onChunk(chunk, chunkIndex, false);
-        chunkIndex++;
-      }
-    }
-
+    const { totalBytesRead, chunksCount } = await streamResponseAsChunks(response, onChunk);
     console.log('[Lock-in MediaFetcher] Fetch complete. Total bytes:', totalBytesRead);
-    const chunksCount = buffer.length > 0 ? chunkIndex + 1 : chunkIndex;
     return {
       success: true,
       totalBytes: totalBytesRead,

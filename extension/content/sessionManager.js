@@ -51,41 +51,61 @@
       return currentTabId;
     }
 
-    async function restoreSession() {
-      if (!Messaging || !chrome.runtime) return;
+    async function ensureTabId() {
       if (!currentTabId) {
         await getTabId();
       }
-      if (!currentTabId) return;
+      return currentTabId;
+    }
+
+    function getSessionFromResponse(response) {
+      return response?.data?.session || response?.session;
+    }
+
+    async function applySession(session) {
+      stateStore.setPendingPrefill(session.selection || '');
+      stateStore.setMode(session.mode || 'explain');
+
+      if (session.chatId) {
+        await stateStore.setChatId(session.chatId);
+      }
+
+      if (session.selection) {
+        await stateStore.setSidebarOpen(true);
+      }
+    }
+
+    async function shouldSkipSession(session) {
+      if (!session || !session.isActive) {
+        return true;
+      }
+
+      if (session.origin && origin && session.origin !== origin) {
+        log.debug('Origin changed, not restoring session');
+        await clearSession();
+        return true;
+      }
+
+      if (session.isClosed) {
+        log.debug('Session was closed by user');
+        return true;
+      }
+
+      return false;
+    }
+
+    async function restoreSession() {
+      if (!Messaging || !chrome.runtime) return;
+      const tabId = await ensureTabId();
+      if (!tabId) return;
 
       try {
         const response = await sendMessage(MESSAGE_TYPES.GET_SESSION);
         if (response && response.ok === false) return;
 
-        const session = response?.data?.session || response?.session;
-        if (!session || !session.isActive) return;
-
-        if (session.origin && origin && session.origin !== origin) {
-          log.debug('Origin changed, not restoring session');
-          await clearSession();
-          return;
-        }
-
-        if (session.isClosed) {
-          log.debug('Session was closed by user');
-          return;
-        }
-
-        stateStore.setPendingPrefill(session.selection || '');
-        stateStore.setMode(session.mode || 'explain');
-
-        if (session.chatId) {
-          await stateStore.setChatId(session.chatId);
-        }
-
-        if (session.selection) {
-          await stateStore.setSidebarOpen(true);
-        }
+        const session = getSessionFromResponse(response);
+        if (await shouldSkipSession(session)) return;
+        await applySession(session);
       } catch (error) {
         log.error('Failed to load session:', error);
       }

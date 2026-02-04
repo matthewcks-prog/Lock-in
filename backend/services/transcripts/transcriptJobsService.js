@@ -3,6 +3,12 @@ const transcriptsRepository = require('../../repositories/transcriptsRepository'
 const transcriptsService = require('./transcriptsService');
 const { cacheExternalTranscript } = require('./transcriptCacheService');
 const {
+  coerceNumber,
+  getStartOfTodayUTC,
+  normalizeMediaUrlForStorage,
+  sanitizeMediaUrlForStorage,
+} = require('./transcriptJobUtils');
+const {
   TRANSCRIPT_DAILY_JOB_LIMIT,
   TRANSCRIPT_CHUNK_MAX_BYTES,
   TRANSCRIPT_MAX_CONCURRENT_JOBS,
@@ -23,38 +29,6 @@ const JOB_STATUS = {
 };
 
 const UPLOADABLE_STATUSES = new Set([JOB_STATUS.CREATED, JOB_STATUS.UPLOADING]);
-
-function sanitizeMediaUrlForStorage(mediaUrl) {
-  if (!mediaUrl) return '';
-  try {
-    const url = new URL(mediaUrl);
-    url.hash = '';
-    url.search = '';
-    const segments = url.pathname.split('/').map((segment) => {
-      if (!segment) return segment;
-      if (segment.length > 32) return '[redacted]';
-      return segment;
-    });
-    url.pathname = segments.join('/');
-    return url.toString();
-  } catch {
-    return '';
-  }
-}
-
-function normalizeMediaUrlForStorage(mediaUrl) {
-  return sanitizeMediaUrlForStorage(mediaUrl);
-}
-
-function coerceNumber(value) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-}
-
-function getStartOfTodayUTC() {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-}
 
 async function enforceUploadRateLimit(repo, userId, bytes) {
   if (!userId || !Number.isFinite(TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE)) return;
@@ -88,6 +62,174 @@ function ensureValidChunkIndex(chunkIndex) {
   if (!Number.isInteger(chunkIndex) || chunkIndex < 0) {
     throw new ValidationError('Chunk index must be a non-negative integer', 'x-chunk-index');
   }
+}
+
+function parseChunkHeaders(headers) {
+  return {
+    chunkIndex: coerceNumber(headers?.['x-chunk-index']),
+    expectedTotalChunks: parseExpectedTotalChunks(headers?.['x-total-chunks']),
+  };
+}
+
+function ensureValidUploadPayload(jobId, chunk, chunkIndex) {
+  if (!jobId) {
+    throw new ValidationError('Job ID is required', 'id');
+  }
+  if (!Buffer.isBuffer(chunk) || chunk.length === 0) {
+    throw new ValidationError('Chunk payload is required', 'chunk');
+  }
+  if (Number.isFinite(TRANSCRIPT_CHUNK_MAX_BYTES) && chunk.length > TRANSCRIPT_CHUNK_MAX_BYTES) {
+    throw new AppError('Chunk exceeds maximum allowed size.', 'TRANSCRIPT_CHUNK_TOO_LARGE', 413, {
+      maxBytes: TRANSCRIPT_CHUNK_MAX_BYTES,
+    });
+  }
+  if (chunkIndex === null) {
+    throw new ValidationError('Chunk index header is required', 'x-chunk-index');
+  }
+  ensureValidChunkIndex(chunkIndex);
+}
+
+function ensureJobUploadable(job) {
+  if (job.status === JOB_STATUS.CANCELED) {
+    throw new AppError('This transcription job has been canceled.', 'TRANSCRIPT_CANCELED', 409);
+  }
+  if (!UPLOADABLE_STATUSES.has(job.status)) {
+    throw new AppError('Job is no longer accepting chunks.', 'TRANSCRIPT_INVALID_STATE', 409);
+  }
+}
+
+function ensureChunkIndexInRange(job, chunkIndex, expectedTotalChunks) {
+  if (job.expected_total_chunks && chunkIndex >= Number(job.expected_total_chunks)) {
+    throw new AppError(
+      'Chunk index exceeds expected total chunks.',
+      'TRANSCRIPT_CHUNK_OUT_OF_RANGE',
+      400,
+    );
+  }
+  if (
+    expectedTotalChunks &&
+    job.expected_total_chunks &&
+    expectedTotalChunks !== Number(job.expected_total_chunks)
+  ) {
+    throw new AppError(
+      'Expected total chunks header does not match job configuration.',
+      'TRANSCRIPT_TOTAL_CHUNKS_MISMATCH',
+      409,
+    );
+  }
+}
+
+async function updateJobUploadState({
+  repo,
+  job,
+  jobId,
+  userId,
+  chunkLength,
+  expectedTotalChunks,
+}) {
+  const bytesReceived = Number(job.bytes_received || 0);
+  const updates = {
+    status: job.status === JOB_STATUS.CREATED ? JOB_STATUS.UPLOADING : job.status,
+    error: null,
+    bytes_received: bytesReceived + chunkLength,
+  };
+
+  if (!job.expected_total_chunks && expectedTotalChunks) {
+    updates.expected_total_chunks = expectedTotalChunks;
+  }
+
+  const expectedCount = Number(updates.expected_total_chunks ?? job.expected_total_chunks);
+  if (Number.isFinite(expectedCount) && expectedCount > 0) {
+    const stats = await repo.getTranscriptJobChunkStats(jobId);
+    if (
+      stats.count === expectedCount &&
+      stats.minIndex === 0 &&
+      stats.maxIndex === expectedCount - 1
+    ) {
+      updates.status = JOB_STATUS.UPLOADED;
+    }
+  }
+
+  await repo.updateTranscriptJob({ jobId, userId, updates });
+}
+
+async function resolveFinalizeResponse(repo, job, userId) {
+  if (job.status === JOB_STATUS.DONE) {
+    const cached = await repo.getTranscriptByFingerprint({
+      fingerprint: job.fingerprint,
+      userId,
+    });
+    return {
+      success: true,
+      job: {
+        id: job.id,
+        status: JOB_STATUS.DONE,
+        transcript: cached?.transcript_json || null,
+      },
+    };
+  }
+
+  if (job.status === JOB_STATUS.CANCELED) {
+    return {
+      success: true,
+      job: { id: job.id, status: JOB_STATUS.CANCELED },
+    };
+  }
+
+  if (job.status === JOB_STATUS.ERROR) {
+    return {
+      success: true,
+      job: { id: job.id, status: JOB_STATUS.ERROR, error: job.error || null },
+    };
+  }
+
+  if (job.status === JOB_STATUS.PROCESSING && !isProcessingStale(job)) {
+    return {
+      success: true,
+      job: { id: job.id, status: JOB_STATUS.PROCESSING },
+    };
+  }
+
+  return null;
+}
+
+function resolveExpectedChunks(job, expectedTotalChunks) {
+  return (
+    job.expected_total_chunks ??
+    (expectedTotalChunks ? parseExpectedTotalChunks(expectedTotalChunks) : null)
+  );
+}
+
+async function ensureAllChunksPresent(repo, jobId, expectedChunks) {
+  if (!expectedChunks) {
+    throw new AppError(
+      'Expected total chunks not provided.',
+      'TRANSCRIPT_TOTAL_CHUNKS_REQUIRED',
+      400,
+    );
+  }
+
+  const stats = await repo.getTranscriptJobChunkStats(jobId);
+  if (
+    stats.count !== expectedChunks ||
+    stats.minIndex !== 0 ||
+    stats.maxIndex !== expectedChunks - 1
+  ) {
+    throw new AppError('Upload incomplete: missing chunks.', 'TRANSCRIPT_MISSING_CHUNKS', 400, {
+      expectedTotalChunks: expectedChunks,
+      receivedChunks: stats.count,
+    });
+  }
+}
+
+function buildProcessingUpdates(expectedChunks, languageHint, maxMinutes) {
+  return {
+    status: JOB_STATUS.PROCESSING,
+    error: null,
+    expected_total_chunks: expectedChunks,
+    language_hint: typeof languageHint === 'string' ? languageHint : null,
+    max_minutes: coerceNumber(maxMinutes),
+  };
 }
 
 function isProcessingStale(job) {
@@ -184,57 +326,17 @@ function createTranscriptJobsService(deps = {}) {
   }
 
   async function uploadChunk({ userId, jobId, chunk, headers } = {}) {
-    const chunkIndex = coerceNumber(headers?.['x-chunk-index']);
-    const expectedTotalChunks = parseExpectedTotalChunks(headers?.['x-total-chunks']);
+    const { chunkIndex, expectedTotalChunks } = parseChunkHeaders(headers);
 
-    if (!jobId) {
-      throw new ValidationError('Job ID is required', 'id');
-    }
-    if (!Buffer.isBuffer(chunk) || chunk.length === 0) {
-      throw new ValidationError('Chunk payload is required', 'chunk');
-    }
-    if (Number.isFinite(TRANSCRIPT_CHUNK_MAX_BYTES) && chunk.length > TRANSCRIPT_CHUNK_MAX_BYTES) {
-      throw new AppError('Chunk exceeds maximum allowed size.', 'TRANSCRIPT_CHUNK_TOO_LARGE', 413, {
-        maxBytes: TRANSCRIPT_CHUNK_MAX_BYTES,
-      });
-    }
-    if (chunkIndex === null) {
-      throw new ValidationError('Chunk index header is required', 'x-chunk-index');
-    }
-    ensureValidChunkIndex(chunkIndex);
+    ensureValidUploadPayload(jobId, chunk, chunkIndex);
 
     const job = await repo.getTranscriptJob({ jobId, userId });
     if (!job) {
       throw new NotFoundError('Transcript job', jobId);
     }
 
-    if (job.status === JOB_STATUS.CANCELED) {
-      throw new AppError('This transcription job has been canceled.', 'TRANSCRIPT_CANCELED', 409);
-    }
-
-    if (!UPLOADABLE_STATUSES.has(job.status)) {
-      throw new AppError('Job is no longer accepting chunks.', 'TRANSCRIPT_INVALID_STATE', 409);
-    }
-
-    if (job.expected_total_chunks && chunkIndex >= Number(job.expected_total_chunks)) {
-      throw new AppError(
-        'Chunk index exceeds expected total chunks.',
-        'TRANSCRIPT_CHUNK_OUT_OF_RANGE',
-        400,
-      );
-    }
-
-    if (
-      expectedTotalChunks &&
-      job.expected_total_chunks &&
-      expectedTotalChunks !== Number(job.expected_total_chunks)
-    ) {
-      throw new AppError(
-        'Expected total chunks header does not match job configuration.',
-        'TRANSCRIPT_TOTAL_CHUNKS_MISMATCH',
-        409,
-      );
-    }
+    ensureJobUploadable(job);
+    ensureChunkIndexInRange(job, chunkIndex, expectedTotalChunks);
 
     const bytesReceived = Number(job.bytes_received || 0);
     if (bytesReceived + chunk.length > TRANSCRIPT_MAX_TOTAL_BYTES) {
@@ -259,30 +361,14 @@ function createTranscriptJobsService(deps = {}) {
       await repo.deleteTranscriptJobChunk({ jobId, chunkIndex });
       throw error;
     }
-
-    const updates = {
-      status: job.status === JOB_STATUS.CREATED ? JOB_STATUS.UPLOADING : job.status,
-      error: null,
-      bytes_received: bytesReceived + chunk.length,
-    };
-
-    if (!job.expected_total_chunks && expectedTotalChunks) {
-      updates.expected_total_chunks = expectedTotalChunks;
-    }
-
-    const expectedCount = Number(updates.expected_total_chunks ?? job.expected_total_chunks);
-    if (Number.isFinite(expectedCount) && expectedCount > 0) {
-      const stats = await repo.getTranscriptJobChunkStats(jobId);
-      if (
-        stats.count === expectedCount &&
-        stats.minIndex === 0 &&
-        stats.maxIndex === expectedCount - 1
-      ) {
-        updates.status = JOB_STATUS.UPLOADED;
-      }
-    }
-
-    await repo.updateTranscriptJob({ jobId, userId, updates });
+    await updateJobUploadState({
+      repo,
+      job,
+      jobId,
+      userId,
+      chunkLength: chunk.length,
+      expectedTotalChunks,
+    });
 
     return { success: true };
   }
@@ -295,76 +381,18 @@ function createTranscriptJobsService(deps = {}) {
       throw new NotFoundError('Transcript job', jobId);
     }
 
-    if (job.status === JOB_STATUS.DONE) {
-      const cached = await repo.getTranscriptByFingerprint({
-        fingerprint: job.fingerprint,
-        userId,
-      });
-      return {
-        success: true,
-        job: {
-          id: job.id,
-          status: JOB_STATUS.DONE,
-          transcript: cached?.transcript_json || null,
-        },
-      };
+    const earlyResponse = await resolveFinalizeResponse(repo, job, userId);
+    if (earlyResponse) {
+      return earlyResponse;
     }
 
-    if (job.status === JOB_STATUS.CANCELED) {
-      return {
-        success: true,
-        job: { id: job.id, status: JOB_STATUS.CANCELED },
-      };
-    }
-
-    if (job.status === JOB_STATUS.ERROR) {
-      return {
-        success: true,
-        job: { id: job.id, status: JOB_STATUS.ERROR, error: job.error || null },
-      };
-    }
-
-    if (job.status === JOB_STATUS.PROCESSING && !isProcessingStale(job)) {
-      return {
-        success: true,
-        job: { id: job.id, status: JOB_STATUS.PROCESSING },
-      };
-    }
-
-    const expectedChunks =
-      job.expected_total_chunks ??
-      (expectedTotalChunks ? parseExpectedTotalChunks(expectedTotalChunks) : null);
-
-    if (!expectedChunks) {
-      throw new AppError(
-        'Expected total chunks not provided.',
-        'TRANSCRIPT_TOTAL_CHUNKS_REQUIRED',
-        400,
-      );
-    }
-
-    const stats = await repo.getTranscriptJobChunkStats(jobId);
-    if (
-      stats.count !== expectedChunks ||
-      stats.minIndex !== 0 ||
-      stats.maxIndex !== expectedChunks - 1
-    ) {
-      throw new AppError('Upload incomplete: missing chunks.', 'TRANSCRIPT_MISSING_CHUNKS', 400, {
-        expectedTotalChunks: expectedChunks,
-        receivedChunks: stats.count,
-      });
-    }
+    const expectedChunks = resolveExpectedChunks(job, expectedTotalChunks);
+    await ensureAllChunksPresent(repo, jobId, expectedChunks);
 
     await repo.updateTranscriptJob({
       jobId,
       userId,
-      updates: {
-        status: JOB_STATUS.PROCESSING,
-        error: null,
-        expected_total_chunks: expectedChunks,
-        language_hint: typeof languageHint === 'string' ? languageHint : null,
-        max_minutes: coerceNumber(maxMinutes),
-      },
+      updates: buildProcessingUpdates(expectedChunks, languageHint, maxMinutes),
     });
 
     processingService.startTranscriptProcessing(

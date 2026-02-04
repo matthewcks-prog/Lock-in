@@ -4,6 +4,27 @@ const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_BASE_DELAY_MS = 2000;
 const DEFAULT_MAX_DELAY_MS = 12000;
 const DEFAULT_JITTER_RATIO = 0.5;
+const RETRYABLE_ERROR_CODES = new Set([
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ENOTFOUND',
+  'ECONNREFUSED',
+  'EAI_AGAIN',
+  'EPIPE',
+  'ECONNABORTED',
+]);
+const RETRYABLE_MESSAGE_FRAGMENTS = [
+  'timeout',
+  'timed out',
+  'connection reset',
+  'socket hang up',
+  'connection error',
+  'network error',
+  'fetch failed',
+  'econnrefused',
+  'socket closed',
+  'unable to connect',
+];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,29 +42,26 @@ function getErrorMessage(error) {
   return error?.message || error?.error?.message || String(error);
 }
 
+function isRetryableStatus(status) {
+  if (status === 429) return true;
+  return status >= 500 && status <= 599;
+}
+
+function isRetryableCode(code) {
+  return code ? RETRYABLE_ERROR_CODES.has(code) : false;
+}
+
+function isRetryableMessage(message) {
+  const normalized = (message || '').toLowerCase();
+  return RETRYABLE_MESSAGE_FRAGMENTS.some((fragment) => normalized.includes(fragment));
+}
+
 function isRetryableError(error) {
   const status = getStatusCode(error);
-  if (status === 429) return true;
-  if (status >= 500 && status <= 599) return true;
-
+  if (isRetryableStatus(status)) return true;
   const code = getErrorCode(error);
-  if (code === 'ECONNRESET' || code === 'ETIMEDOUT') return true;
-  if (code === 'ENOTFOUND' || code === 'ECONNREFUSED' || code === 'EAI_AGAIN') return true;
-  if (code === 'EPIPE' || code === 'ECONNABORTED') return true;
-
-  const message = (getErrorMessage(error) || '').toLowerCase();
-  return (
-    message.includes('timeout') ||
-    message.includes('timed out') ||
-    message.includes('connection reset') ||
-    message.includes('socket hang up') ||
-    message.includes('connection error') ||
-    message.includes('network error') ||
-    message.includes('fetch failed') ||
-    message.includes('econnrefused') ||
-    message.includes('socket closed') ||
-    message.includes('unable to connect')
-  );
+  if (isRetryableCode(code)) return true;
+  return isRetryableMessage(getErrorMessage(error));
 }
 
 function shouldFallbackForError(error) {
@@ -117,15 +135,14 @@ async function attemptWithRetry(fn, provider, options) {
   throw lastError;
 }
 
-async function withRetryAndFallback(primaryFn, fallbackFn, options = {}) {
-  const parsedMaxRetries = Number.isFinite(options.maxRetries)
-    ? options.maxRetries
-    : Number.parseInt(options.maxRetries, 10);
-  const maxAttempts = Number.isFinite(parsedMaxRetries)
-    ? Math.max(1, parsedMaxRetries)
-    : DEFAULT_MAX_ATTEMPTS;
+function parseMaxAttempts(maxRetries) {
+  const parsed = Number.isFinite(maxRetries) ? maxRetries : Number.parseInt(maxRetries, 10);
+  return Number.isFinite(parsed) ? Math.max(1, parsed) : DEFAULT_MAX_ATTEMPTS;
+}
 
-  const config = {
+function buildRetryConfig(options) {
+  const maxAttempts = parseMaxAttempts(options.maxRetries);
+  return {
     operation: options.operation || 'llm-request',
     maxAttempts,
     baseDelayMs: options.baseDelayMs || DEFAULT_BASE_DELAY_MS,
@@ -135,33 +152,43 @@ async function withRetryAndFallback(primaryFn, fallbackFn, options = {}) {
     shouldFallback: options.shouldFallback || shouldFallbackForError,
     logger: options.logger || logStructured,
   };
+}
 
-  const primaryProvider = options.primaryProvider || 'primary';
-  const fallbackProvider = options.fallbackProvider || 'fallback';
-  const model = options.model;
-  const requestId = options.requestId;
-  const userId = options.userId;
+function trackUsageIfPresent(result, provider, config, meta) {
+  if (!result?.usage) return;
+  trackLlmUsage({
+    provider,
+    operation: config.operation,
+    model: meta.model || 'unknown',
+    promptTokens: result.usage.prompt_tokens || 0,
+    completionTokens: result.usage.completion_tokens || 0,
+    totalTokens: result.usage.total_tokens || 0,
+    userId: meta.userId,
+    requestId: meta.requestId,
+    latencyMs: Date.now() - meta.startTime,
+  });
+}
 
-  const startTime = Date.now();
+function resolveProviderNames(options) {
+  return {
+    primary: options.primaryProvider || 'primary',
+    fallback: options.fallbackProvider || 'fallback',
+  };
+}
+
+async function withRetryAndFallback(primaryFn, fallbackFn, options = {}) {
+  const config = buildRetryConfig(options);
+  const providers = resolveProviderNames(options);
+  const meta = {
+    model: options.model,
+    requestId: options.requestId,
+    userId: options.userId,
+    startTime: Date.now(),
+  };
 
   try {
-    const result = await attemptWithRetry(primaryFn, primaryProvider, config);
-
-    // Track LLM usage if result contains token info
-    if (result?.usage) {
-      trackLlmUsage({
-        provider: primaryProvider,
-        operation: config.operation,
-        model: model || 'unknown',
-        promptTokens: result.usage.prompt_tokens || 0,
-        completionTokens: result.usage.completion_tokens || 0,
-        totalTokens: result.usage.total_tokens || 0,
-        userId,
-        requestId,
-        latencyMs: Date.now() - startTime,
-      });
-    }
-
+    const result = await attemptWithRetry(primaryFn, providers.primary, config);
+    trackUsageIfPresent(result, providers.primary, config, meta);
     return result;
   } catch (primaryError) {
     if (!fallbackFn || !config.shouldFallback(primaryError)) {
@@ -170,30 +197,15 @@ async function withRetryAndFallback(primaryFn, fallbackFn, options = {}) {
 
     config.logger('warn', 'Falling back to secondary LLM provider', {
       operation: config.operation,
-      primaryProvider,
-      fallbackProvider,
+      primaryProvider: providers.primary,
+      fallbackProvider: providers.fallback,
       status: getStatusCode(primaryError),
       code: getErrorCode(primaryError),
       message: getErrorMessage(primaryError),
     });
 
-    const result = await attemptWithRetry(fallbackFn, fallbackProvider, config);
-
-    // Track LLM usage for fallback provider
-    if (result?.usage) {
-      trackLlmUsage({
-        provider: fallbackProvider,
-        operation: config.operation,
-        model: model || 'unknown',
-        promptTokens: result.usage.prompt_tokens || 0,
-        completionTokens: result.usage.completion_tokens || 0,
-        totalTokens: result.usage.total_tokens || 0,
-        userId,
-        requestId,
-        latencyMs: Date.now() - startTime,
-      });
-    }
-
+    const result = await attemptWithRetry(fallbackFn, providers.fallback, config);
+    trackUsageIfPresent(result, providers.fallback, config, meta);
     return result;
   }
 }

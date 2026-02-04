@@ -2,7 +2,7 @@
  * Unit tests for OpenAIAdapter
  */
 
-const { test, describe, beforeEach } = require('node:test');
+const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const { OpenAIAdapter } = require('../openaiAdapter');
 

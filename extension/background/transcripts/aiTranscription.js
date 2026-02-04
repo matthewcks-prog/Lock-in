@@ -19,6 +19,12 @@
     const jobs = new Map();
     const aiUtils = transcripts.aiUtils || {};
     const fetchWithRetry = networkUtils?.fetchWithRetry;
+    const uploadServiceFactory =
+      transcripts.aiTranscriptionUpload?.createAiTranscriptionUploadService;
+    const pollingServiceFactory =
+      transcripts.aiTranscriptionPolling?.createAiTranscriptionPollingService;
+    let uploadService = null;
+    let pollingService = null;
 
     function createProgressEmitter(tabId, requestId) {
       let lastStage = null;
@@ -105,6 +111,23 @@
       return data;
     }
 
+    uploadService =
+      uploadServiceFactory?.({
+        config,
+        aiUtils,
+        errors,
+        contentScriptMedia,
+        log,
+        chunkBytes: AI_UPLOAD_CHUNK_BYTES,
+      }) || null;
+    pollingService =
+      pollingServiceFactory?.({
+        config,
+        fetchJsonWithAuth,
+        pollIntervalMs: AI_POLL_INTERVAL_MS,
+        pollMaxAttempts: AI_POLL_MAX_ATTEMPTS,
+      }) || null;
+
     async function createTranscriptionJob({ token, payload, signal }) {
       const backendUrl = config.getBackendUrl();
       return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs`, token, {
@@ -117,13 +140,16 @@
 
     async function fetchMediaHeadMetadata(mediaUrl, signal) {
       try {
+        if (typeof fetchWithRetry !== 'function') {
+          throw new Error('Network utilities unavailable');
+        }
         const response = await fetchWithRetry(mediaUrl, {
           method: 'HEAD',
           credentials: 'include',
           signal,
         });
 
-        if (aiUtils.isAuthStatus(response.status)) {
+        if (aiUtils.isAuthStatus?.(response.status)) {
           return { authRequired: true };
         }
 
@@ -153,345 +179,167 @@
       }
     }
 
-    async function uploadMediaInChunks({
-      jobId,
-      mediaUrl,
-      token,
-      signal,
-      onProgress,
-      tabId,
-      requestId,
-    }) {
-      const backendUrl = config.getBackendUrl();
-      let uploadedBytes = 0;
-      let chunkIndex = 0;
-
-      const sendChunkToBackend = async (chunk, index, maxRetries = 5) => {
-        const headers = {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/octet-stream',
-          'x-chunk-index': String(index),
-        };
-
-        let lastError = null;
-        for (let attempt = 0; attempt < maxRetries; attempt += 1) {
-          if (signal?.aborted) {
-            throw new Error('CANCELED');
-          }
-
-          const response = await fetch(`${backendUrl}/api/transcripts/jobs/${jobId}/chunks`, {
-            method: 'PUT',
-            headers,
-            body: chunk,
-            signal,
-          });
-
-          if (response.ok) {
-            return response.json();
-          }
-
-          if (response.status === 429) {
-            const retryAfterHeader = response.headers.get('Retry-After');
-            let retryAfterMs;
-
-            if (retryAfterHeader) {
-              retryAfterMs = parseInt(retryAfterHeader, 10) * 1000;
-            } else {
-              retryAfterMs = Math.min(2000 * Math.pow(2, attempt), 32000);
-            }
-
-            log.info(
-              `Rate limited on chunk ${index}, retrying in ${retryAfterMs}ms (attempt ${
-                attempt + 1
-              }/${maxRetries})`,
-            );
-            await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
-            continue;
-          }
-
-          const text = await response.text();
-          let data = null;
-          try {
-            data = JSON.parse(text);
-          } catch {
-            /* ignore */
-          }
-          lastError = new Error(
-            data?.error?.message || data?.error || `Chunk upload failed: ${response.status}`,
-          );
-          break;
-        }
-
-        throw lastError || new Error(`Chunk ${index} upload failed after ${maxRetries} retries`);
+    function buildFailureResponse({ requestId, jobId, error, errorCode, status }) {
+      return {
+        success: false,
+        error: error || 'Failed to transcribe media.',
+        errorCode: errorCode || 'NOT_AVAILABLE',
+        jobId,
+        status: status || 'failed',
+        requestId,
       };
+    }
 
-      const SSO_DOMAINS = [
-        'okta.com',
-        'auth0.com',
-        'login.microsoftonline.com',
-        'accounts.google.com',
-      ];
-
-      const isSsoRedirect = (url) => {
-        try {
-          const hostname = new URL(url).hostname.toLowerCase();
-          return SSO_DOMAINS.some((domain) => hostname.includes(domain));
-        } catch {
-          return false;
-        }
+    function buildSuccessResponse({ requestId, jobId, transcript, cached }) {
+      return {
+        success: true,
+        transcript,
+        jobId,
+        status: 'completed',
+        cached: Boolean(cached),
+        requestId,
       };
+    }
 
-      const isCdnUrl = (url) => {
-        try {
-          const hostname = new URL(url).hostname.toLowerCase();
-          return (
-            hostname.includes('cloudfront.net') ||
-            hostname.includes('cdn.') ||
-            hostname.includes('akamai') ||
-            hostname.includes('fastly') ||
-            hostname.includes('cloudflare')
-          );
-        } catch {
-          return false;
-        }
+    function buildRequestContext(payload, sender) {
+      return {
+        video: payload?.video || null,
+        options: payload?.options || {},
+        requestId: payload?.requestId || `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+        tabId: sender?.tab?.id || null,
       };
+    }
 
-      let response;
-
-      try {
-        log.info('Attempting direct media fetch:', mediaUrl);
-
-        response = await fetch(mediaUrl, {
-          method: 'GET',
-          credentials: 'include',
-          redirect: 'manual',
-          signal,
-        });
-
-        log.info('Initial response:', response.status, response.type);
-
-        if (
-          response.type === 'opaqueredirect' ||
-          response.status === 0 ||
-          (response.status >= 300 && response.status < 400)
-        ) {
-          const location = response.headers.get('location');
-          log.info('Redirect detected, location:', location);
-
-          if (location) {
-            if (isSsoRedirect(location)) {
-              throw errors.createErrorWithCode(
-                'Your session has expired. Please refresh the page and log in again.',
-                'SESSION_EXPIRED',
-              );
-            }
-
-            const useCredentials = !isCdnUrl(location);
-            log.info('Following redirect, credentials:', useCredentials);
-
-            response = await fetch(location, {
-              method: 'GET',
-              credentials: useCredentials ? 'include' : 'omit',
-              signal,
-            });
-          } else {
-            log.info('No location header, falling back to content script');
-            throw errors.createErrorWithCode('CORS_BLOCKED', 'CORS_BLOCKED');
-          }
-        }
-
-        if (response.type === 'opaque') {
-          log.info('Got opaque response, will try content script fallback');
-          throw errors.createErrorWithCode('CORS_BLOCKED', 'CORS_BLOCKED');
-        }
-
-        if (!response.ok) {
-          if (aiUtils.isAuthStatus(response.status)) {
-            throw errors.createErrorWithCode(
-              'Authentication required. Please refresh the page and log in.',
-              'AUTH_REQUIRED',
-            );
-          }
-          throw errors.createErrorWithCode(`HTTP ${response.status}`, 'FETCH_ERROR');
-        }
-
-        log.info('Direct fetch successful');
-      } catch (error) {
-        const shouldFallback =
-          error?.code === 'CORS_BLOCKED' ||
-          error?.code === 'NOT_AVAILABLE' ||
-          (error?.message &&
-            (error.message.includes('CORS') ||
-              error.message.includes('opaque') ||
-              error.message.includes('Failed to fetch') ||
-              error.message.includes('NetworkError')));
-
-        if (shouldFallback && tabId) {
-          log.info('Trying content script fallback for media fetch');
-
-          try {
-            await contentScriptMedia.fetchMediaViaContentScript({
-              tabId,
-              mediaUrl,
-              jobId,
-              requestId,
-              onChunk: async (chunkBytes, index, isLast) => {
-                await sendChunkToBackend(chunkBytes, index);
-                uploadedBytes += chunkBytes.length;
-                if (onProgress) {
-                  onProgress({ bytesUploaded: uploadedBytes, chunkIndex: index });
-                }
-                chunkIndex = index + 1;
-              },
-            });
-
-            return {
-              chunkCount: chunkIndex,
-              totalChunks: chunkIndex,
-              totalBytes: uploadedBytes,
-              usedContentScript: true,
-            };
-          } catch (contentError) {
-            log.error('Content script fallback failed:', contentError);
-            throw errors.createErrorWithCode(
-              contentError?.message || 'Media could not be fetched via content script.',
-              contentError?.code || 'CONTENT_FETCH_ERROR',
-            );
-          }
-        }
-
-        if (error?.name === 'AbortError') throw error;
-        if (error?.code) throw error;
-
+    function ensureVideoEligible(video) {
+      if (aiUtils.isBlobUrl?.(video.mediaUrl)) {
         throw errors.createErrorWithCode(
-          'Media could not be fetched due to browser restrictions (CORS/opaque response) or network errors.',
+          'This video uses a blob URL and cannot be accessed for AI transcription.',
           'NOT_AVAILABLE',
         );
       }
 
-      if (!response.body || typeof response.body.getReader !== 'function') {
+      if (video.drmDetected) {
+        const reason = video.drmReason ? ` (${video.drmReason})` : '';
         throw errors.createErrorWithCode(
-          'Streaming not supported for this media.',
+          `This video appears to be DRM-protected${reason}. AI transcription is not available.`,
           'NOT_AVAILABLE',
         );
       }
+    }
 
-      const totalBytesHeader = response.headers.get('content-length');
-      const totalBytes = totalBytesHeader ? Number(totalBytesHeader) : null;
-      const totalChunks =
-        Number.isFinite(totalBytes) && totalBytes > 0
-          ? Math.ceil(totalBytes / AI_UPLOAD_CHUNK_BYTES)
-          : null;
-
-      const reader = response.body.getReader();
-      let pending = new Uint8Array(0);
-
-      const sendChunk = async (chunk, maxRetries = 5) => {
-        const headers = {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/octet-stream',
-          'x-chunk-index': String(chunkIndex),
-        };
-        if (totalChunks) {
-          headers['x-total-chunks'] = String(totalChunks);
-        }
-
-        let lastError = null;
-        for (let attempt = 0; attempt < maxRetries; attempt += 1) {
-          if (signal?.aborted) {
-            throw new Error('CANCELED');
-          }
-
-          const uploadResponse = await fetch(`${backendUrl}/api/transcripts/jobs/${jobId}/chunks`, {
-            method: 'PUT',
-            headers,
-            body: chunk,
-            signal,
-          });
-
-          if (uploadResponse.ok) {
-            chunkIndex += 1;
-            return;
-          }
-
-          if (uploadResponse.status === 429) {
-            const retryAfterHeader = uploadResponse.headers.get('Retry-After');
-            let retryAfterMs;
-
-            if (retryAfterHeader) {
-              retryAfterMs = parseInt(retryAfterHeader, 10) * 1000;
-            } else {
-              retryAfterMs = Math.min(2000 * Math.pow(2, attempt), 32000);
-            }
-
-            log.info(
-              `Rate limited on chunk ${chunkIndex}, retrying in ${retryAfterMs}ms (attempt ${
-                attempt + 1
-              }/${maxRetries})`,
-            );
-            await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
-            continue;
-          }
-
-          const text = await uploadResponse.text();
-          let data = null;
-          try {
-            data = JSON.parse(text);
-          } catch {
-            /* ignore */
-          }
-          lastError = new Error(
-            data?.error?.message ||
-              data?.error ||
-              `Failed to upload chunk ${chunkIndex}: ${uploadResponse.status}`,
-          );
-          break;
-        }
-
-        throw (
-          lastError || new Error(`Chunk ${chunkIndex} upload failed after ${maxRetries} retries`)
+    async function requireAuthToken() {
+      const token = await auth.getAuthToken();
+      if (!token) {
+        throw errors.createErrorWithCode(
+          'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
+          'LOCKIN_AUTH_REQUIRED',
         );
-      };
+      }
+      return token;
+    }
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (!value) continue;
+    function resolveExpectedTotalChunks(headInfo) {
+      const headContentLength = headInfo?.contentLength ? Number(headInfo.contentLength) : null;
+      return Number.isFinite(headContentLength) && headContentLength > 0
+        ? Math.ceil(headContentLength / AI_UPLOAD_CHUNK_BYTES)
+        : null;
+    }
 
-        const combined = new Uint8Array(pending.length + value.length);
-        combined.set(pending);
-        combined.set(value, pending.length);
-        pending = combined;
+    function buildFingerprintSource({ mediaUrlNormalized, headInfo, durationMs }) {
+      return [
+        mediaUrlNormalized,
+        headInfo?.etag || '',
+        headInfo?.lastModified || '',
+        headInfo?.contentLength || '',
+        durationMs || '',
+      ].join('|');
+    }
 
-        while (pending.length >= AI_UPLOAD_CHUNK_BYTES) {
-          const chunk = pending.slice(0, AI_UPLOAD_CHUNK_BYTES);
-          pending = pending.slice(AI_UPLOAD_CHUNK_BYTES);
-          await sendChunk(chunk);
-          uploadedBytes += chunk.length;
-          if (totalBytes) {
-            const percent = Math.round((uploadedBytes / totalBytes) * 100);
-            if (onProgress) {
-              onProgress({ percent });
-            }
-          } else if (onProgress && chunkIndex % 5 === 0) {
-            onProgress({ message: `Uploaded ${chunkIndex} chunks` });
-          }
-        }
+    async function buildFingerprint({ mediaUrlNormalized, headInfo, durationMs }) {
+      const source = buildFingerprintSource({ mediaUrlNormalized, headInfo, durationMs });
+      if (typeof aiUtils.hashStringSha256 !== 'function') {
+        return source;
+      }
+      return aiUtils.hashStringSha256(source);
+    }
+
+    function resolveFinalizeChunkCount(uploadStats, expectedTotalChunks) {
+      return uploadStats?.totalChunks || expectedTotalChunks || uploadStats?.chunkCount || null;
+    }
+
+    function requireUploadService() {
+      if (!uploadService) {
+        throw errors.createErrorWithCode('Upload service unavailable.', 'NOT_AVAILABLE');
+      }
+      return uploadService;
+    }
+
+    function requirePollingService() {
+      if (!pollingService) {
+        throw errors.createErrorWithCode('Polling service unavailable.', 'NOT_AVAILABLE');
+      }
+      return pollingService;
+    }
+
+    function resolveFailureResponse({ error, jobState, requestId }) {
+      const message = error instanceof Error ? error.message : String(error);
+      const errorCode = errors.getErrorCode(error);
+      const status = error?.status;
+
+      if (jobState.abortController.signal.aborted || message === 'CANCELED') {
+        return {
+          progress: { stage: 'canceled', message: 'Canceled.' },
+          response: buildFailureResponse({
+            requestId,
+            jobId: jobState.jobId,
+            error: 'Transcription canceled.',
+            errorCode: 'CANCELED',
+            status: 'canceled',
+          }),
+        };
       }
 
-      if (pending.length > 0) {
-        await sendChunk(pending);
-        uploadedBytes += pending.length;
-        if (totalBytes && onProgress) {
-          const percent = Math.round((uploadedBytes / totalBytes) * 100);
-          onProgress({ percent });
-        }
+      if (errorCode === 'LOCKIN_AUTH_REQUIRED') {
+        return {
+          progress: { stage: 'failed', message: 'Lock-in sign-in required.' },
+          response: buildFailureResponse({
+            requestId,
+            jobId: jobState.jobId,
+            error:
+              'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
+            errorCode: 'LOCKIN_AUTH_REQUIRED',
+            status: 'failed',
+          }),
+        };
+      }
+
+      if (
+        errorCode === 'AUTH_REQUIRED' ||
+        message === 'AUTH_REQUIRED' ||
+        aiUtils.isAuthStatus?.(status)
+      ) {
+        return {
+          progress: { stage: 'failed', message: 'Media authentication required.' },
+          response: buildFailureResponse({
+            requestId,
+            jobId: jobState.jobId,
+            error:
+              'Media authentication required. Please refresh the page and ensure you are logged in to the learning platform.',
+            errorCode: 'AUTH_REQUIRED',
+            status: 'failed',
+          }),
+        };
       }
 
       return {
-        chunkCount: chunkIndex,
-        totalChunks,
-        totalBytes,
+        progress: { stage: 'failed', message },
+        response: buildFailureResponse({
+          requestId,
+          jobId: jobState.jobId,
+          error: message || 'Failed to transcribe media.',
+          errorCode: errorCode || 'NOT_AVAILABLE',
+          status: 'failed',
+        }),
       };
     }
 
@@ -513,42 +361,6 @@
         body: JSON.stringify(payload),
         signal,
       });
-    }
-
-    async function pollTranscriptJob({ jobId, token, signal, onProgress }) {
-      const backendUrl = config.getBackendUrl();
-      for (let attempt = 0; attempt < AI_POLL_MAX_ATTEMPTS; attempt += 1) {
-        if (signal?.aborted) {
-          throw new Error('CANCELED');
-        }
-
-        const data = await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}`, token, {
-          method: 'GET',
-          signal,
-        });
-
-        const job = data?.job || data;
-        if ((job?.status === 'done' || job?.status === 'completed') && job.transcript) {
-          return job.transcript;
-        }
-        if (job?.status === 'error' || job?.status === 'failed') {
-          const errorMsg =
-            typeof job.error === 'string'
-              ? job.error
-              : job.error?.message || 'AI transcription failed';
-          throw new Error(errorMsg);
-        }
-        if (job?.status === 'canceled') {
-          throw new Error('CANCELED');
-        }
-
-        if (onProgress) {
-          onProgress({ message: 'Transcribing...' });
-        }
-        await new Promise((resolve) => setTimeout(resolve, AI_POLL_INTERVAL_MS));
-      }
-
-      throw new Error('AI transcription timed out');
     }
 
     async function cancelTranscriptJob({ jobId, token }) {
@@ -584,21 +396,16 @@
     }
 
     async function handleAiTranscriptionStart(payload, sender) {
-      const video = payload?.video;
-      const options = payload?.options || {};
-      const requestId =
-        payload?.requestId || `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const { video, options, requestId, tabId } = buildRequestContext(payload, sender);
 
       if (!video || !video.mediaUrl) {
-        return {
-          success: false,
+        return buildFailureResponse({
+          requestId,
           error: 'Media URL not available for AI transcription.',
           errorCode: 'NOT_AVAILABLE',
-          requestId,
-        };
+        });
       }
 
-      const tabId = sender?.tab?.id || null;
       const progress = createProgressEmitter(tabId, requestId);
       const abortController = new AbortController();
 
@@ -612,30 +419,12 @@
       progress('starting', { message: 'Preparing AI transcription...' });
 
       try {
-        if (aiUtils.isBlobUrl(video.mediaUrl)) {
-          throw errors.createErrorWithCode(
-            'This video uses a blob URL and cannot be accessed for AI transcription.',
-            'NOT_AVAILABLE',
-          );
-        }
+        ensureVideoEligible(video);
 
-        if (video.drmDetected) {
-          const reason = video.drmReason ? ` (${video.drmReason})` : '';
-          throw errors.createErrorWithCode(
-            `This video appears to be DRM-protected${reason}. AI transcription is not available.`,
-            'NOT_AVAILABLE',
-          );
-        }
-
-        const token = await auth.getAuthToken();
-        if (!token) {
-          throw errors.createErrorWithCode(
-            'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
-            'LOCKIN_AUTH_REQUIRED',
-          );
-        }
-
-        const mediaUrlNormalized = aiUtils.normalizeMediaUrl(video.mediaUrl);
+        const token = await requireAuthToken();
+        const mediaUrlNormalized = aiUtils.normalizeMediaUrl
+          ? aiUtils.normalizeMediaUrl(video.mediaUrl)
+          : video.mediaUrl;
         const headInfo = await fetchMediaHeadMetadata(video.mediaUrl, abortController.signal);
         if (headInfo?.authRequired) {
           throw errors.createErrorWithCode(
@@ -644,20 +433,12 @@
           );
         }
 
-        const headContentLength = headInfo?.contentLength ? Number(headInfo.contentLength) : null;
-        const expectedTotalChunks =
-          Number.isFinite(headContentLength) && headContentLength > 0
-            ? Math.ceil(headContentLength / AI_UPLOAD_CHUNK_BYTES)
-            : null;
-
-        const fingerprintSource = [
+        const expectedTotalChunks = resolveExpectedTotalChunks(headInfo);
+        const fingerprint = await buildFingerprint({
           mediaUrlNormalized,
-          headInfo?.etag || '',
-          headInfo?.lastModified || '',
-          headInfo?.contentLength || '',
-          video.durationMs || '',
-        ].join('|');
-        const fingerprint = await aiUtils.hashStringSha256(fingerprintSource);
+          headInfo,
+          durationMs: video.durationMs || null,
+        });
 
         const jobResponse = await createTranscriptionJob({
           token,
@@ -674,14 +455,12 @@
 
         if (jobResponse?.job?.transcript) {
           progress('completed', { message: 'Transcript ready.' });
-          return {
-            success: true,
-            transcript: jobResponse.job.transcript,
-            jobId: jobResponse.job.id,
-            status: 'completed',
-            cached: true,
+          return buildSuccessResponse({
             requestId,
-          };
+            jobId: jobResponse.job.id,
+            transcript: jobResponse.job.transcript,
+            cached: true,
+          });
         }
 
         const jobId = jobResponse?.job?.id || jobResponse?.jobId;
@@ -692,7 +471,7 @@
         jobState.jobId = jobId;
         progress('uploading', { jobId, message: 'Uploading media...' });
 
-        const uploadStats = await uploadMediaInChunks({
+        const uploadStats = await requireUploadService().uploadMediaInChunks({
           jobId,
           mediaUrl: video.mediaUrl,
           token,
@@ -703,8 +482,10 @@
         });
 
         progress('processing', { jobId, message: 'Processing audio...' });
-        const expectedTotalChunksForFinalize =
-          uploadStats?.totalChunks || expectedTotalChunks || uploadStats?.chunkCount || null;
+        const expectedTotalChunksForFinalize = resolveFinalizeChunkCount(
+          uploadStats,
+          expectedTotalChunks,
+        );
         await finalizeTranscriptionJob({
           jobId,
           token,
@@ -714,7 +495,7 @@
         });
 
         progress('polling', { jobId, message: 'Transcribing...' });
-        const transcript = await pollTranscriptJob({
+        const transcript = await requirePollingService().pollTranscriptJob({
           jobId,
           token,
           signal: abortController.signal,
@@ -722,71 +503,18 @@
         });
 
         progress('completed', { jobId, message: 'Transcript ready.' });
-        return {
-          success: true,
-          transcript,
+        return buildSuccessResponse({
+          requestId,
           jobId,
-          status: 'completed',
-          requestId,
-        };
+          transcript,
+        });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const errorCode = errors.getErrorCode(error);
-        const status = error?.status;
-        if (abortController.signal.aborted || message === 'CANCELED') {
-          progress('canceled', { jobId: jobState.jobId, message: 'Canceled.' });
-          return {
-            success: false,
-            error: 'Transcription canceled.',
-            errorCode: 'CANCELED',
-            jobId: jobState.jobId,
-            status: 'canceled',
-            requestId,
-          };
-        }
-        if (errorCode === 'LOCKIN_AUTH_REQUIRED') {
-          progress('failed', {
-            jobId: jobState.jobId,
-            message: 'Lock-in sign-in required.',
-          });
-          return {
-            success: false,
-            error:
-              'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
-            errorCode: 'LOCKIN_AUTH_REQUIRED',
-            jobId: jobState.jobId,
-            status: 'failed',
-            requestId,
-          };
-        }
-        if (
-          errorCode === 'AUTH_REQUIRED' ||
-          message === 'AUTH_REQUIRED' ||
-          aiUtils.isAuthStatus(status)
-        ) {
-          progress('failed', {
-            jobId: jobState.jobId,
-            message: 'Media authentication required.',
-          });
-          return {
-            success: false,
-            error:
-              'Media authentication required. Please refresh the page and ensure you are logged in to the learning platform.',
-            errorCode: 'AUTH_REQUIRED',
-            jobId: jobState.jobId,
-            status: 'failed',
-            requestId,
-          };
-        }
-        progress('failed', { jobId: jobState.jobId, message });
-        return {
-          success: false,
-          error: message || 'Failed to transcribe media.',
-          errorCode: errorCode || 'NOT_AVAILABLE',
+        const failure = resolveFailureResponse({ error, jobState, requestId });
+        progress(failure.progress.stage, {
           jobId: jobState.jobId,
-          status: 'failed',
-          requestId,
-        };
+          message: failure.progress.message,
+        });
+        return failure.response;
       } finally {
         jobs.delete(requestId);
       }

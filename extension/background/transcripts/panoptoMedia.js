@@ -11,6 +11,47 @@
   }) {
     const PanoptoMediaResolver = panoptoResolver?.PanoptoMediaResolver;
 
+    function buildFailure(error, errorCode) {
+      return {
+        success: false,
+        error,
+        errorCode,
+      };
+    }
+
+    async function resolvePanoptoInfo(video) {
+      if (video?.panoptoTenant && video?.id) {
+        return { info: { tenant: video.panoptoTenant, deliveryId: video.id } };
+      }
+
+      if (video?.embedUrl && typeof transcriptProviders?.extractPanoptoInfo === 'function') {
+        const info = transcriptProviders.extractPanoptoInfo(video.embedUrl);
+        if (info) {
+          return { info };
+        }
+      }
+
+      if (
+        video?.embedUrl &&
+        typeof transcriptProviders?.resolvePanoptoInfoFromWrapperUrl === 'function'
+      ) {
+        const fetcher = createExtensionFetcher();
+        const resolved = await transcriptProviders.resolvePanoptoInfoFromWrapperUrl(
+          video.embedUrl,
+          fetcher,
+        );
+        if (resolved.authRequired) {
+          return {
+            error: 'Authentication required. Please log in to Panopto.',
+            errorCode: 'AUTH_REQUIRED',
+          };
+        }
+        return { info: resolved.info };
+      }
+
+      return { info: null };
+    }
+
     async function fetchPanoptoMediaUrl(video, options = {}) {
       log.info('Fetching Panopto media URL for AI transcription');
       log.info('Video:', {
@@ -21,59 +62,29 @@
       });
 
       if (video?.provider !== 'panopto') {
-        return {
-          success: false,
-          error: 'Not a Panopto video',
-        };
+        return buildFailure('Not a Panopto video');
       }
 
       try {
         const tabId = options?.tabId || null;
-        let resolvedInfo = null;
+        const resolution = await resolvePanoptoInfo(video);
+        if (resolution.error) {
+          return buildFailure(resolution.error, resolution.errorCode);
+        }
+        const resolvedInfo = resolution.info;
 
-        if (video?.panoptoTenant && video?.id) {
-          resolvedInfo = { tenant: video.panoptoTenant, deliveryId: video.id };
-        } else if (
-          video?.embedUrl &&
-          typeof transcriptProviders?.extractPanoptoInfo === 'function'
-        ) {
-          resolvedInfo = transcriptProviders.extractPanoptoInfo(video.embedUrl);
+        if (!resolvedInfo) {
+          return buildFailure(
+            'Could not resolve this Panopto link. Open the video once and try again.',
+            'NOT_AVAILABLE',
+          );
         }
 
         if (
-          !resolvedInfo &&
-          video?.embedUrl &&
-          typeof transcriptProviders?.resolvePanoptoInfoFromWrapperUrl === 'function'
+          !PanoptoMediaResolver ||
+          typeof transcriptProviders?.buildPanoptoEmbedUrl !== 'function'
         ) {
-          const fetcher = createExtensionFetcher();
-          const resolved = await transcriptProviders.resolvePanoptoInfoFromWrapperUrl(
-            video.embedUrl,
-            fetcher,
-          );
-          if (resolved.authRequired) {
-            return {
-              success: false,
-              error: 'Authentication required. Please log in to Panopto.',
-              errorCode: 'AUTH_REQUIRED',
-            };
-          }
-          resolvedInfo = resolved.info;
-        }
-
-        if (!resolvedInfo) {
-          return {
-            success: false,
-            error: 'Could not resolve this Panopto link. Open the video once and try again.',
-            errorCode: 'NOT_AVAILABLE',
-          };
-        }
-
-        if (typeof transcriptProviders?.buildPanoptoEmbedUrl !== 'function') {
-          return {
-            success: false,
-            error: 'Panopto helpers are not available.',
-            errorCode: 'NOT_AVAILABLE',
-          };
+          return buildFailure('Panopto helpers are not available.', 'NOT_AVAILABLE');
         }
 
         const resolvedEmbedUrl = transcriptProviders.buildPanoptoEmbedUrl(

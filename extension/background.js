@@ -39,7 +39,12 @@ try {
   console.warn('Lock-in: Failed to import networkUtils.js:', e);
 }
 try {
-  importScripts('src/panoptoResolver.js');
+  importScripts(
+    'src/panoptoResolverHelpers.js',
+    'src/panoptoResolverRuntime.js',
+    'src/panoptoResolverNetwork.js',
+    'src/panoptoResolver.js',
+  );
 } catch (e) {
   console.warn('Lock-in: Failed to import panoptoResolver.js:', e);
 }
@@ -66,6 +71,8 @@ try {
     'background/transcripts/panoptoMedia.js',
     'background/transcripts/aiUtils.js',
     'background/transcripts/contentScriptMedia.js',
+    'background/transcripts/aiTranscriptionUpload.js',
+    'background/transcripts/aiTranscriptionPolling.js',
     'background/transcripts/aiTranscription.js',
     'background/handlers/sessionHandlers.js',
     'background/handlers/settingsHandlers.js',

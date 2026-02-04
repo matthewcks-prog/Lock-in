@@ -16,6 +16,124 @@ import {
   resolvePanoptoViewerUrl,
 } from './extraction';
 
+function buildCandidateUrls(video: DetectedVideo): string[] {
+  const candidateUrls: string[] = [];
+  if (video.panoptoTenant && video.id) {
+    candidateUrls.push(
+      buildPanoptoEmbedUrl(video.panoptoTenant, video.id),
+      buildPanoptoViewerUrl(video.panoptoTenant, video.id),
+    );
+  }
+
+  const primaryEmbedUrl = resolvePanoptoEmbedUrl(video);
+  const viewerUrl = resolvePanoptoViewerUrl(video);
+  if (primaryEmbedUrl) {
+    candidateUrls.push(primaryEmbedUrl);
+  }
+  if (viewerUrl) {
+    candidateUrls.push(viewerUrl);
+  }
+
+  candidateUrls.push(video.embedUrl);
+  return Array.from(new Set(candidateUrls.filter(Boolean)));
+}
+
+async function fetchPanoptoHtml(fetcher: EnhancedAsyncFetcher, url: string) {
+  if (hasRedirectSupport(fetcher) && fetcher.fetchHtmlWithRedirectInfo) {
+    return fetcher.fetchHtmlWithRedirectInfo(url);
+  }
+  const html = await fetcher.fetchWithCredentials(url);
+  return { html, finalUrl: url };
+}
+
+async function extractTranscriptFromUrl(
+  url: string,
+  fetcher: EnhancedAsyncFetcher,
+  enqueueCandidate: (candidate: string | null) => void,
+  onFetched: () => void,
+): Promise<TranscriptExtractionResult | null> {
+  const { html, finalUrl } = await fetchPanoptoHtml(fetcher, url);
+  onFetched();
+
+  const captionUrl = extractCaptionVttUrl(html);
+  if (!captionUrl) {
+    if (hasHtmlParsingSupport(fetcher) && fetcher.extractPanoptoInfoFromHtml) {
+      const resolvedInfo = extractPanoptoInfo(finalUrl);
+      const fromHtml = fetcher.extractPanoptoInfoFromHtml(html, finalUrl || url);
+      const info = resolvedInfo || fromHtml?.info;
+
+      if (fromHtml?.url) {
+        enqueueCandidate(fromHtml.url);
+      }
+      if (info) {
+        enqueueCandidate(buildPanoptoEmbedUrl(info.tenant, info.deliveryId));
+        enqueueCandidate(buildPanoptoViewerUrl(info.tenant, info.deliveryId));
+      }
+    }
+    return null;
+  }
+
+  const resolvedCaptionUrl = resolveCaptionUrl(captionUrl, finalUrl);
+  const vttContent = await fetcher.fetchWithCredentials(resolvedCaptionUrl);
+  const transcript = parseWebVtt(vttContent);
+
+  if (transcript.segments.length === 0) {
+    return {
+      success: false,
+      error: 'Caption file is empty or could not be parsed',
+      errorCode: 'PARSE_ERROR',
+      aiTranscriptionAvailable: true,
+    };
+  }
+
+  return {
+    success: true,
+    transcript,
+  };
+}
+
+function mapPanoptoError(message: string): TranscriptExtractionResult {
+  if (message === 'AUTH_REQUIRED') {
+    return {
+      success: false,
+      error: 'Authentication required. Please log in to Panopto.',
+      errorCode: 'AUTH_REQUIRED',
+      aiTranscriptionAvailable: true,
+    };
+  }
+
+  if (message.includes('timeout') || message.includes('AbortError')) {
+    return {
+      success: false,
+      error: 'Request timeout. The server took too long to respond.',
+      errorCode: 'TIMEOUT',
+      aiTranscriptionAvailable: true,
+    };
+  }
+
+  if (
+    message.includes('Failed to fetch') ||
+    message.includes('NetworkError') ||
+    message.includes('CORS') ||
+    message.includes('Network request failed')
+  ) {
+    return {
+      success: false,
+      error:
+        "Network error. Please check your internet connection and ensure you're logged into Panopto.",
+      errorCode: 'NETWORK_ERROR',
+      aiTranscriptionAvailable: true,
+    };
+  }
+
+  return {
+    success: false,
+    error: `Failed to extract transcript: ${message}`,
+    errorCode: 'PARSE_ERROR',
+    aiTranscriptionAvailable: true,
+  };
+}
+
 /**
  * Panopto transcript provider implementation
  */
@@ -96,26 +214,7 @@ export class PanoptoProvider implements TranscriptProviderV2 {
         };
       }
 
-      const candidateUrls: string[] = [];
-      if (video.panoptoTenant && video.id) {
-        candidateUrls.push(
-          buildPanoptoEmbedUrl(video.panoptoTenant, video.id),
-          buildPanoptoViewerUrl(video.panoptoTenant, video.id),
-        );
-      }
-
-      const primaryEmbedUrl = resolvePanoptoEmbedUrl(video);
-      const viewerUrl = resolvePanoptoViewerUrl(video);
-
-      if (primaryEmbedUrl) {
-        candidateUrls.push(primaryEmbedUrl);
-      }
-      if (viewerUrl) {
-        candidateUrls.push(viewerUrl);
-      }
-
-      candidateUrls.push(video.embedUrl);
-      const pendingUrls = Array.from(new Set(candidateUrls.filter(Boolean)));
+      const pendingUrls = buildCandidateUrls(video);
       const visitedUrls = new Set<string>();
       let anyFetched = false;
       let primaryError: unknown = null;
@@ -127,66 +226,15 @@ export class PanoptoProvider implements TranscriptProviderV2 {
         pendingUrls.push(candidate);
       };
 
-      const extractFromUrl = async (url: string): Promise<TranscriptExtractionResult | null> => {
-        let html: string;
-        let finalUrl: string;
-
-        if (hasRedirectSupport(fetcher) && fetcher.fetchHtmlWithRedirectInfo) {
-          const result = await fetcher.fetchHtmlWithRedirectInfo(url);
-          html = result.html;
-          finalUrl = result.finalUrl;
-        } else {
-          html = await fetcher.fetchWithCredentials(url);
-          finalUrl = url;
-        }
-
-        anyFetched = true;
-
-        const captionUrl = extractCaptionVttUrl(html);
-
-        if (!captionUrl) {
-          if (hasHtmlParsingSupport(fetcher) && fetcher.extractPanoptoInfoFromHtml) {
-            const resolvedInfo = extractPanoptoInfo(finalUrl);
-            const fromHtml = fetcher.extractPanoptoInfoFromHtml(html, finalUrl || url);
-            const info = resolvedInfo || fromHtml?.info;
-
-            if (fromHtml?.url) {
-              enqueueCandidate(fromHtml.url);
-            }
-            if (info) {
-              enqueueCandidate(buildPanoptoEmbedUrl(info.tenant, info.deliveryId));
-              enqueueCandidate(buildPanoptoViewerUrl(info.tenant, info.deliveryId));
-            }
-          }
-          return null;
-        }
-
-        const resolvedCaptionUrl = resolveCaptionUrl(captionUrl, finalUrl);
-        const vttContent = await fetcher.fetchWithCredentials(resolvedCaptionUrl);
-        const transcript = parseWebVtt(vttContent);
-
-        if (transcript.segments.length === 0) {
-          return {
-            success: false,
-            error: 'Caption file is empty or could not be parsed',
-            errorCode: 'PARSE_ERROR',
-            aiTranscriptionAvailable: true,
-          };
-        }
-
-        return {
-          success: true,
-          transcript,
-        };
-      };
-
       while (pendingUrls.length > 0) {
         const url = pendingUrls.shift();
         if (!url || visitedUrls.has(url)) continue;
         visitedUrls.add(url);
 
         try {
-          const result = await extractFromUrl(url);
+          const result = await extractTranscriptFromUrl(url, fetcher, enqueueCandidate, () => {
+            anyFetched = true;
+          });
           if (result) {
             return result;
           }
@@ -213,46 +261,7 @@ export class PanoptoProvider implements TranscriptProviderV2 {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-
-      if (message === 'AUTH_REQUIRED') {
-        return {
-          success: false,
-          error: 'Authentication required. Please log in to Panopto.',
-          errorCode: 'AUTH_REQUIRED',
-          aiTranscriptionAvailable: true,
-        };
-      }
-
-      if (message.includes('timeout') || message.includes('AbortError')) {
-        return {
-          success: false,
-          error: 'Request timeout. The server took too long to respond.',
-          errorCode: 'TIMEOUT',
-          aiTranscriptionAvailable: true,
-        };
-      }
-
-      if (
-        message.includes('Failed to fetch') ||
-        message.includes('NetworkError') ||
-        message.includes('CORS') ||
-        message.includes('Network request failed')
-      ) {
-        return {
-          success: false,
-          error:
-            "Network error. Please check your internet connection and ensure you're logged into Panopto.",
-          errorCode: 'NETWORK_ERROR',
-          aiTranscriptionAvailable: true,
-        };
-      }
-
-      return {
-        success: false,
-        error: `Failed to extract transcript: ${message}`,
-        errorCode: 'PARSE_ERROR',
-        aiTranscriptionAvailable: true,
-      };
+      return mapPanoptoError(message);
     }
   }
 }

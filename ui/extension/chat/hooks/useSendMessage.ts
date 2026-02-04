@@ -83,6 +83,94 @@ function formatSendError(error: Error): string {
   return error?.message || 'We could not process this request. Try again in a moment.';
 }
 
+function buildChatHistory(params: SendMessageMutationParams): ChatHistoryEntry[] {
+  const baseHistorySource = params.chatHistory ?? params.currentMessages;
+  return baseHistorySource.map((msg) => ({
+    role: msg.role === 'assistant' ? 'assistant' : 'user',
+    content: msg.content,
+  }));
+}
+
+function resolveApiChatId(params: SendMessageMutationParams): string | undefined {
+  return typeof params.chatId === 'string' && isValidUUID(params.chatId)
+    ? params.chatId
+    : undefined;
+}
+
+function resolveSelectionPayload(params: SendMessageMutationParams): string {
+  return params.selectionOverride !== undefined ? params.selectionOverride : params.message;
+}
+
+function resolveUserMessagePayload(params: SendMessageMutationParams): string | undefined {
+  return params.source === 'followup' ? (params.userMessageOverride ?? params.message) : undefined;
+}
+
+function resolveIdempotencyKey(params: SendMessageMutationParams): string {
+  return params.idempotencyKey || buildIdempotencyKey(params);
+}
+
+async function cacheTranscriptIfNeeded(
+  cacheTranscript: (input: TranscriptCacheInput) => Promise<{ fingerprint: string } | null>,
+  transcriptContext?: TranscriptCacheInput,
+) {
+  if (!transcriptContext) return;
+  cacheTranscript(transcriptContext).catch((error) => {
+    console.warn('[Lock-in] Failed to cache transcript for chat:', error);
+  });
+}
+
+async function sendMessageMutation(
+  params: SendMessageMutationParams,
+  deps: {
+    apiClient: UseSendMessageOptions['apiClient'];
+    pageUrl?: string;
+    courseCode?: string | null;
+    cacheTranscript: (input: TranscriptCacheInput) => Promise<{ fingerprint: string } | null>;
+    abortControllerRef: React.MutableRefObject<AbortController | null>;
+  },
+) {
+  const { apiClient, pageUrl, courseCode, cacheTranscript, abortControllerRef } = deps;
+
+  if (abortControllerRef.current) {
+    abortControllerRef.current.abort();
+  }
+  abortControllerRef.current = new AbortController();
+
+  if (!apiClient?.processText) {
+    throw new Error('API client not available');
+  }
+
+  await cacheTranscriptIfNeeded(cacheTranscript, params.transcriptContext);
+
+  const baseHistory = buildChatHistory(params);
+  const apiChatId = resolveApiChatId(params);
+  const selectionPayload = resolveSelectionPayload(params);
+  const userMessagePayload = resolveUserMessagePayload(params);
+  const idempotencyKey = resolveIdempotencyKey(params);
+
+  const response = await apiClient.processText({
+    selection: selectionPayload,
+    mode: params.mode,
+    chatHistory: baseHistory,
+    newUserMessage: userMessagePayload,
+    chatId: apiChatId,
+    pageUrl: params.pageUrl || pageUrl,
+    courseCode: params.courseCode ?? courseCode ?? undefined,
+    attachments: params.attachmentIds,
+    idempotencyKey,
+  });
+
+  const explanation = response?.data?.explanation || `(${params.mode}) ${params.message}`;
+  const resolvedChatId = response?.chatId || params.chatId || `chat-${Date.now()}`;
+
+  return {
+    explanation,
+    chatId: response?.chatId,
+    chatTitle: response?.chatTitle,
+    resolvedChatId,
+  };
+}
+
 /**
  * Hook for sending messages with cancellation and optimistic updates.
  *
@@ -114,57 +202,13 @@ export function useSendMessage(options: UseSendMessageOptions) {
   >({
     retry: false,
     mutationFn: async (params) => {
-      // Cancel any previous pending request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
-
-      if (!apiClient?.processText) {
-        throw new Error('API client not available');
-      }
-
-      if (params.transcriptContext) {
-        cacheTranscript(params.transcriptContext).catch((error) => {
-          console.warn('[Lock-in] Failed to cache transcript for chat:', error);
-        });
-      }
-
-      const baseHistorySource = params.chatHistory ?? params.currentMessages;
-      const baseHistory: ChatHistoryEntry[] = baseHistorySource.map((msg) => ({
-        role: msg.role === 'assistant' ? 'assistant' : 'user',
-        content: msg.content,
-      }));
-
-      const apiChatId =
-        typeof params.chatId === 'string' && isValidUUID(params.chatId) ? params.chatId : undefined;
-      const selectionPayload =
-        params.selectionOverride !== undefined ? params.selectionOverride : params.message;
-      const userMessagePayload =
-        params.source === 'followup' ? (params.userMessageOverride ?? params.message) : undefined;
-      const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
-
-      const response = await apiClient.processText({
-        selection: selectionPayload,
-        mode: params.mode,
-        chatHistory: baseHistory,
-        newUserMessage: userMessagePayload,
-        chatId: apiChatId,
-        pageUrl: params.pageUrl || pageUrl,
-        courseCode: params.courseCode ?? courseCode ?? undefined,
-        attachments: params.attachmentIds,
-        idempotencyKey,
+      return sendMessageMutation(params, {
+        apiClient,
+        pageUrl,
+        courseCode,
+        cacheTranscript,
+        abortControllerRef,
       });
-
-      const explanation = response?.data?.explanation || `(${params.mode}) ${params.message}`;
-      const resolvedChatId = response?.chatId || params.chatId || `chat-${Date.now()}`;
-
-      return {
-        explanation,
-        chatId: response?.chatId,
-        chatTitle: response?.chatTitle,
-        resolvedChatId,
-      };
     },
 
     onMutate: async (params): Promise<MutationContext> => {

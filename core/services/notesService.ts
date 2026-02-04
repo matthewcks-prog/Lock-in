@@ -189,49 +189,48 @@ function normalizeContent(raw: NoteRecord | null | undefined): NoteContent {
   return { ...DEFAULT_CONTENT };
 }
 
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
+
+function firstString(values: Array<unknown>): string | undefined {
+  for (const value of values) {
+    const candidate = readString(value);
+    if (candidate) return candidate;
+  }
+  return undefined;
+}
+
+function firstStringOrNull(values: Array<unknown>): string | null {
+  return firstString(values) ?? null;
+}
+
 function toDomainNote(raw: NoteRecord | null | undefined): Note {
   const record = raw ?? {};
   const content = normalizeContent(raw);
   const preview =
-    (typeof record.preview === 'string' ? record.preview : undefined) ||
-    (typeof record.content_text === 'string' ? record.content_text : undefined) ||
-    content.plainText ||
+    firstString([record.preview, record.content_text, content.plainText]) ||
     extractPlainTextFromEditorState(content.editorState);
 
   return {
-    id: typeof record.id === 'string' ? record.id : null,
-    title: typeof record.title === 'string' && record.title ? record.title : 'Untitled note',
+    id: readString(record.id) ?? null,
+    title: readNonEmptyString(record.title) ?? 'Untitled note',
     content,
-    sourceUrl:
-      (typeof record.source_url === 'string' ? record.source_url : undefined) ??
-      (typeof record.sourceUrl === 'string' ? record.sourceUrl : undefined) ??
-      null,
-    sourceSelection:
-      (typeof record.source_selection === 'string' ? record.source_selection : undefined) ??
-      (typeof record.sourceSelection === 'string' ? record.sourceSelection : undefined) ??
-      null,
-    courseCode:
-      (typeof record.course_code === 'string' ? record.course_code : undefined) ??
-      (typeof record.courseCode === 'string' ? record.courseCode : undefined) ??
-      null,
+    sourceUrl: firstStringOrNull([record.source_url, record.sourceUrl]),
+    sourceSelection: firstStringOrNull([record.source_selection, record.sourceSelection]),
+    courseCode: firstStringOrNull([record.course_code, record.courseCode]),
     noteType:
-      ((typeof record.note_type === 'string' ? record.note_type : undefined) as NoteType) ||
-      ((typeof record.noteType === 'string' ? record.noteType : undefined) as NoteType) ||
+      (readString(record.note_type) as NoteType) ||
+      (readString(record.noteType) as NoteType) ||
       'manual',
     tags: Array.isArray(record.tags) ? (record.tags as string[]) : [],
-    createdAt:
-      (typeof record.created_at === 'string' ? record.created_at : undefined) ??
-      (typeof record.createdAt === 'string' ? record.createdAt : undefined) ??
-      null,
-    updatedAt:
-      (typeof record.updated_at === 'string' ? record.updated_at : undefined) ??
-      (typeof record.updatedAt === 'string' ? record.updatedAt : undefined) ??
-      null,
-    linkedLabel:
-      (typeof record.linked_label === 'string' ? record.linked_label : undefined) ??
-      (typeof record.course_code === 'string' ? record.course_code : undefined) ??
-      (typeof record.courseCode === 'string' ? record.courseCode : undefined) ??
-      undefined,
+    createdAt: firstStringOrNull([record.created_at, record.createdAt]),
+    updatedAt: firstStringOrNull([record.updated_at, record.updatedAt]),
+    linkedLabel: firstString([record.linked_label, record.course_code, record.courseCode]),
     isStarred: Boolean(record.is_starred ?? record.isStarred),
     previewText: preview || '',
   };

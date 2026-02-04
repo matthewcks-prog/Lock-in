@@ -37,15 +37,7 @@ class GroqAdapter extends BaseAdapter {
     this.baseUrl = BASE_URL;
   }
 
-  /**
-   * Execute chat completion via Groq's OpenAI-compatible API
-   * @param {import('../contracts').ChatMessage[]} messages
-   * @param {import('../contracts').ChatCompletionOptions} [options]
-   * @returns {Promise<import('../contracts').ChatCompletionResult>}
-   */
-  async chatCompletion(messages, options = {}) {
-    const model = this._selectModel(messages, options);
-
+  _buildRequestBody(model, messages, options) {
     const requestBody = {
       model,
       messages: this._formatMessages(messages),
@@ -53,17 +45,36 @@ class GroqAdapter extends BaseAdapter {
       max_tokens: options.maxTokens ?? 1024,
     };
 
-    // Add JSON mode if requested
     if (options.responseFormat?.type === 'json_object') {
       requestBody.response_format = { type: 'json_object' };
     }
 
-    const url = `${this.baseUrl}/chat/completions`;
+    return requestBody;
+  }
+
+  _parseErrorDetails(errorBody) {
+    if (!errorBody) return '';
+    try {
+      const parsed = JSON.parse(errorBody);
+      return parsed.error?.message || errorBody.substring(0, 200);
+    } catch {
+      return errorBody.substring(0, 200);
+    }
+  }
+
+  async _buildHttpError(response) {
+    const errorBody = await response.text();
+    const errorDetails = this._parseErrorDetails(errorBody);
+    const error = new Error(`Groq API error: ${response.status} - ${errorDetails}`);
+    error.status = response.status;
+    return this.wrapError('chatCompletion', error);
+  }
+
+  async _executeRequest(url, requestBody) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -74,40 +85,60 @@ class GroqAdapter extends BaseAdapter {
         signal: controller.signal,
       });
 
-      clearTimeout(timeoutId);
-
       if (!response.ok) {
-        const errorBody = await response.text();
-        let errorDetails = '';
-        try {
-          const parsed = JSON.parse(errorBody);
-          errorDetails = parsed.error?.message || errorBody.substring(0, 200);
-        } catch {
-          errorDetails = errorBody.substring(0, 200);
-        }
-        const error = new Error(`Groq API error: ${response.status} - ${errorDetails}`);
-        error.status = response.status;
-        throw this.wrapError('chatCompletion', error);
+        throw await this._buildHttpError(response);
       }
 
-      const data = await response.json();
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
 
-      // Extract response content
-      const choice = data.choices?.[0];
-      if (!choice?.message?.content) {
-        throw this.wrapError('chatCompletion', new Error('No content in Groq response'));
-      }
+  _extractContent(data) {
+    const choice = data.choices?.[0];
+    if (!choice?.message?.content) {
+      throw this.wrapError('chatCompletion', new Error('No content in Groq response'));
+    }
+    return choice.message.content;
+  }
 
-      const content = choice.message.content;
+  _extractUsage(data) {
+    if (!data.usage) {
+      return null;
+    }
+    return {
+      prompt_tokens: data.usage.prompt_tokens || 0,
+      completion_tokens: data.usage.completion_tokens || 0,
+      total_tokens: data.usage.total_tokens || 0,
+    };
+  }
 
-      // Build usage stats
-      const usage = data.usage
-        ? {
-            prompt_tokens: data.usage.prompt_tokens || 0,
-            completion_tokens: data.usage.completion_tokens || 0,
-            total_tokens: data.usage.total_tokens || 0,
-          }
-        : null;
+  _wrapChatCompletionError(error) {
+    if (error.provider === this.getProviderName()) {
+      return error;
+    }
+    if (error.name === 'AbortError') {
+      return this.wrapError('chatCompletion', new Error('Request timed out after 60s'));
+    }
+    return this.wrapError('chatCompletion', error);
+  }
+
+  /**
+   * Execute chat completion via Groq's OpenAI-compatible API
+   * @param {import('../contracts').ChatMessage[]} messages
+   * @param {import('../contracts').ChatCompletionOptions} [options]
+   * @returns {Promise<import('../contracts').ChatCompletionResult>}
+   */
+  async chatCompletion(messages, options = {}) {
+    const model = this._selectModel(messages, options);
+    const requestBody = this._buildRequestBody(model, messages, options);
+    const url = `${this.baseUrl}/chat/completions`;
+
+    try {
+      const data = await this._executeRequest(url, requestBody);
+      const content = this._extractContent(data);
+      const usage = this._extractUsage(data);
 
       return {
         content,
@@ -116,16 +147,7 @@ class GroqAdapter extends BaseAdapter {
         usage,
       };
     } catch (error) {
-      if (error.provider === this.getProviderName()) {
-        throw error; // Already wrapped
-      }
-
-      // Handle abort/timeout
-      if (error.name === 'AbortError') {
-        throw this.wrapError('chatCompletion', new Error('Request timed out after 60s'));
-      }
-
-      throw this.wrapError('chatCompletion', error);
+      throw this._wrapChatCompletionError(error);
     }
   }
 

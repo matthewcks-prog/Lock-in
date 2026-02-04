@@ -1,34 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Note, NoteContent, NoteStatus } from '@core/domain/Note';
-import type { CreateNoteInput, NotesService, UpdateNoteInput } from '@core/services/notesService';
-import { MAX_SAVE_RETRIES, SAVED_RESET_DELAY_MS, SAVE_DEBOUNCE_MS } from './constants';
-import {
-  addToOfflineQueue,
-  getQueueKey,
-  loadOfflineQueue,
-  removeFromOfflineQueue,
-  saveOfflineQueue,
-  type PendingSave,
-} from './offlineQueue';
+import type { NotesService } from '@core/services/notesService';
+import { SAVE_DEBOUNCE_MS } from './constants';
+import { getQueueKey, loadOfflineQueue, removeFromOfflineQueue } from './offlineQueue';
 import { createClientNoteId, createContentFingerprint, createDraftNote } from './noteUtils';
-
-type ErrorMeta = {
-  code?: string;
-  status?: number;
-  message?: string;
-};
-
-function getErrorMeta(err: unknown): ErrorMeta {
-  const record = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
-  return {
-    code: typeof record?.code === 'string' ? record.code : undefined,
-    status: typeof record?.status === 'number' ? record.status : undefined,
-    message:
-      (err instanceof Error && err.message) ||
-      (typeof record?.message === 'string' ? record.message : undefined),
-  };
-}
+import {
+  applySavedNote,
+  buildPendingCreatePayload,
+  buildPendingSave,
+  buildPendingUpdatePayload,
+  clearTimer,
+  evaluateSaveResult,
+  getErrorMeta,
+  handlePersistFailure,
+  saveNoteToService,
+  scheduleSavedReset,
+  shouldApplySyncedSave,
+  updateQueueAfterSyncFailure,
+} from './persistenceUtils';
 
 export interface NoteEditorPersistenceOptions {
   notesService: NotesService | null | undefined;
@@ -96,22 +86,13 @@ export function useNoteEditorPersistence({
       return;
     }
 
-    if (debounceRef.current) {
-      window.clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    clearTimer(debounceRef);
+    abortControllerRef.current?.abort();
 
     const fingerprint = createContentFingerprint(currentNote.title, currentNote.content);
     if (fingerprint === lastSavedFingerprintRef.current) {
       setStatus('saved');
-      if (savedResetRef.current) {
-        window.clearTimeout(savedResetRef.current);
-      }
-      savedResetRef.current = window.setTimeout(() => setStatus('idle'), SAVED_RESET_DELAY_MS);
+      scheduleSavedReset(setStatus, savedResetRef);
       return;
     }
 
@@ -128,107 +109,66 @@ export function useNoteEditorPersistence({
     setStatus('saving');
     setError(null);
 
-    const pendingSave: PendingSave = {
-      noteId: currentNote.id,
+    const defaults = { defaultCourseCode, defaultSourceUrl, sourceSelection };
+    const pendingSave = buildPendingSave({
+      note: currentNote,
       clientNoteId,
-      title: currentNote.title || 'Untitled note',
-      content: currentNote.content,
-      courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
-      sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
-      sourceSelection: currentNote.sourceSelection ?? sourceSelection ?? null,
-      noteType: currentNote.noteType,
-      tags: currentNote.tags,
+      defaultCourseCode,
+      defaultSourceUrl,
+      sourceSelection,
       expectedUpdatedAt,
-      timestamp: Date.now(),
-      retryCount: 0,
-    };
+    });
 
     try {
-      let saved: Note;
-      if (currentNote.id) {
-        const payload: UpdateNoteInput = {
-          title: currentNote.title,
-          content: currentNote.content,
-          courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
-          sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
-          sourceSelection: currentNote.sourceSelection ?? sourceSelection ?? null,
-          noteType: currentNote.noteType,
-          tags: currentNote.tags,
-        };
-        saved = await notesService.updateNote(currentNote.id, payload, {
-          signal: controller.signal,
-          expectedUpdatedAt,
-        });
-      } else {
-        const payload: CreateNoteInput = {
-          title: currentNote.title || 'Untitled note',
-          content: currentNote.content,
-          courseCode: currentNote.courseCode ?? defaultCourseCode ?? null,
-          sourceUrl: currentNote.sourceUrl ?? defaultSourceUrl ?? null,
-          sourceSelection: currentNote.sourceSelection ?? sourceSelection ?? null,
-          noteType: currentNote.noteType,
-          tags: currentNote.tags,
-          clientNoteId,
-        };
-        saved = await notesService.createNote(payload, {
-          signal: controller.signal,
-        });
-      }
+      const saved = await saveNoteToService({
+        notesService,
+        note: currentNote,
+        clientNoteId,
+        expectedUpdatedAt,
+        controller,
+        defaults,
+      });
 
       if (controller.signal.aborted) return;
       if (saveSequence !== saveSequenceRef.current) return;
 
       const latestNote = noteRef.current;
-      if (latestNote?.id && saved.id && latestNote.id !== saved.id) {
-        return;
-      }
-      if (!latestNote?.id && clientNoteIdRef.current !== clientNoteId) {
-        return;
-      }
-      const latestFingerprint = latestNote
-        ? createContentFingerprint(latestNote.title, latestNote.content)
-        : null;
-      if (latestFingerprint && latestFingerprint !== fingerprint) {
-        setStatus('editing');
+      const evaluation = evaluateSaveResult({
+        saved,
+        latestNote,
+        fingerprint,
+        clientNoteIdRef,
+        clientNoteId,
+      });
+      if (evaluation.ignore) {
+        if (evaluation.markEditing) {
+          setStatus('editing');
+        }
         return;
       }
 
       removeFromOfflineQueue(queueKey);
       setPendingSaveCount(loadOfflineQueue().length);
 
-      setNote(saved);
-      setActiveNoteId(saved.id);
-      if (saved.id) {
-        clientNoteIdRef.current = saved.id;
-      }
-      lastSavedFingerprintRef.current = createContentFingerprint(saved.title, saved.content);
-      setStatus('saved');
-      if (savedResetRef.current) {
-        window.clearTimeout(savedResetRef.current);
-      }
-      savedResetRef.current = window.setTimeout(() => setStatus('idle'), SAVED_RESET_DELAY_MS);
+      applySavedNote({
+        saved,
+        setNote,
+        setActiveNoteId,
+        clientNoteIdRef,
+        lastSavedFingerprintRef,
+        setStatus,
+        savedResetRef,
+      });
     } catch (err: unknown) {
       const meta = getErrorMeta(err);
       if (controller.signal.aborted || meta.code === 'ABORTED') return;
-
-      const isNetworkError = meta.code === 'NETWORK_ERROR' || !navigator.onLine;
-      const isRetryable =
-        isNetworkError ||
-        meta.code === 'RATE_LIMIT' ||
-        meta.status === 429 ||
-        (meta.status ?? 0) >= 500;
-
-      if (isRetryable && pendingSave.retryCount < MAX_SAVE_RETRIES) {
-        addToOfflineQueue(pendingSave);
-        setPendingSaveCount(loadOfflineQueue().length);
-        setError(
-          isNetworkError ? 'Saved offline - will sync when connected' : 'Save queued for retry',
-        );
-        setStatus('error');
-      } else {
-        setError(meta.message || 'Failed to save note');
-        setStatus('error');
-      }
+      handlePersistFailure({
+        meta,
+        pendingSave,
+        setPendingSaveCount,
+        setError,
+        setStatus,
+      });
     }
   }, [
     defaultCourseCode,
@@ -335,29 +275,12 @@ export function useNoteEditorPersistence({
       try {
         let saved: Note | null = null;
         if (pendingSave.noteId) {
-          const payload: UpdateNoteInput = {
-            title: pendingSave.title,
-            content: pendingSave.content,
-            courseCode: pendingSave.courseCode,
-            sourceUrl: pendingSave.sourceUrl,
-            sourceSelection: pendingSave.sourceSelection,
-            noteType: pendingSave.noteType,
-            tags: pendingSave.tags,
-          };
+          const payload = buildPendingUpdatePayload(pendingSave);
           saved = await notesService.updateNote(pendingSave.noteId, payload, {
             expectedUpdatedAt: pendingSave.expectedUpdatedAt ?? undefined,
           });
         } else {
-          const payload: CreateNoteInput = {
-            title: pendingSave.title,
-            content: pendingSave.content,
-            courseCode: pendingSave.courseCode,
-            sourceUrl: pendingSave.sourceUrl,
-            sourceSelection: pendingSave.sourceSelection,
-            noteType: pendingSave.noteType,
-            tags: pendingSave.tags,
-            clientNoteId: pendingSave.clientNoteId,
-          };
+          const payload = buildPendingCreatePayload(pendingSave);
           saved = await notesService.createNote(payload);
         }
 
@@ -368,52 +291,29 @@ export function useNoteEditorPersistence({
 
         if (saved) {
           const latestNote = noteRef.current;
-          const pendingFingerprint = createContentFingerprint(
-            pendingSave.title,
-            pendingSave.content,
-          );
-          const latestFingerprint = latestNote
-            ? createContentFingerprint(latestNote.title, latestNote.content)
-            : null;
-          const isSameDraft =
-            !latestNote?.id && clientNoteIdRef.current === pendingSave.clientNoteId;
-          const isSameNote = latestNote?.id && latestNote.id === saved.id;
-
-          if ((isSameDraft || isSameNote) && latestFingerprint === pendingFingerprint) {
-            setNote(saved);
-            setActiveNoteId(saved.id);
-            if (saved.id) {
-              clientNoteIdRef.current = saved.id;
-            }
-            lastSavedFingerprintRef.current = createContentFingerprint(saved.title, saved.content);
-            setStatus('saved');
-            if (savedResetRef.current) {
-              window.clearTimeout(savedResetRef.current);
-            }
-            savedResetRef.current = window.setTimeout(
-              () => setStatus('idle'),
-              SAVED_RESET_DELAY_MS,
-            );
+          if (
+            shouldApplySyncedSave({
+              saved,
+              pendingSave,
+              latestNote,
+              clientNoteIdRef,
+            })
+          ) {
+            applySavedNote({
+              saved,
+              setNote,
+              setActiveNoteId,
+              clientNoteIdRef,
+              lastSavedFingerprintRef,
+              setStatus,
+              savedResetRef,
+            });
           }
         }
       } catch (err: unknown) {
         console.error(`[NoteEditor] Failed to sync offline save:`, err);
         const meta = getErrorMeta(err);
-        const isRetryable =
-          meta.code === 'NETWORK_ERROR' ||
-          meta.code === 'RATE_LIMIT' ||
-          meta.status === 429 ||
-          (meta.status ?? 0) >= 500;
-        const isStale = meta.code === 'CONFLICT' || meta.code === 'NOT_FOUND';
-
-        const updated = loadOfflineQueue().map((s) =>
-          getQueueKey(s) === queueKey ? { ...s, retryCount: (s.retryCount ?? 0) + 1 } : s,
-        );
-        let filtered = updated.filter((s) => s.retryCount < MAX_SAVE_RETRIES);
-        if (!isRetryable || isStale) {
-          filtered = filtered.filter((s) => getQueueKey(s) !== queueKey);
-        }
-        saveOfflineQueue(filtered);
+        updateQueueAfterSyncFailure(queueKey, meta);
       }
     }
 
