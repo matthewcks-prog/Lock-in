@@ -8,11 +8,7 @@
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const { ProviderChain, immediateSleep } = require('../providerChain');
-const {
-  getTestRateLimiterManager,
-  resetRateLimiterManager,
-  TEST_LIMITS,
-} = require('../rateLimiter');
+const { getTestRateLimiterManager, resetRateLimiterManager } = require('../rateLimiter');
 
 /**
  * Test options with immediate sleep - no real delays

@@ -8,7 +8,6 @@ const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const {
   RateLimiterManager,
-  getRateLimiterManager,
   getTestRateLimiterManager,
   resetRateLimiterManager,
   DEFAULT_LIMITS,
