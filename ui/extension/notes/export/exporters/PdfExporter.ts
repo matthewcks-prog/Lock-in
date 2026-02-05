@@ -3,11 +3,11 @@
  *
  * Converts normalized documents to PDF format using jsPDF.
  * Produces clean, well-formatted documents with proper typography.
+ * Supports rich text formatting including colors, highlighting, and alignment.
  */
 
 import type { Exporter, ExportMetadata, NormalizedDocument } from '../types';
 import { buildMetadataFields } from '../metadata';
-import { flattenInlineContent } from '../normalizer';
 import { JsPDFConstructor, PdfBuilder } from './PdfBuilder';
 
 // ============================================================================
@@ -33,6 +33,7 @@ function resolveJsPdfConstructor(module: unknown): JsPDFConstructor {
 
 /**
  * Generates a PDF from the normalized document.
+ * Preserves rich text formatting including colors, highlighting, and alignment.
  */
 async function generatePdf(document: NormalizedDocument, metadata: ExportMetadata): Promise<Blob> {
   // Dynamically import jsPDF to keep bundle size down when not exporting
@@ -50,34 +51,30 @@ async function generatePdf(document: NormalizedDocument, metadata: ExportMetadat
   const metadataFields = buildMetadataFields(metadata);
   builder.addMetadata(metadataFields.map(({ label, value }) => `${label}: ${value}`));
 
-  // Process blocks
+  // Process blocks with rich text support
   for (const block of document.blocks) {
     switch (block.type) {
       case 'paragraph': {
-        const text = flattenInlineContent(block.children);
-        builder.addParagraph(text);
+        builder.addParagraph(block.children, block.alignment);
         break;
       }
 
       case 'heading': {
-        const text = flattenInlineContent(block.children);
-        builder.addHeading(text, block.level);
+        builder.addHeading(block.children, block.level, block.alignment);
         break;
       }
 
       case 'list': {
         for (let i = 0; i < block.children.length; i++) {
           const item = block.children[i];
-          const text = flattenInlineContent(item.children);
-          builder.addListItem(text, i, block.ordered);
+          builder.addListItem(item.children, i, block.ordered);
         }
         builder.endList();
         break;
       }
 
       case 'quote': {
-        const text = flattenInlineContent(block.children);
-        builder.addQuote(text);
+        builder.addQuote(block.children, block.alignment);
         break;
       }
 

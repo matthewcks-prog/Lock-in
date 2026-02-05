@@ -13,17 +13,22 @@ import {
   type HeadingBlock,
   type InlineContent,
   type LineBreakBlock,
-  type LinkNode,
   type ListBlock,
   type ListItemBlock,
   type NormalizedDocument,
   type ParagraphBlock,
   type QuoteBlock,
+  type TextAlignment,
   type TextFormatting,
   type TextRun,
+  type TextStyles,
 } from './types';
 
 import {
+  ELEMENT_FORMAT_CENTER,
+  ELEMENT_FORMAT_JUSTIFY,
+  ELEMENT_FORMAT_LEFT,
+  ELEMENT_FORMAT_RIGHT,
   FORMAT_BOLD,
   FORMAT_CODE,
   FORMAT_ITALIC,
@@ -65,39 +70,122 @@ function parseFormat(format: number | undefined): TextFormatting {
   };
 }
 
+/**
+ * Parses CSS style string to extract text styles (color, background-color).
+ * Lexical stores styles as CSS strings like "color: #ff0000; background-color: yellow;"
+ */
+function parseStyles(style: string | undefined): TextStyles | undefined {
+  if (!style || style.trim() === '') return undefined;
+
+  const styles: TextStyles = {};
+
+  // Parse color property
+  const colorMatch = style.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
+  if (colorMatch) {
+    styles.color = colorMatch[1].trim();
+  }
+
+  // Parse background-color property
+  const bgMatch = style.match(/(?:^|;)\s*background-color\s*:\s*([^;]+)/i);
+  if (bgMatch) {
+    styles.backgroundColor = bgMatch[1].trim();
+  }
+
+  return Object.keys(styles).length > 0 ? styles : undefined;
+}
+
+/**
+ * Parses Lexical element format to text alignment.
+ * Lexical uses numeric format for element alignment (1=left, 2=center, 3=right, 4=justify)
+ */
+function parseAlignment(format: number | undefined): TextAlignment | undefined {
+  if (!format || format === 0 || format === ELEMENT_FORMAT_LEFT) return undefined; // default is left, don't store
+  if (format === ELEMENT_FORMAT_CENTER) return 'center';
+  if (format === ELEMENT_FORMAT_RIGHT) return 'right';
+  if (format === ELEMENT_FORMAT_JUSTIFY) return 'justify';
+  return undefined;
+}
+
 // ============================================================================
 // Node Normalization
 // ============================================================================
 
 /**
- * Normalizes inline children (text, links) from a Lexical node.
+ * Checks if a node is a container that holds inline content.
+ * These nodes don't contribute content themselves but wrap inline children.
  */
-function normalizeInlineChildren(children: LexicalNode[] | undefined): InlineContent[] {
-  if (!children) return [];
+function isInlineContainerNode(node: LexicalNode): boolean {
+  return isParagraphNode(node) || isHeadingNode(node) || isQuoteNode(node);
+}
+
+/**
+ * Recursively extracts inline content from a Lexical node tree.
+ *
+ * Lexical's structure can be deeply nested. For example, a list item might contain:
+ * - Direct text nodes (simple case)
+ * - Paragraph nodes containing text (common case from rich editing)
+ * - Multiple paragraphs or mixed content
+ *
+ * This function handles all cases by recursively descending into container nodes
+ * and collecting all inline content (text, links, linebreaks).
+ *
+ * @param children - Array of Lexical nodes to process
+ * @returns Flattened array of inline content
+ */
+function extractInlineContent(children: LexicalNode[] | undefined): InlineContent[] {
+  if (!children || children.length === 0) return [];
 
   const result: InlineContent[] = [];
 
   for (const child of children) {
+    // Case 1: Direct text node - extract text with formatting and styles
     if (isTextNode(child)) {
       const textRun: TextRun = {
         type: 'text',
         text: child.text || '',
         format: parseFormat(child.format),
       };
+      const styles = parseStyles(child.style);
+      if (styles) {
+        textRun.styles = styles;
+      }
       result.push(textRun);
-    } else if (isLinkNode(child)) {
-      const linkNode: LinkNode = {
+      continue;
+    }
+
+    // Case 2: Link node - extract URL and recursively get text children
+    if (isLinkNode(child)) {
+      result.push({
         type: 'link',
         url: child.url || '',
-        children: normalizeInlineChildren(child.children) as TextRun[],
-      };
-      result.push(linkNode);
-    } else if (isLineBreakNode(child)) {
+        children: extractInlineContent(child.children) as TextRun[],
+      });
+      continue;
+    }
+
+    // Case 3: Line break - convert to newline text
+    if (isLineBreakNode(child)) {
       result.push({
         type: 'text',
         text: '\n',
         format: {},
       });
+      continue;
+    }
+
+    // Case 4: Container nodes (paragraph, heading, quote inside list items)
+    // Recursively extract inline content from these containers
+    if (isInlineContainerNode(child)) {
+      const nestedContent = extractInlineContent(child.children);
+      result.push(...nestedContent);
+      continue;
+    }
+
+    // Case 5: Unknown nodes with children - attempt recursive extraction
+    // This provides forward compatibility for new Lexical node types
+    if (child.children && Array.isArray(child.children)) {
+      const nestedContent = extractInlineContent(child.children);
+      result.push(...nestedContent);
     }
   }
 
@@ -119,18 +207,28 @@ function parseHeadingLevel(tag: string | undefined): 1 | 2 | 3 | 4 | 5 | 6 {
 }
 
 function normalizeParagraph(node: LexicalNode): ParagraphBlock {
-  return {
+  const block: ParagraphBlock = {
     type: 'paragraph',
-    children: normalizeInlineChildren(node.children),
+    children: extractInlineContent(node.children),
   };
+  const alignment = parseAlignment(node.format);
+  if (alignment) {
+    block.alignment = alignment;
+  }
+  return block;
 }
 
 function normalizeHeading(node: LexicalNode): HeadingBlock {
-  return {
+  const block: HeadingBlock = {
     type: 'heading',
     level: parseHeadingLevel(node.tag),
-    children: normalizeInlineChildren(node.children),
+    children: extractInlineContent(node.children),
   };
+  const alignment = parseAlignment(node.format);
+  if (alignment) {
+    block.alignment = alignment;
+  }
+  return block;
 }
 
 function normalizeList(node: LexicalNode): ListBlock {
@@ -140,7 +238,7 @@ function normalizeList(node: LexicalNode): ListBlock {
     if (isListItemNode(child)) {
       items.push({
         type: 'listItem',
-        children: normalizeInlineChildren(child.children),
+        children: extractInlineContent(child.children),
       });
     }
   }
@@ -153,10 +251,15 @@ function normalizeList(node: LexicalNode): ListBlock {
 }
 
 function normalizeQuote(node: LexicalNode): QuoteBlock {
-  return {
+  const block: QuoteBlock = {
     type: 'quote',
-    children: normalizeInlineChildren(node.children),
+    children: extractInlineContent(node.children),
   };
+  const alignment = parseAlignment(node.format);
+  if (alignment) {
+    block.alignment = alignment;
+  }
+  return block;
 }
 
 function normalizeCode(node: LexicalNode): CodeBlock {

@@ -3,6 +3,14 @@
  *
  * Converts normalized documents to CommonMark-compliant Markdown.
  * Preserves formatting, links, and document structure.
+ *
+ * Note on formatting support:
+ * - Supported: bold, italic, strikethrough, code, links
+ * - Not supported (no native Markdown equivalent):
+ *   - Text colors (would require HTML <span> tags)
+ *   - Background/highlight colors (would require HTML)
+ *   - Underline (would require HTML <u> tags)
+ *   - Text alignment (would require HTML or non-standard extensions)
  */
 
 import type {

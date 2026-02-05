@@ -94,6 +94,119 @@ describe('normalizeEditorState', () => {
     expect(children[4]).toMatchObject({ type: 'text', format: { code: true } });
   });
 
+  it('parses text styles (colors) from style property', () => {
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', text: 'red text', format: 0, style: 'color: #ff0000;' },
+              { type: 'text', text: 'highlighted', format: 0, style: 'background-color: yellow;' },
+              {
+                type: 'text',
+                text: 'both',
+                format: 0,
+                style: 'color: blue; background-color: #ffff00;',
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+    const paragraph = result.blocks[0] as ParagraphBlock;
+    const children = paragraph.children as import('../types').TextRun[];
+
+    expect(children[0].styles).toEqual({ color: '#ff0000' });
+    expect(children[1].styles).toEqual({ backgroundColor: 'yellow' });
+    expect(children[2].styles).toEqual({ color: 'blue', backgroundColor: '#ffff00' });
+  });
+
+  it('parses text alignment on paragraphs', () => {
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'paragraph',
+            format: 2,
+            children: [{ type: 'text', text: 'centered', format: 0 }],
+          },
+          { type: 'paragraph', format: 3, children: [{ type: 'text', text: 'right', format: 0 }] },
+          {
+            type: 'paragraph',
+            format: 4,
+            children: [{ type: 'text', text: 'justified', format: 0 }],
+          },
+          {
+            type: 'paragraph',
+            format: 1,
+            children: [{ type: 'text', text: 'left (explicit)', format: 0 }],
+          },
+          { type: 'paragraph', children: [{ type: 'text', text: 'left (default)', format: 0 }] },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+
+    expect((result.blocks[0] as ParagraphBlock).alignment).toBe('center');
+    expect((result.blocks[1] as ParagraphBlock).alignment).toBe('right');
+    expect((result.blocks[2] as ParagraphBlock).alignment).toBe('justify');
+    expect((result.blocks[3] as ParagraphBlock).alignment).toBeUndefined(); // left is default, not stored
+    expect((result.blocks[4] as ParagraphBlock).alignment).toBeUndefined();
+  });
+
+  it('parses text alignment on headings', () => {
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'heading',
+            tag: 'h1',
+            format: 2,
+            children: [{ type: 'text', text: 'Centered Title', format: 0 }],
+          },
+          {
+            type: 'heading',
+            tag: 'h2',
+            format: 3,
+            children: [{ type: 'text', text: 'Right Subtitle', format: 0 }],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+
+    expect((result.blocks[0] as HeadingBlock).alignment).toBe('center');
+    expect((result.blocks[1] as HeadingBlock).alignment).toBe('right');
+  });
+
+  it('does not include styles property when no styles present', () => {
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'paragraph',
+            children: [
+              { type: 'text', text: 'no styles', format: 1 },
+              { type: 'text', text: 'empty style', format: 0, style: '' },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+    const paragraph = result.blocks[0] as ParagraphBlock;
+    const children = paragraph.children as import('../types').TextRun[];
+
+    expect(children[0].styles).toBeUndefined();
+    expect(children[1].styles).toBeUndefined();
+  });
+
   it('normalizes headings with correct level', () => {
     const state = {
       root: {
@@ -142,6 +255,214 @@ describe('normalizeEditorState', () => {
     expect(result.blocks).toHaveLength(2);
     expect(result.blocks[0]).toMatchObject({ type: 'list', ordered: false });
     expect(result.blocks[1]).toMatchObject({ type: 'list', ordered: true });
+  });
+
+  it('normalizes list items with nested paragraph children (real Lexical structure)', () => {
+    // This is the actual structure Lexical produces when list items contain
+    // formatted text or were created in certain ways
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'list',
+            listType: 'bullet',
+            children: [
+              {
+                type: 'listitem',
+                children: [
+                  {
+                    type: 'paragraph',
+                    children: [
+                      {
+                        type: 'text',
+                        text: 'Describe the building blocks of a computer system',
+                        format: 0,
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                type: 'listitem',
+                children: [
+                  {
+                    type: 'paragraph',
+                    children: [
+                      { type: 'text', text: 'Understand various terminologies', format: 0 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+
+    expect(result.blocks).toHaveLength(1);
+    const list = result.blocks[0] as import('../types').ListBlock;
+    expect(list.type).toBe('list');
+    expect(list.children).toHaveLength(2);
+    // Should extract text from nested paragraph
+    expect(list.children[0].children).toHaveLength(1);
+    expect(list.children[0].children[0]).toMatchObject({
+      type: 'text',
+      text: 'Describe the building blocks of a computer system',
+    });
+    expect(list.children[1].children[0]).toMatchObject({
+      type: 'text',
+      text: 'Understand various terminologies',
+    });
+  });
+
+  it('normalizes deeply nested list item content', () => {
+    // Lexical can nest content several levels deep
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'list',
+            listType: 'bullet',
+            children: [
+              {
+                type: 'listitem',
+                children: [
+                  {
+                    type: 'paragraph',
+                    children: [
+                      { type: 'text', text: 'Bold ', format: 1 },
+                      { type: 'text', text: 'and normal text', format: 0 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+
+    const list = result.blocks[0] as import('../types').ListBlock;
+    expect(list.children[0].children).toHaveLength(2);
+    expect(list.children[0].children[0]).toMatchObject({
+      type: 'text',
+      text: 'Bold ',
+      format: { bold: true },
+    });
+    expect(list.children[0].children[1]).toMatchObject({
+      type: 'text',
+      text: 'and normal text',
+    });
+  });
+
+  it('normalizes list items with links inside paragraphs', () => {
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'list',
+            listType: 'bullet',
+            children: [
+              {
+                type: 'listitem',
+                children: [
+                  {
+                    type: 'paragraph',
+                    children: [
+                      { type: 'text', text: 'Check ', format: 0 },
+                      {
+                        type: 'link',
+                        url: 'https://example.com',
+                        children: [{ type: 'text', text: 'this link', format: 0 }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+
+    const list = result.blocks[0] as import('../types').ListBlock;
+    expect(list.children[0].children).toHaveLength(2);
+    expect(list.children[0].children[0]).toMatchObject({
+      type: 'text',
+      text: 'Check ',
+    });
+    expect(list.children[0].children[1]).toMatchObject({
+      type: 'link',
+      url: 'https://example.com',
+    });
+  });
+
+  it('normalizes quote containing nested paragraph', () => {
+    // Quotes can also contain paragraph children
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'quote',
+            children: [
+              {
+                type: 'paragraph',
+                children: [{ type: 'text', text: 'Quoted text here', format: 0 }],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+
+    const quote = result.blocks[0] as import('../types').QuoteBlock;
+    expect(quote.children).toHaveLength(1);
+    expect(quote.children[0]).toMatchObject({
+      type: 'text',
+      text: 'Quoted text here',
+    });
+  });
+
+  it('handles unknown wrapper nodes by extracting children', () => {
+    // Forward compatibility: unknown nodes with children should still extract text
+    const state = {
+      root: {
+        children: [
+          {
+            type: 'list',
+            listType: 'bullet',
+            children: [
+              {
+                type: 'listitem',
+                children: [
+                  {
+                    type: 'unknown-future-node',
+                    children: [{ type: 'text', text: 'Future-proof text', format: 0 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const result = normalizeEditorState(state);
+
+    const list = result.blocks[0] as import('../types').ListBlock;
+    expect(list.children[0].children).toHaveLength(1);
+    expect(list.children[0].children[0]).toMatchObject({
+      type: 'text',
+      text: 'Future-proof text',
+    });
   });
 
   it('normalizes links', () => {

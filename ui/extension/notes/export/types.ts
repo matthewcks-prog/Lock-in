@@ -14,11 +14,16 @@
  * Current AST schema version. Increment when making breaking changes
  * to the normalized document structure.
  */
-export const AST_VERSION = 1 as const;
+export const AST_VERSION = 2 as const;
 
 // ============================================================================
 // Intermediate AST Types
 // ============================================================================
+
+/**
+ * Text alignment options for blocks.
+ */
+export type TextAlignment = 'left' | 'center' | 'right' | 'justify';
 
 /**
  * Text formatting flags that can be combined.
@@ -33,12 +38,24 @@ export interface TextFormatting {
 }
 
 /**
- * A run of text with consistent formatting.
+ * Style properties for text (colors, etc).
+ * Separated from formatting for clarity and extensibility.
+ */
+export interface TextStyles {
+  /** CSS color value (e.g., '#ff0000', 'rgb(255,0,0)') */
+  color?: string;
+  /** CSS background-color value for highlighting */
+  backgroundColor?: string;
+}
+
+/**
+ * A run of text with consistent formatting and styling.
  */
 export interface TextRun {
   type: 'text';
   text: string;
   format: TextFormatting;
+  styles?: TextStyles;
 }
 
 /**
@@ -61,6 +78,7 @@ export type InlineContent = TextRun | LinkNode;
 export interface ParagraphBlock {
   type: 'paragraph';
   children: InlineContent[];
+  alignment?: TextAlignment;
 }
 
 /**
@@ -70,6 +88,7 @@ export interface HeadingBlock {
   type: 'heading';
   level: 1 | 2 | 3 | 4 | 5 | 6;
   children: InlineContent[];
+  alignment?: TextAlignment;
 }
 
 /**
@@ -95,6 +114,7 @@ export interface ListBlock {
 export interface QuoteBlock {
   type: 'quote';
   children: InlineContent[];
+  alignment?: TextAlignment;
 }
 
 /**
