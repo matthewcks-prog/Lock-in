@@ -11,6 +11,19 @@ const { shouldFallback, parseRetryAfter } = require('./contracts');
 const { logger } = require('../../observability');
 const { getRateLimiterManager } = require('./rateLimiter');
 
+/**
+ * Default sleep implementation using setTimeout
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise<void>}
+ */
+const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Immediate sleep for testing - resolves instantly
+ * @returns {Promise<void>}
+ */
+const immediateSleep = () => Promise.resolve();
+
 const STATUS_CATEGORY_RULES = [
   { category: 'rate_limit', statuses: new Set([429]) },
   { category: 'auth_error', statuses: new Set([401, 403]) },
@@ -61,11 +74,13 @@ class ProviderChain {
    * @param {Object} [options]
    * @param {number} [options.maxRetries=2] - Max retries per provider before fallback
    * @param {number} [options.retryDelayMs=1000] - Base delay between retries
+   * @param {Function} [options.sleep] - Custom sleep function for testing (default: real setTimeout)
    */
   constructor(adapters, options = {}) {
     this.adapters = adapters.filter((a) => a.isAvailable());
     this.maxRetries = options.maxRetries ?? 2;
     this.retryDelayMs = options.retryDelayMs ?? 1000;
+    this._sleep = options.sleep ?? defaultSleep;
 
     if (this.adapters.length === 0) {
       throw new Error('No LLM providers available. Check API key configuration.');
@@ -258,14 +273,6 @@ class ProviderChain {
   }
 
   /**
-   * Sleep utility
-   * @private
-   */
-  _sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  /**
    * Categorize error for logging and metrics
    * @private
    * @param {Error} error
@@ -297,4 +304,9 @@ class ProviderChain {
   }
 }
 
-module.exports = { ProviderChain };
+module.exports = {
+  ProviderChain,
+  // Export sleep functions for testing
+  defaultSleep,
+  immediateSleep,
+};

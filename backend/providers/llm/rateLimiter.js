@@ -52,6 +52,43 @@ const DEFAULT_LIMITS = {
 };
 
 /**
+ * Test-friendly rate limit configurations
+ * No delays, high concurrency, NO timers for fast unit tests
+ *
+ * CRITICAL: reservoirRefreshInterval MUST be null to prevent
+ * Bottleneck from creating internal timers that keep the event loop alive.
+ */
+const TEST_LIMITS = {
+  gemini: {
+    reservoir: 1000,
+    reservoirRefreshAmount: null, // No auto-refresh in tests
+    reservoirRefreshInterval: null, // CRITICAL: Prevents timer creation
+    maxConcurrent: 100,
+    minTime: 0, // No delay between requests
+    highWater: 100,
+    strategy: Bottleneck.strategy.OVERFLOW,
+  },
+  groq: {
+    reservoir: 1000,
+    reservoirRefreshAmount: null,
+    reservoirRefreshInterval: null, // CRITICAL: Prevents timer creation
+    maxConcurrent: 100,
+    minTime: 0,
+    highWater: 100,
+    strategy: Bottleneck.strategy.OVERFLOW,
+  },
+  openai: {
+    reservoir: 1000,
+    reservoirRefreshAmount: null,
+    reservoirRefreshInterval: null, // CRITICAL: Prevents timer creation
+    maxConcurrent: 100,
+    minTime: 0,
+    highWater: 100,
+    strategy: Bottleneck.strategy.OVERFLOW,
+  },
+};
+
+/**
  * Approximate per-token costs (USD) for cost estimation
  * Updated: 2026-01
  */
@@ -395,9 +432,15 @@ class RateLimiterManager {
     }
     this._pauseTimers.clear();
 
+    // Stop all Bottleneck limiters and disconnect their stores
     for (const limiter of this.limiters.values()) {
-      limiter.stop();
+      limiter.stop({ dropWaitingJobs: true });
+      // Disconnect to release any internal resources
+      if (limiter.disconnect) {
+        limiter.disconnect();
+      }
     }
+    this.limiters.clear();
 
     logger.info('RateLimiterManager stopped');
   }
@@ -419,6 +462,18 @@ function getRateLimiterManager(customLimits) {
 }
 
 /**
+ * Get or create a test-friendly RateLimiterManager singleton
+ * Uses TEST_LIMITS which have no delays for fast unit tests
+ * @returns {RateLimiterManager}
+ */
+function getTestRateLimiterManager() {
+  if (!instance) {
+    instance = new RateLimiterManager(TEST_LIMITS);
+  }
+  return instance;
+}
+
+/**
  * Reset the singleton (for testing)
  */
 function resetRateLimiterManager() {
@@ -431,7 +486,9 @@ function resetRateLimiterManager() {
 module.exports = {
   RateLimiterManager,
   getRateLimiterManager,
+  getTestRateLimiterManager,
   resetRateLimiterManager,
   DEFAULT_LIMITS,
+  TEST_LIMITS,
   TOKEN_COSTS,
 };

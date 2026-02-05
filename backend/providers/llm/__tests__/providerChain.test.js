@@ -1,23 +1,45 @@
 /**
  * Unit tests for ProviderChain
+ *
+ * Uses dependency injection for sleep to eliminate real delays.
+ * Tests run in milliseconds, not seconds.
  */
 
-const { test, describe, beforeEach } = require('node:test');
+const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
-const { ProviderChain } = require('../providerChain');
-const { getRateLimiterManager, resetRateLimiterManager } = require('../rateLimiter');
+const { ProviderChain, immediateSleep } = require('../providerChain');
+const {
+  getTestRateLimiterManager,
+  resetRateLimiterManager,
+  TEST_LIMITS,
+} = require('../rateLimiter');
 
-// Mock adapter helper
+/**
+ * Test options with immediate sleep - no real delays
+ */
+const FAST_TEST_OPTIONS = {
+  sleep: immediateSleep,
+  retryDelayMs: 0,
+  maxRetries: 2,
+};
+
+/**
+ * Create a mock adapter for testing
+ * @param {string} name - Provider name
+ * @param {Object} options - Mock options
+ * @returns {Object} Mock adapter
+ */
 function createMockAdapter(name, options = {}) {
   return {
     getProviderName: () => name,
+    model: options.model || 'test-model',
     isAvailable: () => options.available !== false,
     chatCompletion:
       options.chatCompletion ||
       (async () => ({
         content: `Response from ${name}`,
         provider: name,
-        model: 'test-model',
+        model: options.model || 'test-model',
         usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
       })),
     healthCheck: async () => ({ available: true, provider: name }),
@@ -26,7 +48,14 @@ function createMockAdapter(name, options = {}) {
 
 describe('ProviderChain', () => {
   beforeEach(() => {
-    // Reset singleton to ensure clean state
+    // Reset singleton to ensure clean state and use test-friendly rate limiter
+    resetRateLimiterManager();
+    // Pre-initialize with TEST_LIMITS for no delays
+    getTestRateLimiterManager();
+  });
+
+  afterEach(() => {
+    // Clean up singleton after each test to prevent state leakage
     resetRateLimiterManager();
   });
 
@@ -37,7 +66,7 @@ describe('ProviderChain', () => {
         createMockAdapter('openai', { available: false }),
       ];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
       assert.deepEqual(chain.getAvailableProviders(), ['gemini']);
     });
 
@@ -47,7 +76,10 @@ describe('ProviderChain', () => {
         createMockAdapter('openai', { available: false }),
       ];
 
-      assert.throws(() => new ProviderChain(adapters), /No LLM providers available/);
+      assert.throws(
+        () => new ProviderChain(adapters, FAST_TEST_OPTIONS),
+        /No LLM providers available/,
+      );
     });
 
     test('should preserve adapter order', () => {
@@ -57,7 +89,7 @@ describe('ProviderChain', () => {
         createMockAdapter('groq'),
       ];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
       assert.deepEqual(chain.getAvailableProviders(), ['gemini', 'openai', 'groq']);
     });
   });
@@ -66,7 +98,7 @@ describe('ProviderChain', () => {
     test('should return first available provider', () => {
       const adapters = [createMockAdapter('gemini'), createMockAdapter('openai')];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
       assert.equal(chain.getPrimaryProvider(), 'gemini');
     });
   });
@@ -75,7 +107,7 @@ describe('ProviderChain', () => {
     test('should use primary provider when successful', async () => {
       const adapters = [createMockAdapter('gemini'), createMockAdapter('openai')];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
       const result = await chain.chatCompletion([{ role: 'user', content: 'Hi' }]);
 
       assert.equal(result.provider, 'gemini');
@@ -96,7 +128,7 @@ describe('ProviderChain', () => {
         createMockAdapter('openai'),
       ];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
       const result = await chain.chatCompletion([{ role: 'user', content: 'Hi' }]);
 
       assert.equal(result.fallbackUsed, true);
@@ -105,7 +137,7 @@ describe('ProviderChain', () => {
 
     test('should pass request through rate limiter', async () => {
       // Get singleton and spy on schedule
-      const rateLimiter = getRateLimiterManager();
+      const rateLimiter = getTestRateLimiterManager();
       let scheduleCalled = false;
       const originalSchedule = rateLimiter.schedule;
 
@@ -117,7 +149,7 @@ describe('ProviderChain', () => {
 
       try {
         const adapters = [createMockAdapter('gemini')];
-        const chain = new ProviderChain(adapters);
+        const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
         await chain.chatCompletion([{ role: 'user', content: 'Hi' }]);
 
         assert.equal(scheduleCalled, true, 'Should have called rate limiter schedule');
@@ -140,7 +172,7 @@ describe('ProviderChain', () => {
         createMockAdapter('openai'),
       ];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
 
       await assert.rejects(
         () => chain.chatCompletion([{ role: 'user', content: 'Hi' }]),
@@ -167,7 +199,7 @@ describe('ProviderChain', () => {
         }),
       ];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
 
       await assert.rejects(
         () => chain.chatCompletion([{ role: 'user', content: 'Hi' }]),
@@ -186,7 +218,7 @@ describe('ProviderChain', () => {
     test('should check health of all providers', async () => {
       const adapters = [createMockAdapter('gemini'), createMockAdapter('openai')];
 
-      const chain = new ProviderChain(adapters);
+      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
       const results = await chain.healthCheck();
 
       assert.equal(results.length, 2);

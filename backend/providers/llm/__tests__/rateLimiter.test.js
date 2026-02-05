@@ -1,5 +1,7 @@
 /**
  * Unit tests for RateLimiterManager
+ *
+ * Uses TEST_LIMITS configuration for fast, deterministic tests.
  */
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
@@ -7,8 +9,10 @@ const assert = require('node:assert');
 const {
   RateLimiterManager,
   getRateLimiterManager,
+  getTestRateLimiterManager,
   resetRateLimiterManager,
   DEFAULT_LIMITS,
+  TEST_LIMITS,
   TOKEN_COSTS,
 } = require('../rateLimiter');
 
@@ -31,7 +35,7 @@ describe('RateLimiterManager', () => {
 
   describe('constructor', () => {
     test('should initialize with default limits for all providers', () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
       const stats = manager.getQueueStats();
 
       assert.ok(stats.gemini, 'Should have gemini limiter');
@@ -41,7 +45,7 @@ describe('RateLimiterManager', () => {
 
     test('should accept custom limits', () => {
       const customLimits = {
-        gemini: { ...DEFAULT_LIMITS.gemini, reservoir: 100 },
+        gemini: { ...TEST_LIMITS.gemini, reservoir: 100 },
       };
       manager = new RateLimiterManager(customLimits);
       const stats = manager.getQueueStats();
@@ -52,7 +56,7 @@ describe('RateLimiterManager', () => {
 
   describe('schedule', () => {
     test('should execute function through rate limiter', async () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
       let executed = false;
 
       await manager.schedule('gemini', async () => {
@@ -64,7 +68,7 @@ describe('RateLimiterManager', () => {
     });
 
     test('should return result from scheduled function', async () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
 
       const result = await manager.schedule('gemini', async () => {
         return { content: 'test response', provider: 'gemini' };
@@ -75,7 +79,7 @@ describe('RateLimiterManager', () => {
     });
 
     test('should execute directly for unknown provider', async () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
       let executed = false;
 
       await manager.schedule('unknown-provider', async () => {
@@ -87,7 +91,7 @@ describe('RateLimiterManager', () => {
     });
 
     test('should propagate errors from scheduled function', async () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
 
       await assert.rejects(
         async () => {
@@ -102,7 +106,7 @@ describe('RateLimiterManager', () => {
 
   describe('recordUsage', () => {
     test('should track usage statistics', () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
 
       manager.recordUsage('gemini', 'gemini-2.0-flash', {
         prompt_tokens: 100,
@@ -117,7 +121,7 @@ describe('RateLimiterManager', () => {
     });
 
     test('should accumulate usage across multiple requests', () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
 
       manager.recordUsage('gemini', 'gemini-2.0-flash', {
         prompt_tokens: 100,
@@ -135,7 +139,7 @@ describe('RateLimiterManager', () => {
     });
 
     test('should track usage per model', () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
 
       manager.recordUsage('gemini', 'gemini-2.0-flash', {
         prompt_tokens: 100,
@@ -156,7 +160,7 @@ describe('RateLimiterManager', () => {
 
   describe('getQueueStats', () => {
     test('should return queue stats for all providers', () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
       const stats = manager.getQueueStats();
 
       assert.ok('gemini' in stats);
@@ -173,7 +177,7 @@ describe('RateLimiterManager', () => {
 
   describe('pauseProvider', () => {
     test('should pause and resume provider', async () => {
-      manager = new RateLimiterManager();
+      manager = new RateLimiterManager(TEST_LIMITS);
 
       // This should complete without error - timer is tracked and cleaned up by stop()
       await manager.pauseProvider('gemini', 100);
@@ -189,16 +193,16 @@ describe('getRateLimiterManager', () => {
   });
 
   test('should return singleton instance', () => {
-    const manager1 = getRateLimiterManager();
-    const manager2 = getRateLimiterManager();
+    const manager1 = getTestRateLimiterManager();
+    const manager2 = getTestRateLimiterManager();
 
     assert.strictEqual(manager1, manager2);
   });
 
   test('should create new instance after reset', () => {
-    const manager1 = getRateLimiterManager();
+    const manager1 = getTestRateLimiterManager();
     resetRateLimiterManager();
-    const manager2 = getRateLimiterManager();
+    const manager2 = getTestRateLimiterManager();
 
     assert.notStrictEqual(manager1, manager2);
   });
@@ -218,6 +222,16 @@ describe('DEFAULT_LIMITS', () => {
     assert.ok(DEFAULT_LIMITS.gemini.reservoir <= 200, 'Gemini should be conservative');
     assert.ok(DEFAULT_LIMITS.openai.reservoir <= 50, 'OpenAI should be conservative');
     assert.ok(DEFAULT_LIMITS.groq.reservoir <= 30, 'Groq should match free tier');
+  });
+});
+
+describe('TEST_LIMITS', () => {
+  test('should have no minTime delays for fast tests', () => {
+    for (const provider of ['gemini', 'groq', 'openai']) {
+      const limits = TEST_LIMITS[provider];
+      assert.equal(limits.minTime, 0, `${provider} should have zero minTime`);
+      assert.ok(limits.maxConcurrent >= 100, `${provider} should have high concurrency`);
+    }
   });
 });
 
