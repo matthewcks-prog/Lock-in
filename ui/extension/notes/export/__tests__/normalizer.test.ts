@@ -119,9 +119,9 @@ describe('normalizeEditorState', () => {
     const paragraph = result.blocks[0] as ParagraphBlock;
     const children = paragraph.children as import('../types').TextRun[];
 
-    expect(children[0].styles).toEqual({ color: '#ff0000' });
-    expect(children[1].styles).toEqual({ backgroundColor: 'yellow' });
-    expect(children[2].styles).toEqual({ color: 'blue', backgroundColor: '#ffff00' });
+    expect(children[0]?.styles).toEqual({ color: '#ff0000' });
+    expect(children[1]?.styles).toEqual({ backgroundColor: 'yellow' });
+    expect(children[2]?.styles).toEqual({ color: 'blue', backgroundColor: '#ffff00' });
   });
 
   it('parses text alignment on paragraphs', () => {
@@ -203,8 +203,8 @@ describe('normalizeEditorState', () => {
     const paragraph = result.blocks[0] as ParagraphBlock;
     const children = paragraph.children as import('../types').TextRun[];
 
-    expect(children[0].styles).toBeUndefined();
-    expect(children[1].styles).toBeUndefined();
+    expect(children[0]?.styles).toBeUndefined();
+    expect(children[1]?.styles).toBeUndefined();
   });
 
   it('normalizes headings with correct level', () => {
@@ -306,12 +306,12 @@ describe('normalizeEditorState', () => {
     expect(list.type).toBe('list');
     expect(list.children).toHaveLength(2);
     // Should extract text from nested paragraph
-    expect(list.children[0].children).toHaveLength(1);
-    expect(list.children[0].children[0]).toMatchObject({
+    expect(list.children[0]?.children).toHaveLength(1);
+    expect(list.children[0]?.children?.[0]).toMatchObject({
       type: 'text',
       text: 'Describe the building blocks of a computer system',
     });
-    expect(list.children[1].children[0]).toMatchObject({
+    expect(list.children[1]?.children?.[0]).toMatchObject({
       type: 'text',
       text: 'Understand various terminologies',
     });
@@ -347,13 +347,13 @@ describe('normalizeEditorState', () => {
     const result = normalizeEditorState(state);
 
     const list = result.blocks[0] as import('../types').ListBlock;
-    expect(list.children[0].children).toHaveLength(2);
-    expect(list.children[0].children[0]).toMatchObject({
+    expect(list.children[0]?.children).toHaveLength(2);
+    expect(list.children[0]?.children?.[0]).toMatchObject({
       type: 'text',
       text: 'Bold ',
       format: { bold: true },
     });
-    expect(list.children[0].children[1]).toMatchObject({
+    expect(list.children[0]?.children?.[1]).toMatchObject({
       type: 'text',
       text: 'and normal text',
     });
@@ -392,12 +392,12 @@ describe('normalizeEditorState', () => {
     const result = normalizeEditorState(state);
 
     const list = result.blocks[0] as import('../types').ListBlock;
-    expect(list.children[0].children).toHaveLength(2);
-    expect(list.children[0].children[0]).toMatchObject({
+    expect(list.children[0]?.children).toHaveLength(2);
+    expect(list.children[0]?.children?.[0]).toMatchObject({
       type: 'text',
       text: 'Check ',
     });
-    expect(list.children[0].children[1]).toMatchObject({
+    expect(list.children[0]?.children?.[1]).toMatchObject({
       type: 'link',
       url: 'https://example.com',
     });
@@ -458,8 +458,8 @@ describe('normalizeEditorState', () => {
     const result = normalizeEditorState(state);
 
     const list = result.blocks[0] as import('../types').ListBlock;
-    expect(list.children[0].children).toHaveLength(1);
-    expect(list.children[0].children[0]).toMatchObject({
+    expect(list.children[0]?.children).toHaveLength(1);
+    expect(list.children[0]?.children?.[0]).toMatchObject({
       type: 'text',
       text: 'Future-proof text',
     });
@@ -568,7 +568,7 @@ describe('normalizeEditorState', () => {
 
     // Should only have the valid paragraph
     expect(result.blocks).toHaveLength(1);
-    expect(result.blocks[0].type).toBe('paragraph');
+    expect(result.blocks[0]?.type).toBe('paragraph');
   });
 });
 

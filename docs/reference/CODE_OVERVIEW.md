@@ -99,6 +99,7 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`core/transcripts/providerRegistry.ts`** - Provider registry and TranscriptProviderV2 interface
 - **`extension/dist/libs/transcriptProviders.js`** - Bundled transcript providers + registry + Panopto helpers for background usage (loaded via `importScripts`).
 - **`extension/src/networkUtils.js`** - Background fetch helpers (retry, credentials, HTML fetch, redirect tracking) used by ExtensionFetcher and PanoptoMediaResolver.
+- **`extension/src/networkRetry.js`** - Shared retry/timeout wrapper for background + content script fetches (redirect-aware).
 - **`extension/src/panoptoResolver.js`** - PanoptoMediaResolver for AI media URL resolution; uses core Panopto helpers.
 - **`extension/background/`** - ExtensionFetcher (`transcripts/extensionFetcher.js`), transcript routing, AI transcription pipeline, and message handlers; `extension/background.js` is the MV3 entrypoint that loads modules and registers listeners.
 - **AI fallback**: `useTranscripts.ts` triggers `FETCH_PANOPTO_MEDIA_URL` when captions are missing, then `TRANSCRIBE_MEDIA_AI` streams media to backend transcript jobs.
@@ -237,7 +238,7 @@ This is a living overview of the current codebase. Update it whenever files move
   - Chat title generation and persistence.
 
 - **`services/llmClient.js`**
-  - LLM orchestration + prompt construction for structured responses and chat titles.
+  - LLM orchestration entrypoint; delegates prompt/response helpers to `services/llm/*` modules.
 
 - **`services/embeddings.js`**
   - Embeddings service wrapper (Azure primary, OpenAI fallback).
@@ -289,7 +290,7 @@ This is a living overview of the current codebase. Update it whenever files move
 ### External Services
 
 - **`services/llmClient.js`**
-  - LLM SDK wrapper (OpenAI primary + optional fallback), prompt construction, and response formatting for chat + structured responses.
+  - LLM SDK wrapper + orchestration; prompt construction/response formatting live under `services/llm/*`.
 
 ### Middleware
 
@@ -318,7 +319,7 @@ This is a living overview of the current codebase. Update it whenever files move
 
 **Test Files:**
 
-- All test files use `.test.js` suffix (e.g., `chatRepository.test.js`, `validation.test.js`)
+- All test files use `.test.js` suffix (e.g., `chatRepository.test.js`, `chatAssetValidation.test.js`)
 - Located next to the code they test or in `__tests__/` subdirectories
 - Use Node.js built-in test runner (`node:test`)
 - Mock external dependencies (Supabase, OpenAI, network)
@@ -417,7 +418,7 @@ The system is designed to handle thousands of concurrent users:
 
 **⚠️ Critical naming rule:**
 
-- Unit test files: `*.test.js` (e.g., `validation.test.js`)
+- Unit test files: `*.test.js` (e.g., `chatAssetValidation.test.js`)
 - Utility scripts: `verify-*`, `check-*`, `setup-*` (e.g., `verify-azure-embeddings.js`)
 - NEVER use `test-*.js` for non-test scripts (will break CI/CD)
 

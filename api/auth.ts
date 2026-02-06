@@ -83,13 +83,13 @@ function resolveAuthErrorMessage(
   nestedRecord: RecordValue | null,
   fallbackMessage: string,
 ): string {
-  const nestedError = payloadRecord?.error;
+  const nestedError = payloadRecord?.['error'];
   const message =
     firstString([
-      payloadRecord?.error_description,
-      nestedRecord?.message,
+      payloadRecord?.['error_description'],
+      nestedRecord?.['message'],
       typeof nestedError === 'string' ? nestedError : undefined,
-      payloadRecord?.message,
+      payloadRecord?.['message'],
     ]) || fallbackMessage;
 
   return message || fallbackMessage;
@@ -130,10 +130,17 @@ async function parseErrorResponse(
 ): Promise<{ message: string; code: string; details?: Record<string, unknown> }> {
   const payload = await readErrorPayload(response);
   const payloadRecord = asRecord(payload);
-  const nestedRecord = asRecord(payloadRecord?.error);
+  const nestedRecord = asRecord(payloadRecord?.['error']);
   const message = resolveAuthErrorMessage(payloadRecord, nestedRecord, fallbackMessage);
   const code = mapAuthErrorCode(message);
-  return { message, code, details: payloadRecord || undefined };
+  const parsed: { message: string; code: string; details?: Record<string, unknown> } = {
+    message,
+    code,
+  };
+  if (payloadRecord) {
+    parsed.details = payloadRecord;
+  }
+  return parsed;
 }
 
 /**
@@ -307,10 +314,10 @@ export function createAuthClient(
         const errorBody: unknown = await response.json();
         if (typeof errorBody === 'object' && errorBody !== null) {
           const record = errorBody as Record<string, unknown>;
-          if (typeof record.error_description === 'string') {
-            errorMessage = record.error_description;
-          } else if (typeof record.message === 'string') {
-            errorMessage = record.message;
+          if (typeof record['error_description'] === 'string') {
+            errorMessage = record['error_description'];
+          } else if (typeof record['message'] === 'string') {
+            errorMessage = record['message'];
           }
         }
       } catch (_) {

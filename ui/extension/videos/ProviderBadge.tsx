@@ -10,7 +10,9 @@ interface ProviderBadgeProps {
   provider: string;
 }
 
-const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
+type ProviderKey = 'panopto' | 'echo360' | 'html5' | 'youtube' | 'unknown';
+
+const BADGE_COLORS: Record<ProviderKey, { bg: string; text: string }> = {
   panopto: { bg: '#1e3a5f', text: '#ffffff' },
   echo360: { bg: '#b45309', text: '#ffffff' },
   html5: { bg: '#2f6f44', text: '#ffffff' },
@@ -19,7 +21,10 @@ const BADGE_COLORS: Record<string, { bg: string; text: string }> = {
 };
 
 export function ProviderBadge({ provider }: ProviderBadgeProps) {
-  const colors = BADGE_COLORS[provider] || BADGE_COLORS.unknown;
+  const key = Object.prototype.hasOwnProperty.call(BADGE_COLORS, provider)
+    ? (provider as ProviderKey)
+    : 'unknown';
+  const colors = BADGE_COLORS[key];
   const label = provider.charAt(0).toUpperCase() + provider.slice(1);
 
   return (

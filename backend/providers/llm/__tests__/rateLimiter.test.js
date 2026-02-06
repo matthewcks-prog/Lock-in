@@ -2,12 +2,14 @@
  * Unit tests for RateLimiterManager
  *
  * Uses TEST_LIMITS configuration for fast, deterministic tests.
+ * Creates local instances for test isolation - avoids global singleton conflicts.
  */
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const {
   RateLimiterManager,
+  getRateLimiterManager,
   getTestRateLimiterManager,
   resetRateLimiterManager,
   DEFAULT_LIMITS,
@@ -18,18 +20,14 @@ const {
 describe('RateLimiterManager', () => {
   let manager;
 
-  beforeEach(() => {
-    // Reset singleton before each test
-    resetRateLimiterManager();
-  });
+  // No global singleton manipulation in beforeEach - creates local instances only
 
-  afterEach(() => {
-    // Clean up
+  afterEach(async () => {
+    // Clean up local manager instance
     if (manager) {
-      manager.stop();
+      await manager.stop();
       manager = null;
     }
-    resetRateLimiterManager();
   });
 
   describe('constructor', () => {
@@ -187,8 +185,8 @@ describe('RateLimiterManager', () => {
 });
 
 describe('getRateLimiterManager', () => {
-  afterEach(() => {
-    resetRateLimiterManager();
+  afterEach(async () => {
+    await resetRateLimiterManager();
   });
 
   test('should return singleton instance', () => {
@@ -198,9 +196,9 @@ describe('getRateLimiterManager', () => {
     assert.strictEqual(manager1, manager2);
   });
 
-  test('should create new instance after reset', () => {
+  test('should create new instance after reset', async () => {
     const manager1 = getTestRateLimiterManager();
-    resetRateLimiterManager();
+    await resetRateLimiterManager();
     const manager2 = getTestRateLimiterManager();
 
     assert.notStrictEqual(manager1, manager2);

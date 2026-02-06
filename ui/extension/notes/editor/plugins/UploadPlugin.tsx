@@ -20,7 +20,8 @@ export function UploadPlugin({
   const handleFiles = useCallback(
     async (files: FileList | null) => {
       if (!onUploadFile || !files || files.length === 0) return;
-      const file = files[0];
+      const file = files.item(0);
+      if (!file) return;
       const asset = await onUploadFile(file);
       if (!asset) return;
       insertAssetIntoEditor(editor, asset);

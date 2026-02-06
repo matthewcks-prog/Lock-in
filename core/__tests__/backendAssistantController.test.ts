@@ -2,10 +2,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { createRequire } from 'node:module';
 
-process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-openai-key';
-process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost';
-process.env.SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key';
+process.env['OPENAI_API_KEY'] = process.env['OPENAI_API_KEY'] || 'test-openai-key';
+process.env['SUPABASE_URL'] = process.env['SUPABASE_URL'] || 'http://localhost';
+process.env['SUPABASE_SERVICE_ROLE_KEY'] =
+  process.env['SUPABASE_SERVICE_ROLE_KEY'] || 'test-service-role-key';
 
 const generateStructuredStudyResponse = vi.fn();
 
@@ -153,7 +153,7 @@ describe('assistant AI attachments validation', () => {
     await handleLockinRequest(req, res);
 
     expect(res.statusCode).toBe(400);
-    expect(res.body?.success).toBe(false);
+    expect(res.body?.['success']).toBe(false);
   });
 
   it('allows attachment-only requests without selection', async () => {
@@ -193,7 +193,7 @@ describe('assistant AI attachments validation', () => {
     await handleLockinRequest(req, res);
 
     expect(res.statusCode).toBe(200);
-    expect(res.body?.success).toBe(true);
+    expect(res.body?.['success']).toBe(true);
     expect(generateStructuredStudyResponse).toHaveBeenCalledWith(
       expect.objectContaining({
         selection: '',

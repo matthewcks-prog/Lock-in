@@ -18,6 +18,7 @@
  */
 
 const { logger } = require('../../observability');
+const { fetchWithRetry } = require('../../utils/networkRetry');
 
 /**
  * Default cache TTL in milliseconds (10 minutes)
@@ -83,25 +84,33 @@ class JwksProvider {
    * @returns {Promise<Object>} Parsed JSON response
    */
   async _defaultFetcher(url) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this._requestTimeoutMs);
-
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
+    const response = await fetchWithRetry(
+      url,
+      {
         headers: {
           Accept: 'application/json',
         },
-      });
+      },
+      {
+        maxRetries: 2,
+        timeoutMs: this._requestTimeoutMs,
+        retryableStatuses: [429, 502, 503, 504],
+        retryOnServerError: true,
+        onRetry: (info) => {
+          logger.warn('[JwksProvider] Retry JWKS fetch', {
+            attempt: info.attempt,
+            delayMs: info.delayMs,
+            status: info.status,
+          });
+        },
+      },
+    );
 
-      if (!response.ok) {
-        throw new Error(`JWKS fetch failed: ${response.status} ${response.statusText}`);
-      }
-
-      return await response.json();
-    } finally {
-      clearTimeout(timeoutId);
+    if (!response.ok) {
+      throw new Error(`JWKS fetch failed: ${response.status} ${response.statusText}`);
     }
+
+    return await response.json();
   }
 
   /**

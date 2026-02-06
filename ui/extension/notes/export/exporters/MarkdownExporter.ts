@@ -124,11 +124,10 @@ function documentToMarkdown(document: NormalizedDocument, metadata: ExportMetada
       }
 
       case 'list': {
-        for (let i = 0; i < block.children.length; i++) {
-          const item = block.children[i];
-          const prefix = block.ordered ? `${i + 1}. ` : '- ';
+        block.children.forEach((item, index) => {
+          const prefix = block.ordered ? `${index + 1}. ` : '- ';
           lines.push(prefix + inlineToMarkdown(item.children));
-        }
+        });
         lines.push('');
         break;
       }

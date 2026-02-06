@@ -102,11 +102,14 @@ export function useFeedbackForm({
       setError(null);
 
       try {
-        await apiClient.submitFeedback({
+        const payload: { type: FeedbackType; message: string; context?: FeedbackContext } = {
           type: formState.type,
           message: formState.message.trim(),
-          context,
-        });
+        };
+        if (context) {
+          payload.context = context;
+        }
+        await apiClient.submitFeedback(payload);
 
         setIsSuccess(true);
         onSuccess?.();

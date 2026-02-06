@@ -2,13 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SidebarInstance } from '../index';
 import type { LockInSidebarProps } from '../LockInSidebar';
 
-vi.mock('../../extension/src/sentry', () => ({
-  initSentry: vi.fn().mockResolvedValue(false),
-}));
-vi.mock('../../extension/src/sentry.ts', () => ({
-  initSentry: vi.fn().mockResolvedValue(false),
-}));
-
 type LockInSidebarFactory = (props: LockInSidebarProps) => SidebarInstance;
 
 type LockInUISurface = {
@@ -18,6 +11,9 @@ type LockInUISurface = {
 
 type TestWindow = typeof window & {
   LockInUI?: LockInUISurface;
+  LockInSentry?: {
+    initSentry?: (surface: string) => Promise<boolean>;
+  };
 };
 
 describe('LockInUI global surface', () => {
@@ -27,6 +23,9 @@ describe('LockInUI global surface', () => {
     vi.resetModules();
     testWindow = window as TestWindow;
     delete testWindow.LockInUI;
+    testWindow.LockInSentry = {
+      initSentry: vi.fn().mockResolvedValue(false),
+    };
     document.body.innerHTML = '';
   });
 

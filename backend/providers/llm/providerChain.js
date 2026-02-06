@@ -75,12 +75,15 @@ class ProviderChain {
    * @param {number} [options.maxRetries=2] - Max retries per provider before fallback
    * @param {number} [options.retryDelayMs=1000] - Base delay between retries
    * @param {Function} [options.sleep] - Custom sleep function for testing (default: real setTimeout)
+   * @param {import('./rateLimiter').RateLimiterManager} [options.rateLimiter] - Injected rate limiter (default: singleton)
    */
   constructor(adapters, options = {}) {
     this.adapters = adapters.filter((a) => a.isAvailable());
     this.maxRetries = options.maxRetries ?? 2;
     this.retryDelayMs = options.retryDelayMs ?? 1000;
     this._sleep = options.sleep ?? defaultSleep;
+    // Support dependency injection for testing isolation
+    this._rateLimiter = options.rateLimiter ?? null;
 
     if (this.adapters.length === 0) {
       throw new Error('No LLM providers available. Check API key configuration.');
@@ -90,6 +93,15 @@ class ProviderChain {
       providers: this.adapters.map((a) => a.getProviderName()),
       primaryProvider: this.adapters[0]?.getProviderName(),
     });
+  }
+
+  /**
+   * Get the rate limiter (injected or global singleton)
+   * @private
+   * @returns {import('./rateLimiter').RateLimiterManager}
+   */
+  _getRateLimiter() {
+    return this._rateLimiter ?? getRateLimiterManager();
   }
 
   /**
@@ -196,7 +208,7 @@ class ProviderChain {
     let lastError;
     const providerName = adapter.getProviderName();
     const model = adapter.model;
-    const rateLimiter = getRateLimiterManager();
+    const rateLimiter = this._getRateLimiter();
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {

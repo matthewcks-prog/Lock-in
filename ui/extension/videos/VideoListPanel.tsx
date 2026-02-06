@@ -154,18 +154,18 @@ export function VideoListPanel({
               const isSelected = selectedVideoId === video.id;
               const isDisabled = isVideoDisabled?.(video) ?? false;
 
-              return (
-                <VideoListItem
-                  key={`${video.provider}-${video.id}`}
-                  video={video}
-                  onSelect={() => onSelectVideo(video)}
-                  isSelected={isSelected}
-                  isDisabled={isDisabled}
-                  renderBadge={renderItemBadge}
-                  renderActions={renderItemActions}
-                  renderStatus={renderItemStatus}
-                />
-              );
+              const itemProps = {
+                key: `${video.provider}-${video.id}`,
+                video,
+                onSelect: () => onSelectVideo(video),
+                isSelected,
+                isDisabled,
+                ...(renderItemBadge ? { renderBadge: renderItemBadge } : {}),
+                ...(renderItemActions ? { renderActions: renderItemActions } : {}),
+                ...(renderItemStatus ? { renderStatus: renderItemStatus } : {}),
+              };
+
+              return <VideoListItem {...itemProps} />;
             })}
           </div>
         )}

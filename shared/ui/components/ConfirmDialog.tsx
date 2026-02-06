@@ -53,6 +53,7 @@ export function ConfirmDialog({
       }, 50);
       return () => clearTimeout(timer);
     }
+    return undefined;
   }, [isOpen]);
 
   // Handle Escape key to close
@@ -78,6 +79,7 @@ export function ConfirmDialog({
         document.body.style.overflow = originalOverflow;
       };
     }
+    return undefined;
   }, [isOpen]);
 
   const handleBackdropClick = useCallback(

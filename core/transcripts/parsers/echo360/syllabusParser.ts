@@ -24,15 +24,15 @@ import { buildLessonPageUrl } from './urlUtils';
 function extractSyllabusEntries(response: unknown): Echo360SyllabusEntry[] | null {
   const payload = asRecord(response);
   if (!payload) return null;
-  if (Array.isArray(payload.data)) {
-    return payload.data as Echo360SyllabusEntry[];
+  if (Array.isArray(payload['data'])) {
+    return payload['data'] as Echo360SyllabusEntry[];
   }
-  if (Array.isArray(payload.lessons)) {
-    return payload.lessons as Echo360SyllabusEntry[];
+  if (Array.isArray(payload['lessons'])) {
+    return payload['lessons'] as Echo360SyllabusEntry[];
   }
-  const dataRecord = asRecord(payload.data);
-  if (dataRecord && Array.isArray(dataRecord.lessons)) {
-    return dataRecord.lessons as Echo360SyllabusEntry[];
+  const dataRecord = asRecord(payload['data']);
+  if (dataRecord && Array.isArray(dataRecord['lessons'])) {
+    return dataRecord['lessons'] as Echo360SyllabusEntry[];
   }
   return null;
 }
@@ -103,14 +103,29 @@ function getMediaStatusSnapshot(media: UnknownRecord): {
   isHiddenDueToCaptions?: boolean;
   isAudioOnly?: boolean;
 } {
-  return {
-    isAvailable: readBoolean(media.isAvailable),
-    isProcessing: readBoolean(media.isProcessing),
-    isFailed: readBoolean(media.isFailed),
-    isPreliminary: readBoolean(media.isPreliminary),
-    isHiddenDueToCaptions: readBoolean(media.isHiddenDueToCaptions),
-    isAudioOnly: readBoolean(media.isAudioOnly),
-  };
+  const snapshot: {
+    isAvailable?: boolean;
+    isProcessing?: boolean;
+    isFailed?: boolean;
+    isPreliminary?: boolean;
+    isHiddenDueToCaptions?: boolean;
+    isAudioOnly?: boolean;
+  } = {};
+  const isAvailable = readBoolean(media['isAvailable']);
+  const isProcessing = readBoolean(media['isProcessing']);
+  const isFailed = readBoolean(media['isFailed']);
+  const isPreliminary = readBoolean(media['isPreliminary']);
+  const isHiddenDueToCaptions = readBoolean(media['isHiddenDueToCaptions']);
+  const isAudioOnly = readBoolean(media['isAudioOnly']);
+
+  if (isAvailable !== undefined) snapshot.isAvailable = isAvailable;
+  if (isProcessing !== undefined) snapshot.isProcessing = isProcessing;
+  if (isFailed !== undefined) snapshot.isFailed = isFailed;
+  if (isPreliminary !== undefined) snapshot.isPreliminary = isPreliminary;
+  if (isHiddenDueToCaptions !== undefined) snapshot.isHiddenDueToCaptions = isHiddenDueToCaptions;
+  if (isAudioOnly !== undefined) snapshot.isAudioOnly = isAudioOnly;
+
+  return snapshot;
 }
 
 /**
@@ -176,8 +191,8 @@ type LessonContext = {
 };
 
 function extractLessonContext(entryRecord: UnknownRecord): LessonContext {
-  const lessonWrapper = asRecord(entryRecord.lesson);
-  const nestedLesson = lessonWrapper ? asRecord(lessonWrapper.lesson) : null;
+  const lessonWrapper = asRecord(entryRecord['lesson']);
+  const nestedLesson = lessonWrapper ? asRecord(lessonWrapper['lesson']) : null;
   const lessonRecord = nestedLesson || lessonWrapper || entryRecord;
   const lessonId =
     extractLessonIdFromRecord(nestedLesson) ||
@@ -203,7 +218,7 @@ function extractLessonContext(entryRecord: UnknownRecord): LessonContext {
 function getMediaTypeInfo(mediaRecord: UnknownRecord) {
   const mediaTypeRaw = extractMediaTypeRaw(mediaRecord);
   const mediaType = normalizeMediaType(mediaTypeRaw);
-  const isAudioOnly = readBoolean(mediaRecord.isAudioOnly) === true;
+  const isAudioOnly = readBoolean(mediaRecord['isAudioOnly']) === true;
   const isVideoType =
     mediaTypeRaw === 'Video' ||
     mediaType === 'video' ||
@@ -358,7 +373,6 @@ function maybeAddLessonFallback({
     title: titleWithDate,
     embedUrl: buildLessonPageUrl(baseUrl, lessonContext.lessonId),
     echoLessonId: lessonContext.lessonId,
-    echoMediaId: undefined,
     echoBaseUrl: baseUrl,
   });
 }
@@ -404,13 +418,14 @@ export function parseSyllabusResponse(
     if (!entryRecord) continue;
 
     const lessonContext = extractLessonContext(entryRecord);
+    const lessonRecord = lessonContext.lessonRecord as UnknownRecord | null;
     const mediaRecords = collectMediaRecords(
-      entryRecord.medias,
-      entryRecord.media,
-      lessonContext.lessonWrapper?.medias,
-      lessonContext.lessonWrapper?.media,
-      (lessonContext.lessonRecord as UnknownRecord | null)?.medias,
-      (lessonContext.lessonRecord as UnknownRecord | null)?.media,
+      entryRecord['medias'],
+      entryRecord['media'],
+      lessonContext.lessonWrapper?.['medias'],
+      lessonContext.lessonWrapper?.['media'],
+      lessonRecord?.['medias'],
+      lessonRecord?.['media'],
     );
 
     const { addedMedia, hasMediaId } = processMediaRecords({

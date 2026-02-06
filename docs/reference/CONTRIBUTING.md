@@ -188,7 +188,7 @@ When adding new code, follow these testing standards:
 **Example:**
 
 ```javascript
-// ✅ Good: validation.test.js
+// ✅ Good: chatAssetValidation.test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');
 

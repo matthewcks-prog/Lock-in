@@ -34,8 +34,10 @@ export class Html5Provider implements TranscriptProviderV2 {
       };
     }
 
-    let lastError: { error: string; errorCode: TranscriptExtractionResult['errorCode'] } | null =
-      null;
+    let lastError: {
+      error: string;
+      errorCode: NonNullable<TranscriptExtractionResult['errorCode']>;
+    } | null = null;
 
     for (const track of tracks) {
       if (!track?.src) continue;

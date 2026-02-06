@@ -9,6 +9,22 @@
  */
 
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks to match backend
+const NetworkRetry = typeof window !== 'undefined' ? window.LockInNetworkRetry : null;
+const MEDIA_FETCH_RETRY_CONFIG = {
+  maxRetries: 2,
+  timeoutMs: 20000,
+};
+
+function fetchWithRetry(url, options, overrides = {}) {
+  if (!NetworkRetry?.fetchWithRetry) {
+    throw new Error('Network retry utilities unavailable');
+  }
+  return NetworkRetry.fetchWithRetry(url, options, {
+    ...MEDIA_FETCH_RETRY_CONFIG,
+    ...overrides,
+    context: overrides.context || 'media fetch',
+  });
+}
 
 /**
  * Fetch media from a URL and return it as chunks
@@ -64,7 +80,7 @@ function isRedirectResponse(response) {
 
 async function fetchWithRedirectHandling(mediaUrl, signal) {
   console.log('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
-  let response = await fetch(mediaUrl, {
+  let response = await fetchWithRetry(mediaUrl, {
     method: 'GET',
     credentials: 'include',
     redirect: 'manual',
@@ -97,7 +113,7 @@ async function fetchWithRedirectHandling(mediaUrl, signal) {
       useCredentials,
     );
 
-    response = await fetch(location, {
+    response = await fetchWithRetry(location, {
       method: 'GET',
       credentials: useCredentials ? 'include' : 'omit',
       signal,
@@ -110,7 +126,7 @@ async function fetchWithRedirectHandling(mediaUrl, signal) {
     '[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials',
   );
   try {
-    response = await fetch(mediaUrl, {
+    response = await fetchWithRetry(mediaUrl, {
       method: 'GET',
       credentials: 'same-origin',
       signal,
@@ -120,7 +136,7 @@ async function fetchWithRedirectHandling(mediaUrl, signal) {
   } catch (sameOriginError) {
     console.log('[Lock-in MediaFetcher] Same-origin fetch failed:', sameOriginError.message);
     console.log('[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)');
-    response = await fetch(mediaUrl, {
+    response = await fetchWithRetry(mediaUrl, {
       method: 'GET',
       credentials: 'omit',
       signal,

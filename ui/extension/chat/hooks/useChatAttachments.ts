@@ -74,12 +74,15 @@ export function useChatAttachments(
             previewUrlsRef.current.add(previewUrl);
           }
 
-          return {
+          const attachment: PendingAttachment = {
             id: generateId(),
             file,
-            previewUrl,
             status: 'pending' as const,
           };
+          if (previewUrl) {
+            attachment.previewUrl = previewUrl;
+          }
+          return attachment;
         });
 
         return [...prev, ...newAttachments];
@@ -118,7 +121,22 @@ export function useChatAttachments(
   const setAttachmentStatus = useCallback(
     (id: string, status: PendingAttachment['status'], assetId?: string, error?: string) => {
       setAttachments((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, status, assetId: assetId || a.assetId, error } : a)),
+        prev.map((a) => {
+          if (a.id !== id) return a;
+          let next: PendingAttachment = { ...a, status };
+          if (assetId) {
+            next.assetId = assetId;
+          }
+          if (error !== undefined) {
+            if (error) {
+              next.error = error;
+            }
+          } else if (status !== 'error' && next.error) {
+            const { error: _removed, ...rest } = next;
+            next = rest;
+          }
+          return next;
+        }),
       );
     },
     [],

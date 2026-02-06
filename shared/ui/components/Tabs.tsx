@@ -45,7 +45,9 @@ export function Tabs({ tabs, activeTab, onTabChange, variant = 'line', ariaLabel
 
     const focusTab = (targetIndex: number) => {
       const nextIndex = (targetIndex + tabs.length) % tabs.length;
-      onTabChange(tabs[nextIndex].id);
+      const nextTab = tabs[nextIndex];
+      if (!nextTab) return;
+      onTabChange(nextTab.id);
       tabRefs.current[nextIndex]?.focus();
     };
 

@@ -65,6 +65,9 @@ function parseColor(cssColor: string): RGB | null {
   const hexMatch = trimmed.match(/^#([a-f0-9]{3,6})$/i);
   if (hexMatch) {
     let hex = hexMatch[1];
+    if (!hex) {
+      return null;
+    }
     if (hex.length === 3)
       hex = hex
         .split('')
@@ -76,7 +79,9 @@ function parseColor(cssColor: string): RGB | null {
 
   const rgbMatch = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
   if (rgbMatch) {
-    return [parseInt(rgbMatch[1], 10), parseInt(rgbMatch[2], 10), parseInt(rgbMatch[3], 10)];
+    const [_, r, g, b] = rgbMatch;
+    if (!r || !g || !b) return null;
+    return [parseInt(r, 10), parseInt(g, 10), parseInt(b, 10)];
   }
 
   const namedColors: Record<string, RGB> = {
@@ -92,7 +97,7 @@ function parseColor(cssColor: string): RGB | null {
     gray: [128, 128, 128],
     grey: [128, 128, 128],
   };
-  return namedColors[trimmed] || null;
+  return namedColors[trimmed] ?? null;
 }
 
 function getFontStyle(span: TextSpan): string {
@@ -170,29 +175,27 @@ export class PdfBuilder {
     const spans: TextSpan[] = [];
     for (const item of content) {
       if (item.type === 'text') {
-        spans.push({
-          text: item.text,
-          bold: item.format.bold,
-          italic: item.format.italic,
-          underline: item.format.underline,
-          strikethrough: item.format.strikethrough,
-          code: item.format.code,
-          color: item.styles?.color ? (parseColor(item.styles.color) ?? undefined) : undefined,
-          backgroundColor: item.styles?.backgroundColor
-            ? (parseColor(item.styles.backgroundColor) ?? undefined)
-            : undefined,
-        });
+        const span: TextSpan = { text: item.text };
+        if (item.format.bold) span.bold = true;
+        if (item.format.italic) span.italic = true;
+        if (item.format.underline) span.underline = true;
+        if (item.format.strikethrough) span.strikethrough = true;
+        if (item.format.code) span.code = true;
+        const color = item.styles?.color ? parseColor(item.styles.color) : null;
+        if (color) span.color = color;
+        const backgroundColor = item.styles?.backgroundColor
+          ? parseColor(item.styles.backgroundColor)
+          : null;
+        if (backgroundColor) span.backgroundColor = backgroundColor;
+        spans.push(span);
       } else if (item.type === 'link') {
         for (const child of item.children) {
-          spans.push({
-            text: child.text,
-            bold: child.format.bold,
-            italic: child.format.italic,
-            underline: true,
-            strikethrough: child.format.strikethrough,
-            code: child.format.code,
-            color: [0, 0, 238],
-          });
+          const span: TextSpan = { text: child.text, underline: true, color: [0, 0, 238] };
+          if (child.format.bold) span.bold = true;
+          if (child.format.italic) span.italic = true;
+          if (child.format.strikethrough) span.strikethrough = true;
+          if (child.format.code) span.code = true;
+          spans.push(span);
         }
       }
     }
@@ -323,8 +326,8 @@ export class PdfBuilder {
   }
 
   addHeading(content: InlineContent[], level: number, alignment?: TextAlignment): void {
-    const fontSize =
-      PDF_CONFIG.headingSizes[Math.min(level - 1, PDF_CONFIG.headingSizes.length - 1)];
+    const headingIndex = Math.min(level - 1, PDF_CONFIG.headingSizes.length - 1);
+    const fontSize = PDF_CONFIG.headingSizes[headingIndex] ?? PDF_CONFIG.bodySize;
     this.y += PDF_CONFIG.headingSpacing / 2;
 
     const spans = this.inlineToSpans(content).map((s) => ({ ...s, bold: true }));
@@ -376,7 +379,12 @@ export class PdfBuilder {
 
     // First line rendered inline with prefix
     let x = contentX;
-    for (const span of lines[0].spans) x += this.renderSpan(span, x, lineHeight);
+    const firstLine = lines[0];
+    if (!firstLine) {
+      this.y += lineHeight;
+      return;
+    }
+    for (const span of firstLine.spans) x += this.renderSpan(span, x, lineHeight);
     this.y += lineHeight;
 
     // Remaining lines at indent

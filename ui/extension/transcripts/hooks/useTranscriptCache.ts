@@ -203,13 +203,19 @@ export function useTranscriptCache(apiClient: ApiClient | null) {
       }));
 
       try {
-        const meta: TranscriptCacheMeta = {
-          mediaUrl: mediaUrl || undefined,
-          mediaUrlNormalized: mediaUrlNormalized || undefined,
-          etag: input.meta?.etag,
-          lastModified: input.meta?.lastModified,
-          durationMs,
-        };
+        const meta: TranscriptCacheMeta = { durationMs };
+        if (mediaUrl) {
+          meta.mediaUrl = mediaUrl;
+        }
+        if (mediaUrlNormalized) {
+          meta.mediaUrlNormalized = mediaUrlNormalized;
+        }
+        if (input.meta?.etag) {
+          meta.etag = input.meta.etag;
+        }
+        if (input.meta?.lastModified) {
+          meta.lastModified = input.meta.lastModified;
+        }
 
         await client.cacheTranscript({
           fingerprint,

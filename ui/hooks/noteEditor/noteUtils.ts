@@ -17,8 +17,8 @@ export function createClientNoteId(): string {
     }
   }
 
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'));
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex
     .slice(6, 8)
@@ -30,7 +30,7 @@ export function createDraftNote(opts: {
   sourceUrl?: string | null;
   sourceSelection?: string | null;
 }): Note {
-  return {
+  const note: Note = {
     id: null,
     title: '',
     content: {
@@ -46,10 +46,13 @@ export function createDraftNote(opts: {
     tags: [],
     createdAt: null,
     updatedAt: null,
-    linkedLabel: opts.courseCode ?? undefined,
     isStarred: false,
     previewText: '',
   };
+  if (opts.courseCode) {
+    note.linkedLabel = opts.courseCode;
+  }
+  return note;
 }
 
 export function createContentFingerprint(title: string, content: NoteContent): string {

@@ -1,5 +1,5 @@
 import type { ChatMessage, StudyResponse, ApiResponse } from '../../core/domain/types';
-import type { ApiRequest } from '../fetcher';
+import type { ApiRequest, ApiRequestOptions } from '../fetcher';
 import { sanitizeUrl } from '../../core/utils/urlSanitizer';
 
 export interface ProcessTextParams {
@@ -74,15 +74,19 @@ export function createLockinClient(apiRequest: ApiRequest) {
     if (attachments && attachments.length > 0) body.attachments = attachments;
     if (idempotencyKey) body.idempotencyKey = idempotencyKey;
 
-    return apiRequest<ApiResponse<StudyResponse>>('/api/lockin', {
+    const requestOptions: ApiRequestOptions = {
       method: 'POST',
       body: JSON.stringify(body),
-      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined,
       retryConfig: {
         maxRetries: 2,
         retryableStatuses: [502, 503, 504],
       },
-    });
+    };
+    if (idempotencyKey) {
+      requestOptions.headers = { 'Idempotency-Key': idempotencyKey };
+    }
+
+    return apiRequest<ApiResponse<StudyResponse>>('/api/lockin', requestOptions);
   }
 
   return {

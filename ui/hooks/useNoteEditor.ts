@@ -30,11 +30,20 @@ export interface UseNoteEditorResult {
 
 export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResult {
   const state = useNoteEditorState(options);
-  const persistence = useNoteEditorPersistence({
+  const persistenceOptions: {
+    notesService: NotesService | null | undefined;
+    defaultCourseCode?: string | null;
+    defaultSourceUrl?: string | null;
+    sourceSelection?: string | null;
+    noteRef: typeof state.noteRef;
+    clientNoteIdRef: typeof state.clientNoteIdRef;
+    lastSavedFingerprintRef: typeof state.lastSavedFingerprintRef;
+    setNote: typeof state.setNote;
+    setStatus: typeof state.setStatus;
+    setError: typeof state.setError;
+    setActiveNoteId: typeof state.setActiveNoteId;
+  } = {
     notesService: options.notesService,
-    defaultCourseCode: options.defaultCourseCode,
-    defaultSourceUrl: options.defaultSourceUrl,
-    sourceSelection: options.sourceSelection,
     noteRef: state.noteRef,
     clientNoteIdRef: state.clientNoteIdRef,
     lastSavedFingerprintRef: state.lastSavedFingerprintRef,
@@ -42,7 +51,17 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     setStatus: state.setStatus,
     setError: state.setError,
     setActiveNoteId: state.setActiveNoteId,
-  });
+  };
+  if (options.defaultCourseCode !== undefined) {
+    persistenceOptions.defaultCourseCode = options.defaultCourseCode;
+  }
+  if (options.defaultSourceUrl !== undefined) {
+    persistenceOptions.defaultSourceUrl = options.defaultSourceUrl;
+  }
+  if (options.sourceSelection !== undefined) {
+    persistenceOptions.sourceSelection = options.sourceSelection;
+  }
+  const persistence = useNoteEditorPersistence(persistenceOptions);
 
   return {
     note: state.note,

@@ -1,23 +1,33 @@
 /**
  * Unit tests for ProviderChain
  *
- * Uses dependency injection for sleep to eliminate real delays.
- * Tests run in milliseconds, not seconds.
+ * Uses dependency injection for:
+ * - sleep: Eliminates real delays
+ * - rateLimiter: Isolates each test from global singleton
+ *
+ * Tests run in milliseconds with full isolation.
  */
 
 const { test, describe, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const { ProviderChain, immediateSleep } = require('../providerChain');
-const { getTestRateLimiterManager, resetRateLimiterManager } = require('../rateLimiter');
+const { RateLimiterManager, TEST_LIMITS } = require('../rateLimiter');
+
+/** @type {RateLimiterManager|null} */
+let testRateLimiter = null;
 
 /**
- * Test options with immediate sleep - no real delays
+ * Create test options with immediate sleep and injected rate limiter
+ * @returns {Object} Test options
  */
-const FAST_TEST_OPTIONS = {
-  sleep: immediateSleep,
-  retryDelayMs: 0,
-  maxRetries: 2,
-};
+function createTestOptions() {
+  return {
+    sleep: immediateSleep,
+    retryDelayMs: 0,
+    maxRetries: 2,
+    rateLimiter: testRateLimiter,
+  };
+}
 
 /**
  * Create a mock adapter for testing
@@ -44,15 +54,17 @@ function createMockAdapter(name, options = {}) {
 
 describe('ProviderChain', () => {
   beforeEach(() => {
-    // Reset singleton to ensure clean state and use test-friendly rate limiter
-    resetRateLimiterManager();
-    // Pre-initialize with TEST_LIMITS for no delays
-    getTestRateLimiterManager();
+    // Create a fresh, isolated rate limiter for each test
+    // No singleton dependency - complete test isolation
+    testRateLimiter = new RateLimiterManager(TEST_LIMITS);
   });
 
-  afterEach(() => {
-    // Clean up singleton after each test to prevent state leakage
-    resetRateLimiterManager();
+  afterEach(async () => {
+    // Clean up the test-specific rate limiter
+    if (testRateLimiter) {
+      await testRateLimiter.stop();
+      testRateLimiter = null;
+    }
   });
 
   describe('constructor', () => {
@@ -62,7 +74,7 @@ describe('ProviderChain', () => {
         createMockAdapter('openai', { available: false }),
       ];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
       assert.deepEqual(chain.getAvailableProviders(), ['gemini']);
     });
 
@@ -73,7 +85,7 @@ describe('ProviderChain', () => {
       ];
 
       assert.throws(
-        () => new ProviderChain(adapters, FAST_TEST_OPTIONS),
+        () => new ProviderChain(adapters, createTestOptions()),
         /No LLM providers available/,
       );
     });
@@ -85,7 +97,7 @@ describe('ProviderChain', () => {
         createMockAdapter('groq'),
       ];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
       assert.deepEqual(chain.getAvailableProviders(), ['gemini', 'openai', 'groq']);
     });
   });
@@ -94,7 +106,7 @@ describe('ProviderChain', () => {
     test('should return first available provider', () => {
       const adapters = [createMockAdapter('gemini'), createMockAdapter('openai')];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
       assert.equal(chain.getPrimaryProvider(), 'gemini');
     });
   });
@@ -103,7 +115,7 @@ describe('ProviderChain', () => {
     test('should use primary provider when successful', async () => {
       const adapters = [createMockAdapter('gemini'), createMockAdapter('openai')];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
       const result = await chain.chatCompletion([{ role: 'user', content: 'Hi' }]);
 
       assert.equal(result.provider, 'gemini');
@@ -124,7 +136,7 @@ describe('ProviderChain', () => {
         createMockAdapter('openai'),
       ];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
       const result = await chain.chatCompletion([{ role: 'user', content: 'Hi' }]);
 
       assert.equal(result.fallbackUsed, true);
@@ -132,27 +144,21 @@ describe('ProviderChain', () => {
     });
 
     test('should pass request through rate limiter', async () => {
-      // Get singleton and spy on schedule
-      const rateLimiter = getTestRateLimiterManager();
+      // Spy on the injected rate limiter's schedule method
       let scheduleCalled = false;
-      const originalSchedule = rateLimiter.schedule;
+      const originalSchedule = testRateLimiter.schedule.bind(testRateLimiter);
 
-      rateLimiter.schedule = async (provider, fn) => {
+      testRateLimiter.schedule = async (provider, fn) => {
         scheduleCalled = true;
         assert.equal(provider, 'gemini');
-        return fn();
+        return originalSchedule(provider, fn);
       };
 
-      try {
-        const adapters = [createMockAdapter('gemini')];
-        const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
-        await chain.chatCompletion([{ role: 'user', content: 'Hi' }]);
+      const adapters = [createMockAdapter('gemini')];
+      const chain = new ProviderChain(adapters, createTestOptions());
+      await chain.chatCompletion([{ role: 'user', content: 'Hi' }]);
 
-        assert.equal(scheduleCalled, true, 'Should have called rate limiter schedule');
-      } finally {
-        // Restore original method
-        rateLimiter.schedule = originalSchedule;
-      }
+      assert.equal(scheduleCalled, true, 'Should have called rate limiter schedule');
     });
 
     test('should NOT fallback on non-recoverable errors', async () => {
@@ -168,7 +174,7 @@ describe('ProviderChain', () => {
         createMockAdapter('openai'),
       ];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
 
       await assert.rejects(
         () => chain.chatCompletion([{ role: 'user', content: 'Hi' }]),
@@ -195,7 +201,7 @@ describe('ProviderChain', () => {
         }),
       ];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
 
       await assert.rejects(
         () => chain.chatCompletion([{ role: 'user', content: 'Hi' }]),
@@ -214,7 +220,7 @@ describe('ProviderChain', () => {
     test('should check health of all providers', async () => {
       const adapters = [createMockAdapter('gemini'), createMockAdapter('openai')];
 
-      const chain = new ProviderChain(adapters, FAST_TEST_OPTIONS);
+      const chain = new ProviderChain(adapters, createTestOptions());
       const results = await chain.healthCheck();
 
       assert.equal(results.length, 2);

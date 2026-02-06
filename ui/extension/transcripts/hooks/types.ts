@@ -113,20 +113,38 @@ export async function sendToBackground<T>(message: unknown): Promise<T> {
 export function normalizeTranscriptResponse(response: BackgroundResponse): TranscriptResponseData {
   const data = response.data as TranscriptResponseData | undefined;
   if (data) {
-    return {
-      ...data,
-      errorCode: data.errorCode ?? response.errorCode,
-      aiTranscriptionAvailable: data.aiTranscriptionAvailable ?? response.aiTranscriptionAvailable,
-    };
+    const normalized: TranscriptResponseData = { success: data.success };
+    if (data.transcript) {
+      normalized.transcript = data.transcript;
+    }
+    if (data.error) {
+      normalized.error = data.error;
+    }
+    const errorCode = data.errorCode ?? response.errorCode;
+    if (errorCode !== undefined) {
+      normalized.errorCode = errorCode;
+    }
+    const aiAvailable = data.aiTranscriptionAvailable ?? response.aiTranscriptionAvailable;
+    if (aiAvailable !== undefined) {
+      normalized.aiTranscriptionAvailable = aiAvailable;
+    }
+    return normalized;
   }
 
-  return {
-    success: response.success ?? false,
-    transcript: response.transcript,
-    error: response.error,
-    errorCode: response.errorCode,
-    aiTranscriptionAvailable: response.aiTranscriptionAvailable,
-  };
+  const normalized: TranscriptResponseData = { success: response.success ?? false };
+  if (response.transcript) {
+    normalized.transcript = response.transcript;
+  }
+  if (response.error) {
+    normalized.error = response.error;
+  }
+  if (response.errorCode !== undefined) {
+    normalized.errorCode = response.errorCode;
+  }
+  if (response.aiTranscriptionAvailable !== undefined) {
+    normalized.aiTranscriptionAvailable = response.aiTranscriptionAvailable;
+  }
+  return normalized;
 }
 
 /**

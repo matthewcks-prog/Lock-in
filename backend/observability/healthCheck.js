@@ -11,6 +11,7 @@
  */
 
 const { logger } = require('./index');
+const { fetchWithRetry } = require('../utils/networkRetry');
 
 /**
  * Check if Supabase is reachable.
@@ -64,18 +65,20 @@ async function checkAzureOpenAI(config) {
     // Just check if the endpoint is reachable (HEAD request or models list)
     const url = `${endpoint.replace(/\/$/, '')}/openai/models?api-version=${config.AZURE_OPENAI_API_VERSION || '2024-02-01'}`;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'api-key': apiKey,
+    const response = await fetchWithRetry(
+      url,
+      {
+        method: 'GET',
+        headers: {
+          'api-key': apiKey,
+        },
       },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
+      {
+        maxRetries: 1,
+        timeoutMs: 5000,
+        retryableStatuses: [429, 502, 503, 504],
+      },
+    );
     const latencyMs = Date.now() - start;
 
     if (response.ok || response.status === 401) {
@@ -97,7 +100,8 @@ async function checkAzureOpenAI(config) {
     return {
       status: 'unhealthy',
       latencyMs,
-      error: error.name === 'AbortError' ? 'Timeout (5s)' : error.message,
+      error:
+        error.name === 'AbortError' || error.code === 'TIMEOUT' ? 'Timeout (5s)' : error.message,
     };
   }
 }

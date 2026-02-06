@@ -84,6 +84,7 @@ function buildTranscriptFromCues(
   if (segments.length === 0) return null;
 
   const lastSegment = segments[segments.length - 1];
+  if (!lastSegment) return null;
   const fallbackDurationMs =
     typeof lastSegment.endMs === 'number' ? lastSegment.endMs : lastSegment.startMs;
   const durationMs =

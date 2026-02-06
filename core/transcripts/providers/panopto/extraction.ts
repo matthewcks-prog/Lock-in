@@ -93,6 +93,7 @@ export function extractCaptionVttUrl(html: string): string | null {
 
   for (let i = 0; i < patterns.length; i++) {
     const pattern = patterns[i];
+    if (!pattern) continue;
     const match = html.match(pattern);
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);
@@ -139,6 +140,7 @@ export function extractPanoptoMediaUrl(html: string): string | null {
 
   for (let i = 0; i < patterns.length; i++) {
     const pattern = patterns[i];
+    if (!pattern) continue;
     const match = html.match(pattern);
     if (match?.[1]) {
       const url = decodeEscapedUrl(match[1]);

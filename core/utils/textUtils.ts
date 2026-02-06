@@ -34,7 +34,8 @@ export function escapeHtml(text: string): string {
 export function extractCourseCodeFromText(text: string): string | null {
   if (!text || typeof text !== 'string') return null;
   const match = text.match(/\b([A-Z]{3}\d{4})\b/i);
-  return match ? match[1].toUpperCase() : null;
+  const courseCode = match?.[1];
+  return courseCode ? courseCode.toUpperCase() : null;
 }
 
 /**

@@ -25,8 +25,9 @@ function getDefaultConfig(): Record<string, unknown> | undefined {
 
 function resolveLogLevel(configProvider?: LoggerOptions['configProvider']): LogLevel {
   const config = (configProvider || getDefaultConfig)();
-  const level = typeof config?.LOG_LEVEL === 'string' ? config.LOG_LEVEL.toLowerCase() : null;
-  const debug = config?.DEBUG === true || config?.DEBUG === 'true';
+  const level =
+    typeof config?.['LOG_LEVEL'] === 'string' ? config['LOG_LEVEL'].toLowerCase() : null;
+  const debug = config?.['DEBUG'] === true || config?.['DEBUG'] === 'true';
 
   if (level && (level === 'debug' || level === 'info' || level === 'warn' || level === 'error')) {
     return level;

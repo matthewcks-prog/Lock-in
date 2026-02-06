@@ -31,23 +31,23 @@
   }
 
   function getAppEnv() {
-    return (import.meta.env.VITE_APP_ENV || 'development').toLowerCase();
+    return (import.meta.env['VITE_APP_ENV'] || 'development').toLowerCase();
   }
 
   function buildConfigByEnv() {
     return {
       development: {
-        url: import.meta.env.VITE_SUPABASE_URL_DEV || '',
-        anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_DEV || '',
+        url: import.meta.env['VITE_SUPABASE_URL_DEV'] || '',
+        anonKey: import.meta.env['VITE_SUPABASE_ANON_KEY_DEV'] || '',
         environment: 'development',
-        backendUrl: import.meta.env.VITE_BACKEND_URL_DEV || 'http://localhost:3000',
+        backendUrl: import.meta.env['VITE_BACKEND_URL_DEV'] || 'http://localhost:3000',
       },
       production: {
-        url: import.meta.env.VITE_SUPABASE_URL_PROD || '',
-        anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY_PROD || '',
+        url: import.meta.env['VITE_SUPABASE_URL_PROD'] || '',
+        anonKey: import.meta.env['VITE_SUPABASE_ANON_KEY_PROD'] || '',
         environment: 'production',
         backendUrl:
-          import.meta.env.VITE_BACKEND_URL_PROD ||
+          import.meta.env['VITE_BACKEND_URL_PROD'] ||
           'https://lock-in-backend.australiaeast.azurecontainerapps.io',
       },
     } as const;
@@ -96,9 +96,15 @@
     SESSION_STORAGE_KEY: 'lockinSupabaseSession',
     TOKEN_EXPIRY_BUFFER_MS: 60000,
     DEBUG_PANOPTO_RESOLVER: !isProduction,
-    DEBUG: import.meta.env.VITE_DEBUG || undefined,
-    SENTRY_DSN: import.meta.env.VITE_SENTRY_DSN || undefined,
   };
+  const debugValue = import.meta.env['VITE_DEBUG'];
+  if (debugValue) {
+    runtimeConfig.DEBUG = debugValue;
+  }
+  const sentryDsn = import.meta.env['VITE_SENTRY_DSN'];
+  if (sentryDsn) {
+    runtimeConfig.SENTRY_DSN = sentryDsn;
+  }
 
   root.LOCKIN_CONFIG = runtimeConfig;
 

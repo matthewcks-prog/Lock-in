@@ -16,8 +16,6 @@ export {
   extractCaptionVttUrl,
   extractPanoptoInfoFromHtml,
   extractPanoptoMediaUrl,
-  extractDeliveryId,
-  extractTenantDomain,
   extractPanoptoInfo,
   buildPanoptoEmbedUrl,
   buildPanoptoViewerUrl,

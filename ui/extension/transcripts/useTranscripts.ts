@@ -18,8 +18,8 @@ import {
   useAiTranscription,
   type AiTranscriptionState,
   type TranscriptResponseData,
-  isAiTranscriptionBusy,
 } from './hooks';
+import { useTranscriptControls } from './hooks/useTranscriptControls';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -105,8 +105,17 @@ export function useTranscripts(): UseTranscriptsResult {
     { provider: string; signInUrl: string } | undefined
   >(undefined);
 
+  const controls = useTranscriptControls({
+    detection,
+    extraction,
+    aiTranscription,
+    setIsVideoListOpen,
+    setError,
+    setAuthRequired,
+  });
+
   // Compose the state
-  const state: TranscriptState = {
+  const stateBase: TranscriptState = {
     isVideoListOpen,
     videos: detection.state.videos,
     isDetecting: detection.state.isDetecting,
@@ -117,124 +126,11 @@ export function useTranscripts(): UseTranscriptsResult {
     extractionsByVideoId: extraction.state.extractionsByVideoId,
     lastTranscript: extraction.state.lastTranscript,
     aiTranscription: aiTranscription.state,
-    authRequired,
   };
-
-  const closeVideoList = useCallback(() => {
-    setIsVideoListOpen(false);
-  }, []);
-
-  /**
-   * Detect videos and automatically extract if only one video is found
-   */
-  const detectAndAutoExtract = useCallback(async () => {
-    setIsVideoListOpen(true);
-    detection.setDetecting(true);
-    setError(null);
-    setAuthRequired(undefined);
-
-    // Reset extraction state for fresh detection
-    extraction.resetExtraction();
-
-    try {
-      const { videos } = await detection.detectVideos();
-
-      if (videos.length === 1) {
-        // Single video - auto-extract without showing selection UI
-        setIsVideoListOpen(false);
-        extraction.setExtracting(true, videos[0].id);
-        extraction.clearExtractionForVideo(videos[0].id);
-
-        try {
-          const { transcript, result } = await extraction.extractTranscriptWithDomFallback(
-            videos[0],
-          );
-
-          if (result.success && transcript) {
-            extraction.setExtracting(false);
-            extraction.setLastTranscript(videos[0], transcript);
-            extraction.setExtractionResult(videos[0].id, result);
-          } else {
-            extraction.setExtracting(false);
-            extraction.setExtractionResult(videos[0].id, {
-              ...result,
-              error: result.error || 'Failed to extract transcript',
-            });
-            setIsVideoListOpen(true);
-          }
-        } catch (extractError) {
-          const errorMessage =
-            extractError instanceof Error ? extractError.message : 'Failed to extract transcript';
-          extraction.setExtracting(false);
-          extraction.setExtractionResult(videos[0].id, {
-            success: false,
-            error: errorMessage,
-          });
-          setIsVideoListOpen(true);
-        }
-      }
-
-      detection.setDetecting(false);
-    } catch (err) {
-      const message =
-        err instanceof Error && err.message
-          ? err.message
-          : 'Video detection failed. Please refresh and try again.';
-      setError(message);
-      detection.setDetecting(false);
-    }
-  }, [detection, extraction]);
-
-  /**
-   * Extract transcript for a video
-   */
-  const extractTranscript = useCallback(
-    async (video: DetectedVideo): Promise<TranscriptResult | null> => {
-      if (extraction.state.isExtracting || aiTranscription.isBusy) {
-        return null;
-      }
-
-      const transcript = await extraction.extractTranscript(video);
-
-      if (transcript) {
-        setIsVideoListOpen(false);
-      }
-
-      return transcript;
-    },
-    [extraction, aiTranscription.isBusy],
-  );
-
-  /**
-   * Transcribe with AI
-   */
-  const transcribeWithAI = useCallback(
-    async (
-      video: DetectedVideo,
-      options?: { languageHint?: string; maxMinutes?: number },
-    ): Promise<TranscriptResult | null> => {
-      if (isAiTranscriptionBusy(aiTranscription.state.status)) {
-        return null;
-      }
-
-      return aiTranscription.transcribeWithAI(video, options);
-    },
-    [aiTranscription],
-  );
-
-  const clearError = useCallback(() => {
-    setError(null);
-    setAuthRequired(undefined);
-    detection.setError(null);
-  }, [detection]);
+  const state: TranscriptState = authRequired ? { ...stateBase, authRequired } : stateBase;
 
   return {
     state,
-    closeVideoList,
-    detectAndAutoExtract,
-    extractTranscript,
-    transcribeWithAI,
-    cancelAiTranscription: aiTranscription.cancelAiTranscription,
-    clearError,
+    ...controls,
   };
 }

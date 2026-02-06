@@ -15,7 +15,7 @@ const require = createRequire(import.meta.url);
 let buildStructuredStudyMessages: BuildStructuredStudyMessages;
 
 beforeAll(async () => {
-  process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-key';
+  process.env['OPENAI_API_KEY'] = process.env['OPENAI_API_KEY'] || 'test-key';
   const openaiClient = require('../../backend/openaiClient.js') as {
     buildStructuredStudyMessages: BuildStructuredStudyMessages;
   };

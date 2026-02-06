@@ -67,13 +67,6 @@ export interface TranscriptProviderV2 {
   getEmptyDetectionHint?(context: VideoDetectionContext): string | null;
 }
 
-/**
- * Async fetcher interface for background script operations
- * @deprecated Use AsyncFetcher from './fetchers/types' instead
- * Kept here for backward compatibility
- */
-export type { AsyncFetcher, EnhancedAsyncFetcher } from './fetchers/types';
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Registry
 // ─────────────────────────────────────────────────────────────────────────────

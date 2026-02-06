@@ -65,10 +65,9 @@ async function generatePdf(document: NormalizedDocument, metadata: ExportMetadat
       }
 
       case 'list': {
-        for (let i = 0; i < block.children.length; i++) {
-          const item = block.children[i];
-          builder.addListItem(item.children, i, block.ordered);
-        }
+        block.children.forEach((item, index) => {
+          builder.addListItem(item.children, index, block.ordered);
+        });
         builder.endList();
         break;
       }

@@ -107,8 +107,19 @@ export function useTranscriptExtraction(): UseTranscriptExtractionResult {
             },
           };
         }
+        if (!domResult.transcript) {
+          return {
+            transcript: null,
+            result: {
+              success: false,
+              error: 'Transcript payload missing',
+              errorCode: 'INVALID_RESPONSE',
+              aiTranscriptionAvailable: Boolean(video.mediaUrl),
+            },
+          };
+        }
         return {
-          transcript: domResult.transcript ?? null,
+          transcript: domResult.transcript,
           result: { success: true, transcript: domResult.transcript },
         };
       }

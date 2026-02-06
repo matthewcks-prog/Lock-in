@@ -79,11 +79,10 @@ export function NoteEditorShell({
     return null;
   }, [note?.id, note?.content?.editorState]);
 
-  const initialConfig: InitialConfigType = useMemo(
-    () => ({
+  const initialConfig: InitialConfigType = useMemo(() => {
+    const baseConfig: InitialConfigType = {
       namespace: 'LockInNoteEditor',
       theme: noteEditorTheme,
-      editorState: initialEditorState ?? undefined,
       editable: true,
       onError(error: Error) {
         console.error('Lexical editor error', error);
@@ -99,16 +98,32 @@ export function NoteEditorShell({
         ImageNode,
         AttachmentNode,
       ],
-    }),
-    [initialEditorState],
-  );
+    };
+    if (initialEditorState) {
+      return { ...baseConfig, editorState: initialEditorState };
+    }
+    return baseConfig;
+  }, [initialEditorState]);
 
-  const statusMeta = buildStatusLabel({
-    status,
-    updatedAt: note?.updatedAt,
-    isAssetUploading,
-    error: assetError || editorError,
-  });
+  const statusMeta = (() => {
+    const metaOptions: {
+      status: NoteStatus;
+      updatedAt?: string | null;
+      isAssetUploading?: boolean;
+      error?: string | null;
+    } = { status };
+    if (note?.updatedAt !== undefined) {
+      metaOptions.updatedAt = note.updatedAt;
+    }
+    if (isAssetUploading !== undefined) {
+      metaOptions.isAssetUploading = isAssetUploading;
+    }
+    const combinedError = assetError || editorError;
+    if (combinedError !== undefined) {
+      metaOptions.error = combinedError;
+    }
+    return buildStatusLabel(metaOptions);
+  })();
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -133,9 +148,9 @@ export function NoteEditorShell({
 
       <LexicalComposer key={composerKey} initialConfig={initialConfig}>
         <NoteToolbar
-          onOpenFilePicker={onUploadFile ? handleUploadClick : undefined}
           disableAttachment={!note?.id || !onUploadFile}
-          isUploading={isAssetUploading}
+          isUploading={Boolean(isAssetUploading)}
+          {...(onUploadFile ? { onOpenFilePicker: handleUploadClick } : {})}
         />
 
         <div className="lockin-note-editor-surface">
@@ -159,13 +174,16 @@ export function NoteEditorShell({
         <AutoFocusPlugin />
         <NoteContentLoader note={note} onHydrationChange={setIsHydrating} />
         <NoteChangePlugin onChange={onContentChange} isHydrating={isHydrating} />
-        <ShortcutsPlugin onSaveNow={onSaveNow} />
+        <ShortcutsPlugin {...(onSaveNow ? { onSaveNow } : {})} />
         <CaretScrollPlugin />
-        <UploadPlugin onUploadFile={onUploadFile} onEditorReady={setComposerEditor} />
+        <UploadPlugin
+          onEditorReady={setComposerEditor}
+          {...(onUploadFile ? { onUploadFile } : {})}
+        />
         <AssetCleanupPlugin
           noteId={note?.id}
-          onDeleteAsset={onDeleteAsset}
           isHydrating={isHydrating}
+          {...(onDeleteAsset ? { onDeleteAsset } : {})}
         />
       </LexicalComposer>
 

@@ -19,13 +19,20 @@ export type ErrorMeta = {
 
 export function getErrorMeta(err: unknown): ErrorMeta {
   const record = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
-  return {
-    code: typeof record?.code === 'string' ? record.code : undefined,
-    status: typeof record?.status === 'number' ? record.status : undefined,
-    message:
-      (err instanceof Error && err.message) ||
-      (typeof record?.message === 'string' ? record.message : undefined),
-  };
+  const meta: ErrorMeta = {};
+  if (typeof record?.['code'] === 'string') {
+    meta.code = record['code'];
+  }
+  if (typeof record?.['status'] === 'number') {
+    meta.status = record['status'];
+  }
+  const message =
+    (err instanceof Error && err.message) ||
+    (typeof record?.['message'] === 'string' ? record['message'] : undefined);
+  if (message) {
+    meta.message = message;
+  }
+  return meta;
 }
 
 export function clearTimer(ref: MutableRefObject<number | null>) {

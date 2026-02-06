@@ -12,6 +12,7 @@
  */
 
 const { BaseAdapter } = require('./baseAdapter');
+const { fetchWithRetry } = require('../../../utils/networkRetry');
 
 const DEFAULT_MODEL = 'llama-3.1-8b-instant';
 const FALLBACK_MODEL = 'llama-3.3-70b-versatile';
@@ -71,28 +72,28 @@ class GroqAdapter extends BaseAdapter {
   }
 
   async _executeRequest(url, requestBody) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(url, {
+    const response = await fetchWithRetry(
+      url,
+      {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.config.apiKey}`,
         },
         body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
+      },
+      {
+        maxRetries: 0,
+        timeoutMs: REQUEST_TIMEOUT_MS,
+        context: 'groq chatCompletion',
+      },
+    );
 
-      if (!response.ok) {
-        throw await this._buildHttpError(response);
-      }
-
-      return await response.json();
-    } finally {
-      clearTimeout(timeoutId);
+    if (!response.ok) {
+      throw await this._buildHttpError(response);
     }
+
+    return await response.json();
   }
 
   _extractContent(data) {
@@ -118,7 +119,7 @@ class GroqAdapter extends BaseAdapter {
     if (error.provider === this.getProviderName()) {
       return error;
     }
-    if (error.name === 'AbortError') {
+    if (error.name === 'AbortError' || error.code === 'TIMEOUT' || error.name === 'TimeoutError') {
       return this.wrapError('chatCompletion', new Error('Request timed out after 60s'));
     }
     return this.wrapError('chatCompletion', error);

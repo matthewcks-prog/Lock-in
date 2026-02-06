@@ -1,9 +1,7 @@
 export {
   buildPanoptoEmbedUrl,
   buildPanoptoViewerUrl,
-  extractDeliveryId,
   extractPanoptoInfo,
-  extractTenantDomain,
   isLmsRedirectPage,
   isPanoptoDomain,
   isPanoptoUrl,

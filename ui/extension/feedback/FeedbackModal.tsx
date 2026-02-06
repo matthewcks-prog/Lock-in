@@ -133,11 +133,15 @@ export function FeedbackModal({
     // Sanitize URL to remove sensitive query parameters (sesskey, tokens, etc.)
     const context: FeedbackContext = {
       url: sanitizeUrl(pageUrl || window.location.href),
-      courseCode: courseCode || undefined,
       extensionVersion: getExtensionVersion(),
       browser: getBrowserInfo(),
-      page: document.title || undefined,
     };
+    if (courseCode) {
+      context.courseCode = courseCode;
+    }
+    if (document.title) {
+      context.page = document.title;
+    }
 
     await submit(context);
   }, [pageUrl, courseCode, submit]);

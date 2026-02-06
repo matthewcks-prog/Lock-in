@@ -75,7 +75,7 @@ export function useNoteSave({
         if (!noteTitle) {
           const contentText =
             typeof options.content === 'string' ? options.content : options.content.plainText || '';
-          const firstLine = contentText.split('\n')[0].trim();
+          const firstLine = contentText.split('\n')[0]?.trim() ?? '';
           noteTitle = firstLine.slice(0, 50) || 'Untitled note';
         }
 

@@ -56,17 +56,17 @@ function extractErrorMessage(body: unknown, fallback: string): string {
     return fallback;
   }
 
-  const errorValue = body.error;
-  if (isRecord(errorValue) && typeof errorValue.message === 'string') {
-    return errorValue.message;
+  const errorValue = body['error'];
+  if (isRecord(errorValue) && typeof errorValue['message'] === 'string') {
+    return errorValue['message'];
   }
 
   if (typeof errorValue === 'string') {
     return errorValue;
   }
 
-  if (typeof body.message === 'string') {
-    return body.message;
+  if (typeof body['message'] === 'string') {
+    return body['message'];
   }
 
   return fallback;
@@ -77,13 +77,13 @@ function extractErrorCode(body: unknown): string | undefined {
     return undefined;
   }
 
-  const errorValue = body.error;
-  if (isRecord(errorValue) && typeof errorValue.code === 'string') {
-    return errorValue.code;
+  const errorValue = body['error'];
+  if (isRecord(errorValue) && typeof errorValue['code'] === 'string') {
+    return errorValue['code'];
   }
 
-  if (typeof body.code === 'string') {
-    return body.code;
+  if (typeof body['code'] === 'string') {
+    return body['code'];
   }
 
   return undefined;
@@ -201,11 +201,11 @@ async function extractConflictVersion(response: Response): Promise<string | unde
   try {
     const body: unknown = await response.json();
     if (isRecord(body)) {
-      if (typeof body.updatedAt === 'string') {
-        return body.updatedAt;
+      if (typeof body['updatedAt'] === 'string') {
+        return body['updatedAt'];
       }
-      if (typeof body.updated_at === 'string') {
-        return body.updated_at;
+      if (typeof body['updated_at'] === 'string') {
+        return body['updated_at'];
       }
     }
   } catch {
@@ -250,20 +250,24 @@ function firstString(candidates: Array<unknown>, fallback: string): string {
 }
 
 function buildAppErrorFromPayload(status: number, payload: unknown): AppError | null {
-  if (!isRecord(payload) || payload.success !== false) {
+  if (!isRecord(payload) || payload['success'] !== false) {
     return null;
   }
-  const errorValue = payload.error;
+  const errorValue = payload['error'];
   const errorDetails = isRecord(errorValue) ? errorValue : undefined;
   const message = firstString(
-    [typeof errorValue === 'string' ? errorValue : undefined, errorDetails?.message],
+    [typeof errorValue === 'string' ? errorValue : undefined, errorDetails?.['message']],
     'Request failed',
   );
-  const errorCode = isRecord(errorValue) ? errorValue.code : undefined;
+  const errorCode = isRecord(errorValue) ? errorValue['code'] : undefined;
+  const options: { status?: number; details?: Record<string, unknown> } = { status };
+  if (errorDetails) {
+    options.details = errorDetails;
+  }
   return new AppError(
     message,
     resolveErrorCode(status, typeof errorCode === 'string' ? errorCode : undefined),
-    { status, details: errorDetails },
+    options,
   );
 }
 
@@ -292,7 +296,11 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
       throw parseError;
     }
     const cause = parseError instanceof Error ? parseError : undefined;
-    throw new AppError('Failed to parse API response', ErrorCodes.PARSE_ERROR, { cause });
+    const options: { cause?: Error } = {};
+    if (cause) {
+      options.cause = cause;
+    }
+    throw new AppError('Failed to parse API response', ErrorCodes.PARSE_ERROR, options);
   }
 }
 
@@ -326,31 +334,29 @@ async function createApiError(response: Response, originalError?: Error): Promis
     code === ErrorCodes.TIMEOUT ||
     code === ErrorCodes.SERVICE_UNAVAILABLE ||
     code === ErrorCodes.BAD_GATEWAY;
+  const baseOptions: { details?: Record<string, unknown>; cause?: Error } = {};
+  if (details) {
+    baseOptions.details = details;
+  }
+  if (originalError) {
+    baseOptions.cause = originalError;
+  }
 
   switch (code) {
     case ErrorCodes.AUTH_REQUIRED:
     case ErrorCodes.INVALID_TOKEN:
     case ErrorCodes.SESSION_EXPIRED:
-      return new AuthError(message, code, {
-        status: response.status,
-        details,
-        cause: originalError,
-      });
+      return new AuthError(message, code, { status: response.status, ...baseOptions });
     case ErrorCodes.RATE_LIMIT:
-      return new RateLimitError(message, retryAfterMs, { cause: originalError });
+      return new RateLimitError(message, retryAfterMs, { ...baseOptions });
     case ErrorCodes.VALIDATION_ERROR:
-      return new ValidationError(message, undefined, { details, cause: originalError });
+      return new ValidationError(message, undefined, { ...baseOptions });
     case ErrorCodes.NOT_FOUND:
-      return new NotFoundError(message, undefined, undefined, { cause: originalError });
+      return new NotFoundError(message, undefined, undefined, { ...baseOptions });
     case ErrorCodes.CONFLICT:
-      return new ConflictError(message, undefined, { cause: originalError });
+      return new ConflictError(message, undefined, { ...baseOptions });
     default:
-      return new AppError(message, code, {
-        status: response.status,
-        details,
-        isRetryable,
-        cause: originalError,
-      });
+      return new AppError(message, code, { status: response.status, isRetryable, ...baseOptions });
   }
 }
 
@@ -386,46 +392,54 @@ export function createFetcher(config: FetcherConfig) {
       retry = true,
       retryConfig: customRetryConfig,
       ifUnmodifiedSince,
+      signal,
       ...fetchOptions
     } = options;
 
     const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...customRetryConfig };
     const url = resolveRequestUrl(backendUrl, endpoint);
-    ensureNotAborted(fetchOptions.signal);
-    const accessToken = await getAccessToken(authClient, fetchOptions.signal);
+    ensureNotAborted(signal);
+    const accessToken = await getAccessToken(authClient, signal);
     const headers = buildRequestHeaders(accessToken, fetchOptions, ifUnmodifiedSince);
 
     const requestOptions: RequestInit = {
       ...fetchOptions,
       headers,
-      signal: fetchOptions.signal,
     };
+    if (signal) {
+      requestOptions.signal = signal;
+    }
 
     let lastError: AppError | null = null;
     const maxAttempts = retry ? retryConfig.maxRetries : 0;
     for (let attempt = 0; attempt <= maxAttempts; attempt++) {
-      ensureNotAborted(fetchOptions.signal);
+      ensureNotAborted(signal);
 
       if (attempt > 0) {
         const delay = calculateRetryDelay(attempt - 1, retryConfig);
         logger.debug(`Retry attempt ${attempt}/${retryConfig.maxRetries} after ${delay}ms`);
         await sleep(delay);
 
-        ensureNotAborted(fetchOptions.signal);
+        ensureNotAborted(signal);
       }
 
       let response: Response;
       try {
         response = await fetcher(url, requestOptions);
       } catch (networkError) {
-        if (fetchOptions.signal?.aborted || isAbortError(networkError)) {
+        if (signal?.aborted || isAbortError(networkError)) {
           throw createAbortError();
         }
 
         const cause = networkError instanceof Error ? networkError : undefined;
-        lastError = new NetworkError('Unable to reach Lock-in. Please check your connection.', {
-          cause,
-        });
+        const options: { cause?: Error } = {};
+        if (cause) {
+          options.cause = cause;
+        }
+        lastError = new NetworkError(
+          'Unable to reach Lock-in. Please check your connection.',
+          options,
+        );
 
         if (retry && attempt < retryConfig.maxRetries) {
           continue;

@@ -1,27 +1,22 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
+set -e
 
-echo "🎨 Running pre-commit checks (formatting & linting)..."
+echo "Running pre-commit checks..."
 
-# Validate lockfile sync (prevent CI failures)
-echo "🔒 Validating package-lock.json sync..."
-if ! npm ls --depth=0 >/dev/null 2>&1; then
-  echo "❌ package-lock.json is out of sync with package.json!"
-  echo "   Run 'npm install' to fix this before committing."
-  exit 1
-fi
-echo "✅ Lockfile is in sync"
+# Format check (fast)
+npm run format:check || { echo "Format check failed. Run 'npm run format'"; exit 1; }
 
-# Run lint-staged (will format and lint staged files)
-npx lint-staged
+# Type check (fast)
+npm run type-check || { echo "Type check failed"; exit 1; }
 
-# Get exit code
-status=$?
+# Lint (medium)
+npm run lint:all || { echo "Lint failed"; exit 1; }
 
-if [ $status -ne 0 ]; then
-  echo "❌ Pre-commit checks failed. Please review and fix the issues."
-  exit 1
-fi
+# Architecture check (fast)
+npm run lint:deps || { echo "Architecture violation detected"; exit 1; }
 
-echo "✅ Pre-commit checks passed!"
-exit 0
+# Tests for changed files only (fast)
+npm run test -- --changed --passWithNoTests || { echo "Tests failed"; exit 1; }
+
+echo "Pre-commit checks passed"

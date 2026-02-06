@@ -22,6 +22,19 @@ const jwt = require('jsonwebtoken');
 const { createPublicKey } = require('crypto');
 const { logger } = require('../../observability');
 
+function normalizeJwtPayload(payload) {
+  return {
+    id: payload.sub,
+    email: payload.email,
+    role: payload.role,
+    aud: payload.aud,
+    iss: payload.iss,
+    exp: payload.exp,
+    iat: payload.iat,
+    ...payload,
+  };
+}
+
 /**
  * Strategy that verifies JWTs using JWKS (asymmetric keys)
  *
@@ -122,31 +135,12 @@ class JwksVerifierStrategy {
 
       return {
         valid: true,
-        payload: this._normalizePayload(payload),
+        payload: normalizeJwtPayload(payload),
       };
     } catch (error) {
       logger.debug('[JwksVerifierStrategy] Verification failed:', { error: error.message });
       return { valid: false, error: error.message };
     }
-  }
-
-  /**
-   * Normalize JWT payload to consistent user format
-   *
-   * @param {Object} payload - Raw JWT payload
-   * @returns {Object} Normalized user object
-   */
-  _normalizePayload(payload) {
-    return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      aud: payload.aud,
-      iss: payload.iss,
-      exp: payload.exp,
-      iat: payload.iat,
-      ...payload,
-    };
   }
 }
 
@@ -220,31 +214,12 @@ class SymmetricVerifierStrategy {
 
       return {
         valid: true,
-        payload: this._normalizePayload(payload),
+        payload: normalizeJwtPayload(payload),
       };
     } catch (error) {
       logger.debug('[SymmetricVerifierStrategy] Verification failed:', { error: error.message });
       return { valid: false, error: error.message };
     }
-  }
-
-  /**
-   * Normalize JWT payload to consistent user format
-   *
-   * @param {Object} payload - Raw JWT payload
-   * @returns {Object} Normalized user object
-   */
-  _normalizePayload(payload) {
-    return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
-      aud: payload.aud,
-      iss: payload.iss,
-      exp: payload.exp,
-      iat: payload.iat,
-      ...payload,
-    };
   }
 }
 

@@ -10,13 +10,13 @@ import { defineConfig } from 'vite';
 import { resolve } from 'path';
 import {
   createAliases,
+  createDefines,
   createIifeBuildConfig,
   ensureAsciiSafeOutput,
-  sharedDefines,
 } from './build/viteShared';
 
-export default defineConfig({
-  define: sharedDefines,
+export default defineConfig(({ mode }) => ({
+  define: createDefines(mode),
   plugins: [
     ensureAsciiSafeOutput(
       resolve(process.cwd(), 'extension/dist/libs/initApi.js'),
@@ -34,4 +34,4 @@ export default defineConfig({
     alias: createAliases({ includeApi: true }),
     extensions: ['.ts', '.js'],
   },
-});
+}));

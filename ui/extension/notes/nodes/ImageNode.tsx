@@ -255,7 +255,7 @@ function ResizableImage({
         (event: MouseEvent) => {
           if (containerRef.current?.contains(event.target as HTMLElement)) {
             const target = event.target as HTMLElement;
-            if (target.dataset.resizeHandle) return false;
+            if (target.dataset['resizeHandle']) return false;
 
             if (event.shiftKey) {
               setSelected(!isSelected);
@@ -384,15 +384,15 @@ function ResizableImage({
 export class ImageNode extends DecoratorNode<JSX.Element> {
   __src: string;
   __alt: string;
-  __assetId?: string | null;
-  __width?: number | null;
-  __height?: number | null;
+  __assetId: string | null;
+  __width: number | null;
+  __height: number | null;
 
-  static getType(): string {
+  static override getType(): string {
     return 'image';
   }
 
-  static clone(node: ImageNode): ImageNode {
+  static override clone(node: ImageNode): ImageNode {
     return new ImageNode(
       node.__src,
       node.__alt,
@@ -403,7 +403,7 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     );
   }
 
-  static importJSON(serializedNode: SerializedImageNode): ImageNode {
+  static override importJSON(serializedNode: SerializedImageNode): ImageNode {
     const { src, alt, assetId, width = null, height = null } = serializedNode;
     return new ImageNode(src, alt, assetId, width, height);
   }
@@ -419,12 +419,12 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     super(key);
     this.__src = src;
     this.__alt = alt;
-    this.__assetId = assetId;
+    this.__assetId = assetId ?? null;
     this.__width = width ?? null;
     this.__height = height ?? null;
   }
 
-  getAssetId(): string | null | undefined {
+  getAssetId(): string | null {
     return this.__assetId;
   }
 
@@ -442,7 +442,7 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     self.__height = height;
   }
 
-  exportJSON(): SerializedImageNode {
+  override exportJSON(): SerializedImageNode {
     return {
       type: 'image',
       version: 1,
@@ -454,17 +454,17 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     };
   }
 
-  createDOM(): HTMLElement {
+  override createDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'lockin-image-wrapper';
     return span;
   }
 
-  updateDOM(): false {
+  override updateDOM(): false {
     return false;
   }
 
-  decorate(): JSX.Element {
+  override decorate(): JSX.Element {
     return (
       <ResizableImage
         src={this.__src}

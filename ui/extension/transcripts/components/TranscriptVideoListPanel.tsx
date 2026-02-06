@@ -77,9 +77,9 @@ export function TranscriptVideoListPanel({
       isLoading={isLoading}
       onSelectVideo={onSelectVideo}
       onClose={onClose}
-      error={error}
-      detectionHint={detectionHint}
-      authRequired={authRequired}
+      {...(error ? { error } : {})}
+      {...(detectionHint ? { detectionHint } : {})}
+      {...(authRequired ? { authRequired } : {})}
       selectedVideoId={extractingVideoId}
       isVideoDisabled={(video) => {
         // Disable if another video is extracting or AI is busy on a different video
@@ -93,17 +93,19 @@ export function TranscriptVideoListPanel({
         const noCaptions = result && !result.success && result.errorCode === 'NO_CAPTIONS';
         return noCaptions ? <span className="lockin-video-item-badge">No transcript</span> : null;
       }}
-      renderItemActions={({ video }) => (
-        <TranscriptVideoStatus
-          video={video}
-          extractionResult={extractionResults[video.id]}
-          aiTranscription={aiTranscription}
-          isExtracting={isExtracting}
-          isAiBusy={isAiBusy}
-          onTranscribeWithAI={onTranscribeWithAI}
-          onCancelAi={onCancelAi}
-        />
-      )}
+      renderItemActions={({ video }) => {
+        const extractionResult = extractionResults[video.id];
+        const statusProps = {
+          video,
+          aiTranscription,
+          isExtracting,
+          isAiBusy,
+          onTranscribeWithAI,
+          onCancelAi,
+          ...(extractionResult ? { extractionResult } : {}),
+        };
+        return <TranscriptVideoStatus {...statusProps} />;
+      }}
     />
   );
 }

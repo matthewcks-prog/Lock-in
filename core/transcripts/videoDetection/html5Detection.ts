@@ -102,12 +102,19 @@ function getTrackUrls(
     const rawSrc = track.getAttribute('src') || track.src;
     const resolved = resolveUrl(rawSrc, baseUrl);
     if (!resolved) continue;
-    urls.push({
+    const entry: { kind: string; label?: string; srclang?: string; src: string } = {
       kind: track.getAttribute('kind') || 'subtitles',
-      label: track.getAttribute('label') || undefined,
-      srclang: track.getAttribute('srclang') || undefined,
       src: resolved,
-    });
+    };
+    const label = track.getAttribute('label');
+    if (label) {
+      entry.label = label;
+    }
+    const srclang = track.getAttribute('srclang');
+    if (srclang) {
+      entry.srclang = srclang;
+    }
+    urls.push(entry);
   }
   return urls;
 }
@@ -181,16 +188,21 @@ export function detectHtml5Videos(context: VideoDetectionContext): DetectedVideo
   ) as HTMLVideoElement[];
   const videos: DetectedVideo[] = [];
 
-  for (let index = 0; index < videoElements.length; index += 1) {
-    const video = videoElements[index];
+  for (const [index, video] of videoElements.entries()) {
     const mediaUrl = getMediaUrl(video, baseUrl);
     const trackUrls = getTrackUrls(video, baseUrl);
-    const domId = video.id || undefined;
+    const domId = video.id || null;
     const domSelector = buildDomSelector(video);
     const title = getVideoTitle(video, mediaUrl, index);
     const durationMs = getVideoDurationMs(video);
     const drmInfo = getDrmInfo(video);
-    const drmFields = drmInfo.detected ? { drmDetected: true, drmReason: drmInfo.reason } : {};
+    const drmFields: { drmDetected?: boolean; drmReason?: string } = {};
+    if (drmInfo.detected) {
+      drmFields.drmDetected = true;
+      if (drmInfo.reason) {
+        drmFields.drmReason = drmInfo.reason;
+      }
+    }
 
     const idSource = mediaUrl ? `${mediaUrl}_${index}` : `video_${index}`;
     const id = domId || `html5_${hashString(idSource)}`;
@@ -200,13 +212,23 @@ export function detectHtml5Videos(context: VideoDetectionContext): DetectedVideo
       provider: 'html5',
       title,
       embedUrl: mediaUrl || context.pageUrl,
-      mediaUrl: mediaUrl || undefined,
-      domId,
-      domSelector,
-      durationMs,
       ...drmFields,
-      trackUrls: trackUrls.length > 0 ? trackUrls : undefined,
     };
+    if (mediaUrl) {
+      detectedVideo.mediaUrl = mediaUrl;
+    }
+    if (domId) {
+      detectedVideo.domId = domId;
+    }
+    if (domSelector) {
+      detectedVideo.domSelector = domSelector;
+    }
+    if (durationMs !== undefined) {
+      detectedVideo.durationMs = durationMs;
+    }
+    if (trackUrls.length > 0) {
+      detectedVideo.trackUrls = trackUrls;
+    }
     videos.push(detectedVideo);
   }
 

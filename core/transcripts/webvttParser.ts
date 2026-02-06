@@ -72,13 +72,14 @@ export function parseVttTimestamp(timestamp: string): number {
   let minutes: number;
   let seconds: number;
 
+  const [part0, part1, part2] = parts;
   if (parts.length === 3) {
-    hours = parseInt(parts[0], 10) || 0;
-    minutes = parseInt(parts[1], 10) || 0;
-    seconds = parseFloat(parts[2]) || 0;
+    hours = parseInt(part0 ?? '0', 10) || 0;
+    minutes = parseInt(part1 ?? '0', 10) || 0;
+    seconds = parseFloat(part2 ?? '0') || 0;
   } else {
-    minutes = parseInt(parts[0], 10) || 0;
-    seconds = parseFloat(parts[1]) || 0;
+    minutes = parseInt(part0 ?? '0', 10) || 0;
+    seconds = parseFloat(part1 ?? '0') || 0;
   }
 
   return Math.round((hours * 3600 + minutes * 60 + seconds) * 1000);
@@ -114,7 +115,7 @@ export function parseWebVtt(vttContent: string): TranscriptResult {
 
   // Skip WEBVTT header and any metadata
   while (i < lines.length) {
-    const line = lines[i].trim();
+    const line = (lines[i] ?? '').trim();
     if (
       line === '' ||
       line.startsWith('WEBVTT') ||
@@ -124,7 +125,7 @@ export function parseWebVtt(vttContent: string): TranscriptResult {
       i++;
       // Skip multi-line NOTE/STYLE blocks
       if (line.startsWith('NOTE') || line.startsWith('STYLE')) {
-        while (i < lines.length && lines[i].trim() !== '') {
+        while (i < lines.length && (lines[i] ?? '').trim() !== '') {
           i++;
         }
       }
@@ -135,7 +136,7 @@ export function parseWebVtt(vttContent: string): TranscriptResult {
 
   // Parse cues
   while (i < lines.length) {
-    const line = lines[i].trim();
+    const line = (lines[i] ?? '').trim();
 
     // Skip empty lines and cue identifiers (numeric or text before timestamp)
     if (line === '') {
@@ -154,15 +155,21 @@ export function parseWebVtt(vttContent: string): TranscriptResult {
       continue;
     }
 
-    const startMs = parseVttTimestamp(timestampMatch[1]);
-    const endMs = parseVttTimestamp(timestampMatch[2]);
+    const startTimestamp = timestampMatch[1];
+    const endTimestamp = timestampMatch[2];
+    if (!startTimestamp || !endTimestamp) {
+      i++;
+      continue;
+    }
+    const startMs = parseVttTimestamp(startTimestamp);
+    const endMs = parseVttTimestamp(endTimestamp);
 
     i++;
 
     // Collect cue text (may span multiple lines until empty line)
     const textLines: string[] = [];
-    while (i < lines.length && lines[i].trim() !== '') {
-      textLines.push(lines[i]);
+    while (i < lines.length && (lines[i] ?? '').trim() !== '') {
+      textLines.push(lines[i] ?? '');
       i++;
     }
 

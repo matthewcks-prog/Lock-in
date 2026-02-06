@@ -109,14 +109,25 @@ export function useNoteEditorPersistence({
     setStatus('saving');
     setError(null);
 
-    const defaults = { defaultCourseCode, defaultSourceUrl, sourceSelection };
+    const defaults: {
+      defaultCourseCode?: string | null;
+      defaultSourceUrl?: string | null;
+      sourceSelection?: string | null;
+    } = {};
+    if (defaultCourseCode !== undefined) {
+      defaults.defaultCourseCode = defaultCourseCode;
+    }
+    if (defaultSourceUrl !== undefined) {
+      defaults.defaultSourceUrl = defaultSourceUrl;
+    }
+    if (sourceSelection !== undefined) {
+      defaults.sourceSelection = sourceSelection;
+    }
     const pendingSave = buildPendingSave({
       note: currentNote,
       clientNoteId,
-      defaultCourseCode,
-      defaultSourceUrl,
-      sourceSelection,
       expectedUpdatedAt,
+      ...defaults,
     });
 
     try {
@@ -195,13 +206,21 @@ export function useNoteEditorPersistence({
   const handleContentChange = useCallback(
     (content: NoteContent) => {
       setNote((prev: Note | null) => {
-        const base =
-          prev ??
-          createDraftNote({
-            courseCode: defaultCourseCode,
-            sourceUrl: defaultSourceUrl,
-            sourceSelection,
-          });
+        const draftDefaults: {
+          courseCode?: string | null;
+          sourceUrl?: string | null;
+          sourceSelection?: string | null;
+        } = {};
+        if (defaultCourseCode !== undefined) {
+          draftDefaults.courseCode = defaultCourseCode;
+        }
+        if (defaultSourceUrl !== undefined) {
+          draftDefaults.sourceUrl = defaultSourceUrl;
+        }
+        if (sourceSelection !== undefined) {
+          draftDefaults.sourceSelection = sourceSelection;
+        }
+        const base = prev ?? createDraftNote(draftDefaults);
         return { ...base, content };
       });
       setStatus('editing');
@@ -213,13 +232,21 @@ export function useNoteEditorPersistence({
   const handleTitleChange = useCallback(
     (title: string) => {
       setNote((prev: Note | null) => {
-        const base =
-          prev ??
-          createDraftNote({
-            courseCode: defaultCourseCode,
-            sourceUrl: defaultSourceUrl,
-            sourceSelection,
-          });
+        const draftDefaults: {
+          courseCode?: string | null;
+          sourceUrl?: string | null;
+          sourceSelection?: string | null;
+        } = {};
+        if (defaultCourseCode !== undefined) {
+          draftDefaults.courseCode = defaultCourseCode;
+        }
+        if (defaultSourceUrl !== undefined) {
+          draftDefaults.sourceUrl = defaultSourceUrl;
+        }
+        if (sourceSelection !== undefined) {
+          draftDefaults.sourceSelection = sourceSelection;
+        }
+        const base = prev ?? createDraftNote(draftDefaults);
         return { ...base, title };
       });
       setStatus('editing');
@@ -241,11 +268,21 @@ export function useNoteEditorPersistence({
     saveSequenceRef.current += 1;
     setActiveNoteId(null);
     clientNoteIdRef.current = createClientNoteId();
-    const draft = createDraftNote({
-      courseCode: defaultCourseCode,
-      sourceUrl: defaultSourceUrl,
-      sourceSelection,
-    });
+    const draftDefaults: {
+      courseCode?: string | null;
+      sourceUrl?: string | null;
+      sourceSelection?: string | null;
+    } = {};
+    if (defaultCourseCode !== undefined) {
+      draftDefaults.courseCode = defaultCourseCode;
+    }
+    if (defaultSourceUrl !== undefined) {
+      draftDefaults.sourceUrl = defaultSourceUrl;
+    }
+    if (sourceSelection !== undefined) {
+      draftDefaults.sourceSelection = sourceSelection;
+    }
+    const draft = createDraftNote(draftDefaults);
     setNote(draft);
     lastSavedFingerprintRef.current = null;
     setStatus('idle');
@@ -276,9 +313,11 @@ export function useNoteEditorPersistence({
         let saved: Note | null = null;
         if (pendingSave.noteId) {
           const payload = buildPendingUpdatePayload(pendingSave);
-          saved = await notesService.updateNote(pendingSave.noteId, payload, {
-            expectedUpdatedAt: pendingSave.expectedUpdatedAt ?? undefined,
-          });
+          const updateOptions: { expectedUpdatedAt?: string | null } = {};
+          if (pendingSave.expectedUpdatedAt !== undefined) {
+            updateOptions.expectedUpdatedAt = pendingSave.expectedUpdatedAt;
+          }
+          saved = await notesService.updateNote(pendingSave.noteId, payload, updateOptions);
         } else {
           const payload = buildPendingCreatePayload(pendingSave);
           saved = await notesService.createNote(payload);

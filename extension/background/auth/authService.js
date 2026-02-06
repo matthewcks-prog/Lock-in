@@ -13,7 +13,9 @@
     };
   }
 
-  function createAuthService({ chromeClient, config, log }) {
+  function createAuthService({ chromeClient, config, log, networkUtils }) {
+    const AUTH_REFRESH_MAX_RETRIES = 2;
+    const AUTH_REFRESH_TIMEOUT_MS = 10000;
     let refreshInFlight = null;
 
     async function storageGet(key) {
@@ -35,14 +37,27 @@
         return null;
       }
 
-      const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=refresh_token`, {
+      const requestOptions = {
         method: 'POST',
         headers: {
           apikey: anonKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ refresh_token: session.refreshToken }),
-      });
+      };
+
+      const fetchWithRetry = networkUtils?.fetchWithRetry;
+      if (typeof fetchWithRetry !== 'function') {
+        log.error('Network utilities unavailable for auth refresh');
+        return null;
+      }
+
+      const response = await fetchWithRetry(
+        `${supabaseUrl}/auth/v1/token?grant_type=refresh_token`,
+        requestOptions,
+        AUTH_REFRESH_MAX_RETRIES,
+        AUTH_REFRESH_TIMEOUT_MS,
+      );
 
       if (!response.ok) {
         await storageRemove(config.getSessionStorageKey());

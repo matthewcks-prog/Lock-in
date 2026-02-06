@@ -82,9 +82,11 @@ export function TranscriptToolContent() {
             void extractTranscript(video);
           }}
           onClose={handlePanelClose}
-          error={transcriptState.error || undefined}
-          detectionHint={transcriptState.detectionHint || undefined}
-          authRequired={transcriptState.authRequired}
+          {...(transcriptState.error ? { error: transcriptState.error } : {})}
+          {...(transcriptState.detectionHint
+            ? { detectionHint: transcriptState.detectionHint }
+            : {})}
+          {...(transcriptState.authRequired ? { authRequired: transcriptState.authRequired } : {})}
           extractionResults={transcriptState.extractionsByVideoId}
           aiTranscription={transcriptState.aiTranscription}
           onTranscribeWithAI={(video) => {

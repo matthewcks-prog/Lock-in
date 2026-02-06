@@ -78,7 +78,7 @@ export function useNotesPanelActions({
         typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
       const errorMessage =
         (err instanceof Error && err.message) ||
-        (typeof errorRecord?.message === 'string' ? errorRecord.message : undefined) ||
+        (typeof errorRecord?.['message'] === 'string' ? errorRecord['message'] : undefined) ||
         'Failed to delete note';
       setDeleteError(errorMessage);
       showToast(errorMessage, 'error');
@@ -113,10 +113,10 @@ export function useNotesPanelActions({
       } catch (err: unknown) {
         const errorRecord =
           typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
-        const code = typeof errorRecord?.code === 'string' ? errorRecord.code : undefined;
+        const code = typeof errorRecord?.['code'] === 'string' ? errorRecord['code'] : undefined;
         const message =
           (err instanceof Error && err.message) ||
-          (typeof errorRecord?.message === 'string' ? errorRecord.message : undefined);
+          (typeof errorRecord?.['message'] === 'string' ? errorRecord['message'] : undefined);
         let errorMessage = 'Failed to update star status';
         if (code === 'AUTH_REQUIRED') {
           errorMessage = 'Please sign in to star notes';

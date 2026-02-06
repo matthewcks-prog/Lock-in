@@ -112,8 +112,9 @@ export class MoodleAdapter implements BaseAdapter {
       for (const el of elements) {
         const text = el.textContent?.trim() || '';
         const match = text.match(weekPattern);
-        if (match) {
-          const weekNum = parseInt(match[1], 10);
+        const weekToken = match?.[1];
+        if (weekToken) {
+          const weekNum = parseInt(weekToken, 10);
           if (weekNum > 0 && weekNum <= 52) {
             return weekNum;
           }
@@ -131,8 +132,9 @@ export class MoodleAdapter implements BaseAdapter {
         const text = el.textContent?.trim() || '';
         // Only match if the element contains just "Week X" (possibly with whitespace)
         const match = text.match(weekPattern);
-        if (match) {
-          const weekNum = parseInt(match[1], 10);
+        const weekToken = match?.[1];
+        if (weekToken) {
+          const weekNum = parseInt(weekToken, 10);
           if (weekNum > 0 && weekNum <= 52) {
             return weekNum;
           }
@@ -147,8 +149,9 @@ export class MoodleAdapter implements BaseAdapter {
       const text = (sectionContent.textContent || '').substring(0, 300);
       // Look for "Week X" at the start of content (possibly after whitespace)
       const startMatch = text.match(/^\s*Week\s+(\d{1,2})\b/i);
-      if (startMatch) {
-        const weekNum = parseInt(startMatch[1], 10);
+      const weekToken = startMatch?.[1];
+      if (weekToken) {
+        const weekNum = parseInt(weekToken, 10);
         if (weekNum > 0 && weekNum <= 52) {
           return weekNum;
         }
@@ -217,14 +220,24 @@ export class MoodleAdapter implements BaseAdapter {
     const topic = this.getTopic(dom);
     const week = this.getWeek(dom);
 
-    return {
+    const context: CourseContext = {
       courseCode,
-      courseName: courseCode || undefined,
-      week: week || undefined,
-      topic: topic || undefined,
       sourceUrl: url,
-      sourceLabel: week ? `Week ${week}` : topic || courseCode || undefined,
     };
+    if (courseCode) {
+      context.courseName = courseCode;
+    }
+    if (week !== null) {
+      context.week = week;
+    }
+    if (topic) {
+      context.topic = topic;
+    }
+    const sourceLabel = week !== null ? `Week ${week}` : topic || courseCode || '';
+    if (sourceLabel) {
+      context.sourceLabel = sourceLabel;
+    }
+    return context;
   }
 
   /**

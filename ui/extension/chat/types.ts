@@ -190,29 +190,38 @@ export function relativeTimeLabel(iso: string | null | undefined): string {
 export function normalizeChatAttachment(raw: unknown): ChatAttachment | null {
   if (!isRecord(raw)) return null;
 
-  const kindValue = getString(raw.kind) || getString(raw.type) || 'other';
+  const kindValue = getString(raw['kind']) || getString(raw['type']) || 'other';
   const kind = (
     ['image', 'document', 'code', 'other'].includes(kindValue) ? kindValue : 'other'
   ) as ChatAttachmentKind;
-  const mime = getString(raw.mime) || getString(raw.mimeType) || getString(raw.mime_type) || '';
+  const mime =
+    getString(raw['mime']) || getString(raw['mimeType']) || getString(raw['mime_type']) || '';
   const name =
-    getString(raw.name) || getString(raw.fileName) || getString(raw.file_name) || 'Attachment';
-  const dataUrl = getString(raw.dataUrl);
-  const url = getString(raw.url);
+    getString(raw['name']) ||
+    getString(raw['fileName']) ||
+    getString(raw['file_name']) ||
+    'Attachment';
+  const dataUrl = getString(raw['dataUrl']);
+  const url = getString(raw['url']);
 
-  return {
+  const attachment: ChatAttachment = {
     kind,
     mime,
     name,
-    dataUrl,
-    url,
   };
+  if (dataUrl) {
+    attachment.dataUrl = dataUrl;
+  }
+  if (url) {
+    attachment.url = url;
+  }
+  return attachment;
 }
 
 export function normalizeChatMessage(raw: unknown, mode: StudyMode): ChatMessage {
   const record = isRecord(raw) ? raw : {};
-  const attachments = Array.isArray(record.attachments)
-    ? record.attachments
+  const attachments = Array.isArray(record['attachments'])
+    ? record['attachments']
         .map(normalizeChatAttachment)
         .filter((attachment: ChatAttachment | null): attachment is ChatAttachment =>
           Boolean(attachment),
@@ -220,18 +229,21 @@ export function normalizeChatMessage(raw: unknown, mode: StudyMode): ChatMessage
     : undefined;
 
   const modeValue =
-    record.mode === 'explain' || record.mode === 'general' ? record.mode : undefined;
+    record['mode'] === 'explain' || record['mode'] === 'general' ? record['mode'] : undefined;
 
-  return {
-    id: getString(record.id) || `msg-${Math.random().toString(16).slice(2)}`,
-    role: record.role === 'assistant' ? 'assistant' : 'user',
+  const message: ChatMessage = {
+    id: getString(record['id']) || `msg-${Math.random().toString(16).slice(2)}`,
+    role: record['role'] === 'assistant' ? 'assistant' : 'user',
     content:
-      getString(record.content) ||
-      getString(record.output_text) ||
-      getString(record.input_text) ||
+      getString(record['content']) ||
+      getString(record['output_text']) ||
+      getString(record['input_text']) ||
       'Message',
-    timestamp: getString(record.created_at) || new Date().toISOString(),
+    timestamp: getString(record['created_at']) || new Date().toISOString(),
     mode: modeValue || mode,
-    attachments,
   };
+  if (attachments && attachments.length > 0) {
+    message.attachments = attachments;
+  }
+  return message;
 }

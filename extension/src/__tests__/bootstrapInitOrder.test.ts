@@ -252,8 +252,10 @@ describe('contentScript-react bootstrap init order', () => {
     expect(domReadyHandlers.length).toBeGreaterThanOrEqual(1);
 
     // Trigger bootstrap twice in quick succession
-    domReadyHandlers[0]();
-    domReadyHandlers[0]();
+    const handler = domReadyHandlers[0];
+    expect(handler).toBeDefined();
+    handler?.();
+    handler?.();
 
     await vi.runAllTimersAsync();
     await Promise.resolve();

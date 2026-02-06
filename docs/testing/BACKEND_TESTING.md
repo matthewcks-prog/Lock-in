@@ -18,7 +18,7 @@ Unit test files MUST use the `.test.js` suffix:
 
 ```
 ✅ chatRepository.test.js
-✅ validation.test.js
+✅ chatAssetValidation.test.js
 ✅ assetValidation.test.js
 ✅ controllers/__tests__/assistantTitle.test.js
 ```
@@ -259,8 +259,8 @@ backend/
 ├── chatRepository.js
 ├── chatRepository.test.js           ✅ Test next to code
 ├── utils/
-│   ├── validation.js
-│   └── validation.test.js           ✅ Test next to code
+│   ├── chatAssetValidation.js
+│   └── chatAssetValidation.test.js           ✅ Test next to code
 ├── controllers/
 │   └── __tests__/                   ✅ Tests in __tests__ subdirectory
 │       ├── assistantTitle.test.js

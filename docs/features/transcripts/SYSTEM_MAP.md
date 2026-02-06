@@ -63,6 +63,7 @@
 
 1. **Background fetch helpers**
    - `fetchWithRetry()` + `fetchWithCredentials()` in `extension/src/networkUtils.js`.
+   - Shared retry/timeout wrapper in `extension/src/networkRetry.js` (used by background + content scripts).
    - `ExtensionFetcher` in `extension/background.js` uses these helpers for providers.
 
 2. **Background message handlers**

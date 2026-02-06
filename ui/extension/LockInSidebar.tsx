@@ -60,6 +60,17 @@ function LockInSidebarContent({
   const { activeToolId, activeToolTitle, closeTool } = useToolContext();
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
+  const sidebarStateOptions: Parameters<typeof useSidebarState>[0] = {
+    currentMode,
+    isOpen,
+    onToggle,
+  };
+  if (activeTabExternal) {
+    sidebarStateOptions.activeTabExternal = activeTabExternal;
+  }
+  if (storage) {
+    sidebarStateOptions.storage = storage;
+  }
   const {
     activeTab,
     setActiveTab,
@@ -68,13 +79,7 @@ function LockInSidebarContent({
     selectedNoteId,
     setSelectedNoteId,
     setIsNoteEditing,
-  } = useSidebarState({
-    activeTabExternal,
-    currentMode,
-    storage,
-    isOpen,
-    onToggle,
-  });
+  } = useSidebarState(sidebarStateOptions);
 
   const notesService: NotesService | null = useMemo(
     () => (apiClient ? createNotesService(apiClient) : null),
@@ -93,13 +98,16 @@ function LockInSidebarContent({
     limit: 50,
   });
 
-  const { handleResizeStart } = useResize({
-    storage,
+  const resizeOptions: Parameters<typeof useResize>[0] = {
     minWidth: SIDEBAR_MIN_WIDTH,
     maxWidth: SIDEBAR_MAX_WIDTH,
     maxVw: SIDEBAR_MAX_VW,
     storageKey: SIDEBAR_WIDTH_KEY,
-  });
+  };
+  if (storage) {
+    resizeOptions.storage = storage;
+  }
+  const { handleResizeStart } = useResize(resizeOptions);
 
   const courseCode = pageContext?.courseContext.courseCode || null;
   const pageUrl = pageContext?.url || (typeof window !== 'undefined' ? window.location.href : '');
@@ -144,12 +152,12 @@ function LockInSidebarContent({
           {activeTab === CHAT_TAB_ID && (
             <ChatSection
               apiClient={apiClient}
-              storage={storage}
+              {...(storage ? { storage } : {})}
               mode={mode}
               pageUrl={pageUrl}
               courseCode={courseCode}
-              pendingPrefill={pendingPrefill}
-              onClearPrefill={onClearPrefill}
+              {...(pendingPrefill !== undefined ? { pendingPrefill } : {})}
+              {...(onClearPrefill ? { onClearPrefill } : {})}
               isOpen={isOpen}
               isActive={activeTab === CHAT_TAB_ID}
             />
@@ -176,7 +184,7 @@ function LockInSidebarContent({
               onSelectNote={(noteId) => setSelectedNoteId(noteId)}
               courseCode={courseCode}
               pageUrl={pageUrl}
-              currentWeek={pageContext?.courseContext?.week}
+              currentWeek={pageContext?.courseContext?.week ?? null}
               onNoteEditingChange={setIsNoteEditing}
             />
           )}

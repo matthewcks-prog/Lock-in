@@ -81,7 +81,8 @@ function extractMediaIdFromPath(pathname: string): string | null {
   const match = pathname.match(
     /\/medias?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
   );
-  return match ? match[1].toLowerCase() : null;
+  const mediaId = match?.[1];
+  return mediaId ? mediaId.toLowerCase() : null;
 }
 
 /**
@@ -120,11 +121,18 @@ export function extractEcho360Info(rawUrl: string): Echo360Info | null {
     const paramLessonId = url.searchParams.get('lessonId') || url.searchParams.get('lesson_id');
     const paramMediaId = url.searchParams.get('mediaId') || url.searchParams.get('media_id');
 
-    return {
-      lessonId: lessonId || paramLessonId || undefined,
-      mediaId: mediaId || (paramMediaId ? paramMediaId.toLowerCase() : undefined),
+    const info: Echo360Info = {
       baseUrl: url.origin,
     };
+    const resolvedLessonId = lessonId || paramLessonId || null;
+    const resolvedMediaId = mediaId || (paramMediaId ? paramMediaId.toLowerCase() : null);
+    if (resolvedLessonId) {
+      info.lessonId = resolvedLessonId;
+    }
+    if (resolvedMediaId) {
+      info.mediaId = resolvedMediaId;
+    }
+    return info;
   } catch {
     return null;
   }

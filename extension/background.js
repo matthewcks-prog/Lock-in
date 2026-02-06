@@ -27,63 +27,16 @@ try {
   console.warn('Lock-in: Failed to import/init sentry.js:', e);
 }
 
-// Other shared libraries
+// Load background bootstrap (shared libs + modules)
 try {
-  importScripts('dist/libs/transcriptProviders.js');
+  importScripts('background/bootstrap.js');
+  if (self.LockInBackground?.bootstrap?.loadAll) {
+    self.LockInBackground.bootstrap.loadAll();
+  } else {
+    console.error('Lock-in: Background bootstrap unavailable.');
+  }
 } catch (e) {
-  console.warn('Lock-in: Failed to import transcriptProviders.js:', e);
-}
-try {
-  importScripts('src/networkUtils.js');
-} catch (e) {
-  console.warn('Lock-in: Failed to import networkUtils.js:', e);
-}
-try {
-  importScripts(
-    'src/panoptoResolverHelpers.js',
-    'src/panoptoResolverRuntime.js',
-    'src/panoptoResolverNetwork.js',
-    'src/panoptoResolver.js',
-  );
-} catch (e) {
-  console.warn('Lock-in: Failed to import panoptoResolver.js:', e);
-}
-
-// ============================================================================
-// Load background modules (no listeners/registering side effects)
-// ============================================================================
-
-try {
-  importScripts(
-    'background/logging.js',
-    'background/errors.js',
-    'background/config.js',
-    'background/chromeClient.js',
-    'background/responder.js',
-    'background/validators.js',
-    'background/router.js',
-    'background/sessions/sessionStore.js',
-    'background/settings/settingsStore.js',
-    'background/auth/authService.js',
-    'background/transcripts/registry.js',
-    'background/transcripts/extensionFetcher.js',
-    'background/transcripts/extraction.js',
-    'background/transcripts/panoptoMedia.js',
-    'background/transcripts/aiUtils.js',
-    'background/transcripts/contentScriptMedia.js',
-    'background/transcripts/aiTranscriptionUpload.js',
-    'background/transcripts/aiTranscriptionPolling.js',
-    'background/transcripts/aiTranscription.js',
-    'background/handlers/sessionHandlers.js',
-    'background/handlers/settingsHandlers.js',
-    'background/handlers/transcriptHandlers.js',
-    'background/handlers/aiTranscriptionHandlers.js',
-    'background/contextMenus.js',
-    'background/lifecycle.js',
-    'background/index.js',
-  );
-} catch (e) {
-  console.error('Lock-in: Failed to import background modules:', e);
+  console.error('Lock-in: Failed to import background bootstrap:', e);
 }
 
 // ============================================================================

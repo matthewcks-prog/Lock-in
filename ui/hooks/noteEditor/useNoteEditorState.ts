@@ -8,7 +8,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   if (typeof err === 'object' && err !== null) {
     const record = err as Record<string, unknown>;
-    if (typeof record.message === 'string') return record.message;
+    if (typeof record['message'] === 'string') return record['message'];
   }
   return fallback;
 }
@@ -49,11 +49,23 @@ export function useNoteEditorState({
 }: NoteEditorStateOptions): NoteEditorStateInternal {
   const [activeNoteId, setActiveNoteId] = useState<string | null>(noteId ?? null);
   const [note, setNote] = useState<Note | null>(
-    createDraftNote({
-      courseCode: defaultCourseCode,
-      sourceUrl: defaultSourceUrl,
-      sourceSelection,
-    }),
+    (() => {
+      const draftDefaults: {
+        courseCode?: string | null;
+        sourceUrl?: string | null;
+        sourceSelection?: string | null;
+      } = {};
+      if (defaultCourseCode !== undefined) {
+        draftDefaults.courseCode = defaultCourseCode;
+      }
+      if (defaultSourceUrl !== undefined) {
+        draftDefaults.sourceUrl = defaultSourceUrl;
+      }
+      if (sourceSelection !== undefined) {
+        draftDefaults.sourceSelection = sourceSelection;
+      }
+      return createDraftNote(draftDefaults);
+    })(),
   );
   const [status, setStatus] = useState<NoteStatus>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -103,11 +115,21 @@ export function useNoteEditorState({
       lastLoadedNoteIdRef.current = null;
       if (!currentNote || currentNote.id !== null) {
         clientNoteIdRef.current = createClientNoteId();
-        const draft = createDraftNote({
-          courseCode: defaultCourseCodeRef.current,
-          sourceUrl: defaultSourceUrlRef.current,
-          sourceSelection: sourceSelectionRef.current,
-        });
+        const draftDefaults: {
+          courseCode?: string | null;
+          sourceUrl?: string | null;
+          sourceSelection?: string | null;
+        } = {};
+        if (defaultCourseCodeRef.current !== undefined) {
+          draftDefaults.courseCode = defaultCourseCodeRef.current;
+        }
+        if (defaultSourceUrlRef.current !== undefined) {
+          draftDefaults.sourceUrl = defaultSourceUrlRef.current;
+        }
+        if (sourceSelectionRef.current !== undefined) {
+          draftDefaults.sourceSelection = sourceSelectionRef.current;
+        }
+        const draft = createDraftNote(draftDefaults);
         setNote(draft);
         // Set fingerprint for the initial draft to prevent unnecessary save on first change
         lastSavedFingerprintRef.current = createContentFingerprint(draft.title, draft.content);

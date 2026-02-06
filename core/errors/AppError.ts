@@ -71,8 +71,12 @@ export class AppError extends Error {
     super(message);
     this.name = 'AppError';
     this.code = code;
-    this.status = options?.status;
-    this.details = options?.details;
+    if (options?.status !== undefined) {
+      this.status = options.status;
+    }
+    if (options?.details !== undefined) {
+      this.details = options.details;
+    }
     this.isRetryable = options?.isRetryable ?? false;
     this.timestamp = new Date().toISOString();
 
@@ -155,7 +159,9 @@ export class ValidationError extends AppError {
   ) {
     super(message, ErrorCodes.VALIDATION_ERROR, { ...options, status: 400, isRetryable: false });
     this.name = 'ValidationError';
-    this.field = field;
+    if (field !== undefined) {
+      this.field = field;
+    }
   }
 }
 
@@ -184,8 +190,12 @@ export class NotFoundError extends AppError {
   ) {
     super(message, ErrorCodes.NOT_FOUND, { ...options, status: 404, isRetryable: false });
     this.name = 'NotFoundError';
-    this.resourceType = resourceType;
-    this.resourceId = resourceId;
+    if (resourceType !== undefined) {
+      this.resourceType = resourceType;
+    }
+    if (resourceId !== undefined) {
+      this.resourceId = resourceId;
+    }
   }
 }
 
@@ -202,7 +212,9 @@ export class ConflictError extends AppError {
   ) {
     super(message, ErrorCodes.CONFLICT, { ...options, status: 409, isRetryable: true });
     this.name = 'ConflictError';
-    this.serverVersion = serverVersion;
+    if (serverVersion !== undefined) {
+      this.serverVersion = serverVersion;
+    }
   }
 }
 
@@ -217,14 +229,20 @@ export class RateLimitError extends AppError {
     retryAfterMs?: number,
     options?: { cause?: Error },
   ) {
-    super(message, ErrorCodes.RATE_LIMIT, {
-      ...options,
-      status: 429,
-      isRetryable: true,
-      details: retryAfterMs ? { retryAfterMs } : undefined,
-    });
+    const rateLimitOptions: {
+      status?: number;
+      details?: Record<string, unknown>;
+      isRetryable?: boolean;
+      cause?: Error;
+    } = { status: 429, isRetryable: true, ...options };
+    if (retryAfterMs) {
+      rateLimitOptions.details = { retryAfterMs };
+    }
+    super(message, ErrorCodes.RATE_LIMIT, rateLimitOptions);
     this.name = 'RateLimitError';
-    this.retryAfterMs = retryAfterMs;
+    if (retryAfterMs !== undefined) {
+      this.retryAfterMs = retryAfterMs;
+    }
   }
 }
 
@@ -250,7 +268,11 @@ export function wrapError(error: unknown, fallbackMessage?: string): AppError {
     const status = typeof errorMeta.status === 'number' ? errorMeta.status : undefined;
 
     if (code && Object.values(ErrorCodes).includes(code)) {
-      return new AppError(error.message, code, { status, cause: error });
+      const options: { status?: number; cause?: Error } = { cause: error };
+      if (status !== undefined) {
+        options.status = status;
+      }
+      return new AppError(error.message, code, options);
     }
 
     return new AppError(

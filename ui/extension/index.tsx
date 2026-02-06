@@ -8,11 +8,12 @@
 import { createRoot, Root } from 'react-dom/client';
 import { LockInSidebar } from './LockInSidebar';
 import type { LockInSidebarProps } from './LockInSidebar';
-import { initSentry } from '../../extension/src/sentry';
 
 // Initialize Sentry for error tracking (sidebar surface)
 // This runs early before the React app renders to catch all errors
-initSentry('sidebar');
+if (typeof window !== 'undefined') {
+  window.LockInSentry?.initSentry?.('sidebar');
+}
 
 export interface SidebarInstance {
   root: Root;
@@ -22,6 +23,9 @@ export interface SidebarInstance {
 
 declare global {
   interface Window {
+    LockInSentry?: {
+      initSentry?: (surface: string) => Promise<boolean>;
+    };
     LockInUI?: {
       createLockInSidebar: typeof createLockInSidebar;
       LockInSidebar: typeof LockInSidebar;

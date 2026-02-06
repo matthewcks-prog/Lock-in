@@ -102,9 +102,13 @@ async function enhanceVideosWithMediaIds(
         updated = {
           ...video,
           echoMediaId: resolved.mediaId,
-          echoLessonId: resolved.lessonId || video.echoLessonId,
-          echoBaseUrl: resolved.baseUrl || video.echoBaseUrl,
         };
+        if (resolved.lessonId) {
+          updated.echoLessonId = resolved.lessonId;
+        }
+        if (resolved.baseUrl) {
+          updated.echoBaseUrl = resolved.baseUrl;
+        }
       }
     }
 

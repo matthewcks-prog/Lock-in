@@ -85,9 +85,9 @@ function isDevelopmentBuild(): boolean {
 const isDevelopment = isDevelopmentBuild();
 const isTestEnv =
   typeof process !== 'undefined' &&
-  (process.env?.NODE_ENV === 'test' ||
-    process.env?.VITEST === 'true' ||
-    process.env?.VITEST === '1');
+  (process.env?.['NODE_ENV'] === 'test' ||
+    process.env?.['VITEST'] === 'true' ||
+    process.env?.['VITEST'] === '1');
 
 // ============================================================================
 // DSN Resolution
@@ -98,7 +98,7 @@ const isTestEnv =
  * Vite replaces this with the actual DSN string at build time via the define config.
  * We use a separate constant to avoid complex typeof checks on import.meta which break in service workers.
  */
-const BUILD_TIME_DSN: string = import.meta.env.VITE_SENTRY_DSN;
+const BUILD_TIME_DSN: string = import.meta.env['VITE_SENTRY_DSN'];
 
 /**
  * Get Sentry DSN from build-time injection or fallback sources
@@ -189,7 +189,8 @@ function stripQueryParams(url: string | undefined): string | undefined {
     return url.startsWith('http') ? parsed.toString().replace(/\/$/, '') : parsed.pathname;
   } catch {
     // Fallback: simple split
-    return url.split('?')[0].split('#')[0];
+    const base = url.split('?')[0] ?? '';
+    return (base.split('#')[0] ?? base) || base;
   }
 }
 
@@ -227,22 +228,23 @@ function sanitizeBreadcrumbs(breadcrumbs: Breadcrumb[] | undefined): Breadcrumb[
   return breadcrumbs.map((bc) => {
     const sanitized = { ...bc };
     if (sanitized.data) {
-      sanitized.data = { ...sanitized.data };
+      const data = { ...(sanitized.data as Record<string, unknown>) };
+      sanitized.data = data;
       // Remove request/response bodies
-      delete sanitized.data.body;
-      delete sanitized.data.response;
-      delete sanitized.data.request;
-      delete sanitized.data.responseBody;
-      delete sanitized.data.requestBody;
+      delete data['body'];
+      delete data['response'];
+      delete data['request'];
+      delete data['responseBody'];
+      delete data['requestBody'];
       // Strip query params from URLs
-      if (sanitized.data.url) {
-        sanitized.data.url = stripQueryParams(sanitized.data.url as string);
+      if (data['url']) {
+        data['url'] = stripQueryParams(data['url'] as string);
       }
-      if (sanitized.data.from) {
-        sanitized.data.from = stripQueryParams(sanitized.data.from as string);
+      if (data['from']) {
+        data['from'] = stripQueryParams(data['from'] as string);
       }
-      if (sanitized.data.to) {
-        sanitized.data.to = stripQueryParams(sanitized.data.to as string);
+      if (data['to']) {
+        data['to'] = stripQueryParams(data['to'] as string);
       }
     }
     return sanitized;
@@ -255,7 +257,10 @@ function sanitizeBreadcrumbs(breadcrumbs: Breadcrumb[] | undefined): Breadcrumb[
 function beforeSendScrubber(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
   // Strip URL query params
   if (event.request?.url) {
-    event.request.url = stripQueryParams(event.request.url);
+    const sanitizedUrl = stripQueryParams(event.request.url);
+    if (sanitizedUrl) {
+      event.request.url = sanitizedUrl;
+    }
   }
 
   // Strip query params from transaction name
@@ -265,10 +270,10 @@ function beforeSendScrubber(event: ErrorEvent, _hint: EventHint): ErrorEvent | n
 
   // Redact auth headers
   if (event.request?.headers) {
-    delete event.request.headers.Authorization;
-    delete event.request.headers.authorization;
-    delete event.request.headers.Cookie;
-    delete event.request.headers.cookie;
+    delete event.request.headers['Authorization'];
+    delete event.request.headers['authorization'];
+    delete event.request.headers['Cookie'];
+    delete event.request.headers['cookie'];
   }
 
   // Remove cookies
@@ -296,7 +301,10 @@ function beforeSendScrubber(event: ErrorEvent, _hint: EventHint): ErrorEvent | n
   }
 
   // Sanitize breadcrumbs
-  event.breadcrumbs = sanitizeBreadcrumbs(event.breadcrumbs);
+  const sanitizedBreadcrumbs = sanitizeBreadcrumbs(event.breadcrumbs);
+  if (sanitizedBreadcrumbs) {
+    event.breadcrumbs = sanitizedBreadcrumbs;
+  }
 
   return event;
 }

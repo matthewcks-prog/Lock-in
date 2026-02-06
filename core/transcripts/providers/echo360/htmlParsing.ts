@@ -52,32 +52,37 @@ export function extractMediaIdFromLessonInfo(lessonData: unknown): string | null
 
   const data = lessonData as Record<string, unknown>;
 
-  if (Array.isArray(data.medias) && data.medias.length > 0) {
-    const firstMedia = data.medias[0] as Record<string, unknown>;
-    if (typeof firstMedia?.id === 'string') {
-      return firstMedia.id.toLowerCase();
+  const medias = data['medias'];
+  if (Array.isArray(medias) && medias.length > 0) {
+    const firstMedia = medias[0] as Record<string, unknown> | undefined;
+    const firstMediaId = firstMedia?.['id'];
+    if (typeof firstMediaId === 'string') {
+      return firstMediaId.toLowerCase();
     }
-    if (typeof firstMedia?.mediaId === 'string') {
-      return firstMedia.mediaId.toLowerCase();
+    const firstMediaMediaId = firstMedia?.['mediaId'];
+    if (typeof firstMediaMediaId === 'string') {
+      return firstMediaMediaId.toLowerCase();
     }
   }
 
-  if (data.data && typeof data.data === 'object') {
-    return extractMediaIdFromLessonInfo(data.data);
+  if (data['data'] && typeof data['data'] === 'object') {
+    return extractMediaIdFromLessonInfo(data['data']);
   }
 
-  if (data.lesson && typeof data.lesson === 'object') {
-    return extractMediaIdFromLessonInfo(data.lesson);
+  if (data['lesson'] && typeof data['lesson'] === 'object') {
+    return extractMediaIdFromLessonInfo(data['lesson']);
   }
 
   const nestedKeys = ['video', 'media', 'content', 'sections'];
   for (const key of nestedKeys) {
     if (data[key] && typeof data[key] === 'object') {
       const nested = data[key] as Record<string, unknown>;
-      if (Array.isArray(nested.medias) && nested.medias.length > 0) {
-        const firstMedia = nested.medias[0] as Record<string, unknown>;
-        if (typeof firstMedia?.id === 'string') {
-          return firstMedia.id.toLowerCase();
+      const nestedMedias = nested['medias'];
+      if (Array.isArray(nestedMedias) && nestedMedias.length > 0) {
+        const firstMedia = nestedMedias[0] as Record<string, unknown> | undefined;
+        const nestedMediaId = firstMedia?.['id'];
+        if (typeof nestedMediaId === 'string') {
+          return nestedMediaId.toLowerCase();
         }
       }
     }
@@ -94,10 +99,13 @@ export function parseEcho360InfoFromHtml(html: string, pageUrl: string): Echo360
   const mediaId = extractMediaIdFromHtml(html);
 
   if (baseInfo) {
-    return {
-      ...baseInfo,
-      mediaId: mediaId || baseInfo.mediaId,
-    };
+    if (mediaId) {
+      return {
+        ...baseInfo,
+        mediaId,
+      };
+    }
+    return baseInfo;
   }
 
   if (mediaId) {

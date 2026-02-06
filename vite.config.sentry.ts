@@ -15,9 +15,9 @@ import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { resolve } from 'path';
 import {
   createAliases,
+  createDefines,
   createIifeBuildConfig,
   ensureAsciiSafeOutput,
-  sharedDefines,
 } from './build/viteShared';
 
 export default defineConfig(({ mode }) => {
@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     define: {
-      ...sharedDefines,
+      ...createDefines(mode),
       // Inject Sentry DSN at build time (required for service worker where import.meta doesn't work)
       'import.meta.env.VITE_SENTRY_DSN': JSON.stringify(env.VITE_SENTRY_DSN || ''),
     },

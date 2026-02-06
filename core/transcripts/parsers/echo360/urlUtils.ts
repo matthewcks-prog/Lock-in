@@ -8,7 +8,8 @@ export function extractSectionId(url: string): string | null {
     const match = parsed.pathname.match(
       /\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
     );
-    return match ? match[1].toLowerCase() : null;
+    const sectionId = match?.[1];
+    return sectionId ? sectionId.toLowerCase() : null;
   } catch {
     return null;
   }

@@ -1,108 +1,15 @@
-/**
- * useChatHistory Hook
- *
- * TanStack Query-based hook for fetching and managing chat history.
- * Provides cached list of recent chats with optimistic updates.
- */
-
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import type { ChatHistoryItem, UseChatHistoryOptions, HistoryTitleSource } from '../types';
 import { coerceChatTitle, clampChatTitle, FALLBACK_CHAT_TITLE } from '../types';
+import { buildPages, normalizeHistoryPage, type ChatHistoryPage } from './chatHistoryUtils';
 import chatLimits from '@core/config/chatLimits.json';
 
-type ChatHistoryPage = {
-  chats: ChatHistoryItem[];
-  pagination: {
-    hasMore: boolean;
-    nextCursor?: string | null;
-  };
-};
-
-type RecordValue = Record<string, unknown>;
-
-function isRecord(value: unknown): value is RecordValue {
-  return typeof value === 'object' && value !== null;
-}
-
-function getString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-/**
- * Normalizes API response to ChatHistoryItem array.
- */
-function normalizeHistory(response: unknown): ChatHistoryItem[] {
-  if (!Array.isArray(response)) return [];
-
-  return response.map((item) => {
-    const record = isRecord(item) ? item : {};
-    return {
-      id: getString(record.id) || `chat-${Math.random().toString(16).slice(2)}`,
-      title: coerceChatTitle(getString(record.title), FALLBACK_CHAT_TITLE),
-      updatedAt:
-        getString(record.updated_at) || getString(record.updatedAt) || new Date().toISOString(),
-      lastMessage: getString(record.lastMessage) || '',
-    };
-  });
-}
-
-function normalizeHistoryPage(response: unknown): ChatHistoryPage {
-  if (Array.isArray(response)) {
-    return {
-      chats: normalizeHistory(response),
-      pagination: { hasMore: false, nextCursor: null },
-    };
-  }
-
-  const record = isRecord(response) ? response : {};
-  const pagination = isRecord(record.pagination) ? record.pagination : {};
-  return {
-    chats: normalizeHistory(record.chats),
-    pagination: {
-      hasMore: Boolean(pagination?.hasMore),
-      nextCursor: typeof pagination?.nextCursor === 'string' ? pagination.nextCursor : null,
-    },
-  };
-}
-
-function buildPages(
-  items: ChatHistoryItem[],
-  pageSize: number,
-  existingPages: ChatHistoryPage[] = [],
-): ChatHistoryPage[] {
-  const pageCount = Math.max(existingPages.length, 1);
-  const pages: ChatHistoryPage[] = [];
-
-  for (let index = 0; index < pageCount; index += 1) {
-    const start = index * pageSize;
-    const chats = items.slice(start, start + pageSize);
-    const existingPagination = existingPages[index]?.pagination || {
-      hasMore: false,
-      nextCursor: null,
-    };
-    pages.push({ chats, pagination: existingPagination });
-  }
-
-  return pages;
-}
-
-/**
- * Query key factory for chat history.
- */
 export const chatHistoryKeys = {
   all: ['chatHistory'] as const,
   recent: (limit: number) => ['chatHistory', 'recent', limit] as const,
 };
 
-/**
- * Hook for fetching chat history with TanStack Query.
- *
- * Features:
- * - Automatic caching and background refetch
- * - Optimistic updates for new/updated chats
- * - Request deduplication
- */
 export function useChatHistory(options: UseChatHistoryOptions) {
   const { apiClient, limit } = options;
   const queryClient = useQueryClient();
@@ -128,13 +35,19 @@ export function useChatHistory(options: UseChatHistoryOptions) {
         };
       }
 
-      const cursor = typeof pageParam === 'string' && pageParam.length > 0 ? pageParam : undefined;
-      const response = await apiClient.getRecentChats({ limit: pageSize, cursor });
+      const cursor = typeof pageParam === 'string' && pageParam.length > 0 ? pageParam : null;
+      const requestParams: { limit: number; cursor?: string | null } = { limit: pageSize };
+      if (cursor) {
+        requestParams.cursor = cursor;
+      }
+      const response = await apiClient.getRecentChats(requestParams);
       return normalizeHistoryPage(response);
     },
     enabled: Boolean(apiClient?.getRecentChats),
     getNextPageParam: (lastPage) =>
-      lastPage.pagination?.hasMore ? (lastPage.pagination.nextCursor ?? undefined) : undefined,
+      lastPage.pagination?.hasMore && lastPage.pagination.nextCursor
+        ? lastPage.pagination.nextCursor
+        : undefined,
     initialPageParam: undefined,
     staleTime: 2 * 60 * 1000, // 2 minutes
     refetchOnMount: true,
@@ -145,11 +58,6 @@ export function useChatHistory(options: UseChatHistoryOptions) {
     [query.data?.pages],
   );
 
-  /**
-   * Upsert a chat in the history list.
-   * Moves existing chat to top or adds new one.
-   * Handles title merging based on source (local vs server).
-   */
   const upsertHistory = useCallback(
     (
       item: ChatHistoryItem,
@@ -206,9 +114,6 @@ export function useChatHistory(options: UseChatHistoryOptions) {
     [maxLimit, pageSize, queryClient],
   );
 
-  /**
-   * Remove a chat from history.
-   */
   const removeFromHistory = useCallback(
     (chatId: string) => {
       queryClient.setQueryData<InfiniteData<ChatHistoryPage, string | undefined>>(
@@ -228,9 +133,6 @@ export function useChatHistory(options: UseChatHistoryOptions) {
     [pageSize, queryClient],
   );
 
-  /**
-   * Invalidate and refetch history.
-   */
   const invalidate = useCallback(() => {
     return queryClient.invalidateQueries({ queryKey: chatHistoryKeys.all });
   }, [queryClient]);

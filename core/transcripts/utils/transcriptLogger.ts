@@ -13,12 +13,12 @@ const LOG_LEVELS: Record<TranscriptLogSetting, number> = {
 function isTestEnv(): boolean {
   if (typeof process === 'undefined') return false;
   const env = process.env || {};
-  return env.NODE_ENV === 'test' || env.VITEST === 'true' || env.VITEST === '1';
+  return env['NODE_ENV'] === 'test' || env['VITEST'] === 'true' || env['VITEST'] === '1';
 }
 
 function resolveLogLevel(): TranscriptLogSetting {
   if (typeof process !== 'undefined') {
-    const raw = process.env?.LOCKIN_TRANSCRIPT_LOG_LEVEL;
+    const raw = process.env?.['LOCKIN_TRANSCRIPT_LOG_LEVEL'];
     if (raw) {
       const normalized = raw.toLowerCase();
       if (normalized in LOG_LEVELS) {

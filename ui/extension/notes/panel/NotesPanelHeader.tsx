@@ -77,7 +77,7 @@ export function NotesPanelHeader({
       <div className="lockin-notes-header-right">
         {showActions && (
           <div className="lockin-notes-header-actions">
-            <ExportDropdown note={note} week={week} onExportError={onExportError} />
+            <ExportDropdown note={note} week={week} {...(onExportError ? { onExportError } : {})} />
             <button
               type="button"
               className={`lockin-note-action-btn lockin-note-star-btn${

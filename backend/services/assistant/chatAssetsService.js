@@ -1,5 +1,4 @@
 const { randomUUID } = require('crypto');
-const pdfParse = require('pdf-parse');
 const { logger: baseLogger } = require('../../observability');
 const {
   CHAT_ASSETS_BUCKET,
@@ -14,8 +13,8 @@ const {
   validateChatAssetFile,
   isVisionCompatibleImage,
 } = require('../../utils/chatAssetValidation');
-const { validateUUID } = require('../../utils/validation');
 const { checkChatAssetDailyLimits } = require('../rateLimitService');
+const { createChatAssetContentService } = require('./chatAssetContentService');
 
 function createRequestError(status, message) {
   const error = new Error(message);
@@ -44,6 +43,8 @@ function createChatAssetsService(deps = {}) {
     dailyUploadBytesLimit: deps.dailyUploadBytesLimit ?? CHAT_ASSET_DAILY_UPLOAD_BYTES_LIMIT,
     signedUrlTtl: deps.signedUrlTtl ?? CHAT_ASSET_SIGNED_URL_TTL_SECONDS,
   };
+
+  const { getAssetForVision, getAssetTextContent } = createChatAssetContentService(services);
 
   async function createSignedAssetUrl(storagePath) {
     const { data, error } = await services.storageRepository.createSignedUrl(
@@ -180,67 +181,6 @@ function createChatAssetsService(deps = {}) {
     await services.chatAssetsRepository.deleteAsset(assetId, userId);
   }
 
-  async function getAssetForVision(assetId, userId) {
-    const asset = await services.chatAssetsRepository.getAssetById(assetId, userId);
-    if (!asset) return null;
-
-    const { data, error } = await services.storageRepository.download(asset.storage_path);
-    if (error) {
-      services.logger.error({ err: error }, 'Failed to download asset for vision');
-      return null;
-    }
-
-    const buffer = await data.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString('base64');
-
-    return {
-      id: asset.id,
-      type: asset.type,
-      mimeType: asset.mime_type,
-      base64,
-      fileName: asset.file_name,
-    };
-  }
-
-  async function getAssetTextContent(assetId, userId) {
-    const asset = await services.chatAssetsRepository.getAssetById(assetId, userId);
-    if (!asset) return null;
-
-    const { data, error } = await services.storageRepository.download(asset.storage_path);
-    if (error) {
-      services.logger.error({ err: error }, 'Failed to download asset for text extraction');
-      return null;
-    }
-
-    const buffer = await data.arrayBuffer();
-    let textContent = '';
-
-    if (asset.mime_type === 'application/pdf') {
-      try {
-        const parsed = await pdfParse(Buffer.from(buffer));
-        textContent = parsed.text?.trim() || '';
-        if (!textContent) {
-          textContent = '[PDF text extraction returned empty]';
-        }
-      } catch (error) {
-        services.logger.error({ err: error }, 'Failed to extract PDF content');
-        textContent = '[PDF text extraction failed]';
-      }
-    } else if (asset.mime_type.startsWith('text/') || asset.mime_type === 'application/json') {
-      textContent = Buffer.from(buffer).toString('utf-8');
-    } else {
-      textContent = '[Binary file - content not extractable]';
-    }
-
-    return {
-      id: asset.id,
-      type: asset.type,
-      mimeType: asset.mime_type,
-      textContent,
-      fileName: asset.file_name,
-    };
-  }
-
   async function resolveAttachmentsForMessage({ userId, assetIds } = {}) {
     const processedAttachments = [];
     const linkedAssetIds = [];
@@ -250,9 +190,6 @@ function createChatAssetsService(deps = {}) {
     }
 
     for (const assetId of assetIds.slice(0, 5)) {
-      const assetIdValidation = validateUUID(assetId);
-      if (!assetIdValidation.valid) continue;
-
       const asset = await services.chatAssetsRepository.getAssetById(assetId, userId);
       if (!asset) continue;
       linkedAssetIds.push(asset.id);

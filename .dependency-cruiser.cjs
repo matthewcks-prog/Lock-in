@@ -13,6 +13,30 @@ module.exports = {
       to: { circular: true },
     },
     {
+      name: 'no-orphan-modules',
+      severity: 'warn',
+      from: { orphan: true, pathNot: '(test|spec|__tests__|fixtures|mocks)' },
+      to: {},
+    },
+    {
+      name: 'no-deprecated-core-imports',
+      severity: 'error',
+      from: {},
+      to: { path: 'core/deprecated/' },
+    },
+    {
+      name: 'core-no-api-imports',
+      comment: 'Core must not depend on the api client layer.',
+      severity: 'error',
+      from: {
+        path: '^core/',
+        pathNot: '(__tests__|\\.test\\.|\\.spec\\.)',
+      },
+      to: {
+        path: '^api/',
+      },
+    },
+    {
       name: 'core-api-no-platform-deps',
       comment: 'core/api must stay platform-agnostic (no backend, extension, UI, or integrations).',
       severity: 'error',
@@ -50,14 +74,62 @@ module.exports = {
     },
     {
       name: 'backend-no-frontend-imports',
-      comment: 'Backend must not depend on extension/UI/integrations.',
+      comment: 'Backend must not depend on api/extension/UI/integrations.',
       severity: 'error',
       from: {
         path: '^backend/',
         pathNot: '(__tests__|\\.test\\.|\\.spec\\.)',
       },
       to: {
-        path: '^(extension|ui|integrations|shared/ui)/',
+        path: '^(api|extension|ui|integrations|shared/ui)/',
+      },
+    },
+    {
+      name: 'extension-no-backend-imports',
+      comment: 'Extension must not depend on backend.',
+      severity: 'error',
+      from: {
+        path: '^extension/',
+        pathNot: '(__tests__|\\.test\\.|\\.spec\\.)',
+      },
+      to: {
+        path: '^backend/',
+      },
+    },
+    {
+      name: 'ui-no-backend-imports',
+      comment: 'UI must not depend on backend.',
+      severity: 'error',
+      from: {
+        path: '^ui/',
+        pathNot: '(__tests__|\\.test\\.|\\.spec\\.)',
+      },
+      to: {
+        path: '^backend/',
+      },
+    },
+    {
+      name: 'ui-no-extension-imports',
+      comment: 'UI must not depend on extension.',
+      severity: 'error',
+      from: {
+        path: '^ui/',
+        pathNot: '(__tests__|\\.test\\.|\\.spec\\.)',
+      },
+      to: {
+        path: '^extension/',
+      },
+    },
+    {
+      name: 'ui-no-integrations-imports',
+      comment: 'UI should not depend on integrations (warn-first).',
+      severity: 'warn',
+      from: {
+        path: '^ui/',
+        pathNot: '(__tests__|\\.test\\.|\\.spec\\.)',
+      },
+      to: {
+        path: '^integrations/',
       },
     },
     {

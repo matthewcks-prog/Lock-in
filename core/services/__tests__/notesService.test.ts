@@ -5,35 +5,27 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createNotesService } from '../notesService';
-import type { ApiClient } from '../../../api/client';
+import { createNotesService, type NotesApiClient } from '../notesService';
 import type { NoteContent, NoteAsset } from '../../domain/Note';
 
 describe('NotesService', () => {
-  let mockApiClient: ApiClient;
+  let mockApiClient: NotesApiClient;
   let notesService: ReturnType<typeof createNotesService>;
 
   beforeEach(() => {
     // Create a mock API client
     mockApiClient = {
       apiRequest: vi.fn(),
-      getBackendUrl: vi.fn(() => 'https://api.example.com'),
-      processText: vi.fn(),
-      getRecentChats: vi.fn(),
-      getChatMessages: vi.fn(),
-      deleteChat: vi.fn(),
       createNote: vi.fn(),
       updateNote: vi.fn(),
       deleteNote: vi.fn(),
       toggleNoteStar: vi.fn(),
       setNoteStar: vi.fn(),
       listNotes: vi.fn(),
-      searchNotes: vi.fn(),
-      chatWithNotes: vi.fn(),
       uploadNoteAsset: vi.fn(),
       listNoteAssets: vi.fn(),
       deleteNoteAsset: vi.fn(),
-    } as unknown as ApiClient;
+    };
 
     notesService = createNotesService(mockApiClient);
   });
@@ -214,7 +206,9 @@ describe('NotesService', () => {
         limit: 50,
       });
       expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('note-1');
+      const [firstNote] = result;
+      expect(firstNote).toBeDefined();
+      expect(firstNote?.id).toBe('note-1');
     });
 
     it('should filter by course code', async () => {
@@ -237,7 +231,9 @@ describe('NotesService', () => {
         courseCode: 'FIT1045',
         limit: 50,
       });
-      expect(result[0].courseCode).toBe('FIT1045');
+      const [firstNote] = result;
+      expect(firstNote).toBeDefined();
+      expect(firstNote?.courseCode).toBe('FIT1045');
     });
 
     it('should migrate legacy notes without content_json', async () => {
@@ -263,8 +259,10 @@ describe('NotesService', () => {
       const result = await notesService.listNotes();
 
       expect(result).toHaveLength(1);
-      expect(result[0].content.version).toBe('lexical_v1');
-      expect(result[0].content.plainText).toContain('Legacy HTML content');
+      const [firstNote] = result;
+      expect(firstNote).toBeDefined();
+      expect(firstNote?.content.version).toBe('lexical_v1');
+      expect(firstNote?.content.plainText).toContain('Legacy HTML content');
     });
   });
 
@@ -364,7 +362,9 @@ describe('NotesService', () => {
 
       expect(mockApiClient.listNoteAssets).toHaveBeenCalledWith({ noteId: 'note-1' });
       expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('asset-1');
+      const [firstAsset] = result;
+      expect(firstAsset).toBeDefined();
+      expect(firstAsset?.id).toBe('asset-1');
     });
   });
 

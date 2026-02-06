@@ -55,11 +55,14 @@ export interface ApiClientConfig {
 }
 
 export function createApiClient(config: ApiClientConfig) {
-  const fetcher = createFetcher({
+  const fetcherConfig: { backendUrl: string; authClient: AuthClient; fetcher?: FetchLike } = {
     backendUrl: config.backendUrl,
     authClient: config.authClient,
-    fetcher: config.fetcher,
-  });
+  };
+  if (config.fetcher) {
+    fetcherConfig.fetcher = config.fetcher;
+  }
+  const fetcher = createFetcher(fetcherConfig);
   const { apiRequest, getBackendUrl } = fetcher;
 
   const { processText } = createLockinClient(apiRequest);

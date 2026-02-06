@@ -177,7 +177,7 @@ backend/
 │   └── verify-embeddings.js
 ├── utils/
 │   ├── validateEnv.js          # Environment validation
-│   └── validation.js           # Input validation utilities
+│   └── chatAssetValidation.js  # Chat attachment validation
 └── package.json                # Dependencies
 ```
 

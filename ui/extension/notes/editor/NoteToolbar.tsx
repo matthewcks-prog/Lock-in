@@ -170,7 +170,7 @@ export function NoteToolbar({
   const [alignment, setAlignment] = useState<string>('left');
   const [showColor, setShowColor] = useState(false);
   const [showHighlight, setShowHighlight] = useState(false);
-  const [currentTextColor, setCurrentTextColor] = useState<string>(TEXT_COLORS[0]);
+  const [currentTextColor, setCurrentTextColor] = useState<string>(TEXT_COLORS[0] ?? '#111827');
   const [currentHighlight, setCurrentHighlight] = useState<string>('transparent');
 
   const updateToolbar = useCallback(() => {
@@ -404,7 +404,11 @@ export function NoteToolbar({
       <div className="lockin-note-toolbar-divider" />
 
       <div className="lockin-note-toolbar-group">
-        <ToolbarButton label="Attach file" onClick={onOpenFilePicker} disabled={disableAttachment}>
+        <ToolbarButton
+          label="Attach file"
+          disabled={Boolean(disableAttachment)}
+          {...(onOpenFilePicker ? { onClick: onOpenFilePicker } : {})}
+        >
           <Paperclip size={16} strokeWidth={2.5} />
         </ToolbarButton>
         {isUploading ? <span className="lockin-inline-spinner" aria-label="Uploading" /> : null}

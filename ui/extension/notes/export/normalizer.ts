@@ -61,13 +61,13 @@ export type { FlattenOptions } from './inlineUtils';
 function parseFormat(format: number | undefined): TextFormatting {
   if (!format) return {};
 
-  return {
-    bold: (format & FORMAT_BOLD) !== 0 || undefined,
-    italic: (format & FORMAT_ITALIC) !== 0 || undefined,
-    strikethrough: (format & FORMAT_STRIKETHROUGH) !== 0 || undefined,
-    underline: (format & FORMAT_UNDERLINE) !== 0 || undefined,
-    code: (format & FORMAT_CODE) !== 0 || undefined,
-  };
+  const formatting: TextFormatting = {};
+  if ((format & FORMAT_BOLD) !== 0) formatting.bold = true;
+  if ((format & FORMAT_ITALIC) !== 0) formatting.italic = true;
+  if ((format & FORMAT_STRIKETHROUGH) !== 0) formatting.strikethrough = true;
+  if ((format & FORMAT_UNDERLINE) !== 0) formatting.underline = true;
+  if ((format & FORMAT_CODE) !== 0) formatting.code = true;
+  return formatting;
 }
 
 /**
@@ -81,13 +81,13 @@ function parseStyles(style: string | undefined): TextStyles | undefined {
 
   // Parse color property
   const colorMatch = style.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
-  if (colorMatch) {
+  if (colorMatch?.[1]) {
     styles.color = colorMatch[1].trim();
   }
 
   // Parse background-color property
   const bgMatch = style.match(/(?:^|;)\s*background-color\s*:\s*([^;]+)/i);
-  if (bgMatch) {
+  if (bgMatch?.[1]) {
     styles.backgroundColor = bgMatch[1].trim();
   }
 
@@ -197,7 +197,7 @@ function extractInlineContent(children: LexicalNode[] | undefined): InlineConten
  */
 function parseHeadingLevel(tag: string | undefined): 1 | 2 | 3 | 4 | 5 | 6 {
   const match = tag?.match(/h(\d)/i);
-  if (match) {
+  if (match?.[1]) {
     const level = parseInt(match[1], 10);
     if (level >= 1 && level <= 6) {
       return level as 1 | 2 | 3 | 4 | 5 | 6;
@@ -265,11 +265,14 @@ function normalizeQuote(node: LexicalNode): QuoteBlock {
 function normalizeCode(node: LexicalNode): CodeBlock {
   const codeText = (node.children || []).map((child) => child.text || '').join('\n');
 
-  return {
+  const block: CodeBlock = {
     type: 'code',
-    language: node.language,
     code: codeText,
   };
+  if (node.language) {
+    block.language = node.language;
+  }
+  return block;
 }
 
 function normalizeBlockNode(node: LexicalNode): Block | null {

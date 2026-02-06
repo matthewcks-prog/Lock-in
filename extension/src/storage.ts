@@ -162,9 +162,11 @@ function createStorage(): Storage {
         // Convert Chrome's StorageChange format to our interface format
         const normalizedChanges: Record<string, StorageChange> = {};
         for (const key in changes) {
+          const change = changes[key];
+          if (!change) continue;
           normalizedChanges[key] = {
-            oldValue: changes[key].oldValue,
-            newValue: changes[key].newValue,
+            oldValue: change.oldValue,
+            newValue: change.newValue,
           };
         }
         callback(normalizedChanges, areaName);

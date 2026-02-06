@@ -31,14 +31,14 @@ function PaperclipIcon() {
 export class AttachmentNode extends DecoratorNode<JSX.Element> {
   __href: string;
   __fileName: string;
-  __mimeType?: string | null;
-  __assetId?: string | null;
+  __mimeType: string | null;
+  __assetId: string | null;
 
-  static getType(): string {
+  static override getType(): string {
     return 'attachment';
   }
 
-  static clone(node: AttachmentNode): AttachmentNode {
+  static override clone(node: AttachmentNode): AttachmentNode {
     return new AttachmentNode(
       node.__href,
       node.__fileName,
@@ -48,7 +48,7 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
     );
   }
 
-  static importJSON(serializedNode: SerializedAttachmentNode): AttachmentNode {
+  static override importJSON(serializedNode: SerializedAttachmentNode): AttachmentNode {
     const { href, fileName, mimeType, assetId } = serializedNode;
     return new AttachmentNode(href, fileName, mimeType, assetId);
   }
@@ -63,15 +63,15 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
     super(key);
     this.__href = href;
     this.__fileName = fileName;
-    this.__mimeType = mimeType;
-    this.__assetId = assetId;
+    this.__mimeType = mimeType ?? null;
+    this.__assetId = assetId ?? null;
   }
 
-  getAssetId(): string | null | undefined {
+  getAssetId(): string | null {
     return this.__assetId;
   }
 
-  exportJSON(): SerializedAttachmentNode {
+  override exportJSON(): SerializedAttachmentNode {
     return {
       type: 'attachment',
       version: 1,
@@ -82,17 +82,17 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
     };
   }
 
-  createDOM(): HTMLElement {
+  override createDOM(): HTMLElement {
     const container = document.createElement('span');
     container.className = 'lockin-note-attachment-wrapper';
     return container;
   }
 
-  updateDOM(): false {
+  override updateDOM(): false {
     return false;
   }
 
-  decorate(): JSX.Element {
+  override decorate(): JSX.Element {
     return (
       <a
         href={this.__href}
@@ -118,7 +118,12 @@ export function $createAttachmentNode(params: {
   mimeType?: string | null;
   assetId?: string | null;
 }): AttachmentNode {
-  return new AttachmentNode(params.href, params.fileName, params.mimeType, params.assetId ?? null);
+  return new AttachmentNode(
+    params.href,
+    params.fileName,
+    params.mimeType ?? null,
+    params.assetId ?? null,
+  );
 }
 
 export function $isAttachmentNode(node: LexicalNode | null | undefined): node is AttachmentNode {

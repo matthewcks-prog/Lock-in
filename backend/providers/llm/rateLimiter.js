@@ -419,8 +419,9 @@ class RateLimiterManager {
 
   /**
    * Stop the rate limiter manager
+   * @returns {Promise<void>}
    */
-  stop() {
+  async stop() {
     if (this._loggingInterval) {
       clearInterval(this._loggingInterval);
       this._loggingInterval = null;
@@ -432,10 +433,16 @@ class RateLimiterManager {
     }
     this._pauseTimers.clear();
 
-    // Stop all Bottleneck limiters and disconnect their stores
+    // Stop all Bottleneck limiters and await their cleanup
+    // Bottleneck.stop() returns a Promise that resolves when all jobs are complete
+    const stopPromises = [];
     for (const limiter of this.limiters.values()) {
-      limiter.stop({ dropWaitingJobs: true });
-      // Disconnect to release any internal resources
+      stopPromises.push(limiter.stop({ dropWaitingJobs: true }));
+    }
+    await Promise.all(stopPromises);
+
+    // Disconnect to release any internal resources after stop completes
+    for (const limiter of this.limiters.values()) {
       if (limiter.disconnect) {
         limiter.disconnect();
       }
@@ -475,10 +482,11 @@ function getTestRateLimiterManager() {
 
 /**
  * Reset the singleton (for testing)
+ * @returns {Promise<void>}
  */
-function resetRateLimiterManager() {
+async function resetRateLimiterManager() {
   if (instance) {
-    instance.stop();
+    await instance.stop();
     instance = null;
   }
 }

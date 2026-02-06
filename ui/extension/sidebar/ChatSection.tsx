@@ -81,13 +81,24 @@ export function ChatSection({
     isLoadingMoreHistory,
     loadMoreHistory,
     isLoadingHistory,
-  } = useChat({
-    apiClient,
-    storage,
-    mode,
-    pageUrl,
-    courseCode,
-  });
+  } = (() => {
+    const chatOptions: {
+      apiClient: ApiClient | null;
+      mode: StudyMode;
+      pageUrl: string;
+      courseCode: string | null;
+      storage?: StorageAdapter;
+    } = {
+      apiClient,
+      mode,
+      pageUrl,
+      courseCode,
+    };
+    if (storage) {
+      chatOptions.storage = storage;
+    }
+    return useChat(chatOptions);
+  })();
 
   const {
     attachments: pendingAttachments,
@@ -121,12 +132,16 @@ export function ChatSection({
           attachmentIds.push(asset.id);
           setAttachmentStatus(attachment.id, 'uploaded', asset.id);
 
-          messageAttachments.push({
+          const attachmentUrl = asset.url || attachment.previewUrl;
+          const messageAttachment: ChatAttachment = {
             kind: asset.type || 'other',
             mime: asset.mimeType,
             name: asset.fileName || attachment.file.name,
-            url: asset.url || attachment.previewUrl,
-          });
+          };
+          if (attachmentUrl) {
+            messageAttachment.url = attachmentUrl;
+          }
+          messageAttachments.push(messageAttachment);
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'Upload failed';
           setAttachmentStatus(attachment.id, 'error', undefined, message);
@@ -173,13 +188,21 @@ export function ChatSection({
       const source = prefillSourceRef.current && hasText ? 'selection' : 'followup';
       prefillSourceRef.current = false;
 
-      sendMessage(displayMessage, {
+      const sendOptions = {
         source,
         attachments: messageAttachments,
         attachmentIds,
-        selectionOverride: hasText ? undefined : '',
-        userMessageOverride: hasText ? trimmed : undefined,
-      });
+      } as const;
+      const sendOverrides: {
+        selectionOverride?: string;
+        userMessageOverride?: string;
+      } = {};
+      if (!hasText) {
+        sendOverrides.selectionOverride = '';
+      } else {
+        sendOverrides.userMessageOverride = trimmed;
+      }
+      sendMessage(displayMessage, { ...sendOptions, ...sendOverrides });
 
       clearAttachments();
       return true;
@@ -242,9 +265,9 @@ export function ChatSection({
         action={
           message.role === 'assistant' && !message.isPending && !message.isError ? (
             <SaveNoteAction content={message.content} />
-          ) : undefined
+          ) : null
         }
-        isThinking={message.isPending}
+        isThinking={Boolean(message.isPending)}
       />
     ));
   };

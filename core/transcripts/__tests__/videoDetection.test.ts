@@ -65,7 +65,9 @@ describe('Panopto Detection', () => {
       const videos = detectPanoptoVideosFromIframes(iframes);
 
       expect(videos).toHaveLength(1);
-      expect(videos[0]).toEqual({
+      const [firstVideo] = videos;
+      expect(firstVideo).toBeDefined();
+      expect(firstVideo).toEqual({
         id: 'abc12345-1234-5678-9abc-def012345678',
         provider: 'panopto',
         title: 'Week 1 Lecture',
@@ -86,7 +88,9 @@ describe('Panopto Detection', () => {
       const videos = detectPanoptoVideosFromIframes(iframes);
 
       expect(videos).toHaveLength(1);
-      expect(videos[0].embedUrl).toBe(
+      const [firstVideo] = videos;
+      expect(firstVideo).toBeDefined();
+      expect(firstVideo?.embedUrl).toBe(
         'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc123',
       );
     });
@@ -115,7 +119,9 @@ describe('Panopto Detection', () => {
       ];
 
       const videos = detectPanoptoVideosFromIframes(iframes);
-      expect(videos[0].title).toBe('Panopto video 1');
+      const [firstVideo] = videos;
+      expect(firstVideo).toBeDefined();
+      expect(firstVideo?.title).toBe('Panopto video 1');
     });
   });
 });
@@ -166,11 +172,13 @@ describe('Unified Detection', () => {
 
       expect(result.provider).toBe('html5');
       expect(result.videos).toHaveLength(1);
-      expect(result.videos[0].provider).toBe('html5');
-      expect(result.videos[0].title).toBe('Week 2 Lecture');
-      expect(result.videos[0].mediaUrl).toBe('https://cdn.example.com/lecture.mp4');
-      expect(result.videos[0].domId).toBe('lecture-video');
-      expect(result.videos[0].trackUrls).toEqual([
+      const [firstVideo] = result.videos;
+      expect(firstVideo).toBeDefined();
+      expect(firstVideo?.provider).toBe('html5');
+      expect(firstVideo?.title).toBe('Week 2 Lecture');
+      expect(firstVideo?.mediaUrl).toBe('https://cdn.example.com/lecture.mp4');
+      expect(firstVideo?.domId).toBe('lecture-video');
+      expect(firstVideo?.trackUrls).toEqual([
         {
           kind: 'captions',
           label: 'English',
@@ -193,9 +201,11 @@ describe('Unified Detection', () => {
 
       expect(result.provider).toBe('echo360');
       expect(result.videos).toHaveLength(1);
-      expect(result.videos[0].provider).toBe('echo360');
-      expect(result.videos[0].echoLessonId).toBe('11111111-2222-3333-4444-555555555555');
-      expect(result.videos[0].echoMediaId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+      const [firstVideo] = result.videos;
+      expect(firstVideo).toBeDefined();
+      expect(firstVideo?.provider).toBe('echo360');
+      expect(firstVideo?.echoLessonId).toBe('11111111-2222-3333-4444-555555555555');
+      expect(firstVideo?.echoMediaId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
     });
 
     it('ignores hidden HTML5 videos', () => {
@@ -220,7 +230,9 @@ describe('Unified Detection', () => {
 
       expect(result.provider).toBe('html5');
       expect(result.videos).toHaveLength(1);
-      expect(result.videos[0].domId).toBe('visible-video');
+      const [firstVideo] = result.videos;
+      expect(firstVideo).toBeDefined();
+      expect(firstVideo?.domId).toBe('visible-video');
     });
   });
 });

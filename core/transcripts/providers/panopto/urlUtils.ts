@@ -29,36 +29,6 @@ export interface PanoptoInfo {
 }
 
 /**
- * Extract delivery ID from a Panopto URL
- * @deprecated Use extractPanoptoInfo instead
- */
-export function extractDeliveryId(url: string): string | null {
-  const info = extractPanoptoInfo(url);
-  return info?.deliveryId ?? null;
-}
-
-/**
- * Extract tenant domain from a Panopto URL
- * Works with any panopto.com URL, even without a video ID
- * @deprecated Use extractPanoptoInfo instead for complete video info
- */
-export function extractTenantDomain(url: string): string | null {
-  const info = extractPanoptoInfo(url);
-  if (info?.tenant) return info.tenant;
-
-  try {
-    const urlObj = new URL(url);
-    if (isPanoptoDomain(urlObj.hostname)) {
-      return urlObj.hostname;
-    }
-  } catch {
-    // Invalid URL
-  }
-
-  return null;
-}
-
-/**
  * Check if URL is a Panopto URL
  */
 export function isPanoptoUrl(url: string): boolean {
@@ -86,12 +56,20 @@ export function isPanoptoDomain(hostname: string): boolean {
 export function extractPanoptoInfo(url: string): PanoptoInfo | null {
   const embedMatch = url.match(PANOPTO_EMBED_REGEX);
   if (embedMatch) {
-    return { deliveryId: embedMatch[2], tenant: embedMatch[1] };
+    const deliveryId = embedMatch[2];
+    const tenant = embedMatch[1];
+    if (deliveryId && tenant) {
+      return { deliveryId, tenant };
+    }
   }
 
   const viewerMatch = url.match(PANOPTO_VIEWER_REGEX);
   if (viewerMatch) {
-    return { deliveryId: viewerMatch[2], tenant: viewerMatch[1] };
+    const deliveryId = viewerMatch[2];
+    const tenant = viewerMatch[1];
+    if (deliveryId && tenant) {
+      return { deliveryId, tenant };
+    }
   }
 
   try {

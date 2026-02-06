@@ -4,8 +4,6 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import {
-  extractDeliveryId,
-  extractTenantDomain,
   isPanoptoUrl,
   extractCaptionVttUrl,
   extractPanoptoInfo,
@@ -18,63 +16,6 @@ import {
 } from '../panoptoProvider';
 
 describe('Panopto URL Utilities', () => {
-  describe('extractDeliveryId', () => {
-    it('extracts delivery ID from embed URL', () => {
-      const url =
-        'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678';
-      expect(extractDeliveryId(url)).toBe('abc12345-1234-5678-9abc-def012345678');
-    });
-
-    it('extracts delivery ID from viewer URL', () => {
-      const url =
-        'https://monash.au.panopto.com/Panopto/Pages/Viewer.aspx?id=abc12345-1234-5678-9abc-def012345678';
-      expect(extractDeliveryId(url)).toBe('abc12345-1234-5678-9abc-def012345678');
-    });
-
-    it('extracts delivery ID with additional query params', () => {
-      const url =
-        'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678&autoplay=true';
-      expect(extractDeliveryId(url)).toBe('abc12345-1234-5678-9abc-def012345678');
-    });
-
-    it('extracts from id= query param as fallback', () => {
-      const url = 'https://monash.au.panopto.com/some/path?id=abc12345-def';
-      expect(extractDeliveryId(url)).toBe('abc12345-def');
-    });
-
-    it('returns null for non-Panopto URLs', () => {
-      expect(extractDeliveryId('https://youtube.com/watch?v=abc123')).toBeNull();
-      expect(extractDeliveryId('https://example.com')).toBeNull();
-    });
-
-    it('returns null for invalid URLs', () => {
-      expect(extractDeliveryId('not-a-url')).toBeNull();
-    });
-  });
-
-  describe('extractTenantDomain', () => {
-    it('extracts tenant domain from embed URL', () => {
-      const url =
-        'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678';
-      expect(extractTenantDomain(url)).toBe('monash.au.panopto.com');
-    });
-
-    it('extracts tenant domain from viewer URL', () => {
-      const url =
-        'https://harvard.hosted.panopto.com/Panopto/Pages/Viewer.aspx?id=abc12345-1234-5678-9abc-def012345678';
-      expect(extractTenantDomain(url)).toBe('harvard.hosted.panopto.com');
-    });
-
-    it('extracts tenant from any panopto.com URL', () => {
-      const url = 'https://example.panopto.com/some/path';
-      expect(extractTenantDomain(url)).toBe('example.panopto.com');
-    });
-
-    it('returns null for non-Panopto URLs', () => {
-      expect(extractTenantDomain('https://example.com/page')).toBeNull();
-    });
-  });
-
   describe('isPanoptoUrl', () => {
     it('returns true for Panopto embed URLs', () => {
       expect(isPanoptoUrl('https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc123')).toBe(
@@ -251,7 +192,7 @@ describe('PanoptoProvider', () => {
       const videos = provider.detectVideosSync(context);
 
       expect(videos).toHaveLength(1);
-      expect(videos[0].title).toBe('Panopto video 1');
+      expect(videos[0]?.title).toBe('Panopto video 1');
     });
 
     it('detects multiple Panopto videos', () => {
@@ -272,10 +213,10 @@ describe('PanoptoProvider', () => {
       const videos = provider.detectVideosSync(context);
 
       expect(videos).toHaveLength(2);
-      expect(videos[0].id).toBe('11111111-1234-5678-9abc-def012345678');
-      expect(videos[0].panoptoTenant).toBe('monash.au.panopto.com');
-      expect(videos[1].id).toBe('22222222-1234-5678-9abc-def012345678');
-      expect(videos[1].panoptoTenant).toBe('monash.au.panopto.com');
+      expect(videos[0]?.id).toBe('11111111-1234-5678-9abc-def012345678');
+      expect(videos[0]?.panoptoTenant).toBe('monash.au.panopto.com');
+      expect(videos[1]?.id).toBe('22222222-1234-5678-9abc-def012345678');
+      expect(videos[1]?.panoptoTenant).toBe('monash.au.panopto.com');
     });
 
     it('deduplicates videos by ID', () => {
@@ -307,11 +248,11 @@ describe('PanoptoProvider', () => {
       const videos = provider.detectVideosSync(context);
 
       expect(videos).toHaveLength(1);
-      expect(videos[0].id).toBe('abc12345-1234-5678-9abc-def012345678');
-      expect(videos[0].embedUrl).toBe(
+      expect(videos[0]?.id).toBe('abc12345-1234-5678-9abc-def012345678');
+      expect(videos[0]?.embedUrl).toBe(
         'https://monash.au.panopto.com/Panopto/Pages/Embed.aspx?id=abc12345-1234-5678-9abc-def012345678',
       );
-      expect(videos[0].panoptoTenant).toBe('monash.au.panopto.com');
+      expect(videos[0]?.panoptoTenant).toBe('monash.au.panopto.com');
     });
 
     it('returns empty array when no Panopto iframes', () => {
@@ -528,9 +469,9 @@ describe('Panopto Link Detection', () => {
       const videos = detectPanoptoFromLinks(doc);
 
       expect(videos).toHaveLength(1);
-      expect(videos[0].id).toBe('abc12345-1234-5678-abcd-def012345678');
-      expect(videos[0].title).toBe('Week 1 Lecture');
-      expect(videos[0].panoptoTenant).toBe('monash.au.panopto.com');
+      expect(videos[0]?.id).toBe('abc12345-1234-5678-abcd-def012345678');
+      expect(videos[0]?.title).toBe('Week 1 Lecture');
+      expect(videos[0]?.panoptoTenant).toBe('monash.au.panopto.com');
     });
 
     it('ignores LMS wrapper links in the Panopto list', () => {
@@ -560,8 +501,8 @@ describe('Panopto Link Detection', () => {
       const videos = detectPanoptoFromLinks(doc);
 
       expect(videos).toHaveLength(2);
-      expect(videos[0].id).toBe('11111111-1111-1111-1111-111111111111');
-      expect(videos[1].id).toBe('22222222-2222-2222-2222-222222222222');
+      expect(videos[0]?.id).toBe('11111111-1111-1111-1111-111111111111');
+      expect(videos[1]?.id).toBe('22222222-2222-2222-2222-222222222222');
     });
 
     it('deduplicates by video ID', () => {
@@ -594,7 +535,7 @@ describe('Panopto Link Detection', () => {
       const videos = detectPanoptoFromRedirect(doc);
 
       expect(videos).toHaveLength(1);
-      expect(videos[0].id).toBe('abc12345-6789-abcd-ef01-23456789abcd');
+      expect(videos[0]?.id).toBe('abc12345-6789-abcd-ef01-23456789abcd');
     });
 
     it('detects Panopto URL in page content', () => {
@@ -609,7 +550,7 @@ describe('Panopto Link Detection', () => {
       const videos = detectPanoptoFromRedirect(doc);
 
       expect(videos).toHaveLength(1);
-      expect(videos[0].id).toBe('cdef0123-4567-89ab-cdef-012345678901');
+      expect(videos[0]?.id).toBe('cdef0123-4567-89ab-cdef-012345678901');
     });
   });
 });

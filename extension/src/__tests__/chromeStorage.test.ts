@@ -179,8 +179,9 @@ describe('chromeStorage', () => {
       const callback = vi.fn();
       chromeStorage.onChanged(callback);
 
-      const listener = mockChromeStorageOnChanged.addListener.mock.calls[0][0];
-      listener(
+      const listener = mockChromeStorageOnChanged.addListener.mock.calls[0]?.[0];
+      expect(listener).toBeDefined();
+      listener?.(
         {
           key1: { oldValue: 'old', newValue: 'new' },
           key2: { oldValue: undefined, newValue: 'added' },
@@ -254,14 +255,15 @@ describe('chromeLocalStorage', () => {
       const callback = vi.fn();
       chromeLocalStorage.onChanged(callback);
 
-      const listener = mockChromeStorageOnChanged.addListener.mock.calls[0][0];
+      const listener = mockChromeStorageOnChanged.addListener.mock.calls[0]?.[0];
+      expect(listener).toBeDefined();
 
       // Should ignore sync changes
-      listener({ key1: { newValue: 'value' } }, 'sync');
+      listener?.({ key1: { newValue: 'value' } }, 'sync');
       expect(callback).not.toHaveBeenCalled();
 
       // Should fire for local changes
-      listener({ key1: { newValue: 'value' } }, 'local');
+      listener?.({ key1: { newValue: 'value' } }, 'local');
       expect(callback).toHaveBeenCalled();
     });
   });

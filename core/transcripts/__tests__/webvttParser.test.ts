@@ -67,12 +67,15 @@ is the brain of the computer.
     const result = parseWebVtt(vtt);
 
     expect(result.segments).toHaveLength(2);
-    expect(result.segments[0]).toEqual({
+    const [firstSegment, secondSegment] = result.segments;
+    expect(firstSegment).toBeDefined();
+    expect(secondSegment).toBeDefined();
+    expect(firstSegment).toEqual({
       startMs: 430,
       endMs: 5919,
       text: 'The central processing unit',
     });
-    expect(result.segments[1]).toEqual({
+    expect(secondSegment).toEqual({
       startMs: 5920,
       endMs: 10000,
       text: 'is the brain of the computer.',
@@ -91,7 +94,9 @@ It&#39;s a &quot;test&quot;
 
     const result = parseWebVtt(vtt);
 
-    expect(result.segments[0].text).toBe('It\'s a "test"');
+    const [firstSegment] = result.segments;
+    expect(firstSegment).toBeDefined();
+    expect(firstSegment?.text).toBe('It\'s a "test"');
   });
 
   it('strips VTT formatting tags', () => {
@@ -104,7 +109,9 @@ It&#39;s a &quot;test&quot;
 
     const result = parseWebVtt(vtt);
 
-    expect(result.segments[0].text).toBe('Hello world');
+    const [firstSegment] = result.segments;
+    expect(firstSegment).toBeDefined();
+    expect(firstSegment?.text).toBe('Hello world');
   });
 
   it('handles multi-line cues', () => {
@@ -118,7 +125,9 @@ and this is line two
 
     const result = parseWebVtt(vtt);
 
-    expect(result.segments[0].text).toBe('This is line one and this is line two');
+    const [firstSegment] = result.segments;
+    expect(firstSegment).toBeDefined();
+    expect(firstSegment?.text).toBe('This is line one and this is line two');
   });
 
   it('handles VTT with NOTE and STYLE blocks', () => {
@@ -138,7 +147,9 @@ Actual content
     const result = parseWebVtt(vtt);
 
     expect(result.segments).toHaveLength(1);
-    expect(result.segments[0].text).toBe('Actual content');
+    const [firstSegment] = result.segments;
+    expect(firstSegment).toBeDefined();
+    expect(firstSegment?.text).toBe('Actual content');
   });
 
   it('handles empty VTT', () => {
@@ -164,7 +175,9 @@ Positioned text
     const result = parseWebVtt(vtt);
 
     expect(result.segments).toHaveLength(1);
-    expect(result.segments[0].text).toBe('Positioned text');
+    const [firstSegment] = result.segments;
+    expect(firstSegment).toBeDefined();
+    expect(firstSegment?.text).toBe('Positioned text');
   });
 });
 

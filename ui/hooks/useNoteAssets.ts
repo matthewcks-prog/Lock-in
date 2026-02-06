@@ -6,7 +6,7 @@ function getErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof Error && err.message) return err.message;
   if (typeof err === 'object' && err !== null) {
     const record = err as Record<string, unknown>;
-    if (typeof record.message === 'string') return record.message;
+    if (typeof record['message'] === 'string') return record['message'];
   }
   return fallback;
 }

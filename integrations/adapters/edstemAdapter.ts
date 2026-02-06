@@ -47,12 +47,18 @@ export class EdstemAdapter implements BaseAdapter {
     const courseCode = this.getCourseCode(dom);
     const topic = this.getTopic(dom);
 
-    return {
+    const context: CourseContext = {
       courseCode,
-      topic: topic || undefined,
       sourceUrl: url,
-      sourceLabel: topic || courseCode || undefined,
     };
+    if (topic) {
+      context.topic = topic;
+    }
+    const sourceLabel = topic || courseCode || '';
+    if (sourceLabel) {
+      context.sourceLabel = sourceLabel;
+    }
+    return context;
   }
 
   getPageContext(dom: Document, url: string): PageContext {

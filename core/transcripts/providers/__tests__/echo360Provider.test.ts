@@ -83,8 +83,8 @@ describe('detectEcho360Videos', () => {
     });
 
     expect(videos).toHaveLength(2);
-    expect(videos[0].echoLessonId).toBe('11111111-2222-3333-4444-555555555555');
-    expect(videos[1].echoMediaId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
+    expect(videos[0]?.echoLessonId).toBe('11111111-2222-3333-4444-555555555555');
+    expect(videos[1]?.echoMediaId).toBe('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee');
   });
 });
 
@@ -282,7 +282,7 @@ describe('Echo360Provider', () => {
       echoBaseUrl: 'https://echo360.net.au',
     });
     // Title should not include the date (date display was removed from UI)
-    expect(videos[0].title).toBe('FIT2100_CL_S2/Class/01_OnCampus/Operating systems');
+    expect(videos[0]?.title).toBe('FIT2100_CL_S2/Class/01_OnCampus/Operating systems');
 
     // Verify second video
     expect(videos[1]).toMatchObject({
@@ -334,7 +334,7 @@ describe('Echo360Provider', () => {
 
     // Should only include the available media
     expect(videos).toHaveLength(1);
-    expect(videos[0].echoMediaId).toBe('available-media');
+    expect(videos[0]?.echoMediaId).toBe('available-media');
   });
 
   it('skips non-video media types in syllabus response', async () => {
@@ -366,7 +366,7 @@ describe('Echo360Provider', () => {
     const videos = await provider.detectVideosAsync!(context, fetcher);
 
     expect(videos).toHaveLength(1);
-    expect(videos[0].echoMediaId).toBe('video-media');
+    expect(videos[0]?.echoMediaId).toBe('video-media');
   });
 
   it('includes audio-only media in syllabus response', async () => {
@@ -402,7 +402,7 @@ describe('Echo360Provider', () => {
     const videos = await provider.detectVideosAsync!(context, fetcher);
 
     expect(videos).toHaveLength(1);
-    expect(videos[0].echoMediaId).toBe('audio-only-media');
+    expect(videos[0]?.echoMediaId).toBe('audio-only-media');
   });
 
   it('includes audio media types in syllabus response', async () => {
@@ -463,7 +463,7 @@ describe('Echo360Provider', () => {
     const videos = await provider.detectVideosAsync!(context, fetcher);
 
     expect(videos).toHaveLength(1);
-    expect(videos[0].echoMediaId).toBe('unknown-type-media');
+    expect(videos[0]?.echoMediaId).toBe('unknown-type-media');
   });
 });
 

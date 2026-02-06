@@ -62,10 +62,10 @@ export function extractPlainText(document: NormalizedDocument): string {
         lines.push(flattenInlineContent(block.children));
         break;
       case 'list':
-        for (let i = 0; i < block.children.length; i++) {
-          const prefix = block.ordered ? `${i + 1}. ` : '- ';
-          lines.push(prefix + flattenInlineContent(block.children[i].children));
-        }
+        block.children.forEach((item, index) => {
+          const prefix = block.ordered ? `${index + 1}. ` : '- ';
+          lines.push(prefix + flattenInlineContent(item.children));
+        });
         break;
       case 'code':
         lines.push(block.code);

@@ -10,7 +10,12 @@
     contentScriptMedia,
     log,
     chunkBytes,
+    networkUtils,
   }) {
+    const fetchWithRetry = networkUtils?.fetchWithRetry;
+    const CHUNK_UPLOAD_TIMEOUT_MS = 30000;
+    const MEDIA_FETCH_MAX_RETRIES = 2;
+    const MEDIA_FETCH_TIMEOUT_MS = 20000;
     const SSO_DOMAINS = [
       'okta.com',
       'auth0.com',
@@ -42,8 +47,6 @@
       }
     };
 
-    const waitMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
     function buildChunkHeaders({ token, index, totalChunks }) {
       const headers = {
         Authorization: `Bearer ${token}`,
@@ -54,17 +57,6 @@
         headers['x-total-chunks'] = String(totalChunks);
       }
       return headers;
-    }
-
-    function resolveRetryDelayMs(response, attempt) {
-      const retryAfterHeader = response.headers.get('Retry-After');
-      if (retryAfterHeader) {
-        const retryAfter = parseInt(retryAfterHeader, 10);
-        if (Number.isFinite(retryAfter)) {
-          return retryAfter * 1000;
-        }
-      }
-      return Math.min(2000 * Math.pow(2, attempt), 32000);
     }
 
     async function parseErrorPayload(response) {
@@ -87,50 +79,62 @@
       totalChunks,
       maxRetries = 5,
     }) {
-      let lastError = null;
-      for (let attempt = 0; attempt < maxRetries; attempt += 1) {
-        if (signal?.aborted) {
-          throw new Error('CANCELED');
-        }
-
-        const response = await fetch(`${backendUrl}/api/transcripts/jobs/${jobId}/chunks`, {
-          method: 'PUT',
-          headers: buildChunkHeaders({ token, index, totalChunks }),
-          body: chunk,
-          signal,
-        });
-
-        if (response.ok) {
-          return;
-        }
-
-        if (response.status === 429) {
-          const retryAfterMs = resolveRetryDelayMs(response, attempt);
-          log.info(
-            `Rate limited on chunk ${index}, retrying in ${retryAfterMs}ms (attempt ${attempt + 1}/${maxRetries})`,
-          );
-          await waitMs(retryAfterMs);
-          continue;
-        }
-
-        const data = await parseErrorPayload(response);
-        lastError = new Error(
-          data?.error?.message || data?.error || `Chunk upload failed: ${response.status}`,
-        );
-        break;
+      if (signal?.aborted) {
+        throw new Error('CANCELED');
       }
 
-      throw lastError || new Error(`Chunk ${index} upload failed after ${maxRetries} retries`);
+      const url = `${backendUrl}/api/transcripts/jobs/${jobId}/chunks`;
+      const requestOptions = {
+        method: 'PUT',
+        headers: buildChunkHeaders({ token, index, totalChunks }),
+        body: chunk,
+        signal,
+      };
+
+      if (typeof fetchWithRetry !== 'function') {
+        throw new Error('Network utilities unavailable');
+      }
+
+      const response = await fetchWithRetry(url, requestOptions, {
+        maxRetries,
+        timeoutMs: CHUNK_UPLOAD_TIMEOUT_MS,
+        retryableStatuses: [429, 502, 503, 504],
+        retryOnServerError: true,
+        onRetry: (info) => {
+          log.info(
+            `Retrying chunk ${index} in ${info.delayMs}ms (attempt ${info.attempt}/${maxRetries})`,
+          );
+        },
+      });
+
+      if (response.ok) {
+        return;
+      }
+
+      const data = await parseErrorPayload(response);
+      throw new Error(
+        data?.error?.message || data?.error || `Chunk upload failed: ${response.status}`,
+      );
     }
 
     async function fetchDirectMediaResponse(mediaUrl, signal) {
       log.info('Attempting direct media fetch:', mediaUrl);
-      let response = await fetch(mediaUrl, {
+      const initialOptions = {
         method: 'GET',
         credentials: 'include',
         redirect: 'manual',
         signal,
-      });
+      };
+      if (typeof fetchWithRetry !== 'function') {
+        throw errors.createErrorWithCode('Network utilities unavailable', 'NOT_AVAILABLE');
+      }
+
+      let response = await fetchWithRetry(
+        mediaUrl,
+        initialOptions,
+        MEDIA_FETCH_MAX_RETRIES,
+        MEDIA_FETCH_TIMEOUT_MS,
+      );
 
       log.info('Initial response:', response.status, response.type);
 
@@ -154,11 +158,17 @@
           const useCredentials = !isCdnUrl(location);
           log.info('Following redirect, credentials:', useCredentials);
 
-          response = await fetch(location, {
+          const redirectOptions = {
             method: 'GET',
             credentials: useCredentials ? 'include' : 'omit',
             signal,
-          });
+          };
+          response = await fetchWithRetry(
+            location,
+            redirectOptions,
+            MEDIA_FETCH_MAX_RETRIES,
+            MEDIA_FETCH_TIMEOUT_MS,
+          );
         } else {
           log.info('No location header, falling back to content script');
           throw errors.createErrorWithCode('CORS_BLOCKED', 'CORS_BLOCKED');

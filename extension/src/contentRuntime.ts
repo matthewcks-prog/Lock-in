@@ -55,13 +55,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function inferCourseCode(dom: Document, url: string): string | null {
   const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
-  if (urlMatch) {
-    return urlMatch[1].toUpperCase();
+  const urlCode = urlMatch?.[1];
+  if (urlCode) {
+    return urlCode.toUpperCase();
   }
 
   const bodyText = dom.body?.innerText || '';
   const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
-  return codeMatch ? codeMatch[1].toUpperCase() : null;
+  const bodyCode = codeMatch?.[1];
+  return bodyCode ? bodyCode.toUpperCase() : null;
 }
 
 export function resolveAdapterContext(loggerInstance?: LoggerInterface): {
@@ -171,12 +173,12 @@ function createSessionApi(
     try {
       const response = await runtimeMessaging.send<unknown>(runtimeMessaging.types.GET_TAB_ID);
       const responseRecord = isRecord(response) ? response : {};
-      const dataRecord = isRecord(responseRecord.data) ? responseRecord.data : {};
+      const dataRecord = isRecord(responseRecord['data']) ? responseRecord['data'] : {};
       const tabId =
-        typeof dataRecord.tabId === 'number'
-          ? dataRecord.tabId
-          : typeof responseRecord.tabId === 'number'
-            ? responseRecord.tabId
+        typeof dataRecord['tabId'] === 'number'
+          ? dataRecord['tabId']
+          : typeof responseRecord['tabId'] === 'number'
+            ? responseRecord['tabId']
             : null;
       if (typeof tabId === 'number') {
         cachedTabId = tabId;
@@ -193,8 +195,8 @@ function createSessionApi(
     try {
       const response = await runtimeMessaging.send<unknown>(runtimeMessaging.types.GET_SESSION);
       const responseRecord = isRecord(response) ? response : {};
-      const dataRecord = isRecord(responseRecord.data) ? responseRecord.data : {};
-      return dataRecord.session ?? responseRecord.session ?? null;
+      const dataRecord = isRecord(responseRecord['data']) ? responseRecord['data'] : {};
+      return dataRecord['session'] ?? responseRecord['session'] ?? null;
     } catch (error) {
       log.error('[Lock-in] Failed to get session:', error);
       return null;

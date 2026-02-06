@@ -70,9 +70,11 @@ export const chromeStorage: StorageInterface = {
       // Convert Chrome's StorageChange format to our interface format
       const normalizedChanges: Record<string, { oldValue?: T; newValue?: T }> = {};
       for (const key in changes) {
+        const change = changes[key];
+        if (!change) continue;
         normalizedChanges[key] = {
-          oldValue: changes[key].oldValue,
-          newValue: changes[key].newValue,
+          oldValue: change.oldValue,
+          newValue: change.newValue,
         };
       }
       callback(normalizedChanges, areaName);
@@ -152,9 +154,11 @@ export const chromeLocalStorage: StorageInterface = {
 
       const normalizedChanges: Record<string, { oldValue?: T; newValue?: T }> = {};
       for (const key in changes) {
+        const change = changes[key];
+        if (!change) continue;
         normalizedChanges[key] = {
-          oldValue: changes[key].oldValue,
-          newValue: changes[key].newValue,
+          oldValue: change.oldValue,
+          newValue: change.newValue,
         };
       }
       callback(normalizedChanges, areaName);

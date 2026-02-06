@@ -2,9 +2,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
-process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost';
-process.env.SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key';
+process.env['SUPABASE_URL'] = process.env['SUPABASE_URL'] || 'http://localhost';
+process.env['SUPABASE_SERVICE_ROLE_KEY'] =
+  process.env['SUPABASE_SERVICE_ROLE_KEY'] || 'test-service-role-key';
 
 const require = createRequire(import.meta.url);
 type ChatRow = {

@@ -30,15 +30,16 @@ export function detectEcho360Videos(context: VideoDetectionContext): DetectedVid
     if (seenIds.has(id)) return;
     seenIds.add(id);
 
-    videos.push({
+    const video: DetectedVideo = {
       id,
       provider: 'echo360',
       title: title || `Echo360 video ${videos.length + 1}`,
       embedUrl: url,
-      echoLessonId: info.lessonId,
-      echoMediaId: info.mediaId,
-      echoBaseUrl: info.baseUrl,
-    });
+    };
+    if (info.lessonId) video.echoLessonId = info.lessonId;
+    if (info.mediaId) video.echoMediaId = info.mediaId;
+    if (info.baseUrl) video.echoBaseUrl = info.baseUrl;
+    videos.push(video);
   };
 
   if (isEcho360Url(context.pageUrl)) {
@@ -61,14 +62,15 @@ export function mergeSyllabusMetadata(
   syncVideo: DetectedVideo,
   syllabusVideo: DetectedVideo,
 ): DetectedVideo {
-  return {
+  const merged: DetectedVideo = {
     ...syncVideo,
     id: syllabusVideo.id || syncVideo.id,
     title: syllabusVideo.title || syncVideo.title,
-    echoLessonId: syllabusVideo.echoLessonId || syncVideo.echoLessonId,
-    echoMediaId: syllabusVideo.echoMediaId || syncVideo.echoMediaId,
-    echoBaseUrl: syllabusVideo.echoBaseUrl || syncVideo.echoBaseUrl,
   };
+  if (syllabusVideo.echoLessonId) merged.echoLessonId = syllabusVideo.echoLessonId;
+  if (syllabusVideo.echoMediaId) merged.echoMediaId = syllabusVideo.echoMediaId;
+  if (syllabusVideo.echoBaseUrl) merged.echoBaseUrl = syllabusVideo.echoBaseUrl;
+  return merged;
 }
 
 /**

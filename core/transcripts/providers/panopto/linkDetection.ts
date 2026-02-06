@@ -114,8 +114,9 @@ export function detectPanoptoFromRedirect(doc: Document): DetectedVideo[] {
   if (metaRefresh) {
     const content = metaRefresh.getAttribute('content') || '';
     const urlMatch = content.match(/url=(.+)/i);
-    if (urlMatch) {
-      const info = extractPanoptoInfo(urlMatch[1]);
+    const urlValue = urlMatch?.[1];
+    if (urlValue) {
+      const info = extractPanoptoInfo(urlValue);
       if (info) {
         addVideo(info, '');
       }
@@ -128,8 +129,9 @@ export function detectPanoptoFromRedirect(doc: Document): DetectedVideo[] {
     const locationMatch = content.match(
       /(?:window\.)?location(?:\.href)?\s*=\s*['"]([^'"]*panopto[^'"]*)['"]/i,
     );
-    if (locationMatch) {
-      const info = extractPanoptoInfo(locationMatch[1]);
+    const locationValue = locationMatch?.[1];
+    if (locationValue) {
+      const info = extractPanoptoInfo(locationValue);
       if (info && !seenIds.has(info.deliveryId)) {
         addVideo(info, '');
       }

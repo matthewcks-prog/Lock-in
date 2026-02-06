@@ -27,8 +27,9 @@ export function normalizeMediaId(value: unknown): string | null {
   if (!raw) return null;
   const trimmed = raw.trim();
   const braceMatch = trimmed.match(/^\{?([0-9a-fA-F-]{36})\}?$/);
-  if (braceMatch && UUID_REGEX.test(braceMatch[1])) {
-    return braceMatch[1].toLowerCase();
+  const braceId = braceMatch?.[1];
+  if (braceId && UUID_REGEX.test(braceId)) {
+    return braceId.toLowerCase();
   }
   if (UUID_REGEX.test(trimmed)) {
     return trimmed.toLowerCase();
@@ -38,38 +39,49 @@ export function normalizeMediaId(value: unknown): string | null {
 
 export function extractLessonIdFromRecord(record: UnknownRecord | null): string | null {
   if (!record) return null;
-  return normalizeLessonId(record.id ?? record.lessonId ?? record.lesson_id);
+  return normalizeLessonId(record['id'] ?? record['lessonId'] ?? record['lesson_id']);
 }
 
 export function extractLessonNameFromRecord(record: UnknownRecord | null): string {
   if (!record) return '';
   return (
-    readString(record.displayName) || readString(record.name) || readString(record.title) || ''
+    readString(record['displayName']) ||
+    readString(record['name']) ||
+    readString(record['title']) ||
+    ''
   );
 }
 
 export function extractTimingStart(record: UnknownRecord | null): string | null {
   if (!record) return null;
-  const timing = asRecord(record.timing);
+  const timing = asRecord(record['timing']);
   if (timing) {
-    return readString(timing.start) || readString(timing.startTime) || readString(timing.startsAt);
+    return (
+      readString(timing['start']) ||
+      readString(timing['startTime']) ||
+      readString(timing['startsAt'])
+    );
   }
   return null;
 }
 
 export function extractMediaIdFromRecord(record: UnknownRecord | null): string | null {
   if (!record) return null;
-  return normalizeMediaId(record.mediaId ?? record.media_id ?? record.id);
+  return normalizeMediaId(record['mediaId'] ?? record['media_id'] ?? record['id']);
 }
 
 export function extractMediaTitle(record: UnknownRecord | null): string | null {
   if (!record) return null;
-  return readString(record.title) || readString(record.name) || readString(record.displayName);
+  return (
+    readString(record['title']) || readString(record['name']) || readString(record['displayName'])
+  );
 }
 
 export function extractMediaTypeRaw(record: UnknownRecord | null): string | null {
   if (!record) return null;
-  return readString(record.mediaType ?? record.media_type ?? record.type ?? record.kind);
+  return readString(
+    record['mediaType'] ?? record['media_type'] ?? record['type'] ?? record['kind'],
+  );
 }
 
 export function normalizeMediaType(value: unknown): string | null {

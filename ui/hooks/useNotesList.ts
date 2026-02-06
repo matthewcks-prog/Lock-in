@@ -9,12 +9,17 @@ interface UseNotesListOptions {
 
 function getErrorMeta(err: unknown): { code?: string; message?: string } {
   const record = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
-  return {
-    code: typeof record?.code === 'string' ? record.code : undefined,
-    message:
-      (err instanceof Error && err.message) ||
-      (typeof record?.message === 'string' ? record.message : undefined),
-  };
+  const meta: { code?: string; message?: string } = {};
+  if (typeof record?.['code'] === 'string') {
+    meta.code = record['code'];
+  }
+  const message =
+    (err instanceof Error && err.message) ||
+    (typeof record?.['message'] === 'string' ? record['message'] : undefined);
+  if (message) {
+    meta.message = message;
+  }
+  return meta;
 }
 
 /**

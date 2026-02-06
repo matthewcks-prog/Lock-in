@@ -19,12 +19,13 @@ export function collectIframeInfo(doc: Document, depth = 0): VideoDetectionConte
 
   for (const iframe of iframes) {
     if (!isElementVisible(iframe)) continue;
-    const src = iframe.src || iframe.getAttribute('data-src') || iframe.dataset.src || '';
+    const src = iframe.src || iframe.getAttribute('data-src') || iframe.dataset['src'] || '';
     if (src) {
-      result.push({
-        src,
-        title: iframe.title || undefined,
-      });
+      const entry: { src: string; title?: string } = { src };
+      if (iframe.title) {
+        entry.title = iframe.title;
+      }
+      result.push(entry);
     }
 
     try {

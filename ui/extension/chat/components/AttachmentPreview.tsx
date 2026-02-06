@@ -48,7 +48,9 @@ function getFileType(mimeType: string): 'image' | 'document' | 'code' | 'other' 
 /** Get file extension from filename */
 function getExtension(filename: string): string {
   const parts = filename.split('.');
-  return parts.length > 1 ? parts[parts.length - 1].toUpperCase() : '';
+  if (parts.length <= 1) return '';
+  const last = parts[parts.length - 1];
+  return last ? last.toUpperCase() : '';
 }
 
 /** Format file size for display */

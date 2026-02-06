@@ -18,7 +18,12 @@
 
     const sessionStore = registry.sessions.createSessionStore({ chromeClient, log });
     const settingsStore = registry.settings.createSettingsStore({ chromeClient, log });
-    const authService = registry.auth.createAuthService({ chromeClient, config, log });
+    const authService = registry.auth.createAuthService({
+      chromeClient,
+      config,
+      log,
+      networkUtils,
+    });
 
     const transcriptRegistry = registry.transcripts.registry.createTranscriptRegistry({
       transcriptProviders,

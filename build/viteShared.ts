@@ -22,12 +22,6 @@ export function createDefines(mode: string) {
   };
 }
 
-/** @deprecated Use createDefines(mode) instead for proper JSX runtime alignment */
-export const sharedDefines = {
-  "process.env.NODE_ENV": JSON.stringify("production"),
-  process: JSON.stringify({}),
-};
-
 export function createAliases(options: AliasOptions = {}): Record<string, string> {
   const {
     includeCore = true,
