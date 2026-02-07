@@ -34,7 +34,6 @@ export function createSendMessageHandlers(deps: MutationHandlerDeps) {
       role: 'assistant',
       content: 'Thinking...',
       timestamp: new Date().toISOString(),
-      mode: params.mode,
       isPending: true,
     };
 
@@ -84,7 +83,7 @@ export function createSendMessageHandlers(deps: MutationHandlerDeps) {
       deps.queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), (old = []) =>
         old.map((msg) =>
           msg.id === context.pendingMessageId
-            ? { ...msg, content: data.explanation, isPending: false }
+            ? { ...msg, content: data.content, isPending: false }
             : msg,
         ),
       );

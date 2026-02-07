@@ -8,8 +8,19 @@ import { extractEcho360Info } from './urlUtils';
 
 type ResolvableEchoInfo = Echo360Info & { lessonId: string; baseUrl: string };
 
+const isNonEmptyString = (value: string | null | undefined): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const firstNonEmptyString = (values: Array<string | null | undefined>): string | null => {
+  for (const value of values) {
+    if (isNonEmptyString(value)) return value;
+  }
+  return null;
+};
+
 function asResolvableInfo(info: Echo360Info | null): ResolvableEchoInfo | null {
-  if (!info?.lessonId || !info.baseUrl) return null;
+  if (info === null || !isNonEmptyString(info.lessonId) || !isNonEmptyString(info.baseUrl))
+    return null;
   return {
     ...info,
     lessonId: info.lessonId,
@@ -33,7 +44,7 @@ async function resolveFromClassroom(
     });
 
     const htmlInfo = parseEcho360InfoFromHtml(html, finalUrl);
-    if (!htmlInfo?.mediaId) {
+    if (!isNonEmptyString(htmlInfo?.mediaId)) {
       log('warn', requestId, 'No mediaId found in classroom HTML');
       return null;
     }
@@ -65,13 +76,14 @@ async function resolveFromLessonApi(
     log('info', requestId, 'Fetching lesson info from API', { lessonInfoUrl });
 
     const lessonData = await fetcher.fetchJson<unknown>(lessonInfoUrl);
+    const hasData = lessonData !== null && lessonData !== undefined;
     log('info', requestId, 'Lesson info fetched', {
-      hasData: !!lessonData,
+      hasData,
       dataType: typeof lessonData,
     });
 
     const mediaId = extractMediaIdFromLessonInfo(lessonData);
-    if (!mediaId) {
+    if (mediaId === null) {
       log('warn', requestId, 'No mediaId found in lesson API response');
       return null;
     }
@@ -106,11 +118,15 @@ async function resolveFromEmbedFetch(
     const urlInfo = extractEcho360Info(finalUrl);
     const htmlInfo = parseEcho360InfoFromHtml(html, finalUrl);
 
-    const lessonId = urlInfo?.lessonId || htmlInfo?.lessonId || directInfo?.lessonId;
-    const mediaId = urlInfo?.mediaId || htmlInfo?.mediaId;
-    const baseUrl = urlInfo?.baseUrl || htmlInfo?.baseUrl || directInfo?.baseUrl;
+    const lessonId = firstNonEmptyString([
+      urlInfo?.lessonId,
+      htmlInfo?.lessonId,
+      directInfo?.lessonId,
+    ]);
+    const mediaId = firstNonEmptyString([urlInfo?.mediaId, htmlInfo?.mediaId]);
+    const baseUrl = firstNonEmptyString([urlInfo?.baseUrl, htmlInfo?.baseUrl, directInfo?.baseUrl]);
 
-    if (lessonId && mediaId && baseUrl) {
+    if (lessonId !== null && mediaId !== null && baseUrl !== null) {
       log('info', requestId, 'Resolved from embed URL fetch', { lessonId, mediaId });
       return { lessonId, mediaId, baseUrl };
     }
@@ -142,22 +158,26 @@ export async function resolveEcho360Info(
     baseUrl: directInfo?.baseUrl,
   });
 
-  if (directInfo?.lessonId && directInfo?.mediaId) {
+  if (
+    directInfo !== null &&
+    isNonEmptyString(directInfo.lessonId) &&
+    isNonEmptyString(directInfo.mediaId)
+  ) {
     log('info', requestId, 'Resolved from direct URL');
     return directInfo;
   }
 
   const resolvableInfo = asResolvableInfo(directInfo);
-  if (resolvableInfo) {
+  if (resolvableInfo !== null) {
     const fromClassroom = await resolveFromClassroom(resolvableInfo, fetcher, requestId);
-    if (fromClassroom) return fromClassroom;
+    if (fromClassroom !== null) return fromClassroom;
 
     const fromLessonApi = await resolveFromLessonApi(resolvableInfo, fetcher, requestId);
-    if (fromLessonApi) return fromLessonApi;
+    if (fromLessonApi !== null) return fromLessonApi;
   }
 
   const fromEmbed = await resolveFromEmbedFetch(embedUrl, directInfo, fetcher, requestId);
-  if (fromEmbed) return fromEmbed;
+  if (fromEmbed !== null) return fromEmbed;
 
   log('warn', requestId, 'Could not resolve complete Echo360 info');
   return directInfo;

@@ -1,6 +1,5 @@
 import type { ChatHistoryItem, ChatMessage, UseChatOptions } from '../types';
 import { normalizeChatMessage } from '../types';
-import type { StudyMode } from '@core/domain/types';
 import type { Dispatch, SetStateAction } from 'react';
 
 type SetActiveId = Dispatch<SetStateAction<string | null>>;
@@ -9,7 +8,6 @@ type SetMessages = (chatId: string, messages: ChatMessage[]) => void;
 
 interface SelectChatDeps {
   apiClient: UseChatOptions['apiClient'];
-  mode: StudyMode;
   setActiveChatId: SetActiveId;
   setActiveHistoryId: SetActiveId;
   setError: SetError;
@@ -27,9 +25,7 @@ export function createSelectChat(deps: SelectChatDeps) {
     try {
       const response = await deps.apiClient.getChatMessages(item.id);
       if (Array.isArray(response)) {
-        const normalized: ChatMessage[] = response.map((msg) =>
-          normalizeChatMessage(msg, deps.mode),
-        );
+        const normalized: ChatMessage[] = response.map((msg) => normalizeChatMessage(msg));
         deps.setMessages(item.id, normalized);
       }
     } catch (err: unknown) {

@@ -5,7 +5,6 @@ import { coerceSendOptions } from './chatSendOptions';
 import type { SendMessageMutationParams } from './sendMessageUtils';
 import { chatMessagesKeys } from './useChatMessages';
 import type { TranscriptCacheInput } from '../../transcripts/hooks/useTranscriptCache';
-import type { StudyMode } from '@core/domain/types';
 import type { QueryClient } from '@tanstack/react-query';
 import type { Dispatch, SetStateAction } from 'react';
 
@@ -27,7 +26,6 @@ interface SendMessageDeps {
   activeChatId: string | null;
   activeHistoryId: string | null;
   messages: ChatMessage[];
-  mode: StudyMode;
   pageUrl: string;
   courseCode: string | null;
   queryClient: QueryClient;
@@ -41,7 +39,6 @@ interface SendMessageDeps {
 
 function buildUserMessage(
   content: string,
-  mode: StudyMode,
   source: 'selection' | 'followup',
   timestamp: string,
   attachments?: ChatMessage['attachments'],
@@ -51,7 +48,6 @@ function buildUserMessage(
     role: 'user',
     content,
     timestamp,
-    mode,
     source,
   };
   if (attachments && attachments.length > 0) {
@@ -75,7 +71,6 @@ function buildSendPayload(
 ): SendMessageMutationParams {
   const payload: SendMessageMutationParams = {
     message,
-    mode: deps.mode,
     source,
     pageUrl: deps.pageUrl,
     chatId: deps.activeChatId,
@@ -143,7 +138,7 @@ export function createSendMessage(deps: SendMessageDeps) {
       ? (deps.activeChatId as string)
       : deps.activeHistoryId || `chat-${Date.now()}`;
 
-    const userMessage = buildUserMessage(trimmed, deps.mode, source, now, attachments);
+    const userMessage = buildUserMessage(trimmed, source, now, attachments);
 
     deps.setIsHistoryOpen(false);
     deps.setError(null);

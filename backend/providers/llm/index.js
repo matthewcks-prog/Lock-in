@@ -25,7 +25,10 @@ const {
   RateLimiterManager,
   getRateLimiterManager,
   resetRateLimiterManager,
+  forceResetRateLimiterManager,
+  drainEventLoop,
   DEFAULT_LIMITS,
+  TEST_LIMITS,
   TOKEN_COSTS,
 } = require('./rateLimiter');
 
@@ -39,8 +42,11 @@ module.exports = {
   // Rate limiter
   getRateLimiterManager,
   resetRateLimiterManager,
+  forceResetRateLimiterManager,
+  drainEventLoop,
   RateLimiterManager,
   DEFAULT_LIMITS,
+  TEST_LIMITS,
   TOKEN_COSTS,
 
   // Classes (for testing/extension)

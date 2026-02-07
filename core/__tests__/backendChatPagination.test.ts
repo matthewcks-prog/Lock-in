@@ -2,9 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
-process.env['SUPABASE_URL'] = process.env['SUPABASE_URL'] || 'http://localhost';
-process.env['SUPABASE_SERVICE_ROLE_KEY'] =
-  process.env['SUPABASE_SERVICE_ROLE_KEY'] || 'test-service-role-key';
+const ensureEnv = (key: string, fallback: string): void => {
+  const current = process.env[key];
+  process.env[key] = typeof current === 'string' && current.length > 0 ? current : fallback;
+};
+
+ensureEnv('SUPABASE_URL', 'http://localhost');
+ensureEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role-key');
 
 const require = createRequire(import.meta.url);
 type ChatRow = {
@@ -20,11 +24,19 @@ type GetRecentChats = (
 let supabase: { from: ReturnType<typeof vi.fn> };
 let getRecentChats: GetRecentChats;
 
-function resetModule(modulePath: string) {
+function resetModule(modulePath: string): void {
   delete require.cache[require.resolve(modulePath)];
 }
 
-function createChain(data: ChatRow[]) {
+type SupabaseChain = {
+  select: ReturnType<typeof vi.fn>;
+  eq: ReturnType<typeof vi.fn>;
+  order: ReturnType<typeof vi.fn>;
+  or: ReturnType<typeof vi.fn>;
+  limit: ReturnType<typeof vi.fn>;
+};
+
+function createChain(data: ChatRow[]): SupabaseChain {
   return {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),

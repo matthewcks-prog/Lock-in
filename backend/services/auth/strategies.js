@@ -228,6 +228,10 @@ class SymmetricVerifierStrategy {
  *
  * This is the most reliable strategy for Supabase Cloud as it handles
  * all edge cases and key rotation automatically.
+ *
+ * NOTE: This strategy may fail when the Supabase circuit breaker is open.
+ * When that happens, it returns a special error that signals the verification
+ * service to try fallback strategies (e.g., JWKS or symmetric verification).
  */
 class SupabaseSdkVerifierStrategy {
   /**
@@ -255,6 +259,21 @@ class SupabaseSdkVerifierStrategy {
   }
 
   /**
+   * Check if an error is a circuit breaker error
+   *
+   * @param {Error} error - The error to check
+   * @returns {boolean} True if this is a circuit breaker error
+   */
+  _isCircuitBreakerError(error) {
+    if (!error) return false;
+    return (
+      error.name === 'CircuitOpenError' ||
+      error.code === 'SERVICE_UNAVAILABLE' ||
+      (error.message && error.message.includes('circuit open'))
+    );
+  }
+
+  /**
    * Verify a JWT token using Supabase SDK
    *
    * @param {string} token - The JWT to verify
@@ -266,7 +285,21 @@ class SupabaseSdkVerifierStrategy {
 
       if (error || !data?.user) {
         const errorMessage = error?.message || error?.name || 'User not found';
-        return { valid: false, error: errorMessage };
+
+        // Check if this is a circuit breaker error - signal that fallback should be tried
+        const isCircuitError = this._isCircuitBreakerError(error);
+        if (isCircuitError) {
+          logger.warn('[SupabaseSdkVerifierStrategy] Circuit breaker open, signaling fallback');
+        }
+
+        return {
+          valid: false,
+          error: errorMessage,
+          // Signal to verification service that this is a transient error
+          // and fallback strategies should be attempted
+          isTransient: isCircuitError,
+          isCircuitBreakerError: isCircuitError,
+        };
       }
 
       return {
@@ -274,8 +307,24 @@ class SupabaseSdkVerifierStrategy {
         payload: data.user,
       };
     } catch (error) {
-      logger.debug('[SupabaseSdkVerifierStrategy] Verification failed:', { error: error.message });
-      return { valid: false, error: error.message };
+      const isCircuitError = this._isCircuitBreakerError(error);
+
+      if (isCircuitError) {
+        logger.warn('[SupabaseSdkVerifierStrategy] Circuit breaker error:', {
+          error: error.message,
+        });
+      } else {
+        logger.debug('[SupabaseSdkVerifierStrategy] Verification failed:', {
+          error: error.message,
+        });
+      }
+
+      return {
+        valid: false,
+        error: error.message,
+        isTransient: isCircuitError,
+        isCircuitBreakerError: isCircuitError,
+      };
     }
   }
 }

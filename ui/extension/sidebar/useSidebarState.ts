@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { StudyMode } from '@core/domain/types';
 import type { SidebarTabId, StorageAdapter } from './types';
 import {
   CHAT_TAB_ID,
   NOTES_TAB_ID,
   TOOL_TAB_ID,
   SIDEBAR_ACTIVE_TAB_KEY,
-  MODE_STORAGE_KEY,
   SELECTED_NOTE_ID_KEY,
   SIDEBAR_OPEN_KEY,
 } from './constants';
@@ -14,7 +12,6 @@ import { coerceTab, isValidUUID } from './utils';
 
 interface UseSidebarStateOptions {
   activeTabExternal?: string;
-  currentMode: StudyMode;
   storage?: StorageAdapter;
   isOpen: boolean;
   onToggle: () => void;
@@ -22,13 +19,11 @@ interface UseSidebarStateOptions {
 
 export function useSidebarState({
   activeTabExternal,
-  currentMode,
   storage,
   isOpen,
   onToggle,
 }: UseSidebarStateOptions) {
   const [activeTab, setActiveTab] = useState<SidebarTabId>(coerceTab(activeTabExternal));
-  const [mode, setMode] = useState<StudyMode>(currentMode);
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [isNoteIdLoaded, setIsNoteIdLoaded] = useState(false);
   const [isNoteEditing, setIsNoteEditing] = useState(false);
@@ -66,12 +61,17 @@ export function useSidebarState({
 
   useEffect(() => {
     if (!storage) return;
-    storage.get(SIDEBAR_ACTIVE_TAB_KEY).then((tab) => {
-      if (typeof tab !== 'string') return;
-      if (tab === CHAT_TAB_ID || tab === NOTES_TAB_ID || tab === TOOL_TAB_ID) {
-        setActiveTab(tab);
-      }
-    });
+    storage
+      .get(SIDEBAR_ACTIVE_TAB_KEY)
+      .then((tab) => {
+        if (typeof tab !== 'string') return;
+        if (tab === CHAT_TAB_ID || tab === NOTES_TAB_ID || tab === TOOL_TAB_ID) {
+          setActiveTab(tab);
+        }
+      })
+      .catch(() => {
+        /* ignore */
+      });
   }, [storage]);
 
   useEffect(() => {
@@ -106,13 +106,6 @@ export function useSidebarState({
       /* ignore */
     });
   }, [activeTab, storage]);
-
-  useEffect(() => {
-    if (!storage) return;
-    storage.set(MODE_STORAGE_KEY, mode).catch(() => {
-      /* ignore */
-    });
-  }, [mode, storage]);
 
   useEffect(() => {
     if (!storage?.setLocal) return;
@@ -153,10 +146,6 @@ export function useSidebarState({
   }, [isOpen, onToggle]);
 
   useEffect(() => {
-    setMode(currentMode);
-  }, [currentMode]);
-
-  useEffect(() => {
     if (isNoteEditing && !isOpen) {
       const now = Date.now();
       if (now - lastForceOpenRef.current > 400) {
@@ -170,8 +159,6 @@ export function useSidebarState({
     activeTab,
     setActiveTab,
     handleTabChange,
-    mode,
-    setMode,
     selectedNoteId,
     setSelectedNoteId,
     isNoteEditing,

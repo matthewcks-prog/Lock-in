@@ -4,7 +4,6 @@ import { createRequire } from 'node:module';
 
 type StructuredMessage = { role: string; content: unknown };
 type BuildStructuredStudyMessages = (options: {
-  mode: 'explain' | 'general';
   selection?: string;
   chatHistory?: StructuredMessage[];
   attachments?: Array<{ type: string; textContent?: string; fileName?: string }>;
@@ -14,18 +13,22 @@ type BuildStructuredStudyMessages = (options: {
 const require = createRequire(import.meta.url);
 let buildStructuredStudyMessages: BuildStructuredStudyMessages;
 
+const ensureEnv = (key: string, fallback: string): void => {
+  const current = process.env[key];
+  process.env[key] = typeof current === 'string' && current.length > 0 ? current : fallback;
+};
+
 beforeAll(async () => {
-  process.env['OPENAI_API_KEY'] = process.env['OPENAI_API_KEY'] || 'test-key';
-  const openaiClient = require('../../backend/openaiClient.js') as {
+  ensureEnv('OPENAI_API_KEY', 'test-key');
+  const structuredMessages = require('../../backend/services/llm/structuredMessages.js') as {
     buildStructuredStudyMessages: BuildStructuredStudyMessages;
   };
-  buildStructuredStudyMessages = openaiClient.buildStructuredStudyMessages;
+  buildStructuredStudyMessages = structuredMessages.buildStructuredStudyMessages;
 });
 
-describe('openaiClient attachment-first prompt', () => {
+describe('structuredMessages attachment-first prompt', () => {
   it('references attached files/images as primary context', () => {
     const { messages } = buildStructuredStudyMessages({
-      mode: 'explain',
       selection: '',
       chatHistory: [],
       attachments: [
@@ -43,7 +46,7 @@ describe('openaiClient attachment-first prompt', () => {
       content = userMessage.content;
     } else if (Array.isArray(userMessage?.content)) {
       const firstPart = userMessage.content[0] as { text?: string } | undefined;
-      if (firstPart && typeof firstPart.text === 'string') {
+      if (firstPart !== undefined && typeof firstPart.text === 'string') {
         content = firstPart.text;
       }
     }

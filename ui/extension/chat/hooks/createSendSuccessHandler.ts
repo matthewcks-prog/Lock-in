@@ -35,7 +35,7 @@ export function createSendSuccessHandler(deps: SendSuccessDeps) {
         deps.queryClient.setQueryData(chatMessagesKeys.byId(resolvedChatId), cachedMessages);
       }
     }
-    const fallbackTitle = buildInitialChatTitle(response.explanation.slice(0, 50));
+    const fallbackTitle = buildInitialChatTitle(response.content.slice(0, 50));
     const serverTitle = response.chatTitle;
     const resolvedTitle = serverTitle ? coerceChatTitle(serverTitle, fallbackTitle) : fallbackTitle;
     const titleSource: HistoryTitleSource = serverTitle ? 'server' : 'local';
@@ -48,7 +48,7 @@ export function createSendSuccessHandler(deps: SendSuccessDeps) {
         id: resolvedChatId,
         title: resolvedTitle,
         updatedAt: now,
-        lastMessage: response.explanation,
+        lastMessage: response.content,
       },
       deps.activeHistoryIdRef.current !== resolvedChatId
         ? deps.activeHistoryIdRef.current

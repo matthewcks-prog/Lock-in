@@ -3,7 +3,6 @@
  * Keeps global state in one place so the orchestrator stays thin.
  */
 (function () {
-  const DEFAULT_MODE = 'explain';
   const DEFAULT_PREFS = {
     preferredLanguage: 'en',
   };
@@ -15,15 +14,10 @@
     const SIDEBAR_OPEN_KEY = keys.SIDEBAR_IS_OPEN || 'lockin_sidebar_isOpen';
     const SIDEBAR_ACTIVE_TAB_KEY = keys.SIDEBAR_ACTIVE_TAB || 'lockin_sidebar_activeTab';
     const CHAT_ID_STORAGE_KEY = keys.CURRENT_CHAT_ID || 'lockinCurrentChatId';
-    const MODE_KEY = keys.ACTIVE_MODE || 'lockinActiveMode';
-    const MODE_PREF_KEY = keys.MODE_PREFERENCE || 'modePreference';
-    const DEFAULT_MODE_KEY = keys.DEFAULT_MODE || 'defaultMode';
-    const LAST_USED_MODE_KEY = keys.LAST_USED_MODE || 'lastUsedMode';
     const HIGHLIGHTING_KEY = keys.HIGHLIGHTING_ENABLED || 'highlightingEnabled';
 
     const state = {
       highlightingEnabled: true,
-      currentMode: DEFAULT_MODE,
       isSidebarOpen: false,
       pendingPrefill: '',
       currentChatId: null,
@@ -67,85 +61,11 @@
           log.warn('Failed to load toggle state:', error);
         }
 
-        await loadMode();
         await loadChatId();
       }
 
       notify();
       return getSnapshot();
-    }
-
-    async function loadMode() {
-      if (!storage) return state.currentMode;
-      try {
-        const data = await storage.get(MODE_KEY);
-        if (data[MODE_KEY]) {
-          state.currentMode = data[MODE_KEY];
-        }
-      } catch (error) {
-        log.warn('Failed to load mode:', error);
-      }
-      return state.currentMode;
-    }
-
-    async function determineDefaultMode() {
-      if (!storage) {
-        state.currentMode = DEFAULT_MODE;
-        notify();
-        return state.currentMode;
-      }
-
-      try {
-        const data = await storage.get([
-          MODE_PREF_KEY,
-          DEFAULT_MODE_KEY,
-          LAST_USED_MODE_KEY,
-          MODE_KEY,
-        ]);
-
-        if (data[MODE_KEY]) {
-          state.currentMode = data[MODE_KEY];
-        } else {
-          const modePref = data[MODE_PREF_KEY] || 'fixed';
-          if (modePref === 'lastUsed' && data[LAST_USED_MODE_KEY]) {
-            state.currentMode = data[LAST_USED_MODE_KEY];
-          } else {
-            state.currentMode = data[DEFAULT_MODE_KEY] || DEFAULT_MODE;
-          }
-        }
-      } catch (error) {
-        log.warn('Mode determination error:', error);
-        state.currentMode = DEFAULT_MODE;
-      }
-
-      notify();
-      return state.currentMode;
-    }
-
-    function setMode(mode) {
-      state.currentMode = mode || DEFAULT_MODE;
-      notify();
-    }
-
-    async function persistMode(mode) {
-      state.currentMode = mode || DEFAULT_MODE;
-      if (!storage) {
-        notify();
-        return state.currentMode;
-      }
-
-      try {
-        const data = await storage.get(MODE_PREF_KEY);
-        if (data[MODE_PREF_KEY] === 'lastUsed') {
-          await storage.set({ [LAST_USED_MODE_KEY]: state.currentMode });
-        }
-        await storage.set({ [MODE_KEY]: state.currentMode });
-      } catch (error) {
-        log.warn('Storage access error:', error);
-      }
-
-      notify();
-      return state.currentMode;
     }
 
     async function loadChatId() {
@@ -231,10 +151,6 @@
         state.highlightingEnabled = changes[HIGHLIGHTING_KEY].newValue !== false;
       }
 
-      if (areaName === 'sync' && changes[MODE_KEY]) {
-        state.currentMode = changes[MODE_KEY].newValue;
-      }
-
       if (areaName === 'sync' && changes[SIDEBAR_OPEN_KEY]) {
         state.isSidebarOpen = changes[SIDEBAR_OPEN_KEY].newValue === true;
       }
@@ -268,9 +184,6 @@
 
     return {
       loadInitial,
-      determineDefaultMode,
-      persistMode,
-      setMode,
       setSidebarOpen,
       setPendingPrefill,
       clearPendingPrefill,

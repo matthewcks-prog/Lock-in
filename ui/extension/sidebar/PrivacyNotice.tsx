@@ -58,7 +58,7 @@ export function PrivacyNotice({ storage = defaultStorage, compact = false }: Pri
         setIsLoading(false);
       }
     }
-    checkDismissed();
+    void checkDismissed();
   }, [storage]);
 
   const handleDismiss = useCallback(async () => {

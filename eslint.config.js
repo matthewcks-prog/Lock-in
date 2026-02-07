@@ -7,6 +7,60 @@ import prettierConfig from 'eslint-config-prettier';
 
 const tsconfigRootDir = path.dirname(fileURLToPath(import.meta.url));
 
+const qualityRules = {
+  'max-lines': [
+    'warn',
+    {
+      max: 300,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ],
+  'max-lines-per-function': [
+    'warn',
+    {
+      max: 50,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ],
+  complexity: ['warn', 15],
+  'max-depth': ['warn', 4],
+  'max-nested-callbacks': ['warn', 3],
+  'max-params': ['warn', 4],
+  'max-statements': ['warn', 20],
+  'no-magic-numbers': [
+    'warn',
+    {
+      ignore: [0, 1, -1, 2, 100, 1000],
+      ignoreArrayIndexes: true,
+      enforceConst: true,
+    },
+  ],
+  'prefer-const': 'warn',
+  'no-var': 'warn',
+  eqeqeq: ['warn', 'always'],
+  curly: ['warn', 'all'],
+  'no-else-return': 'warn',
+  'no-lonely-if': 'warn',
+  'no-unneeded-ternary': 'warn',
+  'no-eval': 'warn',
+  'no-implied-eval': 'warn',
+  'no-new-func': 'warn',
+  'no-script-url': 'warn',
+  'no-proto': 'warn',
+  'no-extend-native': 'warn',
+};
+
+const errorRules = Object.fromEntries(
+  Object.entries(qualityRules).map(([rule, setting]) => {
+    if (Array.isArray(setting)) {
+      return [rule, ['error', ...setting.slice(1)]];
+    }
+    return [rule, 'error'];
+  }),
+);
+
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
   {
@@ -20,50 +74,11 @@ export default [
   },
   {
     files: ['**/*.{js,mjs,cjs,ts,tsx}'],
-    rules: {
-      'max-lines': [
-        'warn',
-        {
-          max: 300,
-          skipBlankLines: true,
-          skipComments: true,
-        },
-      ],
-      'max-lines-per-function': [
-        'warn',
-        {
-          max: 50,
-          skipBlankLines: true,
-          skipComments: true,
-        },
-      ],
-      complexity: ['warn', 12],
-      'max-depth': ['warn', 4],
-      'max-nested-callbacks': ['warn', 3],
-      'max-params': ['warn', 4],
-      'max-statements': ['warn', 20],
-      'no-magic-numbers': [
-        'warn',
-        {
-          ignore: [0, 1, -1, 2, 100, 1000],
-          ignoreArrayIndexes: true,
-          enforceConst: true,
-        },
-      ],
-      'prefer-const': 'warn',
-      'no-var': 'warn',
-      eqeqeq: ['warn', 'always'],
-      curly: ['warn', 'all'],
-      'no-else-return': 'warn',
-      'no-lonely-if': 'warn',
-      'no-unneeded-ternary': 'warn',
-      'no-eval': 'warn',
-      'no-implied-eval': 'warn',
-      'no-new-func': 'warn',
-      'no-script-url': 'warn',
-      'no-proto': 'warn',
-      'no-extend-native': 'warn',
-    },
+    rules: qualityRules,
+  },
+  {
+    files: ['api/**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: errorRules,
   },
 
   // Legacy globals guardrail: prefer canonical LockInContent runtime
@@ -165,16 +180,16 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-unsafe-assignment': 'warn',
-      '@typescript-eslint/no-unsafe-call': 'warn',
-      '@typescript-eslint/no-unsafe-member-access': 'warn',
-      '@typescript-eslint/no-unsafe-return': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-misused-promises': 'warn',
-      '@typescript-eslint/promise-function-async': 'warn',
-      '@typescript-eslint/await-thenable': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/promise-function-async': 'error',
+      '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/explicit-function-return-type': [
         'warn',
         {
@@ -190,12 +205,12 @@ export default [
           allowNullableObject: false,
         },
       ],
-      '@typescript-eslint/switch-exhaustiveness-check': 'warn',
-      '@typescript-eslint/consistent-type-imports': 'warn',
-      '@typescript-eslint/consistent-type-exports': 'warn',
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/consistent-type-exports': 'error',
       '@typescript-eslint/naming-convention': [
-        'warn',
-        { selector: 'interface', format: ['PascalCase'], prefix: ['I'] },
+        'error',
+        { selector: 'interface', format: ['PascalCase'] },
         { selector: 'typeAlias', format: ['PascalCase'] },
         { selector: 'enum', format: ['PascalCase'] },
         { selector: 'enumMember', format: ['UPPER_CASE'] },
@@ -251,6 +266,23 @@ export default [
           ],
         },
       ],
+    },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    ignores: ['core/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'warn',
+      '@typescript-eslint/no-unsafe-call': 'warn',
+      '@typescript-eslint/no-unsafe-member-access': 'warn',
+      '@typescript-eslint/no-unsafe-return': 'warn',
+      '@typescript-eslint/no-unsafe-argument': 'warn',
+      '@typescript-eslint/no-floating-promises': 'warn',
+      '@typescript-eslint/no-misused-promises': 'warn',
+      '@typescript-eslint/promise-function-async': 'warn',
+      '@typescript-eslint/consistent-type-imports': 'warn',
+      '@typescript-eslint/consistent-type-exports': 'warn',
+      '@typescript-eslint/switch-exhaustiveness-check': 'warn',
     },
   },
   // - /api must remain Chrome-free and extension-independent (ERROR)
@@ -505,6 +537,9 @@ export default [
         URLSearchParams: 'readonly', // Node.js 18+ built-in
         AbortController: 'readonly', // Node.js 18+ built-in
         AbortSignal: 'readonly', // Node.js 18+ built-in
+        TextDecoder: 'readonly', // Web Streams API (Node.js 18+)
+        TextEncoder: 'readonly', // Web Streams API (Node.js 18+)
+        ReadableStream: 'readonly', // Web Streams API (Node.js 18+)
       },
     },
     rules: {

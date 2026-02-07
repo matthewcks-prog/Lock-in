@@ -51,6 +51,14 @@ declare global {
         timeoutMs: number;
       };
     };
+    LockInMessageSchemas?: {
+      createMessageValidators: () => Record<
+        string,
+        (
+          message: unknown,
+        ) => { ok: true; payload?: Record<string, unknown> } | { ok: false; error: string }
+      >;
+    };
     authClient?: AuthClient;
     apiClient?: ApiClient;
   }

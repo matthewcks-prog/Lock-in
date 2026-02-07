@@ -31,7 +31,7 @@ interface UseChatAttachmentsReturn {
   ) => void;
   /** Get asset IDs for uploaded attachments */
   getUploadedAssetIds: () => string[];
-  /** Whether any attachments are currently uploading */
+  /** Whether any attachments are currently uploading or processing */
   isUploading: boolean;
   /** Whether max attachments reached */
   isAtLimit: boolean;
@@ -146,7 +146,9 @@ export function useChatAttachments(
     return attachments.filter((a) => a.status === 'uploaded' && a.assetId).map((a) => a.assetId!);
   }, [attachments]);
 
-  const isUploading = attachments.some((a) => a.status === 'uploading');
+  const isUploading = attachments.some(
+    (a) => a.status === 'uploading' || a.status === 'processing',
+  );
   const isAtLimit = attachments.length >= maxAttachments;
 
   return {

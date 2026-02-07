@@ -34,7 +34,6 @@ const chatMessageSchema = z.object({
  *
  * Field names match the client contract:
  * - selection: The highlighted/selected text (optional for follow-up messages)
- * - mode: 'explain' for initial explanation, 'general' for follow-up
  * - chatHistory: Previous messages in the conversation
  * - newUserMessage: Follow-up question from user
  * - pageContext: Full page content for context
@@ -47,9 +46,6 @@ const chatMessageSchema = z.object({
  */
 const lockinRequestSchema = z
   .object({
-    mode: z.enum(['explain', 'general'], {
-      errorMap: () => ({ message: 'Mode must be one of: explain, general' }),
-    }),
     selection: z
       .string()
       .max(MAX_SELECTION_LENGTH, `Selection too long (max ${MAX_SELECTION_LENGTH} chars)`)

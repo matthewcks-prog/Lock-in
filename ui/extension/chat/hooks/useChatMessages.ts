@@ -13,9 +13,9 @@ import { isValidUUID, normalizeChatMessage } from '../types';
 /**
  * Normalizes API response to ChatMessage array.
  */
-function normalizeMessages(response: unknown, mode: UseChatMessagesOptions['mode']): ChatMessage[] {
+function normalizeMessages(response: unknown): ChatMessage[] {
   if (!Array.isArray(response)) return [];
-  return response.map((message) => normalizeChatMessage(message, mode));
+  return response.map((message) => normalizeChatMessage(message));
 }
 
 /**
@@ -36,7 +36,7 @@ export const chatMessagesKeys = {
  * - Suspense-ready if needed
  */
 export function useChatMessages(options: UseChatMessagesOptions) {
-  const { apiClient, chatId, mode } = options;
+  const { apiClient, chatId } = options;
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -47,7 +47,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
       }
 
       const response = await apiClient.getChatMessages(chatId);
-      return normalizeMessages(response, mode);
+      return normalizeMessages(response);
     },
     enabled: Boolean(chatId) && Boolean(apiClient?.getChatMessages) && isValidUUID(chatId),
     staleTime: 5 * 60 * 1000, // 5 minutes

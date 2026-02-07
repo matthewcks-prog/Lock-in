@@ -63,7 +63,10 @@
       message.includes('Failed to fetch') ||
       message.includes('NetworkError') ||
       message.includes('Network request failed') ||
-      message.includes('ERR_NETWORK')
+      message.includes('ERR_NETWORK') ||
+      message.includes('ECONNRESET') ||
+      message.includes('ETIMEDOUT') ||
+      message.includes('EAI_AGAIN')
     );
   }
 
@@ -82,6 +85,7 @@
   function shouldRetryError(error, config) {
     if (!error) return false;
     if (error.code === 'TIMEOUT') return config.retryOnTimeout;
+    if (error.code === 'ABORTED') return false;
     if (isNetworkError(error)) return config.retryOnNetworkError;
     return false;
   }

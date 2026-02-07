@@ -3,15 +3,20 @@
  *
  * Uses TEST_LIMITS configuration for fast, deterministic tests.
  * Creates local instances for test isolation - avoids global singleton conflicts.
+ *
+ * IMPORTANT: Each test creates its own RateLimiterManager instance
+ * and uses forceCleanup() for guaranteed resource release.
  */
 
-const { test, describe, beforeEach, afterEach } = require('node:test');
+const { test, describe, beforeEach, afterEach, after } = require('node:test');
 const assert = require('node:assert');
 const {
   RateLimiterManager,
   getRateLimiterManager,
   getTestRateLimiterManager,
   resetRateLimiterManager,
+  forceResetRateLimiterManager,
+  drainEventLoop,
   DEFAULT_LIMITS,
   TEST_LIMITS,
   TOKEN_COSTS,
@@ -20,14 +25,24 @@ const {
 describe('RateLimiterManager', () => {
   let manager;
 
-  // No global singleton manipulation in beforeEach - creates local instances only
+  beforeEach(() => {
+    // Ensure any global singleton is cleaned up before each test
+    forceResetRateLimiterManager();
+  });
 
   afterEach(async () => {
-    // Clean up local manager instance
+    // Clean up local manager instance using force cleanup for reliability
     if (manager) {
-      await manager.stop();
+      manager.forceCleanup();
       manager = null;
     }
+    // Also ensure global singleton is cleaned
+    forceResetRateLimiterManager();
+  });
+
+  // Final cleanup after all tests in this describe block complete
+  after(async () => {
+    await drainEventLoop(5);
   });
 
   describe('constructor', () => {
@@ -176,17 +191,46 @@ describe('RateLimiterManager', () => {
     test('should pause and resume provider', async () => {
       manager = new RateLimiterManager(TEST_LIMITS);
 
-      // This should complete without error - timer is tracked and cleaned up by stop()
+      // This should complete without error - timer is tracked and cleaned up by forceCleanup()
       await manager.pauseProvider('gemini', 100);
 
-      // No need to wait - afterEach calls manager.stop() which cleans up the timer
+      // No need to wait - afterEach calls manager.forceCleanup() which cleans up the timer
+    });
+  });
+
+  describe('isStopped', () => {
+    test('should return false initially', () => {
+      manager = new RateLimiterManager(TEST_LIMITS);
+      assert.equal(manager.isStopped(), false);
+    });
+
+    test('should return true after stop', async () => {
+      manager = new RateLimiterManager(TEST_LIMITS);
+      await manager.stop();
+      assert.equal(manager.isStopped(), true);
+      manager = null; // Already stopped, don't cleanup again
+    });
+
+    test('should return true after forceCleanup', () => {
+      manager = new RateLimiterManager(TEST_LIMITS);
+      manager.forceCleanup();
+      assert.equal(manager.isStopped(), true);
+      manager = null; // Already stopped, don't cleanup again
     });
   });
 });
 
 describe('getRateLimiterManager', () => {
-  afterEach(async () => {
-    await resetRateLimiterManager();
+  beforeEach(() => {
+    forceResetRateLimiterManager();
+  });
+
+  afterEach(() => {
+    forceResetRateLimiterManager();
+  });
+
+  after(async () => {
+    await drainEventLoop(5);
   });
 
   test('should return singleton instance', () => {
@@ -198,7 +242,7 @@ describe('getRateLimiterManager', () => {
 
   test('should create new instance after reset', async () => {
     const manager1 = getTestRateLimiterManager();
-    await resetRateLimiterManager();
+    forceResetRateLimiterManager();
     const manager2 = getTestRateLimiterManager();
 
     assert.notStrictEqual(manager1, manager2);

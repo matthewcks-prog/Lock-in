@@ -12,7 +12,7 @@ import type { LockInSidebarProps } from './LockInSidebar';
 // Initialize Sentry for error tracking (sidebar surface)
 // This runs early before the React app renders to catch all errors
 if (typeof window !== 'undefined') {
-  window.LockInSentry?.initSentry?.('sidebar');
+  void window.LockInSentry?.initSentry?.('sidebar');
 }
 
 export interface SidebarInstance {

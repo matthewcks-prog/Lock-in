@@ -15,6 +15,7 @@
  */
 
 const Bottleneck = require('bottleneck');
+const { RateLimitError } = require('../../errors');
 const { logger } = require('../../observability');
 
 /**
@@ -190,26 +191,55 @@ class UsageTracker {
  * Rate Limiter Manager
  *
  * Manages per-provider bottleneck instances and usage tracking.
+ *
+ * Lifecycle:
+ * - Create instance with `new RateLimiterManager(limits)`
+ * - Use via `schedule()`, `recordUsage()`, etc.
+ * - Call `stop()` for graceful shutdown
+ *
+ * For testing:
+ * - Use TEST_LIMITS which disable internal timers
+ * - Always call `stop()` in afterEach hooks
+ * - Use `forceCleanup()` for guaranteed resource release
  */
 class RateLimiterManager {
+  /** @type {boolean} Whether the manager has been stopped */
+  #stopped = false;
+
   constructor(customLimits = {}) {
     this.limiters = new Map();
     this.limits = { ...DEFAULT_LIMITS, ...customLimits };
     this.usageTracker = new UsageTracker();
     this._loggingInterval = null;
     this._pauseTimers = new Map(); // Track pause timers for cleanup
+    this.#stopped = false;
 
     // Initialize limiters for each provider
     for (const [provider, config] of Object.entries(this.limits)) {
       this.limiters.set(provider, this._createLimiter(provider, config));
     }
 
-    // Start periodic usage logging (every 5 minutes)
-    this._startUsageLogging();
+    // Only start logging interval if we have refresh intervals (production mode)
+    // TEST_LIMITS have null refreshInterval, so no timers are created for tests
+    const hasProductionLimits = Object.values(this.limits).some(
+      (limit) =>
+        limit.reservoirRefreshInterval !== null && limit.reservoirRefreshInterval !== undefined,
+    );
+    if (hasProductionLimits) {
+      this._startUsageLogging();
+    }
 
     logger.info('RateLimiterManager initialized', {
       providers: Object.keys(this.limits),
     });
+  }
+
+  /**
+   * Check if manager has been stopped
+   * @returns {boolean}
+   */
+  isStopped() {
+    return this.#stopped;
   }
 
   /**
@@ -302,11 +332,10 @@ class RateLimiterManager {
       const config = this.limits[provider];
 
       if (counts.QUEUED >= config.highWater) {
-        const error = new Error(
+        const error = new RateLimitError(
           `Rate limit queue full for ${provider}. Try again in a few seconds.`,
+          5,
         );
-        error.status = 429;
-        error.retryAfter = 5;
         error.shouldFallback = true;
         throw error;
       }
@@ -323,19 +352,19 @@ class RateLimiterManager {
     } catch (error) {
       // Handle bottleneck-specific errors
       if (error.message?.includes('This job has been dropped')) {
-        const queueError = new Error(
+        const queueError = new RateLimitError(
           `Rate limit queue full for ${provider}. Try again in a few seconds.`,
+          5,
         );
-        queueError.status = 429;
-        queueError.retryAfter = 5;
         queueError.shouldFallback = true;
         throw queueError;
       }
 
       if (error.message?.includes('This job timed out')) {
-        const timeoutError = new Error(`Request queued too long for ${provider}. Try again later.`);
-        timeoutError.status = 429;
-        timeoutError.retryAfter = 10;
+        const timeoutError = new RateLimitError(
+          `Request queued too long for ${provider}. Try again later.`,
+          10,
+        );
         timeoutError.shouldFallback = true;
         throw timeoutError;
       }
@@ -448,8 +477,43 @@ class RateLimiterManager {
       }
     }
     this.limiters.clear();
+    this.#stopped = true;
 
     logger.info('RateLimiterManager stopped');
+  }
+
+  /**
+   * Force cleanup all resources synchronously
+   * Use only in test teardown when async cleanup isn't sufficient
+   * @returns {void}
+   */
+  forceCleanup() {
+    // Clear interval
+    if (this._loggingInterval) {
+      clearInterval(this._loggingInterval);
+      this._loggingInterval = null;
+    }
+
+    // Clear all pause timers
+    for (const timer of this._pauseTimers.values()) {
+      clearTimeout(timer);
+    }
+    this._pauseTimers.clear();
+
+    // Force disconnect all limiters without waiting
+    for (const limiter of this.limiters.values()) {
+      try {
+        // Stop with dropWaitingJobs but don't await
+        limiter.stop({ dropWaitingJobs: true }).catch(() => {});
+        if (limiter.disconnect) {
+          limiter.disconnect();
+        }
+      } catch {
+        // Ignore errors during force cleanup
+      }
+    }
+    this.limiters.clear();
+    this.#stopped = true;
   }
 }
 
@@ -491,11 +555,39 @@ async function resetRateLimiterManager() {
   }
 }
 
+/**
+ * Force reset the singleton synchronously (for test teardown)
+ * Use when async reset isn't completing properly
+ */
+function forceResetRateLimiterManager() {
+  if (instance) {
+    instance.forceCleanup();
+    instance = null;
+  }
+}
+
+/**
+ * Drain the event loop to allow Bottleneck internal cleanup
+ * Call this after tests to ensure all async work completes
+ * @param {number} [iterations=5] - Number of event loop iterations
+ * @returns {Promise<void>}
+ */
+async function drainEventLoop(iterations = 5) {
+  for (let i = 0; i < iterations; i++) {
+    // eslint-disable-next-line no-undef -- setImmediate is a Node.js global
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  // Additional microtask flush
+  await Promise.resolve();
+}
+
 module.exports = {
   RateLimiterManager,
   getRateLimiterManager,
   getTestRateLimiterManager,
   resetRateLimiterManager,
+  forceResetRateLimiterManager,
+  drainEventLoop,
   DEFAULT_LIMITS,
   TEST_LIMITS,
   TOKEN_COSTS,

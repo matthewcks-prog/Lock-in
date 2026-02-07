@@ -12,8 +12,13 @@
 
 const Sentry = require('@sentry/node');
 const { logger } = require('./index');
+const { ONE, TWO, TEN, THIRTY, THOUSAND } = require('../constants/numbers');
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
+const TRACE_SAMPLE_RATE_DEV = ONE;
+const TRACE_SAMPLE_RATE_PROD = ONE / TEN;
+const DSN_PREFIX_LENGTH = THIRTY;
+const DEFAULT_FLUSH_TIMEOUT_MS = THOUSAND * TWO;
 
 /**
  * Check if Sentry should be completely disabled.
@@ -46,6 +51,127 @@ function stripQueryParams(url) {
   }
 }
 
+function sanitizeRequest(request) {
+  if (!request) {
+    return;
+  }
+
+  if (request.url) {
+    request.url = stripQueryParams(request.url);
+  }
+
+  if (request.data) {
+    request.data = '[REDACTED]';
+  }
+
+  if (request.headers) {
+    delete request.headers.Authorization;
+    delete request.headers.authorization;
+    delete request.headers.Cookie;
+    delete request.headers.cookie;
+    delete request.headers['x-api-key'];
+    delete request.headers['x-auth-token'];
+  }
+
+  if (request.cookies) {
+    request.cookies = '[REDACTED]';
+  }
+
+  if (request.query_string) {
+    request.query_string = '[REDACTED]';
+  }
+}
+
+function sanitizeBreadcrumbs(breadcrumbs) {
+  if (!Array.isArray(breadcrumbs)) {
+    return breadcrumbs;
+  }
+
+  return breadcrumbs.map((breadcrumb) => {
+    if (breadcrumb.data) {
+      delete breadcrumb.data.body;
+      delete breadcrumb.data.response;
+      delete breadcrumb.data.request;
+      if (breadcrumb.data.url) {
+        breadcrumb.data.url = stripQueryParams(breadcrumb.data.url);
+      }
+    }
+    return breadcrumb;
+  });
+}
+
+function sanitizeUser(user) {
+  if (!user) {
+    return;
+  }
+
+  delete user.email;
+  delete user.username;
+  delete user.ip_address;
+}
+
+function sanitizeSentryEvent(event) {
+  if (event.request) {
+    sanitizeRequest(event.request);
+  }
+
+  if (event.transaction) {
+    event.transaction = stripQueryParams(event.transaction);
+  }
+
+  if (event.breadcrumbs) {
+    event.breadcrumbs = sanitizeBreadcrumbs(event.breadcrumbs);
+  }
+
+  if (event.user) {
+    sanitizeUser(event.user);
+  }
+
+  return event;
+}
+
+function buildSentryOptions(dsn) {
+  return {
+    dsn,
+    environment: isDevelopment ? 'development' : 'production',
+    release: `lockin-backend@${process.env.npm_package_version || '1.0.0'}`,
+
+    // Performance monitoring: sample 10% of transactions in production
+    tracesSampleRate: isDevelopment ? TRACE_SAMPLE_RATE_DEV : TRACE_SAMPLE_RATE_PROD,
+
+    // PRIVACY: Never send PII
+    sendDefaultPii: false,
+
+    // Filter out common noise
+    ignoreErrors: [
+      'ECONNREFUSED',
+      'ETIMEDOUT',
+      'Network request failed',
+      'ENOTFOUND',
+      'ECONNRESET',
+    ],
+
+    // PRIVACY: Strip sensitive data before sending
+    beforeSend: sanitizeSentryEvent,
+  };
+}
+
+function logSentryDebugInfo({ dsn, enabled }) {
+  if (!isDevelopment) {
+    return;
+  }
+
+  logger.debug(
+    {
+      hasDsn: !!dsn,
+      dsnPrefix: dsn ? dsn.substring(0, DSN_PREFIX_LENGTH) + '...' : 'none',
+      nodeEnv: process.env.NODE_ENV || 'undefined',
+      sentryEnabled: enabled,
+    },
+    '[Sentry] Initialization debug',
+  );
+}
+
 /**
  * Initialize Sentry for the backend
  * Call this BEFORE setting up Express middleware
@@ -60,17 +186,7 @@ function initSentry() {
   const enabled = isSentryEnabled();
 
   // Debug logging for troubleshooting
-  if (isDevelopment) {
-    logger.debug(
-      {
-        hasDsn: !!dsn,
-        dsnPrefix: dsn ? dsn.substring(0, 30) + '...' : 'none',
-        nodeEnv: process.env.NODE_ENV || 'undefined',
-        sentryEnabled: enabled,
-      },
-      '[Sentry] Initialization debug',
-    );
-  }
+  logSentryDebugInfo({ dsn, enabled });
 
   // Check if explicitly disabled
   if (!enabled) {
@@ -86,92 +202,7 @@ function initSentry() {
   }
 
   try {
-    Sentry.init({
-      dsn,
-      environment: isDevelopment ? 'development' : 'production',
-      release: `lockin-backend@${process.env.npm_package_version || '1.0.0'}`,
-
-      // Performance monitoring: sample 10% of transactions in production
-      tracesSampleRate: isDevelopment ? 1.0 : 0.1,
-
-      // PRIVACY: Never send PII
-      sendDefaultPii: false,
-
-      // Filter out common noise
-      ignoreErrors: [
-        'ECONNREFUSED',
-        'ETIMEDOUT',
-        'Network request failed',
-        'ENOTFOUND',
-        'ECONNRESET',
-      ],
-
-      // PRIVACY: Strip sensitive data before sending
-      beforeSend(event) {
-        // Strip query params from request URL
-        if (event.request) {
-          if (event.request.url) {
-            event.request.url = stripQueryParams(event.request.url);
-          }
-
-          // PRIVACY: Redact request body entirely (may contain chat/transcript/note/user content)
-          if (event.request.data) {
-            event.request.data = '[REDACTED]';
-          }
-
-          // PRIVACY: Remove auth headers and cookies
-          if (event.request.headers) {
-            delete event.request.headers.Authorization;
-            delete event.request.headers.authorization;
-            delete event.request.headers.Cookie;
-            delete event.request.headers.cookie;
-            delete event.request.headers['x-api-key'];
-            delete event.request.headers['x-auth-token'];
-          }
-
-          // Remove cookies object
-          if (event.request.cookies) {
-            event.request.cookies = '[REDACTED]';
-          }
-
-          // Strip query params from query_string
-          if (event.request.query_string) {
-            event.request.query_string = '[REDACTED]';
-          }
-        }
-
-        // Strip query params from transaction name
-        if (event.transaction) {
-          event.transaction = stripQueryParams(event.transaction);
-        }
-
-        // Sanitize breadcrumbs
-        if (event.breadcrumbs) {
-          event.breadcrumbs = event.breadcrumbs.map((bc) => {
-            if (bc.data) {
-              // Remove potentially sensitive data from breadcrumbs
-              delete bc.data.body;
-              delete bc.data.response;
-              delete bc.data.request;
-              // Strip query params from breadcrumb URLs
-              if (bc.data.url) {
-                bc.data.url = stripQueryParams(bc.data.url);
-              }
-            }
-            return bc;
-          });
-        }
-
-        // Remove any user data that might have been attached
-        if (event.user) {
-          delete event.user.email;
-          delete event.user.username;
-          delete event.user.ip_address;
-        }
-
-        return event;
-      },
-    });
+    Sentry.init(buildSentryOptions(dsn));
 
     logger.info(`[Sentry] Initialized for ${isDevelopment ? 'development' : 'production'}`);
     return true;
@@ -210,7 +241,7 @@ function captureMessage(message, level = 'info') {
 /**
  * Flush pending events (call before process exit)
  */
-async function flush(timeout = 2000) {
+async function flush(timeout = DEFAULT_FLUSH_TIMEOUT_MS) {
   try {
     await Sentry.flush(timeout);
   } catch {

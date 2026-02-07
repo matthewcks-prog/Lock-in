@@ -1,16 +1,16 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-export interface Logger {
+export type Logger = {
   debug: (...args: unknown[]) => void;
   info: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
-}
+};
 
-export interface LoggerOptions {
+export type LoggerOptions = {
   configProvider?: () => Record<string, unknown> | undefined;
   console?: Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
-}
+};
 
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 10,
@@ -24,12 +24,16 @@ function getDefaultConfig(): Record<string, unknown> | undefined {
 }
 
 function resolveLogLevel(configProvider?: LoggerOptions['configProvider']): LogLevel {
-  const config = (configProvider || getDefaultConfig)();
+  const config = (configProvider ?? getDefaultConfig)();
   const level =
     typeof config?.['LOG_LEVEL'] === 'string' ? config['LOG_LEVEL'].toLowerCase() : null;
-  const debug = config?.['DEBUG'] === true || config?.['DEBUG'] === 'true';
+  const debugValue = config?.['DEBUG'];
+  const debug = debugValue === true || debugValue === 'true';
 
-  if (level && (level === 'debug' || level === 'info' || level === 'warn' || level === 'error')) {
+  if (
+    level !== null &&
+    (level === 'debug' || level === 'info' || level === 'warn' || level === 'error')
+  ) {
     return level;
   }
 
@@ -41,7 +45,7 @@ function isEnabled(level: LogLevel, configProvider?: LoggerOptions['configProvid
 }
 
 export function createLogger(scope?: string, options: LoggerOptions = {}): Logger {
-  const prefix = scope ? `[Lock-in:${scope}]` : '[Lock-in]';
+  const prefix = typeof scope === 'string' && scope.length > 0 ? `[Lock-in:${scope}]` : '[Lock-in]';
   const configProvider = options.configProvider;
   const consoleRef = options.console ?? console;
 

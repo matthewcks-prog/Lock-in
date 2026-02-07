@@ -8,14 +8,15 @@
 
 import type { Exporter, ExportMetadata, NormalizedDocument } from '../types';
 import { buildMetadataFields } from '../metadata';
-import { JsPDFConstructor, PdfBuilder } from './PdfBuilder';
+import { PdfBuilder } from './PdfBuilder';
+import type { JsPDFConstructor } from './pdfTypes';
 
 // ============================================================================
 // jsPDF Module Resolution
 // ============================================================================
 
 function resolveJsPdfConstructor(module: unknown): JsPDFConstructor {
-  if (!module || typeof module !== 'object') {
+  if (module === null || module === undefined || typeof module !== 'object') {
     throw new Error('jsPDF module did not load correctly.');
   }
 
@@ -27,31 +28,17 @@ function resolveJsPdfConstructor(module: unknown): JsPDFConstructor {
   return candidate as JsPDFConstructor;
 }
 
-// ============================================================================
-// PDF Generation
-// ============================================================================
+function getTitleLine(title: string): string | null {
+  const trimmed = title.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
-/**
- * Generates a PDF from the normalized document.
- * Preserves rich text formatting including colors, highlighting, and alignment.
- */
-async function generatePdf(document: NormalizedDocument, metadata: ExportMetadata): Promise<Blob> {
-  // Dynamically import jsPDF to keep bundle size down when not exporting
-  const jspdfModule = await import('jspdf');
-  const JsPDF = resolveJsPdfConstructor(jspdfModule);
-
-  const builder = new PdfBuilder(JsPDF);
-
-  // Add title
-  if (metadata.title) {
-    builder.addTitle(metadata.title);
-  }
-
-  // Add metadata
+function addMetadata(builder: PdfBuilder, metadata: ExportMetadata): void {
   const metadataFields = buildMetadataFields(metadata);
   builder.addMetadata(metadataFields.map(({ label, value }) => `${label}: ${value}`));
+}
 
-  // Process blocks with rich text support
+function addBlocks(builder: PdfBuilder, document: NormalizedDocument): void {
   for (const block of document.blocks) {
     switch (block.type) {
       case 'paragraph': {
@@ -88,6 +75,32 @@ async function generatePdf(document: NormalizedDocument, metadata: ExportMetadat
       }
     }
   }
+}
+
+// ============================================================================
+// PDF Generation
+// ============================================================================
+
+/**
+ * Generates a PDF from the normalized document.
+ * Preserves rich text formatting including colors, highlighting, and alignment.
+ */
+async function generatePdf(document: NormalizedDocument, metadata: ExportMetadata): Promise<Blob> {
+  // Dynamically import jsPDF to keep bundle size down when not exporting
+  const jspdfModule = await import('jspdf');
+  const JsPDF = resolveJsPdfConstructor(jspdfModule);
+
+  const builder = new PdfBuilder(JsPDF);
+
+  // Add title
+  const titleLine = getTitleLine(metadata.title);
+  if (titleLine !== null) builder.addTitle(titleLine);
+
+  // Add metadata
+  addMetadata(builder, metadata);
+
+  // Process blocks with rich text support
+  addBlocks(builder, document);
 
   return builder.toBlob();
 }

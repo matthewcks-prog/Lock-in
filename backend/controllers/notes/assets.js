@@ -1,4 +1,5 @@
 const { noteAssetsService } = require('../../services/notes/noteAssetsService');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 // POST /api/notes/:noteId/assets
 async function uploadNoteAsset(req, res, next) {
@@ -10,7 +11,7 @@ async function uploadNoteAsset(req, res, next) {
       noteId,
       file: req.file,
     });
-    res.status(201).json(asset);
+    res.status(HTTP_STATUS.CREATED).json(asset);
   } catch (err) {
     next(err);
   }
@@ -34,7 +35,7 @@ async function deleteNoteAsset(req, res, next) {
     const userId = req.user?.id;
     const { assetId } = req.params;
     await noteAssetsService.deleteNoteAsset({ userId, assetId });
-    res.status(204).send();
+    res.status(HTTP_STATUS.NO_CONTENT).send();
   } catch (err) {
     next(err);
   }

@@ -26,4 +26,11 @@ describe('background validators', () => {
     expect(result.ok).toBe(true);
     expect(result.payload.settings).toEqual({});
   });
+
+  test('runtime validators sanitize settings payloads', () => {
+    const runtime = validators.createRuntimeValidators();
+    const result = runtime.validateSettings({ preferredLanguage: 'en' });
+    expect(result.ok).toBe(true);
+    expect(result.value.preferredLanguage).toBe('en');
+  });
 });

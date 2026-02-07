@@ -1,6 +1,8 @@
 // backend/controllers/notes/chat.js
 
 const chatService = require('../../services/notes/chatService');
+const { ONE, EIGHT, TEN, TWENTY } = require('../../constants/numbers');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 /**
  * Chat with Notes Controller
@@ -17,7 +19,7 @@ async function chatWithNotes(req, res, next) {
     const { query, courseCode, k } = req.body;
 
     // Validate and limit k parameter
-    const matchCount = k ? Math.min(Math.max(parseInt(k, 10), 1), 20) : 8;
+    const matchCount = k ? Math.min(Math.max(parseInt(k, TEN), ONE), TWENTY) : EIGHT;
 
     // Delegate to service
     const result = await chatService.chatWithNotes({
@@ -31,13 +33,13 @@ async function chatWithNotes(req, res, next) {
   } catch (err) {
     // Service throws descriptive errors
     if (err.message === 'Failed to process search query') {
-      return res.status(500).json({
+      return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         success: false,
         error: { message: err.message },
       });
     }
     if (err.message === 'Failed to generate answer') {
-      return res.status(500).json({
+      return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
         success: false,
         error: { message: err.message },
       });

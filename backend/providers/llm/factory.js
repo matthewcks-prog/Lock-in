@@ -24,12 +24,30 @@ const {
   GROQ_FALLBACK_MODEL,
   OPENAI_API_KEY,
   OPENAI_MODEL,
+  LLM_CIRCUIT_REDIS_URL,
+  LLM_CIRCUIT_REDIS_PREFIX,
+  LLM_CIRCUIT_REDIS_ENABLED,
 } = require('../../config');
 const { GeminiAdapter, GroqAdapter, OpenAIAdapter } = require('./adapters');
 const { ProviderChain } = require('./providerChain');
+const { createRedisCircuitBreakerStore } = require('../../utils/circuitBreakerStore');
 
 // Singleton cache for provider chain
 let cachedChain = null;
+let cachedCircuitStore = null;
+
+function getCircuitBreakerStore() {
+  if (!LLM_CIRCUIT_REDIS_ENABLED || !LLM_CIRCUIT_REDIS_URL) {
+    return null;
+  }
+  if (!cachedCircuitStore) {
+    cachedCircuitStore = createRedisCircuitBreakerStore({
+      url: LLM_CIRCUIT_REDIS_URL,
+      keyPrefix: LLM_CIRCUIT_REDIS_PREFIX,
+    });
+  }
+  return cachedCircuitStore;
+}
 
 /**
  * Create a chat completion provider chain
@@ -79,7 +97,10 @@ function createChatProviderChain(options = {}) {
     );
   }
 
-  cachedChain = new ProviderChain(adapters);
+  const circuitBreakerStore = getCircuitBreakerStore();
+  cachedChain = new ProviderChain(adapters, {
+    circuitBreakerOptions: circuitBreakerStore ? { store: circuitBreakerStore } : undefined,
+  });
   return cachedChain;
 }
 

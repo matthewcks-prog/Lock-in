@@ -167,7 +167,7 @@
       };
     }
 
-    function renderSidebar({ apiClient, adapter, pageContext, state, onToggle, onClearPrefill }) {
+    function renderSidebar({ apiClient, pageContext, state, onToggle, onClearPrefill }) {
       if (!window.LockInUI || !window.LockInUI.createLockInSidebar) {
         log.error('LockInUI.createLockInSidebar not available');
         return;
@@ -181,11 +181,9 @@
         apiClient,
         isOpen: !!viewState.isSidebarOpen,
         onToggle,
-        currentMode: viewState.currentMode,
         pendingPrefill: viewState.pendingPrefill,
         onClearPrefill,
         pageContext,
-        adapter,
         storage: buildStorageAdapter(),
         activeTabExternal: viewState.currentActiveTab,
       };
@@ -202,7 +200,6 @@
       if (!sidebarInstance) return;
       sidebarInstance.updateProps({
         isOpen: !!state.isSidebarOpen,
-        currentMode: state.currentMode,
         pendingPrefill: state.pendingPrefill,
         activeTabExternal: state.currentActiveTab,
       });

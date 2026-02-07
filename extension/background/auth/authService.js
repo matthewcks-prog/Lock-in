@@ -13,10 +13,17 @@
     };
   }
 
-  function createAuthService({ chromeClient, config, log, networkUtils }) {
+  function createAuthService({ chromeClient, config, log, networkUtils, validators }) {
     const AUTH_REFRESH_MAX_RETRIES = 2;
     const AUTH_REFRESH_TIMEOUT_MS = 10000;
     let refreshInFlight = null;
+    const runtimeValidators =
+      validators || registry.validators?.createRuntimeValidators?.() || null;
+    const validateAuthSession =
+      runtimeValidators?.validateAuthSession || ((value) => ({ ok: true, value: value || {} }));
+    const validateSupabaseTokenResponse =
+      runtimeValidators?.validateSupabaseTokenResponse ||
+      ((value) => ({ ok: true, value: value || {} }));
 
     async function storageGet(key) {
       return chromeClient.storage.getSync([key]);
@@ -72,6 +79,13 @@
         return null;
       }
 
+      const parsedPayload = validateSupabaseTokenResponse(payload);
+      if (!parsedPayload.ok) {
+        log.error('Invalid Supabase token response:', parsedPayload.error);
+        return null;
+      }
+      payload = parsedPayload.value;
+
       if (!payload?.access_token) {
         return null;
       }
@@ -85,7 +99,13 @@
         user: payload.user || session.user || null,
       };
 
-      await storageSet({ [config.getSessionStorageKey()]: nextSession });
+      const validatedSession = validateAuthSession(nextSession);
+      if (!validatedSession.ok) {
+        log.error('Invalid auth session payload:', validatedSession.error);
+        return null;
+      }
+
+      await storageSet({ [config.getSessionStorageKey()]: validatedSession.value });
       return nextSession.accessToken;
     }
 
@@ -94,20 +114,26 @@
       try {
         const result = await storageGet(key);
         const session = normalizeStoredSession(result[key]);
-        if (!session?.accessToken) return null;
+        const validated = validateAuthSession(session || {});
+        if (!validated.ok) {
+          log.error('Invalid auth session in storage:', validated.error);
+          return null;
+        }
+        const safeSession = validated.value;
+        if (!safeSession?.accessToken) return null;
 
         const bufferMs = config.getTokenExpiryBufferMs();
-        const expiresAt = session.expiresAt || 0;
+        const expiresAt = safeSession.expiresAt || 0;
         if (expiresAt && expiresAt - bufferMs > Date.now()) {
-          return session.accessToken;
+          return safeSession.accessToken;
         }
 
-        if (!session.refreshToken) {
+        if (!safeSession.refreshToken) {
           return null;
         }
 
         if (!refreshInFlight) {
-          refreshInFlight = refreshAccessToken(session).finally(() => {
+          refreshInFlight = refreshAccessToken(safeSession).finally(() => {
             refreshInFlight = null;
           });
         }

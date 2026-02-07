@@ -4,7 +4,6 @@ import type { SendChatOptionsInput } from './chatSendOptions';
 import { coerceSendOptions } from './chatSendOptions';
 import type { SendMessageMutationParams } from './sendMessageUtils';
 import type { TranscriptCacheInput } from '../../transcripts/hooks/useTranscriptCache';
-import type { StudyMode } from '@core/domain/types';
 import type { Dispatch, SetStateAction } from 'react';
 
 type SetMessages = (chatId: string, messages: ChatMessage[]) => void;
@@ -20,7 +19,6 @@ type SetError = Dispatch<SetStateAction<Error | null>>;
 type SetHistoryOpen = Dispatch<SetStateAction<boolean>>;
 
 interface StartNewChatDeps {
-  mode: StudyMode;
   pageUrl: string;
   courseCode: string | null;
   setMessages: SetMessages;
@@ -35,7 +33,6 @@ interface StartNewChatDeps {
 function buildUserMessage(
   id: string,
   content: string,
-  mode: StudyMode,
   source: 'selection' | 'followup',
   timestamp: string,
   attachments?: ChatAttachment[],
@@ -45,7 +42,6 @@ function buildUserMessage(
     role: 'user',
     content,
     timestamp,
-    mode,
     source,
   };
   if (attachments && attachments.length > 0) {
@@ -69,7 +65,6 @@ function buildSendPayload(
 ): SendMessageMutationParams {
   const payload: SendMessageMutationParams = {
     message,
-    mode: deps.mode,
     source,
     pageUrl: deps.pageUrl,
     chatId: null,
@@ -130,7 +125,6 @@ export function createStartNewChat(deps: StartNewChatDeps) {
     const userMessage = buildUserMessage(
       `${provisionalChatId}-user`,
       trimmed,
-      deps.mode,
       source,
       now,
       attachments,

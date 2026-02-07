@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { ChatHistoryItem, ChatMessage } from '../types';
 import type { SendChatOptionsInput } from './chatSendOptions';
+import type { StreamingState } from './useSendMessageStream';
 
 export interface UseChatReturn {
   // Current chat state
@@ -31,4 +32,8 @@ export interface UseChatReturn {
   // History panel
   isHistoryOpen: boolean;
   setIsHistoryOpen: Dispatch<SetStateAction<boolean>>;
+
+  // Streaming (optional - only present when enableStreaming is true)
+  streaming?: StreamingState;
+  cancelStream?: () => void;
 }

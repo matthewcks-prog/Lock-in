@@ -65,6 +65,33 @@ class BaseAdapter {
   }
 
   /**
+   * Execute streaming chat completion
+   * Returns an async generator that yields chunks.
+   * Default implementation falls back to non-streaming (yields single final chunk).
+   *
+   * @param {import('../contracts').ChatMessage[]} messages
+   * @param {import('../contracts').ChatCompletionOptions} [options]
+   * @returns {AsyncGenerator<import('../contracts').ProviderStreamChunk>}
+   */
+  async *chatCompletionStream(messages, options = {}) {
+    // Default fallback: use non-streaming and yield as single final chunk
+    const result = await this.chatCompletion(messages, options);
+    yield {
+      type: 'final',
+      content: result.content,
+      usage: result.usage,
+    };
+  }
+
+  /**
+   * Check if this adapter supports native streaming
+   * @returns {boolean}
+   */
+  supportsStreaming() {
+    return false;
+  }
+
+  /**
    * Check provider health
    * @returns {Promise<import('../contracts').ProviderHealth>}
    */

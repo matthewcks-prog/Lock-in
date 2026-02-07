@@ -6,7 +6,11 @@
  */
 
 import type { ApiRequest } from '../fetcher';
-import { validateChatAssetRecord, validateChatAssetRecords } from '../validation';
+import {
+  validateChatAssetRecord,
+  validateChatAssetRecords,
+  validateChatAssetStatus,
+} from '../validation';
 
 export interface ChatAsset {
   id: string;
@@ -17,6 +21,10 @@ export interface ChatAsset {
   fileSize: number | null;
   url: string | null;
   createdAt: string;
+  processingStatus?: 'pending' | 'processing' | 'ready' | 'error' | null;
+  processingError?: string | null;
+  processingUpdatedAt?: string | null;
+  processingCompletedAt?: string | null;
 }
 
 export interface UploadChatAssetParams {
@@ -30,6 +38,18 @@ export interface ListChatAssetsParams {
 
 export interface DeleteChatAssetParams {
   assetId: string;
+}
+
+export interface GetChatAssetStatusParams {
+  assetId: string;
+}
+
+export interface ChatAssetStatus {
+  id: string;
+  processingStatus?: 'pending' | 'processing' | 'ready' | 'error' | null;
+  processingError?: string | null;
+  processingUpdatedAt?: string | null;
+  processingCompletedAt?: string | null;
 }
 
 type ChatAssetRecord = {
@@ -46,33 +66,111 @@ type ChatAssetRecord = {
   url?: string | null;
   createdAt?: string;
   created_at?: string;
+  processingStatus?: string | null;
+  processing_status?: string | null;
+  processingError?: string | null;
+  processing_error?: string | null;
+  processingUpdatedAt?: string | null;
+  processing_updated_at?: string | null;
+  processingCompletedAt?: string | null;
+  processing_completed_at?: string | null;
 };
+
+type ChatAssetStatusRecord = {
+  id: string;
+  processingStatus?: string | null;
+  processing_status?: string | null;
+  processingError?: string | null;
+  processing_error?: string | null;
+  processingUpdatedAt?: string | null;
+  processing_updated_at?: string | null;
+  processingCompletedAt?: string | null;
+  processing_completed_at?: string | null;
+};
+
+function resolveString(value?: string | null): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function resolveNumber(value?: number | null): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function assertNonEmptyString(value: unknown, message: string): asserts value is string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(message);
+  }
+}
+
+function resolveProcessingStatus(
+  value?: string | null,
+): 'pending' | 'processing' | 'ready' | 'error' | null {
+  switch (value) {
+    case 'pending':
+    case 'processing':
+    case 'ready':
+    case 'error':
+      return value;
+    default:
+      return null;
+  }
+}
 
 function mapChatAsset(raw: ChatAssetRecord): ChatAsset {
   return {
     id: raw.id,
-    messageId: raw.messageId || raw.message_id || null,
+    messageId: resolveString(raw.messageId) ?? resolveString(raw.message_id),
     type: raw.type,
-    mimeType: raw.mimeType || raw.mime_type || '',
-    fileName: raw.fileName ?? raw.file_name ?? null,
-    fileSize: raw.fileSize ?? raw.file_size ?? null,
-    url: raw.url ?? null,
-    createdAt: raw.createdAt || raw.created_at || new Date().toISOString(),
+    mimeType: resolveString(raw.mimeType) ?? resolveString(raw.mime_type) ?? '',
+    fileName: resolveString(raw.fileName) ?? resolveString(raw.file_name),
+    fileSize: resolveNumber(raw.fileSize) ?? resolveNumber(raw.file_size),
+    url: resolveString(raw.url),
+    createdAt:
+      resolveString(raw.createdAt) ?? resolveString(raw.created_at) ?? new Date().toISOString(),
+    processingStatus: resolveProcessingStatus(
+      resolveString(raw.processingStatus) ?? resolveString(raw.processing_status),
+    ),
+    processingError:
+      resolveString(raw.processingError) ?? resolveString(raw.processing_error) ?? null,
+    processingUpdatedAt:
+      resolveString(raw.processingUpdatedAt) ?? resolveString(raw.processing_updated_at) ?? null,
+    processingCompletedAt:
+      resolveString(raw.processingCompletedAt) ??
+      resolveString(raw.processing_completed_at) ??
+      null,
   };
 }
 
-export function createChatAssetsClient(apiRequest: ApiRequest) {
-  /**
-   * Upload a file as a chat attachment
-   * @param params - Upload parameters including chatId and file
-   * @returns The created chat asset with URL
-   */
-  async function uploadChatAsset(params: UploadChatAssetParams): Promise<ChatAsset> {
+function mapChatAssetStatus(raw: ChatAssetStatusRecord): ChatAssetStatus {
+  return {
+    id: raw.id,
+    processingStatus: resolveProcessingStatus(
+      resolveString(raw.processingStatus) ?? resolveString(raw.processing_status),
+    ),
+    processingError:
+      resolveString(raw.processingError) ?? resolveString(raw.processing_error) ?? null,
+    processingUpdatedAt:
+      resolveString(raw.processingUpdatedAt) ?? resolveString(raw.processing_updated_at) ?? null,
+    processingCompletedAt:
+      resolveString(raw.processingCompletedAt) ??
+      resolveString(raw.processing_completed_at) ??
+      null,
+  };
+}
+
+export type ChatAssetsClient = {
+  uploadChatAsset: (params: UploadChatAssetParams) => Promise<ChatAsset>;
+  listChatAssets: (params: ListChatAssetsParams) => Promise<ChatAsset[]>;
+  getChatAssetStatus: (params: GetChatAssetStatusParams) => Promise<ChatAssetStatus>;
+  deleteChatAsset: (params: DeleteChatAssetParams) => Promise<void>;
+};
+
+const createUploadChatAsset =
+  (apiRequest: ApiRequest) =>
+  async (params: UploadChatAssetParams): Promise<ChatAsset> => {
     const { chatId, file } = params;
-    if (!chatId) {
-      throw new Error('chatId is required to upload an asset');
-    }
-    if (!file) {
+    assertNonEmptyString(chatId, 'chatId is required to upload an asset');
+    if (file === undefined || file === null) {
       throw new Error('file is required to upload an asset');
     }
 
@@ -85,18 +183,13 @@ export function createChatAssetsClient(apiRequest: ApiRequest) {
     });
 
     return mapChatAsset(validateChatAssetRecord(raw, 'uploadChatAsset') as ChatAssetRecord);
-  }
+  };
 
-  /**
-   * List all assets for a chat
-   * @param params - List parameters including chatId
-   * @returns Array of chat assets with URLs
-   */
-  async function listChatAssets(params: ListChatAssetsParams): Promise<ChatAsset[]> {
+const createListChatAssets =
+  (apiRequest: ApiRequest) =>
+  async (params: ListChatAssetsParams): Promise<ChatAsset[]> => {
     const { chatId } = params;
-    if (!chatId) {
-      throw new Error('chatId is required to list assets');
-    }
+    assertNonEmptyString(chatId, 'chatId is required to list assets');
 
     const raw = await apiRequest<unknown>(`/api/chats/${chatId}/assets`, {
       method: 'GET',
@@ -105,26 +198,39 @@ export function createChatAssetsClient(apiRequest: ApiRequest) {
     return validateChatAssetRecords(raw, 'listChatAssets').map((record) =>
       mapChatAsset(record as ChatAssetRecord),
     );
-  }
+  };
 
-  /**
-   * Delete a chat asset
-   * @param params - Delete parameters including assetId
-   */
-  async function deleteChatAsset(params: DeleteChatAssetParams): Promise<void> {
+const createGetChatAssetStatus =
+  (apiRequest: ApiRequest) =>
+  async (params: GetChatAssetStatusParams): Promise<ChatAssetStatus> => {
     const { assetId } = params;
-    if (!assetId) {
-      throw new Error('assetId is required to delete an asset');
-    }
+    assertNonEmptyString(assetId, 'assetId is required to fetch asset status');
+
+    const raw = await apiRequest<unknown>(`/api/chat-assets/${assetId}/status`, {
+      method: 'GET',
+    });
+
+    return mapChatAssetStatus(
+      validateChatAssetStatus(raw, 'getChatAssetStatus') as ChatAssetStatusRecord,
+    );
+  };
+
+const createDeleteChatAsset =
+  (apiRequest: ApiRequest) =>
+  async (params: DeleteChatAssetParams): Promise<void> => {
+    const { assetId } = params;
+    assertNonEmptyString(assetId, 'assetId is required to delete an asset');
 
     return apiRequest<void>(`/api/chat-assets/${assetId}`, {
       method: 'DELETE',
     });
-  }
+  };
 
+export function createChatAssetsClient(apiRequest: ApiRequest): ChatAssetsClient {
   return {
-    uploadChatAsset,
-    listChatAssets,
-    deleteChatAsset,
+    uploadChatAsset: createUploadChatAsset(apiRequest),
+    listChatAssets: createListChatAssets(apiRequest),
+    getChatAssetStatus: createGetChatAssetStatus(apiRequest),
+    deleteChatAsset: createDeleteChatAsset(apiRequest),
   };
 }

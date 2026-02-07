@@ -8,6 +8,7 @@
 const express = require('express');
 const { requireSupabaseUser } = require('../middleware/authMiddleware');
 const { handleLockinRequest } = require('../controllers/assistant/ai');
+const { handleLockinStreamRequest } = require('../controllers/assistant/stream');
 const {
   createChatSession,
   listChats,
@@ -18,6 +19,7 @@ const { generateChatTitle } = require('../controllers/assistant/title');
 const {
   uploadChatAsset,
   listChatAssets,
+  getChatAssetStatus,
   deleteChatAsset,
 } = require('../controllers/assistant/assets');
 const { assetUploadMiddleware } = require('../middleware/uploadMiddleware');
@@ -32,8 +34,16 @@ const {
 
 const router = express.Router();
 
-// Main AI endpoint
+// Main AI endpoint (blocking request/response)
 router.post('/lockin', requireSupabaseUser, validate(lockinRequestSchema), handleLockinRequest);
+
+// Streaming AI endpoint (SSE)
+router.post(
+  '/lockin/stream',
+  requireSupabaseUser,
+  validate(lockinRequestSchema),
+  handleLockinStreamRequest,
+);
 
 // Chat management endpoints
 router.post('/chats', requireSupabaseUser, validate(createChatSessionSchema), createChatSession);
@@ -71,6 +81,12 @@ router.delete(
   requireSupabaseUser,
   validateParams(assetIdParamSchema),
   deleteChatAsset,
+);
+router.get(
+  '/chat-assets/:assetId/status',
+  requireSupabaseUser,
+  validateParams(assetIdParamSchema),
+  getChatAssetStatus,
 );
 
 module.exports = router;

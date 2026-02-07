@@ -198,7 +198,7 @@ export function useNotesList(options: UseNotesListOptions) {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   return {

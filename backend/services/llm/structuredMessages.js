@@ -1,3 +1,17 @@
+/**
+ * Chat Message Builder
+ *
+ * Builds messages array for LLM chat completion following industry standards.
+ *
+ * Key Design Principles:
+ * - NO forced JSON response format (LLM returns natural markdown)
+ * - NO mode parameter sent to LLM (it infers intent from context)
+ * - Simple system prompt defining assistant personality
+ * - Context provided naturally, not as structured fields
+ *
+ * @module services/llm/structuredMessages
+ */
+
 const {
   MAX_ATTACHMENT_CONTEXT_CHARS,
   MIN_SELECTION_PRIMARY_CHARS,
@@ -5,11 +19,22 @@ const {
 } = require('./constants');
 const { sanitizeHistory } = require('./history');
 
+/**
+ * Normalize selection text
+ * @param {string|undefined} selection
+ * @returns {string}
+ */
 function normalizeSelection(selection) {
   if (typeof selection !== 'string') return '';
   return selection.trim();
 }
 
+/**
+ * Extract heading lines from text for context summary
+ * @param {string} text
+ * @param {number} maxHeadings
+ * @returns {string[]}
+ */
 function extractHeadingLines(text, maxHeadings = 6) {
   const headings = [];
   const lines = text.split(/\r?\n/);
@@ -24,6 +49,12 @@ function extractHeadingLines(text, maxHeadings = 6) {
   return headings;
 }
 
+/**
+ * Build head/tail snippet for long text
+ * @param {string} text
+ * @param {number} maxChars
+ * @returns {string}
+ */
 function buildHeadTailSnippet(text, maxChars) {
   const trimmed = text.trim();
   if (trimmed.length <= maxChars) return trimmed;
@@ -38,6 +69,12 @@ function buildHeadTailSnippet(text, maxChars) {
   return `${head}${marker}${tail}`;
 }
 
+/**
+ * Build snippet from attachment text
+ * @param {string} text
+ * @param {number} maxChars
+ * @returns {string}
+ */
 function buildAttachmentSnippet(text, maxChars = MAX_ATTACHMENT_CONTEXT_CHARS) {
   const trimmed = text.trim();
   if (trimmed.length <= maxChars) return trimmed;
@@ -49,6 +86,12 @@ function buildAttachmentSnippet(text, maxChars = MAX_ATTACHMENT_CONTEXT_CHARS) {
   return `${headingBlock}${buildHeadTailSnippet(trimmed, available)}`;
 }
 
+/**
+ * Resolve selection context flags
+ * @param {string|undefined} selection
+ * @param {Array} attachments
+ * @returns {Object}
+ */
 function resolveSelectionContext(selection, attachments) {
   const selectionText = normalizeSelection(selection);
   const hasSelection = selectionText.length > 0;
@@ -70,6 +113,11 @@ function resolveSelectionContext(selection, attachments) {
   };
 }
 
+/**
+ * Resolve user question context
+ * @param {string|undefined} newUserMessage
+ * @returns {Object}
+ */
 function resolveUserQuestion(newUserMessage) {
   const trimmed = typeof newUserMessage === 'string' ? newUserMessage.trim() : '';
   return {
@@ -78,31 +126,30 @@ function resolveUserQuestion(newUserMessage) {
   };
 }
 
-function buildModeInstruction(mode) {
-  switch (mode) {
-    case 'explain':
-      return "Provide a detailed explanation in the 'explanation' field. Still create notes and todos if relevant to help the student study.";
-    case 'general':
-      return "Treat this as general Q&A about the selection/context. Provide a helpful explanation in the 'explanation' field.";
-    default:
-      return "Provide a clear explanation in the 'explanation' field. Create notes and todos if relevant.";
-  }
-}
-
+/**
+ * Build context information string
+ * @param {Object} options
+ * @returns {string}
+ */
 function buildContextInfo({ pageContext, pageUrl, courseCode }) {
   const contextParts = [];
   if (pageContext) {
     contextParts.push(`Page context: ${pageContext}`);
   }
   if (pageUrl) {
-    contextParts.push(`Page URL: ${pageUrl}`);
+    contextParts.push(`Source: ${pageUrl}`);
   }
   if (courseCode) {
-    contextParts.push(`Course code: ${courseCode}`);
+    contextParts.push(`Course: ${courseCode}`);
   }
   return contextParts.length > 0 ? `\n\n${contextParts.join('\n')}` : '';
 }
 
+/**
+ * Build focus instruction based on available context
+ * @param {Object} options
+ * @returns {string}
+ */
 function buildFocusInstruction({
   hasUserQuestion,
   hasAttachments,
@@ -110,56 +157,58 @@ function buildFocusInstruction({
   selectionIsShort,
 }) {
   if (hasUserQuestion) {
-    return 'Treat the student question as the primary task. Use the selected text and any attachments as supporting evidence.';
+    return "Focus on answering the student's question. Use the selected text and any attachments as context.";
   }
   if (hasAttachments && (!hasSelection || selectionIsShort)) {
-    return 'The attached files/images are the primary source of context. The selected text is minimal or missing; focus on the attachments first.';
+    return 'The attached files are the primary context. Analyze and explain their content.';
   }
-  return 'The selected text is the primary source of context. Use attachments as supporting evidence when available.';
+  return 'Explain and help the student understand the selected text.';
 }
 
+/**
+ * Build attachment note for system prompt
+ * @param {boolean} hasAttachments
+ * @returns {string}
+ */
 function buildAttachmentNote(hasAttachments) {
   return hasAttachments
-    ? '\n\nThe student may also attach images, documents, or code files. For images, describe what you see and how it relates to the topic.'
+    ? '\n\nThe student may attach images or documents. Describe what you see in images and how it relates to the topic.'
     : '';
 }
 
-function buildSystemPrompt({
-  modeInstruction,
-  focusInstruction,
-  contextInfo,
-  attachmentNote,
-  selectionForPrompt,
-}) {
-  return `You are Lock-in, a helpful AI study assistant. Your task is to analyze the selected text and return a structured JSON response.
+/**
+ * Build the system prompt - Industry standard approach
+ *
+ * Key principles:
+ * - Define assistant personality and behavior
+ * - Provide context naturally (no forced JSON structure)
+ * - Let the model respond in natural language (markdown)
+ * - No explicit "mode" - the model infers intent from context
+ *
+ * @param {Object} options
+ * @returns {string}
+ */
+function buildSystemPrompt({ focusInstruction, contextInfo, attachmentNote, selectionForPrompt }) {
+  return `You are Lock-in, a helpful AI study assistant. Your role is to help students understand their course material.
 
-${modeInstruction}
-${focusInstruction ? `\n${focusInstruction}` : ''}
+${focusInstruction}
 
-Use the provided context (page context, course code, page URL) to improve the quality of tags and notes.${attachmentNote}
-
-IMPORTANT: You MUST return ONLY a valid JSON object with this exact structure:
-{
-  "explanation": "string - the main answer/explanation for the user",
-  "notes": [{"title": "string", "content": "string", "type": "string"}],
-  "todos": [{"title": "string", "description": "string"}],
-  "tags": ["string"],
-  "difficulty": "easy" | "medium" | "hard"
-}
-
-Do NOT include any markdown, code blocks, or extra text. Return ONLY the JSON object.
-
-Guidelines:
-- explanation: The main answer based on the mode (explain/general)
-- notes: Array of study notes that could be saved (title, content, type like "definition", "formula", "concept", etc.)
-- todos: Array of study tasks (title, description)
-- tags: Array of topic tags relevant to the content
-- difficulty: Estimate the difficulty level of the selected text
+Use markdown formatting in your responses:
+- Use **bold** for key terms and important concepts
+- Use bullet points for lists
+- Use code blocks for technical content
+- Keep explanations clear and educational
+${attachmentNote}
 
 Selected text:
 ${selectionForPrompt}${contextInfo}`;
 }
 
+/**
+ * Build attachment context from text-based attachments
+ * @param {Array} attachments
+ * @returns {string}
+ */
 function buildAttachmentContext(attachments) {
   const textAttachments = (attachments || []).filter((a) => a.type !== 'image' && a.textContent);
   if (textAttachments.length === 0) {
@@ -173,6 +222,11 @@ function buildAttachmentContext(attachments) {
   return `\n\nAttached files:${attachmentTexts.join('\n')}`;
 }
 
+/**
+ * Build user text content based on context
+ * @param {Object} options
+ * @returns {string}
+ */
 function buildUserTextContent({
   hasUserQuestion,
   userQuestion,
@@ -182,20 +236,22 @@ function buildUserTextContent({
   attachmentContext,
 }) {
   if (hasUserQuestion) {
-    return `The student has asked a follow-up question about the selected text and previous explanation:
-
-"${userQuestion}"${attachmentContext}
-
-Using the selected text, the previous conversation, any attached files/images, and the mode instructions, answer their question and return ONLY the structured JSON object described in the system message.`;
+    return `${userQuestion}${attachmentContext}`;
   }
 
   if (hasAttachments && (!hasSelection || selectionIsShort)) {
-    return `Analyze the attached files/images as the primary source of context. The selected text is minimal or missing, so treat it as optional background. Return ONLY the structured JSON response described in the system message.${attachmentContext}`;
+    return `Please analyze and explain the attached content.${attachmentContext}`;
   }
 
-  return `Analyze the selected text${attachmentContext ? ' and the attached files/images' : ''} and return the structured JSON response described in the system message.${attachmentContext}`;
+  return `Please explain this.${attachmentContext}`;
 }
 
+/**
+ * Build user message with optional image attachments
+ * @param {string} userTextContent
+ * @param {Array} attachments
+ * @returns {Object}
+ */
 function buildUserMessage(userTextContent, attachments) {
   const imageAttachments = (attachments || []).filter((a) => a.type === 'image' && a.base64);
   if (imageAttachments.length === 0) {
@@ -216,9 +272,28 @@ function buildUserMessage(userTextContent, attachments) {
   return { role: 'user', content: contentParts };
 }
 
+/**
+ * Build messages array for chat completion
+ *
+ * Industry-standard approach:
+ * - System message defines assistant behavior
+ * - Chat history preserved for context
+ * - User message contains the actual request
+ * - No mode parameter - model infers intent
+ *
+ * @param {Object} options
+ * @param {string} [options.selection] - Selected text
+ * @param {string} [options.pageContext] - Page context
+ * @param {string} [options.pageUrl] - Source URL
+ * @param {string} [options.courseCode] - Course identifier
+ * @param {string} [options.language] - Language code
+ * @param {Array} [options.chatHistory] - Previous messages
+ * @param {string} [options.newUserMessage] - User's follow-up question
+ * @param {Array} [options.attachments] - File attachments
+ * @returns {Object} - { messages, selectionForPrompt, userTextContent, hasAttachments, hasUserQuestion, language }
+ */
 function buildStructuredStudyMessages(options) {
   const {
-    mode = 'explain',
     selection,
     pageContext,
     pageUrl,
@@ -237,7 +312,6 @@ function buildStructuredStudyMessages(options) {
   }
 
   const systemPrompt = buildSystemPrompt({
-    modeInstruction: buildModeInstruction(mode),
     focusInstruction: buildFocusInstruction({
       hasUserQuestion: userQuestion.hasUserQuestion,
       hasAttachments: selectionContext.hasAttachments,

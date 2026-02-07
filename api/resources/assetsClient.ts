@@ -29,6 +29,13 @@ type NoteAssetRecord = {
   name?: string | null;
 };
 
+function resolveFileName(raw: NoteAssetRecord): string | null {
+  if (typeof raw.file_name === 'string' && raw.file_name.length > 0) return raw.file_name;
+  if (typeof raw.filename === 'string' && raw.filename.length > 0) return raw.filename;
+  if (typeof raw.name === 'string' && raw.name.length > 0) return raw.name;
+  return null;
+}
+
 function mapNoteAsset(raw: NoteAssetRecord): NoteAsset {
   return {
     id: raw.id,
@@ -38,18 +45,24 @@ function mapNoteAsset(raw: NoteAssetRecord): NoteAsset {
     mimeType: raw.mime_type,
     storagePath: raw.storage_path,
     createdAt: raw.created_at,
-    url: raw.url ?? '',
-    fileName: raw.file_name || raw.filename || raw.name || null,
+    url: typeof raw.url === 'string' ? raw.url : '',
+    fileName: resolveFileName(raw),
   };
 }
 
-export function createAssetsClient(apiRequest: ApiRequest) {
+export type AssetsClient = {
+  uploadNoteAsset: (params: UploadNoteAssetParams) => Promise<NoteAsset>;
+  listNoteAssets: (params: ListNoteAssetsParams) => Promise<NoteAsset[]>;
+  deleteNoteAsset: (params: DeleteNoteAssetParams) => Promise<void>;
+};
+
+export function createAssetsClient(apiRequest: ApiRequest): AssetsClient {
   async function uploadNoteAsset(params: UploadNoteAssetParams): Promise<NoteAsset> {
     const { noteId, file } = params;
-    if (!noteId) {
+    if (typeof noteId !== 'string' || noteId.trim().length === 0) {
       throw new Error('noteId is required to upload an asset');
     }
-    if (!file) {
+    if (file === undefined || file === null) {
       throw new Error('file is required to upload an asset');
     }
 
@@ -66,7 +79,7 @@ export function createAssetsClient(apiRequest: ApiRequest) {
 
   async function listNoteAssets(params: ListNoteAssetsParams): Promise<NoteAsset[]> {
     const { noteId } = params;
-    if (!noteId) {
+    if (typeof noteId !== 'string' || noteId.trim().length === 0) {
       throw new Error('noteId is required to list assets');
     }
 
@@ -81,7 +94,7 @@ export function createAssetsClient(apiRequest: ApiRequest) {
 
   async function deleteNoteAsset(params: DeleteNoteAssetParams): Promise<void> {
     const { assetId } = params;
-    if (!assetId) {
+    if (typeof assetId !== 'string' || assetId.trim().length === 0) {
       throw new Error('assetId is required to delete an asset');
     }
 

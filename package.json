@@ -16,10 +16,11 @@
     "build:sentry": "vite build --config vite.config.sentry.ts",
     "build:initApi": "vite build --config vite.config.initApi.ts",
     "build:contentLibs": "vite build --config vite.config.contentLibs.ts",
+    "build:messageSchemas": "vite build --config vite.config.messageSchemas.ts",
     "build:webvttParser": "vite build --config vite.config.webvttParser.ts",
     "build:transcriptProviders": "vite build --config vite.config.transcriptProviders.ts",
     "build:config": "vite build --config vite.config.extensionConfig.ts",
-    "build:libs": "npm run build:sentry && npm run build:initApi && npm run build:contentLibs && npm run build:webvttParser && npm run build:transcriptProviders && npm run build:config",
+    "build:libs": "npm run build:sentry && npm run build:initApi && npm run build:contentLibs && npm run build:messageSchemas && npm run build:webvttParser && npm run build:transcriptProviders && npm run build:config",
     "build:extension": "npm run build:libs && vite build",
     "verify-build": "node scripts/ci/verify-build.js",
     "// Testing": "",
@@ -91,7 +92,8 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@sentry/vite-plugin": "^4.6.1",

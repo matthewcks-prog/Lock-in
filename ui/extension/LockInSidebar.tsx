@@ -4,7 +4,7 @@
  * Main sidebar orchestrator for the Lock-in extension.
  */
 import { useEffect, useMemo, useState } from 'react';
-import type { PageContext, StudyMode } from '../../core/domain/types';
+import type { PageContext } from '../../core/domain/types';
 import type { ApiClient } from '../../api/client';
 import { createNotesService } from '../../core/services/notesService.ts';
 import type { NotesService } from '../../core/services/notesService.ts';
@@ -33,16 +33,13 @@ import {
 } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
 import { useSidebarState } from './sidebar/useSidebarState';
-import type { BaseAdapter } from '../../integrations/adapters/baseAdapter';
 export interface LockInSidebarProps {
   apiClient: ApiClient | null;
   isOpen: boolean;
   onToggle: () => void;
-  currentMode: StudyMode;
   pendingPrefill?: string;
   onClearPrefill?: () => void;
   pageContext?: PageContext;
-  adapter?: BaseAdapter;
   storage?: StorageAdapter;
   activeTabExternal?: string;
 }
@@ -50,7 +47,6 @@ function LockInSidebarContent({
   apiClient,
   isOpen,
   onToggle,
-  currentMode,
   pendingPrefill,
   onClearPrefill,
   pageContext,
@@ -61,7 +57,6 @@ function LockInSidebarContent({
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   const sidebarStateOptions: Parameters<typeof useSidebarState>[0] = {
-    currentMode,
     isOpen,
     onToggle,
   };
@@ -75,7 +70,6 @@ function LockInSidebarContent({
     activeTab,
     setActiveTab,
     handleTabChange,
-    mode,
     selectedNoteId,
     setSelectedNoteId,
     setIsNoteEditing,
@@ -120,7 +114,7 @@ function LockInSidebarContent({
 
   useEffect(() => {
     if (activeTab === NOTES_TAB_ID) {
-      refreshNotes();
+      void refreshNotes();
     }
   }, [activeTab, refreshNotes]);
 
@@ -153,7 +147,6 @@ function LockInSidebarContent({
             <ChatSection
               apiClient={apiClient}
               {...(storage ? { storage } : {})}
-              mode={mode}
               pageUrl={pageUrl}
               courseCode={courseCode}
               {...(pendingPrefill !== undefined ? { pendingPrefill } : {})}

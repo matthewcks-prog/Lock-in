@@ -6,7 +6,7 @@
 
 import type { BaseAdapter } from './baseAdapter';
 import type { CourseContext, PageContext } from '../../core/domain/types';
-import { extractCourseCodeFromText } from '../../core/utils/textUtils';
+import { extractCourseCodeFromText } from '../utils/textUtils';
 
 /**
  * Edstem-specific adapter

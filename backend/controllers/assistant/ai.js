@@ -6,6 +6,7 @@
 
 const { assistantService } = require('../../services/assistant/assistantService');
 const { extractIdempotencyKey } = require('../../utils/idempotencyKey');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 async function handleLockinRequest(req, res) {
   try {
@@ -24,7 +25,7 @@ async function handleLockinRequest(req, res) {
       return res.status(error.status).json(error.payload);
     }
 
-    return res.status(500).json({
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       success: false,
       error: { message: 'Failed to process your request. Please try again.' },
     });

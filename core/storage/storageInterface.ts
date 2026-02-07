@@ -12,7 +12,7 @@
 /**
  * Storage interface for key-value operations
  */
-export interface StorageInterface {
+export type StorageInterface = {
   /**
    * Get value(s) from storage
    */
@@ -34,13 +34,13 @@ export interface StorageInterface {
   onChanged<T = unknown>(
     callback: (changes: Record<string, { oldValue?: T; newValue?: T }>, areaName: string) => void,
   ): () => void;
-}
+};
 
 /**
  * Local storage interface (for per-tab or temporary data)
  */
-export interface LocalStorageInterface {
+export type LocalStorageInterface = {
   get<T = unknown>(key: string | string[]): Promise<Record<string, T>>;
   set<T = unknown>(data: Record<string, T>): Promise<void>;
   remove(keys: string | string[]): Promise<void>;
-}
+};

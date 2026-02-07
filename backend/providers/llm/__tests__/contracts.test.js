@@ -201,3 +201,92 @@ describe('parseRetryAfter', () => {
     assert.equal(parseRetryAfter(error), null);
   });
 });
+
+describe('Streaming chunk creators', () => {
+  const {
+    createDeltaChunk,
+    createFinalChunk,
+    createStreamErrorChunk,
+    createDoneChunk,
+    createMetaChunk,
+  } = require('../contracts');
+
+  describe('createDeltaChunk', () => {
+    test('creates delta chunk with content', () => {
+      const chunk = createDeltaChunk('Hello');
+      assert.deepEqual(chunk, { type: 'delta', content: 'Hello' });
+    });
+
+    test('creates delta chunk with empty content', () => {
+      const chunk = createDeltaChunk('');
+      assert.deepEqual(chunk, { type: 'delta', content: '' });
+    });
+  });
+
+  describe('createFinalChunk', () => {
+    test('creates final chunk with content only', () => {
+      const chunk = createFinalChunk('Complete response');
+      assert.deepEqual(chunk, { type: 'final', content: 'Complete response' });
+    });
+
+    test('creates final chunk with usage', () => {
+      const usage = { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 };
+      const chunk = createFinalChunk('Response', usage);
+      assert.deepEqual(chunk, {
+        type: 'final',
+        content: 'Response',
+        usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
+      });
+    });
+
+    test('omits usage when null', () => {
+      const chunk = createFinalChunk('Response', null);
+      assert.ok(!('usage' in chunk) || chunk.usage === undefined);
+    });
+  });
+
+  describe('createStreamErrorChunk', () => {
+    test('creates error chunk with defaults', () => {
+      const chunk = createStreamErrorChunk('RATE_LIMIT', 'Too many requests');
+      assert.deepEqual(chunk, {
+        type: 'error',
+        code: 'RATE_LIMIT',
+        message: 'Too many requests',
+        retryable: false,
+      });
+    });
+
+    test('creates retryable error chunk', () => {
+      const chunk = createStreamErrorChunk('UPSTREAM_ERROR', 'Service unavailable', true);
+      assert.equal(chunk.retryable, true);
+    });
+  });
+
+  describe('createDoneChunk', () => {
+    test('creates done chunk', () => {
+      const chunk = createDoneChunk();
+      assert.deepEqual(chunk, { type: 'done' });
+    });
+  });
+
+  describe('createMetaChunk', () => {
+    test('creates meta chunk with all fields', () => {
+      const chunk = createMetaChunk({
+        chatId: 'chat-123',
+        messageId: 'msg-456',
+        requestId: 'req-789',
+        model: 'gemini-2.0-flash',
+        provider: 'gemini',
+      });
+
+      assert.deepEqual(chunk, {
+        type: 'meta',
+        chatId: 'chat-123',
+        messageId: 'msg-456',
+        requestId: 'req-789',
+        model: 'gemini-2.0-flash',
+        provider: 'gemini',
+      });
+    });
+  });
+});

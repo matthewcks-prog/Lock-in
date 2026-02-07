@@ -25,30 +25,45 @@ import {
   getDefaultIntegrations,
   makeFetchTransport,
   Scope,
-  type ErrorEvent,
-  type EventHint,
-  type Breadcrumb,
 } from '@sentry/browser';
+import type { ChromeLike } from './sentry/chromeTypes';
+import { beforeSendScrubber } from './sentry/privacy';
+import {
+  isTelemetryEnabled as isTelemetryEnabledForChrome,
+  setTelemetryEnabled as setTelemetryEnabledForChrome,
+} from './sentry/telemetry';
+import { getExtensionVersion, getMetaEnvString, isNonEmptyString } from './sentry/utils';
 
-// ============================================================================
-// Types
-// ============================================================================
+export { setTelemetryEnabled };
 
 export type Surface = 'sidebar' | 'content' | 'background' | 'popup';
+
+type GlobalWithChrome = typeof globalThis & {
+  chrome?: ChromeLike;
+  LOCKIN_CONFIG?: { SENTRY_DSN?: string };
+  LockInSentry?: LockInSentryApi;
+};
+
+type LockInSentryApi = {
+  initSentry: (surface: Surface) => Promise<boolean>;
+  captureError: (error: Error, context?: Record<string, unknown>) => void;
+  captureMessage: (message: string, level?: 'info' | 'warning' | 'error') => void;
+  setContext: (name: string, context: Record<string, unknown>) => void;
+  getSentryScope: () => Scope | null;
+  isSentryInitialized: () => boolean;
+  flushSentry: (timeout?: number) => Promise<void>;
+  sendTestEvents: () => { success: boolean; message: string };
+  setTelemetryEnabled: (enabled: boolean) => Promise<void>;
+  setupMv3Lifecycle: () => void;
+};
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
-// Telemetry opt-out storage key
-const TELEMETRY_OPT_OUT_KEY = 'lockin_telemetry_disabled';
-
-// Keys in event.extra that likely contain user content and should be redacted
-const SENSITIVE_EXTRA_KEYS =
-  /transcript|note|selection|prompt|message|content|chat|caption|text|query|input|output/i;
-
-// Maximum string length before redaction
-const MAX_STRING_LENGTH = 500;
+const DSN_PREFIX_LENGTH = 30;
+const PROD_TRACES_SAMPLE_RATE = 0.1;
+const DEFAULT_FLUSH_TIMEOUT_MS = 2000;
 
 // ============================================================================
 // Environment Detection
@@ -66,6 +81,7 @@ const globalContext: typeof globalThis = isServiceWorker
   : typeof window !== 'undefined'
     ? window
     : globalThis;
+const globalWithChrome = globalContext as GlobalWithChrome;
 
 /**
  * Check if this is an unpacked/development extension
@@ -73,10 +89,10 @@ const globalContext: typeof globalThis = isServiceWorker
  */
 function isDevelopmentBuild(): boolean {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const manifest = (globalContext as any).chrome?.runtime?.getManifest?.();
+    const manifest = globalWithChrome.chrome?.runtime?.getManifest?.();
     // Unpacked extensions don't have update_url
-    return !manifest?.update_url;
+    const updateUrl = manifest?.update_url;
+    return !isNonEmptyString(updateUrl);
   } catch {
     return true; // Default to dev if we can't check
   }
@@ -88,6 +104,7 @@ const isTestEnv =
   (process.env?.['NODE_ENV'] === 'test' ||
     process.env?.['VITEST'] === 'true' ||
     process.env?.['VITEST'] === '1');
+const shouldLogDebug = isDevelopment && !isTestEnv;
 
 // ============================================================================
 // DSN Resolution
@@ -98,7 +115,7 @@ const isTestEnv =
  * Vite replaces this with the actual DSN string at build time via the define config.
  * We use a separate constant to avoid complex typeof checks on import.meta which break in service workers.
  */
-const BUILD_TIME_DSN: string = import.meta.env['VITE_SENTRY_DSN'];
+const BUILD_TIME_DSN = getMetaEnvString('VITE_SENTRY_DSN');
 
 /**
  * Get Sentry DSN from build-time injection or fallback sources
@@ -108,15 +125,14 @@ const BUILD_TIME_DSN: string = import.meta.env['VITE_SENTRY_DSN'];
  */
 function getSentryDsn(): string | undefined {
   // Primary: Build-time injected DSN (Vite replaces the constant at build)
-  if (BUILD_TIME_DSN && BUILD_TIME_DSN !== '' && !BUILD_TIME_DSN.includes('import.meta')) {
-    return BUILD_TIME_DSN;
+  const buildTimeDsn = BUILD_TIME_DSN;
+  if (isNonEmptyString(buildTimeDsn) && !buildTimeDsn.includes('import.meta')) {
+    return buildTimeDsn;
   }
 
   // Fallback: LOCKIN_CONFIG (for popup/content script where config.js loads first)
-  const configDsn = (
-    globalContext as typeof globalThis & { LOCKIN_CONFIG?: { SENTRY_DSN?: string } }
-  ).LOCKIN_CONFIG?.SENTRY_DSN;
-  if (configDsn && configDsn !== '__SENTRY_DSN__' && configDsn !== '') {
+  const configDsn = globalWithChrome.LOCKIN_CONFIG?.SENTRY_DSN;
+  if (isNonEmptyString(configDsn) && configDsn !== '__SENTRY_DSN__') {
     return configDsn;
   }
 
@@ -126,192 +142,100 @@ function getSentryDsn(): string | undefined {
 /**
  * Get extension version from Chrome runtime
  */
-function getExtensionVersion(): string {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (globalContext as any).chrome?.runtime?.getManifest?.()?.version || 'unknown';
-  } catch {
-    return 'unknown';
-  }
+async function setTelemetryEnabled(enabled: boolean): Promise<void> {
+  await setTelemetryEnabledForChrome(globalWithChrome.chrome, enabled);
 }
 
-// ============================================================================
-// Telemetry Opt-Out
-// ============================================================================
-
-/**
- * Check if user has opted out of telemetry
- * Returns a promise that resolves to true if telemetry is ENABLED
- */
-async function isTelemetryEnabled(): Promise<boolean> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chrome = (globalContext as any).chrome;
-    if (!chrome?.storage?.sync) {
-      return true; // Default to enabled if storage not available
-    }
-    const result = await chrome.storage.sync.get([TELEMETRY_OPT_OUT_KEY]);
-    return result[TELEMETRY_OPT_OUT_KEY] !== true;
-  } catch {
-    return true; // Default to enabled on error
+function logDebug(message: string, context?: Record<string, unknown>): void {
+  if (!shouldLogDebug) return;
+  if (context !== undefined) {
+    console.log(message, context);
+    return;
   }
+  console.log(message);
 }
 
-/**
- * Set telemetry opt-out preference
- */
-export async function setTelemetryEnabled(enabled: boolean): Promise<void> {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chrome = (globalContext as any).chrome;
-    if (chrome?.storage?.sync) {
-      await chrome.storage.sync.set({ [TELEMETRY_OPT_OUT_KEY]: !enabled });
-    }
-  } catch {
-    // Ignore storage errors
-  }
-}
-
-// ============================================================================
-// Privacy Scrubbing Utilities
-// ============================================================================
-
-/**
- * Strip query parameters from a URL string
- */
-function stripQueryParams(url: string | undefined): string | undefined {
-  if (!url || typeof url !== 'string') return url;
-  try {
-    const parsed = new URL(url, 'http://placeholder');
-    parsed.search = '';
-    parsed.hash = '';
-    // Return just the path if it was relative, otherwise full URL
-    return url.startsWith('http') ? parsed.toString().replace(/\/$/, '') : parsed.pathname;
-  } catch {
-    // Fallback: simple split
-    const base = url.split('?')[0] ?? '';
-    return (base.split('#')[0] ?? base) || base;
-  }
-}
-
-/**
- * Redact long strings in an object (recursive)
- */
-function redactLongStrings(obj: unknown, maxLen: number = MAX_STRING_LENGTH): unknown {
-  if (obj === null || obj === undefined) return obj;
-
-  if (typeof obj === 'string') {
-    return obj.length > maxLen ? `[REDACTED: ${obj.length} chars]` : obj;
-  }
-
-  if (Array.isArray(obj)) {
-    return obj.map((item) => redactLongStrings(item, maxLen));
-  }
-
-  if (typeof obj === 'object') {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(obj)) {
-      result[key] = redactLongStrings(value, maxLen);
-    }
-    return result;
-  }
-
-  return obj;
-}
-
-/**
- * Sanitize breadcrumbs to remove sensitive data
- */
-function sanitizeBreadcrumbs(breadcrumbs: Breadcrumb[] | undefined): Breadcrumb[] | undefined {
-  if (!breadcrumbs) return breadcrumbs;
-
-  return breadcrumbs.map((bc) => {
-    const sanitized = { ...bc };
-    if (sanitized.data) {
-      const data = { ...(sanitized.data as Record<string, unknown>) };
-      sanitized.data = data;
-      // Remove request/response bodies
-      delete data['body'];
-      delete data['response'];
-      delete data['request'];
-      delete data['responseBody'];
-      delete data['requestBody'];
-      // Strip query params from URLs
-      if (data['url']) {
-        data['url'] = stripQueryParams(data['url'] as string);
-      }
-      if (data['from']) {
-        data['from'] = stripQueryParams(data['from'] as string);
-      }
-      if (data['to']) {
-        data['to'] = stripQueryParams(data['to'] as string);
-      }
-    }
-    return sanitized;
+function logInitDebug(surface: Surface, dsn: string | undefined, telemetryEnabled: boolean): void {
+  if (!shouldLogDebug) return;
+  const dsnValue = isNonEmptyString(dsn) ? dsn : undefined;
+  const hasDsn = dsnValue !== undefined;
+  const dsnPrefix = hasDsn ? `${dsnValue.substring(0, DSN_PREFIX_LENGTH)}...` : 'none';
+  logDebug('[Sentry] Initialization debug:', {
+    surface,
+    hasDsn,
+    dsnPrefix,
+    isServiceWorker,
+    telemetryEnabled,
   });
 }
 
-/**
- * Comprehensive beforeSend scrubbing for privacy
- */
-function beforeSendScrubber(event: ErrorEvent, _hint: EventHint): ErrorEvent | null {
-  // Strip URL query params
-  if (event.request?.url) {
-    const sanitizedUrl = stripQueryParams(event.request.url);
-    if (sanitizedUrl) {
-      event.request.url = sanitizedUrl;
-    }
-  }
-
-  // Strip query params from transaction name
-  if (event.transaction) {
-    event.transaction = stripQueryParams(event.transaction) || event.transaction;
-  }
-
-  // Redact auth headers
-  if (event.request?.headers) {
-    delete event.request.headers['Authorization'];
-    delete event.request.headers['authorization'];
-    delete event.request.headers['Cookie'];
-    delete event.request.headers['cookie'];
-  }
-
-  // Remove cookies
-  if (event.request?.cookies) {
-    event.request.cookies = {};
-  }
-
-  // Redact user content in extras
-  if (event.extra) {
-    for (const key of Object.keys(event.extra)) {
-      if (SENSITIVE_EXTRA_KEYS.test(key)) {
-        event.extra[key] = '[REDACTED]';
-      }
-    }
-    // Redact long strings anywhere in extras
-    event.extra = redactLongStrings(event.extra) as Record<string, unknown>;
-  }
-
-  // Remove user data that might have been attached
-  if (event.user) {
-    delete event.user.id;
-    delete event.user.email;
-    delete event.user.username;
-    delete event.user.ip_address;
-  }
-
-  // Sanitize breadcrumbs
-  const sanitizedBreadcrumbs = sanitizeBreadcrumbs(event.breadcrumbs);
-  if (sanitizedBreadcrumbs) {
-    event.breadcrumbs = sanitizedBreadcrumbs;
-  }
-
-  return event;
+function getSentryIntegrations(): ReturnType<typeof getDefaultIntegrations> {
+  return getDefaultIntegrations({}).filter(
+    (integration) =>
+      !['BrowserApiErrors', 'Breadcrumbs', 'GlobalHandlers'].includes(integration.name),
+  );
 }
 
-// ============================================================================
-// Module State
-// ============================================================================
+function createSentryClient(dsn: string): BrowserClient {
+  const extensionVersion = getExtensionVersion(globalWithChrome.chrome);
+  return new BrowserClient({
+    dsn,
+    transport: makeFetchTransport,
+    stackParser: defaultStackParser,
+    integrations: getSentryIntegrations(),
+    debug: isDevelopment,
+    environment: isDevelopment ? 'development' : 'production',
+    release: `lockin-extension@${extensionVersion}`,
+    sendDefaultPii: false,
+    tracesSampleRate: isDevelopment ? 1.0 : PROD_TRACES_SAMPLE_RATE,
+    attachStacktrace: true,
+    normalizeDepth: 5,
+    beforeSend: beforeSendScrubber,
+    ignoreErrors: [
+      'Extension context invalidated',
+      'The message port closed',
+      'Could not establish connection',
+      'Receiving end does not exist',
+      'ResizeObserver loop',
+      'ResizeObserver loop limit exceeded',
+      'Network request failed',
+      'Failed to fetch',
+      'NetworkError',
+      'Load failed',
+      'net::ERR_',
+      'AbortError',
+      'The operation was aborted',
+    ],
+  });
+}
+
+function initializeScope(client: BrowserClient, surface: Surface): void {
+  sentryScope = new Scope();
+  sentryScope.setClient(client);
+  sentryClient = client;
+  sentryScope.setTag('surface', surface);
+  sentryScope.setTag('extensionVersion', getExtensionVersion(globalWithChrome.chrome));
+  currentSurface = surface;
+  client.init();
+}
+
+async function resolveDsnForInit(surface: Surface): Promise<string | null> {
+  const telemetryEnabled = await isTelemetryEnabledForChrome(globalWithChrome.chrome);
+  if (telemetryEnabled === false) {
+    logDebug('[Sentry] Telemetry disabled by user preference');
+    return null;
+  }
+
+  const dsn = getSentryDsn();
+  logInitDebug(surface, dsn, telemetryEnabled);
+
+  if (!isNonEmptyString(dsn)) {
+    logDebug('[Sentry] No DSN configured, skipping initialization');
+    return null;
+  }
+
+  return dsn;
+}
 
 let sentryScope: Scope | null = null;
 let sentryClient: BrowserClient | null = null;
@@ -331,127 +255,28 @@ let currentSurface: Surface | null = null;
  */
 export async function initSentry(surface: Surface): Promise<boolean> {
   if (isInitialized) {
-    if (isDevelopment && !isTestEnv) {
-      console.log(`[Sentry] Already initialized for surface: ${currentSurface}`);
-    }
+    logDebug(`[Sentry] Already initialized for surface: ${currentSurface}`);
     return true;
   }
 
-  // Check telemetry opt-out
-  const telemetryEnabled = await isTelemetryEnabled();
-  if (!telemetryEnabled) {
-    if (isDevelopment && !isTestEnv) {
-      console.log('[Sentry] Telemetry disabled by user preference');
-    }
-    return false;
-  }
-
-  const dsn = getSentryDsn();
-
-  // Debug logging for troubleshooting
-  if (isDevelopment && !isTestEnv) {
-    console.log('[Sentry] Initialization debug:', {
-      surface,
-      hasDsn: !!dsn,
-      dsnPrefix: dsn ? dsn.substring(0, 30) + '...' : 'none',
-      isServiceWorker,
-      telemetryEnabled,
-    });
-  }
-
-  if (!dsn) {
-    if (isDevelopment && !isTestEnv) {
-      console.log('[Sentry] No DSN configured, skipping initialization');
-    }
+  const dsn = await resolveDsnForInit(surface);
+  if (dsn === null) {
     return false;
   }
 
   try {
-    // Filter out integrations that use global state (required for browser extensions)
-    const integrations = getDefaultIntegrations({}).filter(
-      (integration) =>
-        !['BrowserApiErrors', 'Breadcrumbs', 'GlobalHandlers'].includes(integration.name),
-    );
+    const client = createSentryClient(dsn);
+    initializeScope(client, surface);
 
-    const client = new BrowserClient({
-      dsn,
-      transport: makeFetchTransport,
-      stackParser: defaultStackParser,
-      integrations,
-
-      // Enable debug mode in development
-      debug: isDevelopment,
-
-      // Environment and release
-      environment: isDevelopment ? 'development' : 'production',
-      release: `lockin-extension@${getExtensionVersion()}`,
-
-      // PRIVACY: Never send PII
-      sendDefaultPii: false,
-
-      // Performance: Sample 10% in production
-      tracesSampleRate: isDevelopment ? 1.0 : 0.1,
-
-      // Error quality
-      attachStacktrace: true,
-      normalizeDepth: 5,
-
-      // PRIVACY: Comprehensive scrubbing before send
-      beforeSend: (event, _hint) => beforeSendScrubber(event, _hint),
-
-      // Noise filtering
-      ignoreErrors: [
-        // Extension lifecycle (not actionable)
-        'Extension context invalidated',
-        'The message port closed',
-        'Could not establish connection',
-        'Receiving end does not exist',
-
-        // Browser quirks
-        'ResizeObserver loop',
-        'ResizeObserver loop limit exceeded',
-
-        // Network errors (usually user's connection)
-        'Network request failed',
-        'Failed to fetch',
-        'NetworkError',
-        'Load failed',
-        'net::ERR_',
-
-        // User actions
-        'AbortError',
-        'The operation was aborted',
-      ],
-    });
-
-    // Create isolated scope for this extension
-    sentryScope = new Scope();
-    sentryScope.setClient(client);
-    sentryClient = client;
-
-    // Set surface tag
-    sentryScope.setTag('surface', surface);
-    sentryScope.setTag('extensionVersion', getExtensionVersion());
-    currentSurface = surface;
-
-    // Initialize client AFTER setting on scope
-    client.init();
-
-    // Set up custom error listeners (replaces GlobalHandlers for isolated scope)
-    // Only in window context (not service worker)
     if (!isServiceWorker) {
       setupErrorListeners();
     }
 
     isInitialized = true;
-
-    if (isDevelopment && !isTestEnv) {
-      console.log(`[Sentry] ✓ Initialized successfully for surface: ${surface}`);
-    }
+    logDebug(`[Sentry] Initialized successfully for surface: ${surface}`);
 
     return true;
   } catch (err) {
-    // Fail silently - don't break the extension if Sentry fails
     console.error('[Sentry] Failed to initialize:', err);
     return false;
   }
@@ -473,12 +298,12 @@ function setupErrorListeners(): void {
 
   // Capture unhandled errors
   window.addEventListener('error', (event) => {
-    if (!sentryClient || !event.error) {
+    if (sentryClient === null || event.error === undefined || event.error === null) {
       return;
     }
 
     // Check if this error comes from our extension context
-    const filename = event.filename || '';
+    const filename = event.filename ?? '';
     const isOurError =
       filename.includes('chrome-extension://') ||
       filename.includes('dist/ui/') ||
@@ -492,7 +317,7 @@ function setupErrorListeners(): void {
 
   // Capture unhandled promise rejections
   window.addEventListener('unhandledrejection', (event) => {
-    if (!sentryClient) {
+    if (sentryClient === null) {
       return;
     }
 
@@ -513,14 +338,12 @@ function setupErrorListeners(): void {
  */
 export function setupMv3Lifecycle(): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chrome = (globalContext as any).chrome;
-    if (chrome?.runtime?.onSuspend) {
-      chrome.runtime.onSuspend.addListener(() => {
-        if (isDevelopment && !isTestEnv) {
-          console.log('[Sentry] Service worker suspending, flushing events...');
-        }
-        flushSentry(2000);
+    const chrome = globalWithChrome.chrome;
+    const onSuspend = chrome?.runtime?.onSuspend;
+    if (onSuspend !== undefined) {
+      onSuspend.addListener(() => {
+        logDebug('[Sentry] Service worker suspending, flushing events...');
+        void flushSentry(DEFAULT_FLUSH_TIMEOUT_MS);
       });
     }
   } catch {
@@ -528,22 +351,18 @@ export function setupMv3Lifecycle(): void {
   }
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
 /**
  * Capture an error with optional context
  */
 export function captureError(error: Error, context?: Record<string, unknown>): void {
-  if (!sentryClient || !sentryScope) {
-    if (isDevelopment && !isTestEnv) {
+  if (sentryClient === null || sentryScope === null) {
+    if (shouldLogDebug) {
       console.warn('[Sentry] Not initialized, error not captured:', error);
     }
     return;
   }
 
-  if (context) {
+  if (context !== undefined) {
     sentryScope.setExtras(context);
   }
 
@@ -558,7 +377,7 @@ export function captureMessage(
   message: string,
   level: 'info' | 'warning' | 'error' = 'info',
 ): void {
-  if (!sentryClient) {
+  if (sentryClient === null) {
     return;
   }
   sentryClient.captureMessage(message, level);
@@ -568,7 +387,7 @@ export function captureMessage(
  * Set additional context that will be included in error reports
  */
 export function setContext(name: string, context: Record<string, unknown>): void {
-  if (!sentryScope) {
+  if (sentryScope === null) {
     return;
   }
   sentryScope.setContext(name, context);
@@ -592,8 +411,8 @@ export function isSentryInitialized(): boolean {
  * Flush pending events
  * Call this before the service worker suspends or page unloads
  */
-export async function flushSentry(timeout: number = 2000): Promise<void> {
-  if (!sentryClient) {
+export async function flushSentry(timeout: number = DEFAULT_FLUSH_TIMEOUT_MS): Promise<void> {
+  if (sentryClient === null) {
     return;
   }
   try {
@@ -608,7 +427,7 @@ export async function flushSentry(timeout: number = 2000): Promise<void> {
  * Sends both a message and an error to verify integration.
  */
 export function sendTestEvents(): { success: boolean; message: string } {
-  if (!sentryClient) {
+  if (sentryClient === null) {
     return { success: false, message: 'Sentry not initialized' };
   }
 
@@ -631,18 +450,15 @@ export function sendTestEvents(): { success: boolean; message: string } {
 // ============================================================================
 
 // Expose on global context for popup.js and other non-bundled scripts
-if (typeof globalContext !== 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalContext as any).LockInSentry = {
-    initSentry,
-    captureError,
-    captureMessage,
-    setContext,
-    getSentryScope,
-    isSentryInitialized,
-    flushSentry,
-    sendTestEvents,
-    setTelemetryEnabled,
-    setupMv3Lifecycle,
-  };
-}
+globalWithChrome.LockInSentry = {
+  initSentry,
+  captureError,
+  captureMessage,
+  setContext,
+  getSentryScope,
+  isSentryInitialized,
+  flushSentry,
+  sendTestEvents,
+  setTelemetryEnabled,
+  setupMv3Lifecycle,
+};

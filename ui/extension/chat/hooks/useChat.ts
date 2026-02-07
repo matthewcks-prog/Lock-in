@@ -10,6 +10,7 @@ import type { UseChatOptions } from '../types';
 import { useChatMessages } from './useChatMessages';
 import { useChatHistory } from './useChatHistory';
 import { useSendMessage } from './useSendMessage';
+import { useSendMessageStream } from './useSendMessageStream';
 import { createSendMessage } from './createSendMessage';
 import { createSendSuccessHandler } from './createSendSuccessHandler';
 import { createSelectChat } from './createSelectChat';
@@ -25,9 +26,10 @@ import { useChatSessionState } from './useChatSessionState';
  * - Manages active chat session state
  * - Coordinates message sending with history updates
  * - Handles storage persistence for active chat ID
+ * - Optional streaming support (enableStreaming flag)
  */
 export function useChat(options: UseChatOptions): UseChatReturn {
-  const { apiClient, storage, mode, pageUrl, courseCode } = options;
+  const { apiClient, storage, pageUrl, courseCode, enableStreaming } = options;
   const queryClient = useQueryClient();
 
   const {
@@ -52,7 +54,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
   } = useChatMessages({
     apiClient,
     chatId: activeChatId,
-    mode,
   });
 
   const {
@@ -75,9 +76,9 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     upsertHistory,
   });
 
-  const { sendMessage: sendMessageMutation, isSending } = useSendMessage({
+  // Blocking (non-streaming) message send
+  const { sendMessage: sendMessageMutation, isSending: isSendingBlocking } = useSendMessage({
     apiClient,
-    mode,
     pageUrl,
     courseCode,
     onSuccess: handleSendSuccess,
@@ -86,8 +87,31 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     },
   });
 
+  // Streaming message send (only active when enableStreaming is true)
+  // Note: sendMessageStream and resetStream available for future UI integration
+  const {
+    // sendMessageStream, // Reserved for direct streaming API
+    isStreaming,
+    streamedContent,
+    meta: streamMeta,
+    error: streamError,
+    isComplete: streamComplete,
+    cancelPending: cancelStream,
+    // reset: resetStream, // Reserved for stream reset
+  } = useSendMessageStream({
+    apiClient,
+    pageUrl,
+    courseCode,
+    onSuccess: handleSendSuccess,
+    onError: (err) => {
+      setError(err);
+    },
+  });
+
+  // Combined sending state
+  const isSending = enableStreaming ? isStreaming : isSendingBlocking;
+
   const startNewChat = createStartNewChat({
-    mode,
     pageUrl,
     courseCode,
     setMessages,
@@ -103,7 +127,6 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     activeChatId,
     activeHistoryId,
     messages,
-    mode,
     pageUrl,
     courseCode,
     queryClient,
@@ -126,14 +149,14 @@ export function useChat(options: UseChatOptions): UseChatReturn {
 
   const selectChat = createSelectChat({
     apiClient,
-    mode,
     setActiveChatId,
     setActiveHistoryId,
     setError,
     setMessages,
   });
 
-  return {
+  // Build base return object
+  const baseReturn: UseChatReturn = {
     activeChatId,
     activeHistoryId,
     messages,
@@ -154,4 +177,18 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     isHistoryOpen,
     setIsHistoryOpen,
   };
+
+  // Add streaming fields only if streaming is enabled (exactOptionalPropertyTypes)
+  if (enableStreaming) {
+    baseReturn.streaming = {
+      isStreaming,
+      streamedContent,
+      meta: streamMeta,
+      error: streamError,
+      isComplete: streamComplete,
+    };
+    baseReturn.cancelStream = cancelStream;
+  }
+
+  return baseReturn;
 }

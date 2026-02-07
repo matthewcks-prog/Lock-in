@@ -151,7 +151,6 @@ backend/
 │   ├── embeddingsFactory.js    # Embeddings client factory
 │   ├── transcriptionFactory.js # Transcription client factory
 │   ├── storageRepository.js  # Supabase Storage wrapper (via repositories/)
-│   └── withFallback.js         # Retry + fallback wrapper
 ├── services/
 │   ├── llmClient.js            # LLM orchestration + prompts
 │   ├── embeddings.js           # Embeddings service

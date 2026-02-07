@@ -1,5 +1,7 @@
 const { chatService } = require('../../services/assistant/chatService');
 const { DEFAULT_CHAT_LIST_LIMIT, MAX_CHAT_LIST_LIMIT } = require('../../config');
+const { TEN } = require('../../constants/numbers');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 /**
  * Chat Controllers - Thin HTTP layer
@@ -15,7 +17,7 @@ function parseChatCursor(rawCursor) {
 
   const numeric = Number(trimmed);
   if (!Number.isNaN(numeric)) {
-    const ms = trimmed.length <= 10 ? numeric * 1000 : numeric;
+    const ms = trimmed.length <= TEN ? numeric * 1000 : numeric;
     const date = new Date(ms);
     return Number.isNaN(date.getTime()) ? null : date.toISOString();
   }
@@ -33,7 +35,7 @@ async function listChats(req, res, next) {
     const cursor = parseChatCursor(cursorParam);
 
     if (cursorParam && !cursor) {
-      return res.status(400).json({ error: 'Invalid cursor parameter' });
+      return res.status(HTTP_STATUS.BAD_REQUEST).json({ error: 'Invalid cursor parameter' });
     }
 
     const limit =
@@ -61,7 +63,7 @@ async function createChatSession(req, res, next) {
   try {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(500).json({ error: 'User context missing.' });
+      return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({ error: 'User context missing.' });
     }
 
     // Body already validated by Zod middleware
@@ -75,7 +77,7 @@ async function createChatSession(req, res, next) {
 
     const chat = await chatService.createChatSession({ userId, titleSeed: seed });
 
-    return res.status(201).json({
+    return res.status(HTTP_STATUS.CREATED).json({
       id: chat.id,
       title: chat.title,
       createdAt: chat.created_at,
@@ -95,13 +97,13 @@ async function deleteChat(req, res, next) {
 
     const result = await chatService.deleteChat({ userId, chatId });
     if (result?.notFound) {
-      return res.status(404).json({
+      return res.status(HTTP_STATUS.NOT_FOUND).json({
         error: 'Not Found',
         message: 'The requested chat does not exist for this user',
       });
     }
 
-    return res.status(200).json({
+    return res.status(HTTP_STATUS.OK).json({
       message: 'Chat deleted successfully',
     });
   } catch (error) {
@@ -117,7 +119,7 @@ async function listChatMessages(req, res, next) {
 
     const result = await chatService.listChatMessages({ userId, chatId });
     if (result?.notFound) {
-      return res.status(404).json({ error: 'Chat not found' });
+      return res.status(HTTP_STATUS.NOT_FOUND).json({ error: 'Chat not found' });
     }
 
     return res.json(result.messages);

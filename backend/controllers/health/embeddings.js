@@ -1,4 +1,5 @@
 const { getEmbeddingsStats, runEmbeddingsDiagnostics } = require('../../services/embeddings');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 async function getEmbeddingsDiagnostics(req, res) {
   try {
@@ -9,7 +10,7 @@ async function getEmbeddingsDiagnostics(req, res) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    return res.status(500).json({
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       status: 'error',
       message: error.message,
       timestamp: new Date().toISOString(),
@@ -26,7 +27,7 @@ function getEmbeddingsHealth(req, res) {
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    return res.status(500).json({
+    return res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       status: 'error',
       message: error.message,
       timestamp: new Date().toISOString(),

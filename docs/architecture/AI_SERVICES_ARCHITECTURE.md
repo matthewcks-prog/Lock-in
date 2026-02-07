@@ -111,7 +111,6 @@ backend/services/transcripts/transcriptsService.js   (consumer: job orchestratio
   - `transcriptionFactory.js` - Transcription clients (Azure Speech + Whisper)
   - `azureEmbeddingsClient.js` - Azure-specific embeddings implementation
   - `azureSpeechClient.js` - Azure Speech-specific implementation
-  - `withFallback.js` - Retry + fallback utility (shared)
 
 ### Service Layer (`backend/services/`)
 

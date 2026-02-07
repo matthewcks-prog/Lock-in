@@ -12,7 +12,7 @@
     return {};
   }
 
-  function createMessageValidators() {
+  function createFallbackValidators() {
     return {
       getTabId: () => ({ ok: true }),
       GET_TAB_ID: () => ({ ok: true }),
@@ -93,8 +93,54 @@
     };
   }
 
+  function createMessageValidators() {
+    const schemaRegistry = root.LockInMessageSchemas;
+    if (schemaRegistry?.createMessageValidators) {
+      return schemaRegistry.createMessageValidators();
+    }
+    return createFallbackValidators();
+  }
+
+  function createRuntimeValidators() {
+    const schemaRegistry = root.LockInMessageSchemas;
+    if (schemaRegistry?.createRuntimeValidators) {
+      return schemaRegistry.createRuntimeValidators();
+    }
+    return {
+      validateSettings: (value) => ({ ok: true, value: value || {} }),
+      validateSession: (value) => ({ ok: true, value: value || { chatHistory: [] } }),
+      validateAuthSession: (value) => ({
+        ok: true,
+        value: value || {
+          accessToken: '',
+          refreshToken: '',
+          expiresAt: 0,
+          tokenType: 'bearer',
+          user: null,
+        },
+      }),
+      validateTranscriptJobResponse: (value) => ({
+        ok: true,
+        value: value || { success: false },
+      }),
+      validateTranscriptJob: (value) => ({
+        ok: true,
+        value: value || {},
+      }),
+      validateTranscriptJobListResponse: (value) => ({
+        ok: true,
+        value: value || { success: false, jobs: [] },
+      }),
+      validateTranscriptCancelAllResponse: (value) => ({
+        ok: true,
+        value: value || { success: false, canceledIds: [] },
+      }),
+    };
+  }
+
   registry.validators = {
     getMessageType,
     createMessageValidators,
+    createRuntimeValidators,
   };
 })();

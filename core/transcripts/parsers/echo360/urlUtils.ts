@@ -9,7 +9,7 @@ export function extractSectionId(url: string): string | null {
       /\/section\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
     );
     const sectionId = match?.[1];
-    return sectionId ? sectionId.toLowerCase() : null;
+    return sectionId !== undefined && sectionId.length > 0 ? sectionId.toLowerCase() : null;
   } catch {
     return null;
   }

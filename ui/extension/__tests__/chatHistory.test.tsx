@@ -109,13 +109,7 @@ describe('LockInSidebar chat history', () => {
 
     await act(async () => {
       root.render(
-        <LockInSidebar
-          apiClient={apiClient}
-          isOpen={true}
-          onToggle={vi.fn()}
-          currentMode="explain"
-          storage={storage}
-        />,
+        <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
       );
     });
     await act(async () => {
@@ -164,13 +158,7 @@ describe('LockInSidebar chat history', () => {
 
     await act(async () => {
       root.render(
-        <LockInSidebar
-          apiClient={apiClient}
-          isOpen={true}
-          onToggle={vi.fn()}
-          currentMode="explain"
-          storage={storage}
-        />,
+        <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
       );
     });
     await act(async () => {
@@ -235,13 +223,7 @@ describe('LockInSidebar chat history', () => {
 
     await act(async () => {
       root.render(
-        <LockInSidebar
-          apiClient={apiClient}
-          isOpen={true}
-          onToggle={vi.fn()}
-          currentMode="explain"
-          storage={storage}
-        />,
+        <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
       );
     });
     await act(async () => {
@@ -295,13 +277,7 @@ describe('LockInSidebar chat history', () => {
 
     await act(async () => {
       root.render(
-        <LockInSidebar
-          apiClient={apiClient}
-          isOpen={true}
-          onToggle={vi.fn()}
-          currentMode="explain"
-          storage={storage}
-        />,
+        <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
       );
     });
     await act(async () => {

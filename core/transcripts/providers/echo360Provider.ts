@@ -1,4 +1,4 @@
-export * from '../types/echo360Types';
+export type * from '../types/echo360Types';
 export {
   extractSectionId,
   parseSyllabusResponse,

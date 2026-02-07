@@ -7,6 +7,17 @@
 
 import type { TranscriptResult, TranscriptSegment } from './types';
 
+const DECIMAL_RADIX = 10;
+const HEX_RADIX = 16;
+const MIN_TIMESTAMP_PARTS = 2;
+const MAX_TIMESTAMP_PARTS = 3;
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
+const MILLISECONDS_PER_SECOND = 1000;
+const MILLIS_PAD_LENGTH = 3;
+const TIMESTAMP_LINE_REGEX =
+  /^(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)\s*-->\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/;
+
 /**
  * Common HTML entities that appear in VTT captions
  */
@@ -34,6 +45,16 @@ const HTML_ENTITIES: Record<string, string> = {
   '&#8230;': '\u2026', // Ellipsis
 };
 
+const parseIntOrZero = (value: string): number => {
+  const parsed = Number.parseInt(value, DECIMAL_RADIX);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const parseFloatOrZero = (value: string): number => {
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
 /**
  * Decode HTML entities in text
  */
@@ -46,12 +67,12 @@ export function decodeHtmlEntities(text: string): string {
   }
 
   // Handle arbitrary numeric entities (&#NNN; or &#xHHH;)
-  result = result.replace(/&#(\d+);/g, (_, code) => {
-    return String.fromCharCode(parseInt(code, 10));
+  result = result.replace(/&#(\d+);/g, (_match: string, code: string) => {
+    return String.fromCharCode(Number.parseInt(code, DECIMAL_RADIX));
   });
 
-  result = result.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => {
-    return String.fromCharCode(parseInt(code, 16));
+  result = result.replace(/&#x([0-9a-fA-F]+);/g, (_match: string, code: string) => {
+    return String.fromCharCode(Number.parseInt(code, HEX_RADIX));
   });
 
   return result;
@@ -64,7 +85,7 @@ export function decodeHtmlEntities(text: string): string {
 export function parseVttTimestamp(timestamp: string): number {
   const parts = timestamp.trim().split(':');
 
-  if (parts.length < 2 || parts.length > 3) {
+  if (parts.length < MIN_TIMESTAMP_PARTS || parts.length > MAX_TIMESTAMP_PARTS) {
     return 0;
   }
 
@@ -73,16 +94,18 @@ export function parseVttTimestamp(timestamp: string): number {
   let seconds: number;
 
   const [part0, part1, part2] = parts;
-  if (parts.length === 3) {
-    hours = parseInt(part0 ?? '0', 10) || 0;
-    minutes = parseInt(part1 ?? '0', 10) || 0;
-    seconds = parseFloat(part2 ?? '0') || 0;
+  if (parts.length === MAX_TIMESTAMP_PARTS) {
+    hours = parseIntOrZero(part0 ?? '0');
+    minutes = parseIntOrZero(part1 ?? '0');
+    seconds = parseFloatOrZero(part2 ?? '0');
   } else {
-    minutes = parseInt(part0 ?? '0', 10) || 0;
-    seconds = parseFloat(part1 ?? '0') || 0;
+    minutes = parseIntOrZero(part0 ?? '0');
+    seconds = parseFloatOrZero(part1 ?? '0');
   }
 
-  return Math.round((hours * 3600 + minutes * 60 + seconds) * 1000);
+  return Math.round(
+    (hours * SECONDS_PER_HOUR + minutes * SECONDS_PER_MINUTE + seconds) * MILLISECONDS_PER_SECOND,
+  );
 }
 
 /**
@@ -101,6 +124,100 @@ function stripVttTags(text: string): string {
   return result.trim();
 }
 
+function skipHeaderLines(lines: string[]): number {
+  let index = 0;
+  while (index < lines.length) {
+    const line = (lines[index] ?? '').trim();
+    if (
+      line === '' ||
+      line.startsWith('WEBVTT') ||
+      line.startsWith('NOTE') ||
+      line.startsWith('STYLE')
+    ) {
+      index += 1;
+      if (line.startsWith('NOTE') || line.startsWith('STYLE')) {
+        while (index < lines.length && (lines[index] ?? '').trim() !== '') {
+          index += 1;
+        }
+      }
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function parseTimestampLine(line: string): { startMs: number; endMs: number } | null {
+  const timestampMatch = line.match(TIMESTAMP_LINE_REGEX);
+  if (timestampMatch === null) return null;
+  const startTimestamp = timestampMatch[1];
+  const endTimestamp = timestampMatch[2];
+  if (startTimestamp === undefined || endTimestamp === undefined) return null;
+  if (startTimestamp.length === 0 || endTimestamp.length === 0) return null;
+  return {
+    startMs: parseVttTimestamp(startTimestamp),
+    endMs: parseVttTimestamp(endTimestamp),
+  };
+}
+
+function collectCueText(lines: string[], startIndex: number): { text: string; nextIndex: number } {
+  const textLines: string[] = [];
+  let index = startIndex;
+  while (index < lines.length && (lines[index] ?? '').trim() !== '') {
+    textLines.push(lines[index] ?? '');
+    index += 1;
+  }
+  return { text: textLines.join(' '), nextIndex: index };
+}
+
+function normalizeCueText(rawText: string): string {
+  if (rawText.length === 0) return '';
+  let text = stripVttTags(rawText);
+  text = decodeHtmlEntities(text);
+  text = text.replace(/\s+/g, ' ').trim();
+  return text;
+}
+
+function buildDurationMs(segments: TranscriptSegment[]): number {
+  const lastSegment = segments[segments.length - 1];
+  if (lastSegment === undefined) return 0;
+  if (typeof lastSegment.endMs === 'number') return lastSegment.endMs;
+  return lastSegment.startMs;
+}
+
+function parseSegments(lines: string[]): TranscriptSegment[] {
+  const segments: TranscriptSegment[] = [];
+  let i = skipHeaderLines(lines);
+
+  while (i < lines.length) {
+    const line = (lines[i] ?? '').trim();
+
+    if (line === '') {
+      i += 1;
+      continue;
+    }
+
+    const timestamps = parseTimestampLine(line);
+    if (timestamps === null) {
+      i += 1;
+      continue;
+    }
+
+    const { startMs, endMs } = timestamps;
+    i += 1;
+
+    const { text: rawText, nextIndex } = collectCueText(lines, i);
+    i = nextIndex;
+
+    const text = normalizeCueText(rawText);
+    if (text.length > 0) {
+      segments.push({ startMs, endMs, text });
+    }
+  }
+
+  return segments;
+}
+
 /**
  * Parse WebVTT content into structured segments
  *
@@ -109,92 +226,13 @@ function stripVttTags(text: string): string {
  */
 export function parseWebVtt(vttContent: string): TranscriptResult {
   const lines = vttContent.split(/\r?\n/);
-  const segments: TranscriptSegment[] = [];
-
-  let i = 0;
-
-  // Skip WEBVTT header and any metadata
-  while (i < lines.length) {
-    const line = (lines[i] ?? '').trim();
-    if (
-      line === '' ||
-      line.startsWith('WEBVTT') ||
-      line.startsWith('NOTE') ||
-      line.startsWith('STYLE')
-    ) {
-      i++;
-      // Skip multi-line NOTE/STYLE blocks
-      if (line.startsWith('NOTE') || line.startsWith('STYLE')) {
-        while (i < lines.length && (lines[i] ?? '').trim() !== '') {
-          i++;
-        }
-      }
-      continue;
-    }
-    break;
-  }
-
-  // Parse cues
-  while (i < lines.length) {
-    const line = (lines[i] ?? '').trim();
-
-    // Skip empty lines and cue identifiers (numeric or text before timestamp)
-    if (line === '') {
-      i++;
-      continue;
-    }
-
-    // Check if this line is a timestamp line (contains -->)
-    const timestampMatch = line.match(
-      /^(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)\s*-->\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/,
-    );
-
-    if (!timestampMatch) {
-      // This might be a cue identifier, skip it
-      i++;
-      continue;
-    }
-
-    const startTimestamp = timestampMatch[1];
-    const endTimestamp = timestampMatch[2];
-    if (!startTimestamp || !endTimestamp) {
-      i++;
-      continue;
-    }
-    const startMs = parseVttTimestamp(startTimestamp);
-    const endMs = parseVttTimestamp(endTimestamp);
-
-    i++;
-
-    // Collect cue text (may span multiple lines until empty line)
-    const textLines: string[] = [];
-    while (i < lines.length && (lines[i] ?? '').trim() !== '') {
-      textLines.push(lines[i] ?? '');
-      i++;
-    }
-
-    if (textLines.length > 0) {
-      let text = textLines.join(' ');
-      text = stripVttTags(text);
-      text = decodeHtmlEntities(text);
-      text = text.replace(/\s+/g, ' ').trim();
-
-      if (text) {
-        segments.push({ startMs, endMs, text });
-      }
-    }
-  }
+  const segments = parseSegments(lines);
 
   // Build plain text version
-  const plainText = segments.map((s) => s.text).join(' ');
+  const plainText = segments.map((segment) => segment.text).join(' ');
 
   // Calculate duration from last segment
-  const lastSegment = segments[segments.length - 1];
-  const durationMs = lastSegment
-    ? typeof lastSegment.endMs === 'number'
-      ? lastSegment.endMs
-      : lastSegment.startMs
-    : 0;
+  const durationMs = buildDurationMs(segments);
 
   return {
     plainText,
@@ -224,11 +262,11 @@ export function formatAsVtt(segments: TranscriptSegment[]): string {
  * Format milliseconds as VTT timestamp (HH:MM:SS.mmm)
  */
 function formatVttTimestamp(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  const millis = ms % 1000;
+  const totalSeconds = Math.floor(ms / MILLISECONDS_PER_SECOND);
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
+  const millis = ms % MILLISECONDS_PER_SECOND;
 
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(MILLIS_PAD_LENGTH, '0')}`;
 }

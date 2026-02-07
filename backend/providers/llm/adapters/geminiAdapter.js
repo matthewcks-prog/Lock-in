@@ -14,6 +14,9 @@
 
 const { BaseAdapter } = require('./baseAdapter');
 const { fetchWithRetry } = require('../../../utils/networkRetry');
+const { parseGeminiResponse } = require('../responseSchemas');
+const { resolveTimeoutMs } = require('../requestBudget');
+const { createDeltaChunk, createFinalChunk, createStreamErrorChunk } = require('../contracts');
 
 const DEFAULT_MODEL = 'gemini-2.0-flash';
 const UPGRADED_MODEL = 'gemini-2.5-flash';
@@ -211,7 +214,8 @@ class GeminiAdapter extends BaseAdapter {
     return this.wrapError('chatCompletion', error);
   }
 
-  async _executeRequest(url, requestBody) {
+  async _executeRequest(url, requestBody, requestOptions = {}) {
+    const timeoutMs = resolveTimeoutMs(requestOptions.timeoutMs, REQUEST_TIMEOUT_MS);
     const response = await fetchWithRetry(
       url,
       {
@@ -221,10 +225,11 @@ class GeminiAdapter extends BaseAdapter {
           'X-goog-api-key': this.config.apiKey,
         },
         body: JSON.stringify(requestBody),
+        signal: requestOptions.signal,
       },
       {
         maxRetries: 0,
-        timeoutMs: REQUEST_TIMEOUT_MS,
+        timeoutMs,
         context: 'gemini chatCompletion',
       },
     );
@@ -259,9 +264,6 @@ class GeminiAdapter extends BaseAdapter {
     if (error.provider === this.getProviderName()) {
       return error;
     }
-    if (error.name === 'AbortError' || error.code === 'TIMEOUT' || error.name === 'TimeoutError') {
-      return this.wrapError('chatCompletion', new Error('Request timed out after 60s'));
-    }
     return this.wrapError('chatCompletion', error);
   }
 
@@ -278,9 +280,13 @@ class GeminiAdapter extends BaseAdapter {
     const url = `${this.baseUrl}/models/${selectedModel}:generateContent`;
 
     try {
-      const data = await this._executeRequest(url, requestBody);
-      const content = this._extractContent(data);
-      const usage = this._extractUsage(data);
+      const data = await this._executeRequest(url, requestBody, {
+        timeoutMs: options.timeoutMs,
+        signal: options.signal,
+      });
+      const parsed = parseGeminiResponse(data);
+      const content = this._extractContent(parsed);
+      const usage = this._extractUsage(parsed);
 
       return {
         content,
@@ -290,6 +296,190 @@ class GeminiAdapter extends BaseAdapter {
       };
     } catch (error) {
       throw this._wrapChatCompletionError(error);
+    }
+  }
+
+  /**
+   * Check if this adapter supports native streaming
+   * @returns {boolean}
+   */
+  supportsStreaming() {
+    return true;
+  }
+
+  /**
+   * Execute streaming chat completion via Gemini REST API
+   * Uses streamGenerateContent endpoint with SSE format.
+   *
+   * @param {import('../contracts').ChatMessage[]} messages
+   * @param {import('../contracts').ChatCompletionOptions} [options]
+   * @returns {AsyncGenerator<import('../contracts').ProviderStreamChunk>}
+   */
+  async *chatCompletionStream(messages, options = {}) {
+    const { systemInstruction, contents } = this._convertMessages(messages);
+    const selectedModel = this._selectModel(messages, options);
+    const requestBody = this._buildRequestBody(systemInstruction, contents, options);
+    const url = `${this.baseUrl}/models/${selectedModel}:streamGenerateContent?alt=sse`;
+
+    const timeoutMs = resolveTimeoutMs(options.timeoutMs, REQUEST_TIMEOUT_MS);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    // Link external signal if provided
+    if (options.signal) {
+      if (options.signal.aborted) {
+        controller.abort();
+      } else {
+        options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+      }
+    }
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': this.config.apiKey,
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw this._wrapChatCompletionError(error);
+    }
+
+    if (!response.ok) {
+      clearTimeout(timeoutId);
+      throw await this._buildHttpError(response);
+    }
+
+    // Stream the response
+    let accumulatedContent = '';
+    let usage = null;
+
+    try {
+      yield* this._parseSSEStream(response.body, (chunk) => {
+        if (chunk.content) {
+          accumulatedContent += chunk.content;
+        }
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+      });
+
+      // Yield final chunk with accumulated content
+      yield createFinalChunk(accumulatedContent, usage);
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        yield createStreamErrorChunk('ABORTED', 'Request was cancelled', false);
+      } else {
+        yield createStreamErrorChunk(
+          'UPSTREAM_ERROR',
+          error.message || 'Stream processing failed',
+          true,
+        );
+      }
+      throw this._wrapChatCompletionError(error);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Parse Gemini SSE stream and yield delta chunks
+   * @private
+   * @param {ReadableStream} body - Response body stream
+   * @param {Function} onChunk - Callback to track accumulated state
+   * @returns {AsyncGenerator<import('../contracts').ProviderStreamChunk>}
+   */
+  async *_parseSSEStream(body, onChunk) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE events (separated by double newlines)
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || ''; // Keep incomplete event in buffer
+
+        for (const event of events) {
+          const chunk = this._parseSSEEvent(event);
+          if (chunk) {
+            onChunk(chunk);
+            if (chunk.type === 'delta') {
+              yield chunk;
+            }
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const chunk = this._parseSSEEvent(buffer);
+        if (chunk) {
+          onChunk(chunk);
+          if (chunk.type === 'delta') {
+            yield chunk;
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  /**
+   * Parse a single SSE event into a stream chunk
+   * @private
+   * @param {string} event - Raw SSE event text
+   * @returns {import('../contracts').ProviderStreamChunk|null}
+   */
+  _parseSSEEvent(event) {
+    const lines = event.split('\n');
+    let data = '';
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        data = line.slice(6);
+      }
+    }
+
+    if (!data) return null;
+
+    try {
+      const parsed = JSON.parse(data);
+
+      // Extract text from Gemini response format
+      const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        return createDeltaChunk(text);
+      }
+
+      // Extract usage metadata if present (usually in final chunk)
+      if (parsed.usageMetadata) {
+        return {
+          type: 'delta',
+          content: '',
+          usage: {
+            prompt_tokens: parsed.usageMetadata.promptTokenCount || 0,
+            completion_tokens: parsed.usageMetadata.candidatesTokenCount || 0,
+            total_tokens: parsed.usageMetadata.totalTokenCount || 0,
+          },
+        };
+      }
+
+      return null;
+    } catch {
+      // Ignore parse errors for malformed events
+      return null;
     }
   }
 }

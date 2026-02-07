@@ -2,6 +2,7 @@ const { supabase } = require('../db/supabaseClient');
 const config = require('../config');
 const { createJwtVerifierForConfig } = require('../services/auth');
 const { logger } = require('../observability');
+const HTTP_STATUS = require('../constants/httpStatus');
 
 /**
  * Authentication Middleware for Supabase
@@ -88,6 +89,16 @@ function extractBearerToken(authHeader) {
  * Extracts the JWT from the Authorization header, verifies it using
  * the configured strategies, and attaches the user to req.user.
  *
+ * Error Handling:
+ * - 401 Unauthorized: Invalid/expired token or missing auth header
+ * - 503 Service Unavailable: All auth strategies failed due to circuit breaker
+ * - 500 Internal Server Error: Unexpected errors
+ *
+ * Circuit Breaker Resilience:
+ * - When Supabase SDK verification fails due to circuit breaker, fallback
+ *   strategies (JWKS, symmetric) are attempted automatically
+ * - Returns 503 only when ALL strategies are unavailable
+ *
  * @param {Request} req - Express request
  * @param {Response} res - Express response
  * @param {Function} next - Express next function
@@ -97,7 +108,7 @@ async function requireSupabaseUser(req, res, next) {
     const token = extractBearerToken(req.headers.authorization);
 
     if (!token) {
-      return res.status(401).json({
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         error: 'Missing or invalid Authorization header',
         code: 'auth/missing-token',
       });
@@ -108,12 +119,26 @@ async function requireSupabaseUser(req, res, next) {
     const result = await verifier.verify(token);
 
     if (!result.valid) {
+      // Check if this failure is due to service unavailability (circuit breaker)
+      // Return 503 instead of 401 to signal transient error
+      if (result.isServiceUnavailable) {
+        logger.warn('[Auth] All auth strategies unavailable (circuit breaker):', {
+          error: result.error,
+        });
+
+        return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+          error: 'Authentication service temporarily unavailable',
+          code: 'auth/service-unavailable',
+          retryAfter: 30, // Suggest retry after 30 seconds
+        });
+      }
+
       logger.warn('[Auth] Token verification failed:', {
         error: result.error,
         strategy: result.strategy,
       });
 
-      return res.status(401).json({
+      return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         error: 'Invalid or expired token',
         code: 'auth/invalid-token',
       });
@@ -130,12 +155,27 @@ async function requireSupabaseUser(req, res, next) {
 
     next();
   } catch (error) {
+    // Check for circuit breaker errors that weren't caught by the verification service
+    const isCircuitError =
+      error.name === 'CircuitOpenError' ||
+      error.code === 'SERVICE_UNAVAILABLE' ||
+      (error.message && error.message.includes('circuit open'));
+
+    if (isCircuitError) {
+      logger.warn('[Auth] Circuit breaker open:', { error: error.message });
+      return res.status(HTTP_STATUS.SERVICE_UNAVAILABLE).json({
+        error: 'Authentication service temporarily unavailable',
+        code: 'auth/service-unavailable',
+        retryAfter: 30,
+      });
+    }
+
     logger.error('[Auth] Unexpected authentication error:', {
       error: error.message,
       stack: error.stack,
     });
 
-    res.status(500).json({
+    res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       error: 'Authentication service error',
       code: 'auth/internal-error',
     });

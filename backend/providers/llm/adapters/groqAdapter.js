@@ -13,6 +13,8 @@
 
 const { BaseAdapter } = require('./baseAdapter');
 const { fetchWithRetry } = require('../../../utils/networkRetry');
+const { parseGroqResponse } = require('../responseSchemas');
+const { resolveTimeoutMs } = require('../requestBudget');
 
 const DEFAULT_MODEL = 'llama-3.1-8b-instant';
 const FALLBACK_MODEL = 'llama-3.3-70b-versatile';
@@ -71,7 +73,8 @@ class GroqAdapter extends BaseAdapter {
     return this.wrapError('chatCompletion', error);
   }
 
-  async _executeRequest(url, requestBody) {
+  async _executeRequest(url, requestBody, requestOptions = {}) {
+    const timeoutMs = resolveTimeoutMs(requestOptions.timeoutMs, REQUEST_TIMEOUT_MS);
     const response = await fetchWithRetry(
       url,
       {
@@ -81,10 +84,11 @@ class GroqAdapter extends BaseAdapter {
           Authorization: `Bearer ${this.config.apiKey}`,
         },
         body: JSON.stringify(requestBody),
+        signal: requestOptions.signal,
       },
       {
         maxRetries: 0,
-        timeoutMs: REQUEST_TIMEOUT_MS,
+        timeoutMs,
         context: 'groq chatCompletion',
       },
     );
@@ -119,9 +123,6 @@ class GroqAdapter extends BaseAdapter {
     if (error.provider === this.getProviderName()) {
       return error;
     }
-    if (error.name === 'AbortError' || error.code === 'TIMEOUT' || error.name === 'TimeoutError') {
-      return this.wrapError('chatCompletion', new Error('Request timed out after 60s'));
-    }
     return this.wrapError('chatCompletion', error);
   }
 
@@ -137,14 +138,18 @@ class GroqAdapter extends BaseAdapter {
     const url = `${this.baseUrl}/chat/completions`;
 
     try {
-      const data = await this._executeRequest(url, requestBody);
-      const content = this._extractContent(data);
-      const usage = this._extractUsage(data);
+      const data = await this._executeRequest(url, requestBody, {
+        timeoutMs: options.timeoutMs,
+        signal: options.signal,
+      });
+      const parsed = parseGroqResponse(data);
+      const content = this._extractContent(parsed);
+      const usage = this._extractUsage(parsed);
 
       return {
         content,
         provider: this.getProviderName(),
-        model: data.model || model,
+        model: parsed.model || model,
         usage,
       };
     } catch (error) {

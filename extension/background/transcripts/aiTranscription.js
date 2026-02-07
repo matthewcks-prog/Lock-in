@@ -11,6 +11,7 @@
     errors,
     contentScriptMedia,
     log,
+    validators,
   }) {
     const AI_UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
     const AI_POLL_INTERVAL_MS = 3000;
@@ -33,7 +34,7 @@
         chromeClient,
         chunkBytes: AI_UPLOAD_CHUNK_BYTES,
       }) || null;
-    const requests = requestsFactory?.({ config, networkUtils, aiUtils }) || null;
+    const requests = requestsFactory?.({ config, networkUtils, aiUtils, validators }) || null;
     const uploadService =
       uploadServiceFactory?.({
         config,
@@ -51,6 +52,7 @@
             fetchJsonWithAuth: requests.fetchJsonWithAuth,
             pollIntervalMs: AI_POLL_INTERVAL_MS,
             pollMaxAttempts: AI_POLL_MAX_ATTEMPTS,
+            validators,
           })
         : null;
 

@@ -64,7 +64,6 @@
 
     async function applySession(session) {
       stateStore.setPendingPrefill(session.selection || '');
-      stateStore.setMode(session.mode || 'explain');
 
       if (session.chatId) {
         await stateStore.setChatId(session.chatId);

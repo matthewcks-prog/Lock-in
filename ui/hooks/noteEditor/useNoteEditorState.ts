@@ -151,7 +151,7 @@ export function useNoteEditorState({
 
     let cancelled = false;
 
-    (async () => {
+    void (async () => {
       try {
         const loaded = await service.getNote(targetId);
         if (cancelled) return;

@@ -8,14 +8,33 @@
     fetchJsonWithAuth,
     pollIntervalMs,
     pollMaxAttempts,
+    validators,
   }) {
+    const runtimeValidators =
+      validators || registry.validators?.createRuntimeValidators?.() || null;
+    const validateJobResponse =
+      runtimeValidators?.validateTranscriptJobResponse ||
+      ((value) => ({ ok: true, value: value || { success: false } }));
+    const validateJob =
+      runtimeValidators?.validateTranscriptJob || ((value) => ({ ok: true, value: value || {} }));
+
     async function fetchJobStatus({ jobId, token, signal }) {
       const backendUrl = config.getBackendUrl();
       const data = await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}`, token, {
         method: 'GET',
         signal,
       });
-      return data?.job || data;
+      const parsed = validateJobResponse(data);
+      if (parsed.ok && parsed.value?.job) {
+        return parsed.value.job;
+      }
+
+      const jobParsed = validateJob(data);
+      if (jobParsed.ok) {
+        return jobParsed.value;
+      }
+
+      throw new Error(parsed.error || jobParsed.error || 'Invalid transcript job status response');
     }
 
     function resolveJobState(job) {

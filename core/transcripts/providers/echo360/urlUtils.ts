@@ -11,6 +11,16 @@ const ECHO360_DOMAIN_SUFFIXES = [
   'echo360qa.dev',
 ];
 
+const isNonEmptyString = (value: string | null | undefined): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const firstNonEmptyString = (values: Array<string | null | undefined>): string | null => {
+  for (const value of values) {
+    if (isNonEmptyString(value)) return value;
+  }
+  return null;
+};
+
 /**
  * Check if URL is an Echo360 section/course page (not a single lesson view)
  */
@@ -18,7 +28,7 @@ export function isEcho360SectionPage(url: string): boolean {
   if (!isEcho360Url(url)) return false;
 
   const sectionId = extractSectionId(url);
-  if (!sectionId) return false;
+  if (sectionId === null) return false;
 
   try {
     const parsed = new URL(url);
@@ -58,6 +68,39 @@ function safeDecodeUri(value: string): string {
   }
 }
 
+function tryParseUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function hasIdentifiers(info: Echo360Info | null): info is Echo360Info {
+  return info !== null && (isNonEmptyString(info.lessonId) || isNonEmptyString(info.mediaId));
+}
+
+function getFirstParam(url: URL, names: string[]): string | null {
+  const values = names.map((name) => url.searchParams.get(name));
+  return firstNonEmptyString(values);
+}
+
+function tryExtractEmbeddedInfo(rawUrl: string): Echo360Info | null {
+  const outerUrl = tryParseUrl(rawUrl);
+  if (outerUrl === null) return null;
+
+  for (const [, value] of outerUrl.searchParams.entries()) {
+    const decodedValue = safeDecodeUri(value);
+    if (!decodedValue.includes('echo360')) continue;
+    const innerInfo = extractEcho360Info(decodedValue);
+    if (hasIdentifiers(innerInfo)) {
+      return innerInfo;
+    }
+  }
+
+  return null;
+}
+
 // ============================================================================//
 // ID Extraction
 // ============================================================================//
@@ -68,8 +111,9 @@ function safeDecodeUri(value: string): string {
  */
 function extractLessonIdFromPath(pathname: string): string | null {
   const match = pathname.match(/\/lessons?\/([^\/]+)/i);
-  if (match?.[1]) {
-    return safeDecodeUri(match[1]);
+  const lessonId = match?.[1];
+  if (lessonId !== undefined && lessonId.length > 0) {
+    return safeDecodeUri(lessonId);
   }
   return null;
 }
@@ -82,58 +126,38 @@ function extractMediaIdFromPath(pathname: string): string | null {
     /\/medias?\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
   );
   const mediaId = match?.[1];
-  return mediaId ? mediaId.toLowerCase() : null;
+  return mediaId !== undefined && mediaId.length > 0 ? mediaId.toLowerCase() : null;
 }
 
 /**
  * Extract Echo360 info from a URL
  */
 export function extractEcho360Info(rawUrl: string): Echo360Info | null {
-  try {
-    // First check if this URL contains an embedded Echo360 URL (e.g., LTI launch URLs)
-    const decoded = safeDecodeUri(rawUrl);
+  const decoded = safeDecodeUri(rawUrl);
+  const embedded = tryExtractEmbeddedInfo(decoded);
+  if (embedded !== null) return embedded;
 
-    // Look for embedded Echo360 URL in query params
-    try {
-      const outerUrl = new URL(decoded);
-      for (const [, value] of outerUrl.searchParams.entries()) {
-        const decodedValue = safeDecodeUri(value);
-        if (decodedValue.includes('echo360')) {
-          const innerInfo = extractEcho360Info(decodedValue);
-          if (innerInfo?.lessonId || innerInfo?.mediaId) {
-            return innerInfo;
-          }
-        }
-      }
-    } catch {
-      // Not a valid URL with params, continue
-    }
+  const url = tryParseUrl(decoded);
+  if (url === null) return null;
+  if (!isEcho360Domain(url.hostname)) return null;
 
-    const url = new URL(decoded);
+  const lessonId = extractLessonIdFromPath(url.pathname);
+  const mediaId = extractMediaIdFromPath(url.pathname);
 
-    if (!isEcho360Domain(url.hostname)) {
-      return null;
-    }
+  const paramLessonId = getFirstParam(url, ['lessonId', 'lesson_id']);
+  const paramMediaId = getFirstParam(url, ['mediaId', 'media_id']);
 
-    const lessonId = extractLessonIdFromPath(url.pathname);
-    const mediaId = extractMediaIdFromPath(url.pathname);
-
-    const paramLessonId = url.searchParams.get('lessonId') || url.searchParams.get('lesson_id');
-    const paramMediaId = url.searchParams.get('mediaId') || url.searchParams.get('media_id');
-
-    const info: Echo360Info = {
-      baseUrl: url.origin,
-    };
-    const resolvedLessonId = lessonId || paramLessonId || null;
-    const resolvedMediaId = mediaId || (paramMediaId ? paramMediaId.toLowerCase() : null);
-    if (resolvedLessonId) {
-      info.lessonId = resolvedLessonId;
-    }
-    if (resolvedMediaId) {
-      info.mediaId = resolvedMediaId;
-    }
-    return info;
-  } catch {
-    return null;
+  const info: Echo360Info = {
+    baseUrl: url.origin,
+  };
+  const normalizedParamMediaId = paramMediaId !== null ? paramMediaId.toLowerCase() : null;
+  const resolvedLessonId = firstNonEmptyString([lessonId, paramLessonId]);
+  const resolvedMediaId = firstNonEmptyString([mediaId, normalizedParamMediaId]);
+  if (resolvedLessonId !== null) {
+    info.lessonId = resolvedLessonId;
   }
+  if (resolvedMediaId !== null) {
+    info.mediaId = resolvedMediaId;
+  }
+  return info;
 }

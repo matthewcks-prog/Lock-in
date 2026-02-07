@@ -62,7 +62,6 @@ function createContentHelpers() {
 
   const state = {
     isSidebarOpen: false,
-    currentMode: 'explain',
     pendingPrefill: '',
     currentActiveTab: 'chat',
   };
@@ -81,10 +80,6 @@ function createContentHelpers() {
       state.isSidebarOpen = isOpen;
       subscribers.forEach((cb) => cb({ ...state }));
     }),
-    persistMode: vi.fn(async (mode: string) => {
-      state.currentMode = mode;
-    }),
-    determineDefaultMode: vi.fn(() => state.currentMode),
   };
 
   const sidebarInstance = {

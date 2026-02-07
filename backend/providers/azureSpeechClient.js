@@ -13,12 +13,20 @@
  */
 
 const axios = require('axios');
+const { TEN, THOUSAND, SIXTY } = require('../constants/numbers');
+const HTTP_STATUS = require('../constants/httpStatus');
+
+const DEFAULT_LANGUAGE = 'en-US';
+const DEFAULT_FORMAT = 'wav';
+const DEFAULT_TIMEOUT_MS = SIXTY * THOUSAND;
+const TICKS_PER_SECOND = TEN * THOUSAND * THOUSAND;
+const SILENCE_WAV_HEADER = Buffer.from('RIFF$\u0000\u0000\u0000', 'latin1');
 
 /**
  * Azure Speech service configuration
  */
 class AzureSpeechConfig {
-  constructor({ apiKey, region, language = 'en-US' }) {
+  constructor({ apiKey, region, language = DEFAULT_LANGUAGE }) {
     if (!apiKey) {
       throw new Error('AZURE_SPEECH_API_KEY is required');
     }
@@ -57,7 +65,7 @@ class AzureSpeechClient {
    */
   async transcribe(audioData, options = {}) {
     const language = options.language || this.config.language;
-    const format = options.format || 'wav';
+    const format = options.format || DEFAULT_FORMAT;
 
     try {
       const response = await axios.post(this.config.getEndpoint(language), audioData, {
@@ -67,7 +75,7 @@ class AzureSpeechClient {
           Accept: 'application/json',
         },
         maxBodyLength: Infinity,
-        timeout: 60000, // 60 second timeout
+        timeout: DEFAULT_TIMEOUT_MS, // 60 second timeout
       });
 
       return this.parseResponse(response.data);
@@ -103,7 +111,7 @@ class AzureSpeechClient {
       return {
         text: data.DisplayText || '',
         language: data.Language,
-        duration: data.Duration / 10000000, // Convert from ticks to seconds
+        duration: data.Duration / TICKS_PER_SECOND, // Convert from ticks to seconds
         confidence: data.Confidence,
       };
     }
@@ -120,17 +128,17 @@ class AzureSpeechClient {
       const message = error.response.data?.error?.message || error.message;
 
       // Quota exceeded or rate limit
-      if (status === 429) {
+      if (status === HTTP_STATUS.TOO_MANY_REQUESTS) {
         return new Error('Azure Speech quota exceeded or rate limited');
       }
 
       // Authentication errors
-      if (status === 401 || status === 403) {
+      if (status === HTTP_STATUS.UNAUTHORIZED || status === HTTP_STATUS.FORBIDDEN) {
         return new Error('Azure Speech authentication failed: Invalid API key or region');
       }
 
       // Service errors
-      if (status >= 500) {
+      if (status >= HTTP_STATUS.INTERNAL_SERVER_ERROR) {
         return new Error(`Azure Speech service error: ${message}`);
       }
 
@@ -150,8 +158,7 @@ class AzureSpeechClient {
   async healthCheck() {
     try {
       // Simple health check with minimal audio data
-      const silenceBuffer = Buffer.from([0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00]);
-      await this.transcribe(silenceBuffer, { format: 'wav' });
+      await this.transcribe(SILENCE_WAV_HEADER, { format: DEFAULT_FORMAT });
       return true;
     } catch {
       return false;

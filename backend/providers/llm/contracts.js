@@ -20,6 +20,10 @@
  * @property {number} [temperature=0.7] - Sampling temperature (0-2)
  * @property {number} [maxTokens=1024] - Maximum tokens to generate
  * @property {Object} [responseFormat] - Response format (e.g., { type: 'json_object' })
+ * @property {number} [timeoutMs] - Per-provider attempt timeout (ms)
+ * @property {number} [overallTimeoutMs] - Overall provider chain timeout (ms)
+ * @property {number} [queueTimeoutMs] - Max time to wait in rate limiter queue (ms)
+ * @property {AbortSignal} [signal] - Abort signal for cancellation
  * @property {string} [operation] - Operation name for logging
  */
 
@@ -33,6 +37,71 @@
  * @property {number} [usage.prompt_tokens] - Input tokens
  * @property {number} [usage.completion_tokens] - Output tokens
  * @property {number} [usage.total_tokens] - Total tokens
+ */
+
+/**
+ * Streaming chunk types for SSE events
+ * @typedef {'meta'|'delta'|'final'|'error'|'done'} StreamChunkType
+ */
+
+/**
+ * Metadata chunk - sent first, contains request context
+ * @typedef {Object} StreamMetaChunk
+ * @property {'meta'} type
+ * @property {string} chatId - Chat session ID
+ * @property {string} messageId - Assistant message ID
+ * @property {string} requestId - Request trace ID
+ * @property {string} model - Model being used
+ * @property {string} provider - Provider name
+ */
+
+/**
+ * Delta chunk - incremental content updates
+ * @typedef {Object} StreamDeltaChunk
+ * @property {'delta'} type
+ * @property {string} content - Token/text fragment
+ */
+
+/**
+ * Final chunk - complete response with metadata
+ * @typedef {Object} StreamFinalChunk
+ * @property {'final'} type
+ * @property {string} content - Full accumulated content
+ * @property {Object} [usage] - Token usage statistics
+ * @property {number} [usage.prompt_tokens]
+ * @property {number} [usage.completion_tokens]
+ * @property {number} [usage.total_tokens]
+ */
+
+/**
+ * Error chunk - structured error for SSE
+ * @typedef {Object} StreamErrorChunk
+ * @property {'error'} type
+ * @property {string} code - Error code (e.g., 'RATE_LIMIT', 'UPSTREAM_ERROR')
+ * @property {string} message - Human-readable error message
+ * @property {boolean} retryable - Whether client should retry
+ */
+
+/**
+ * Done chunk - signals stream completion
+ * @typedef {Object} StreamDoneChunk
+ * @property {'done'} type
+ */
+
+/**
+ * Union type for all streaming chunks
+ * @typedef {StreamMetaChunk|StreamDeltaChunk|StreamFinalChunk|StreamErrorChunk|StreamDoneChunk} StreamChunk
+ */
+
+/**
+ * Provider-level streaming chunk (before adding request metadata)
+ * @typedef {Object} ProviderStreamChunk
+ * @property {'delta'|'final'|'error'} type
+ * @property {string} [content] - For delta/final types
+ * @property {Object} [usage] - For final type
+ * @property {string} [code] - For error type
+ * @property {string} [message] - For error type
+ * @property {boolean} [retryable] - For error type
  */
 
 /**
@@ -83,6 +152,19 @@ const NO_FALLBACK_ERROR_PATTERNS = [
   // Note: Removed '400', '401', '403' from patterns - check status codes directly
 ];
 
+const { AppError } = require('../../errors');
+
+function getErrorStatus(error) {
+  return (
+    error?.status ??
+    error?.statusCode ??
+    error?.response?.status ??
+    error?.originalError?.status ??
+    error?.originalError?.statusCode ??
+    null
+  );
+}
+
 /**
  * Determine if an error should trigger fallback to next provider
  * @param {Error} error - The error to evaluate
@@ -90,7 +172,7 @@ const NO_FALLBACK_ERROR_PATTERNS = [
  */
 function shouldFallback(error) {
   const message = (error?.message || String(error)).toLowerCase();
-  const status = error?.status || error?.response?.status;
+  const status = getErrorStatus(error);
 
   // First check HTTP status codes - these are definitive
   if (status === 400 || status === 401 || status === 403) {
@@ -121,6 +203,14 @@ function shouldFallback(error) {
   return false;
 }
 
+function resolveErrorCode(status) {
+  if (status === 429) return 'RATE_LIMIT';
+  if (status === 400) return 'INVALID_INPUT';
+  if (status === 401 || status === 403) return 'AUTH_REQUIRED';
+  if (typeof status === 'number' && status >= 500) return 'BAD_GATEWAY';
+  return 'INTERNAL_ERROR';
+}
+
 /**
  * Create a standardized provider error
  * @param {string} provider - Provider name
@@ -129,12 +219,31 @@ function shouldFallback(error) {
  * @returns {Error} - Standardized error with metadata
  */
 function createProviderError(provider, operation, originalError) {
-  const error = new Error(`[${provider}] ${operation} failed: ${originalError.message}`);
+  const status = getErrorStatus(originalError);
+  const message = `[${provider}] ${operation} failed: ${originalError?.message || 'Unknown error'}`;
+  const baseDetails = { provider, operation };
+  const code = originalError instanceof AppError ? originalError.code : resolveErrorCode(status);
+  const statusCode =
+    originalError instanceof AppError
+      ? (originalError.statusCode ?? status)
+      : typeof status === 'number'
+        ? status
+        : null;
+  const details =
+    originalError instanceof AppError ? { ...baseDetails, ...originalError.details } : baseDetails;
+
+  const error = new AppError(message, code, statusCode, details);
   error.provider = provider;
   error.operation = operation;
   error.originalError = originalError;
-  error.status = originalError?.status || originalError?.response?.status;
+  error.status = status ?? error.statusCode;
   error.shouldFallback = shouldFallback(originalError);
+  if (originalError?.headers) {
+    error.headers = originalError.headers;
+  }
+  if (originalError?.response) {
+    error.response = originalError.response;
+  }
   return error;
 }
 
@@ -147,6 +256,12 @@ function createProviderError(provider, operation, originalError) {
  * @returns {number|null} - Seconds to wait, or null if not found
  */
 function parseRetryAfter(error) {
+  if (Number.isFinite(error?.retryAfter) && error.retryAfter > 0) {
+    return Math.floor(error.retryAfter);
+  }
+  if (Number.isFinite(error?.retryAfterSeconds) && error.retryAfterSeconds > 0) {
+    return Math.floor(error.retryAfterSeconds);
+  }
   // Check Retry-After header (HTTP standard)
   const header =
     error.headers?.get?.('Retry-After') ||
@@ -195,4 +310,62 @@ module.exports = {
   shouldFallback,
   createProviderError,
   parseRetryAfter,
+  // Streaming chunk creators
+  createDeltaChunk,
+  createFinalChunk,
+  createStreamErrorChunk,
+  createDoneChunk,
+  createMetaChunk,
 };
+
+/**
+ * Create a delta (incremental content) chunk
+ * @param {string} content - Token fragment
+ * @returns {ProviderStreamChunk}
+ */
+function createDeltaChunk(content) {
+  return { type: 'delta', content };
+}
+
+/**
+ * Create a final chunk with complete content and usage
+ * @param {string} content - Full accumulated content
+ * @param {Object} [usage] - Token usage stats
+ * @returns {ProviderStreamChunk}
+ */
+function createFinalChunk(content, usage = null) {
+  return { type: 'final', content, ...(usage && { usage }) };
+}
+
+/**
+ * Create a streaming error chunk
+ * @param {string} code - Error code
+ * @param {string} message - Error message
+ * @param {boolean} [retryable=false] - Whether client should retry
+ * @returns {ProviderStreamChunk}
+ */
+function createStreamErrorChunk(code, message, retryable = false) {
+  return { type: 'error', code, message, retryable };
+}
+
+/**
+ * Create a done chunk (stream terminator)
+ * @returns {StreamDoneChunk}
+ */
+function createDoneChunk() {
+  return { type: 'done' };
+}
+
+/**
+ * Create a meta chunk with request context
+ * @param {Object} meta
+ * @param {string} meta.chatId
+ * @param {string} meta.messageId
+ * @param {string} meta.requestId
+ * @param {string} meta.model
+ * @param {string} meta.provider
+ * @returns {StreamMetaChunk}
+ */
+function createMetaChunk({ chatId, messageId, requestId, model, provider }) {
+  return { type: 'meta', chatId, messageId, requestId, model, provider };
+}

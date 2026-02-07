@@ -11,18 +11,15 @@
 const { logger: baseLogger } = require('../../observability');
 const { DAILY_REQUEST_LIMIT } = require('../../config');
 const { createIdempotencyStore } = require('../../utils/idempotency');
-const {
-  buildInitialChatTitle,
-  extractFirstUserMessage,
-  FALLBACK_TITLE,
-} = require('../../utils/chatTitle');
+const { buildRequestContext, shouldGenerateTitle } = require('./assistantFlow');
 const chatRepository = require('../../repositories/chatRepository');
-const { generateStructuredStudyResponse } = require('../llmClient');
+const { createChatCompletion } = require('../llm/providerChain');
+const { buildStructuredStudyMessages } = require('../llm/structuredMessages');
+const { clampHistory } = require('../llm/history');
 const { checkDailyLimit } = require('../rateLimitService');
 const { chatAssetsService: defaultChatAssetsService } = require('./chatAssetsService');
 const { chatTitleService: defaultChatTitleService } = require('./chatTitleService');
 
-const ATTACHMENT_ONLY_TITLE_SEED = 'Attachment-based question';
 const defaultIdempotencyStore = createIdempotencyStore();
 
 function createRequestError(status, message) {
@@ -39,7 +36,7 @@ function createAssistantService(deps = {}) {
   const services = {
     logger: deps.logger ?? baseLogger,
     chatRepository: deps.chatRepository ?? chatRepository,
-    llmClient: deps.llmClient ?? { generateStructuredStudyResponse },
+    llmClient: deps.llmClient ?? { createChatCompletion },
     rateLimitService: deps.rateLimitService ?? { checkDailyLimit },
     chatAssetsService: deps.chatAssetsService ?? defaultChatAssetsService,
     chatTitleService: deps.chatTitleService ?? defaultChatTitleService,
@@ -49,35 +46,23 @@ function createAssistantService(deps = {}) {
   async function handleLockinRequest({ userId, payload, idempotencyKey } = {}) {
     // Payload is ALREADY validated by Zod middleware - no duplicate validation needed
     const {
-      selection = '',
-      mode,
-      chatHistory = [],
+      selection,
+      chatHistory,
       newUserMessage,
-      chatId: incomingChatId,
+      incomingChatId,
       pageContext,
       pageUrl,
       courseCode,
-      language = 'en',
-      attachments = [],
-    } = payload || {};
-
-    // Determine request type based on chat history
-    const isInitialRequest = chatHistory.length === 0;
-    const effectiveMode = isInitialRequest ? mode : 'general';
-
-    // Prepare text values
-    const trimmedSelection = typeof selection === 'string' ? selection.trim() : '';
-    const trimmedUserMessage = newUserMessage ? newUserMessage.trim() : '';
-    const hasAttachmentIds = Array.isArray(attachments) && attachments.length > 0;
-
-    // Build title seed
-    const userInputText =
-      trimmedUserMessage ||
-      trimmedSelection ||
-      (hasAttachmentIds ? ATTACHMENT_ONLY_TITLE_SEED : '');
-    const initialTitle = buildInitialChatTitle(userInputText || '');
-    const firstUserMessage = extractFirstUserMessage(chatHistory);
-    const initialTitleFromHistory = buildInitialChatTitle(firstUserMessage || userInputText || '');
+      language,
+      attachments,
+      effectiveMode,
+      trimmedSelection,
+      trimmedUserMessage,
+      userInputText,
+      initialTitle,
+      firstUserMessage,
+      initialTitleFromHistory,
+    } = buildRequestContext(payload);
 
     if (!userId) {
       throw createRequestError(500, 'User context missing for authenticated request.');
@@ -102,6 +87,19 @@ function createAssistantService(deps = {}) {
 
       const chatId = chatRecord.id;
 
+      const { processedAttachments, linkedAssetIds, pendingAssetIds } =
+        await services.chatAssetsService.resolveAttachmentsForMessage({
+          userId,
+          assetIds: attachments,
+        });
+
+      if (pendingAssetIds.length > 0) {
+        throw createRequestError(
+          409,
+          'Attachments are still processing. Please try again in a moment.',
+        );
+      }
+
       const userMessage = await services.chatRepository.insertChatMessage({
         chat_id: chatId,
         user_id: userId,
@@ -112,16 +110,10 @@ function createAssistantService(deps = {}) {
         output_text: null,
       });
 
-      const { processedAttachments, linkedAssetIds } =
-        await services.chatAssetsService.resolveAttachmentsForMessage({
-          userId,
-          assetIds: attachments,
-        });
-
-      let structuredResponse;
+      // Generate natural markdown response (industry standard - no forced JSON)
+      let responseContent;
       try {
-        structuredResponse = await services.llmClient.generateStructuredStudyResponse({
-          mode: effectiveMode,
+        const { messages } = buildStructuredStudyMessages({
           selection: trimmedSelection,
           pageContext,
           pageUrl,
@@ -131,8 +123,23 @@ function createAssistantService(deps = {}) {
           newUserMessage: trimmedUserMessage || undefined,
           attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
         });
+
+        const finalMessages = clampHistory(messages);
+
+        const completion = await services.llmClient.createChatCompletion({
+          messages: finalMessages,
+          temperature: 0.4,
+          maxTokens: 1500,
+          // No responseFormat - returns natural markdown
+          operation: 'chat.completions.create',
+        });
+
+        responseContent = completion.choices[0]?.message?.content;
+        if (!responseContent) {
+          throw new Error('No response content from LLM');
+        }
       } catch (error) {
-        services.logger.error({ err: error }, 'Error generating structured study response');
+        services.logger.error({ err: error }, 'Error generating AI response');
         throw createRequestError(
           500,
           error.message || 'Failed to generate study response. Please try again.',
@@ -154,18 +161,13 @@ function createAssistantService(deps = {}) {
         mode: effectiveMode,
         source: 'highlight',
         input_text: null,
-        output_text: structuredResponse.explanation,
+        output_text: responseContent,
       });
 
       await services.chatRepository.touchChat(chatId);
 
       const existingTitle = typeof chatRecord.title === 'string' ? chatRecord.title.trim() : '';
-      const shouldGenerateTitle =
-        !existingTitle ||
-        existingTitle === FALLBACK_TITLE ||
-        existingTitle === initialTitleFromHistory;
-
-      if (shouldGenerateTitle) {
+      if (shouldGenerateTitle(existingTitle, initialTitleFromHistory)) {
         services.chatTitleService
           .generateChatTitleAsync(userId, chatId, firstUserMessage || userInputText)
           .catch((error) => {
@@ -173,15 +175,12 @@ function createAssistantService(deps = {}) {
           });
       }
 
+      // Return markdown content in consistent format
+      // For backwards compatibility, wrap in data object with content field
       return {
         success: true,
         data: {
-          mode: structuredResponse.mode,
-          explanation: structuredResponse.explanation,
-          notes: structuredResponse.notes,
-          todos: structuredResponse.todos,
-          tags: structuredResponse.tags,
-          difficulty: structuredResponse.difficulty,
+          content: responseContent,
         },
         chatId,
         chatTitle: existingTitle || initialTitle,

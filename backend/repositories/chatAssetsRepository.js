@@ -18,6 +18,7 @@ const { supabase } = require('../db/supabaseClient');
  * @param {string} params.storagePath - Path in storage bucket
  * @param {string|null} params.fileName - Original filename
  * @param {number|null} params.fileSize - File size in bytes
+ * @param {string} [params.processingStatus] - Processing status
  * @returns {Promise<Object>}
  */
 async function createAsset({
@@ -29,6 +30,7 @@ async function createAsset({
   storagePath,
   fileName,
   fileSize,
+  processingStatus,
 }) {
   const { data, error } = await supabase
     .from('chat_message_assets')
@@ -41,11 +43,56 @@ async function createAsset({
       storage_path: storagePath,
       file_name: fileName || null,
       file_size: fileSize || null,
+      processing_status: processingStatus || 'ready',
     })
     .select()
     .single();
 
   if (error) throw error;
+  return data;
+}
+
+/**
+ * Update processing metadata for an asset
+ * @param {Object} params
+ * @param {string} params.assetId
+ * @param {string} params.userId
+ * @param {Object} params.updates
+ * @returns {Promise<Object>}
+ */
+async function updateAssetProcessing({ assetId, userId, updates }) {
+  const { data, error } = await supabase
+    .from('chat_message_assets')
+    .update(updates)
+    .eq('id', assetId)
+    .eq('user_id', userId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Get processing status for an asset
+ * @param {string} assetId
+ * @param {string} userId
+ * @returns {Promise<Object|null>}
+ */
+async function getAssetProcessingStatus(assetId, userId) {
+  const { data, error } = await supabase
+    .from('chat_message_assets')
+    .select(
+      'id, processing_status, processing_error, processing_updated_at, processing_completed_at',
+    )
+    .eq('id', assetId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw error;
+  }
   return data;
 }
 
@@ -152,6 +199,8 @@ module.exports = {
   listAssetsForMessage,
   listAssetsForChat,
   getAssetById,
+  getAssetProcessingStatus,
+  updateAssetProcessing,
   deleteAsset,
   linkAssetsToMessage,
 };

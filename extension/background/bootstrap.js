@@ -15,6 +15,7 @@
 
   function loadSharedScripts() {
     safeImportScripts('transcriptProviders.js', ['dist/libs/transcriptProviders.js']);
+    safeImportScripts('messageSchemas.js', ['dist/libs/messageSchemas.js']);
     safeImportScripts('networkRetry.js', ['src/networkRetry.js']);
     safeImportScripts('networkUtils.js', ['src/networkUtils.js']);
     safeImportScripts('panoptoResolver.js', [

@@ -93,7 +93,7 @@ async function bootstrap() {
       // Continue anyway - the error will be caught by the notes service
     }
 
-    const { adapter, pageContext } = resolveAdapterContext(Logger);
+    const { pageContext } = resolveAdapterContext(Logger);
     const stateStore = createStateStore({ Storage, Logger });
     const sidebarHost = createSidebarHost({ Logger, Storage });
     const sessionManager = createSessionManager({
@@ -118,7 +118,6 @@ async function bootstrap() {
     const initialState = await stateStore.loadInitial();
     sidebarHost.renderSidebar({
       apiClient,
-      adapter,
       pageContext,
       state: initialState,
       onToggle: handleSidebarToggle,

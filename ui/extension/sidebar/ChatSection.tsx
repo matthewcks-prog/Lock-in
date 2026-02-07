@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ApiClient } from '@api/client';
-import type { StudyMode } from '@core/domain/types';
 import {
   AttachmentButton,
   AttachmentPreview,
@@ -20,7 +19,6 @@ import type { StorageAdapter } from './types';
 interface ChatSectionProps {
   apiClient: ApiClient | null;
   storage?: StorageAdapter;
-  mode: StudyMode;
   pageUrl: string;
   courseCode: string | null;
   pendingPrefill?: string;
@@ -45,7 +43,7 @@ function SaveNoteAction({ content }: { content: string }) {
         className="lockin-chat-save-note-btn"
         onClick={(event) => {
           event.stopPropagation();
-          handleSave();
+          void handleSave();
         }}
         type="button"
       >
@@ -58,7 +56,6 @@ function SaveNoteAction({ content }: { content: string }) {
 export function ChatSection({
   apiClient,
   storage,
-  mode,
   pageUrl,
   courseCode,
   pendingPrefill,
@@ -71,6 +68,8 @@ export function ChatSection({
     recentChats,
     activeHistoryId,
     isSending,
+    streaming,
+    cancelStream,
     sendMessage,
     startBlankChat,
     selectChat,
@@ -84,15 +83,15 @@ export function ChatSection({
   } = (() => {
     const chatOptions: {
       apiClient: ApiClient | null;
-      mode: StudyMode;
       pageUrl: string;
       courseCode: string | null;
       storage?: StorageAdapter;
+      enableStreaming?: boolean;
     } = {
       apiClient,
-      mode,
       pageUrl,
       courseCode,
+      enableStreaming: true,
     };
     if (storage) {
       chatOptions.storage = storage;
@@ -120,6 +119,7 @@ export function ChatSection({
       }
 
       const attachmentIds: string[] = [];
+      const processingAttachments: Array<{ assetId: string; attachmentId: string }> = [];
       const messageAttachments: ChatAttachment[] = [];
 
       for (const attachment of pendingAttachments) {
@@ -130,7 +130,12 @@ export function ChatSection({
             file: attachment.file,
           });
           attachmentIds.push(asset.id);
-          setAttachmentStatus(attachment.id, 'uploaded', asset.id);
+          if (asset.processingStatus && asset.processingStatus !== 'ready') {
+            setAttachmentStatus(attachment.id, 'processing', asset.id);
+            processingAttachments.push({ assetId: asset.id, attachmentId: attachment.id });
+          } else {
+            setAttachmentStatus(attachment.id, 'uploaded', asset.id);
+          }
 
           const attachmentUrl = asset.url || attachment.previewUrl;
           const messageAttachment: ChatAttachment = {
@@ -149,9 +154,65 @@ export function ChatSection({
         }
       }
 
-      return { attachmentIds, messageAttachments };
+      return { attachmentIds, messageAttachments, processingAttachments };
     },
     [apiClient, pendingAttachments, setAttachmentStatus],
+  );
+
+  const waitForAttachmentsReady = useCallback(
+    async (processingAttachments: Array<{ assetId: string; attachmentId: string }>) => {
+      if (!apiClient?.getChatAssetStatus) {
+        throw new Error('Attachment status checks are not available.');
+      }
+
+      const timeoutMs = 60000;
+      const pollIntervalMs = 1000;
+      const startedAt = Date.now();
+      const remaining = new Map(
+        processingAttachments.map(({ assetId, attachmentId }) => [assetId, attachmentId]),
+      );
+
+      while (remaining.size > 0) {
+        if (Date.now() - startedAt > timeoutMs) {
+          throw new Error('Attachment processing timed out.');
+        }
+
+        const checkIds = Array.from(remaining.keys());
+        const results = await Promise.all(
+          checkIds.map(async (assetId) => {
+            const status = await apiClient.getChatAssetStatus({ assetId });
+            return { assetId, status };
+          }),
+        );
+
+        for (const { assetId, status } of results) {
+          if (status.processingStatus === 'ready') {
+            const attachmentId = remaining.get(assetId);
+            if (attachmentId) {
+              setAttachmentStatus(attachmentId, 'uploaded', assetId);
+            }
+            remaining.delete(assetId);
+          } else if (status.processingStatus === 'error') {
+            const attachmentId = remaining.get(assetId);
+            if (attachmentId) {
+              setAttachmentStatus(
+                attachmentId,
+                'error',
+                assetId,
+                status.processingError || 'Attachment processing failed.',
+              );
+            }
+            remaining.delete(assetId);
+            throw new Error(status.processingError || 'Attachment processing failed.');
+          }
+        }
+
+        if (remaining.size > 0) {
+          await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        }
+      }
+    },
+    [apiClient, setAttachmentStatus],
   );
 
   const handleSendMessage = useCallback(
@@ -177,6 +238,10 @@ export function ChatSection({
           const uploadResult = await uploadAttachments(chatId);
           attachmentIds = uploadResult.attachmentIds;
           messageAttachments = uploadResult.messageAttachments;
+
+          if (uploadResult.processingAttachments.length > 0) {
+            await waitForAttachmentsReady(uploadResult.processingAttachments);
+          }
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : 'Failed to upload attachments.';
           setComposerError(message);
@@ -213,6 +278,7 @@ export function ChatSection({
       isAttachmentUploading,
       ensureChatId,
       uploadAttachments,
+      waitForAttachmentsReady,
       sendMessage,
       clearAttachments,
     ],
@@ -233,6 +299,8 @@ export function ChatSection({
     canSend: hasPendingAttachments,
   });
   const canSend = Boolean(inputValue.trim()) || hasPendingAttachments;
+  const isStreaming = Boolean(streaming?.isStreaming);
+  const streamError = streaming?.error;
 
   useEffect(() => {
     if (!pendingPrefill || !pendingPrefill.trim()) return;
@@ -311,7 +379,7 @@ export function ChatSection({
                 <button
                   key={item.id}
                   className={`lockin-history-item ${activeHistoryId === item.id ? 'active' : ''}`}
-                  onClick={() => selectChat(item)}
+                  onClick={async () => selectChat(item)}
                 >
                   <div className="lockin-history-item-content">
                     <div className="lockin-history-title">{item.title}</div>
@@ -342,6 +410,26 @@ export function ChatSection({
             </div>
 
             <div className="lockin-chat-bottom-section">
+              {isStreaming && (
+                <div className="lockin-chat-streaming">
+                  <div className="lockin-chat-streaming-indicator">
+                    <span className="lockin-chat-streaming-dot" aria-hidden="true" />
+                    <span>Generating...</span>
+                  </div>
+                  {cancelStream && (
+                    <button
+                      className="lockin-chat-stop-btn"
+                      type="button"
+                      onClick={() => cancelStream()}
+                    >
+                      Stop
+                    </button>
+                  )}
+                </div>
+              )}
+              {!isStreaming && streamError && (
+                <div className="lockin-chat-error">{streamError.message}</div>
+              )}
               <AttachmentPreview
                 attachments={pendingAttachments}
                 onRemove={removeAttachment}

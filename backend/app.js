@@ -62,6 +62,17 @@ function createApp() {
   app.get('/health/ready', healthRoutes.readiness);
   app.get('/health/deep', healthRoutes.deep);
 
+  // Circuit breaker status endpoint (public, no auth required for observability)
+  const {
+    getCircuitBreakerStatus,
+    resetCircuitBreaker,
+  } = require('./controllers/health/circuitBreaker');
+  const { requireSupabaseUser } = require('./middleware/authMiddleware');
+
+  app.get('/health/circuit-breaker', getCircuitBreakerStatus);
+  // Reset requires authentication (admin operation)
+  app.post('/health/circuit-breaker/reset', requireSupabaseUser, resetCircuitBreaker);
+
   // Sentry test endpoint (only in development)
   if (process.env.NODE_ENV !== 'production') {
     app.get('/debug-sentry', (_req, _res, _next) => {

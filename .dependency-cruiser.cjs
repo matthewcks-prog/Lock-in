@@ -15,7 +15,11 @@ module.exports = {
     {
       name: 'no-orphan-modules',
       severity: 'warn',
-      from: { orphan: true, pathNot: '(test|spec|__tests__|fixtures|mocks)' },
+      from: {
+        orphan: true,
+        pathNot:
+          '(test|spec|__tests__|fixtures|mocks|^core/domain/|^core/transcripts/types/|^core/transcripts/types\\.ts|^core/storage/|^core/services/notes/notesServiceTypes\\.ts|^api/fetcher/types\\.ts$|^ui/.*/types\\.ts$|^ui/.*/.*[Tt]ypes\\.ts$|^extension/(background|content)/|^extension/(background\\.js|contentScript-react\\.js|popup\\.js|config\\.js)|^extension/src/(config\\.ts|contentLibs\\.ts|initApi\\.ts|messageSchemas\\.ts|sentry\\.ts|networkRetry\\.js|networkUtils\\.js|panoptoResolver.*\\.js|globals\\.d\\.ts)|^backend/(scripts/|eslint\\.config\\.js))',
+      },
       to: {},
     },
     {

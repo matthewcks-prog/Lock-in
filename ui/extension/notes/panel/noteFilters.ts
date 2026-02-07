@@ -18,10 +18,10 @@ export function filterNotes({
     if (filter === 'all') {
       matchesFilter = true;
     } else if (filter === 'course') {
-      if (courseCode != null) {
+      if (courseCode !== null && courseCode !== undefined) {
         matchesFilter = item.courseCode === courseCode;
       } else {
-        matchesFilter = item.courseCode == null;
+        matchesFilter = item.courseCode === null || item.courseCode === undefined;
       }
     } else if (filter === 'starred') {
       matchesFilter = item.isStarred === true;

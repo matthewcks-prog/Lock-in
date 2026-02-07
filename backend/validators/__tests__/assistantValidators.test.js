@@ -15,22 +15,19 @@ const {
 // lockinRequestSchema tests
 // ============================================================================
 
-test('lockinRequestSchema - valid explain request with selection', () => {
+test('lockinRequestSchema - valid initial request with selection', () => {
   const validData = {
-    mode: 'explain',
     selection: 'What is React?',
     chatHistory: [],
   };
 
   const result = lockinRequestSchema.safeParse(validData);
   assert.equal(result.success, true);
-  assert.equal(result.data.mode, 'explain');
   assert.equal(result.data.selection, 'What is React?');
 });
 
-test('lockinRequestSchema - valid explain request with pageContext', () => {
+test('lockinRequestSchema - valid initial request with pageContext', () => {
   const validData = {
-    mode: 'explain',
     selection: 'React hooks',
     pageContext: 'This page is about React hooks and their usage in functional components.',
     pageUrl: 'https://example.com/react-hooks',
@@ -41,9 +38,8 @@ test('lockinRequestSchema - valid explain request with pageContext', () => {
   assert.equal(result.data.pageContext, validData.pageContext);
 });
 
-test('lockinRequestSchema - valid general request with chatHistory', () => {
+test('lockinRequestSchema - valid follow-up request with chatHistory', () => {
   const validData = {
-    mode: 'general',
     selection: 'Some text',
     chatHistory: [
       { role: 'user', content: 'Hi there' },
@@ -61,7 +57,6 @@ test('lockinRequestSchema - valid general request with chatHistory', () => {
 test('lockinRequestSchema - valid follow-up with empty selection', () => {
   // Follow-up messages can have empty selection if chatHistory exists
   const validData = {
-    mode: 'general',
     selection: '',
     chatHistory: [
       { role: 'user', content: 'Initial question' },
@@ -76,7 +71,6 @@ test('lockinRequestSchema - valid follow-up with empty selection', () => {
 
 test('lockinRequestSchema - valid initial request with attachments only', () => {
   const validData = {
-    mode: 'explain',
     selection: '',
     chatHistory: [],
     attachments: ['550e8400-e29b-41d4-a716-446655440000'],
@@ -88,7 +82,6 @@ test('lockinRequestSchema - valid initial request with attachments only', () => 
 
 test('lockinRequestSchema - reject initial request without selection or attachments', () => {
   const invalidData = {
-    mode: 'explain',
     selection: '',
     chatHistory: [],
   };
@@ -99,20 +92,8 @@ test('lockinRequestSchema - reject initial request without selection or attachme
   assert.ok(result.error.errors.some((e) => e.message.includes('Initial requests require')));
 });
 
-test('lockinRequestSchema - reject invalid mode', () => {
-  const invalidData = {
-    mode: 'invalid_mode',
-    selection: 'Hello',
-  };
-
-  const result = lockinRequestSchema.safeParse(invalidData);
-  assert.equal(result.success, false);
-  assert.ok(result.error.errors.some((e) => e.path.includes('mode')));
-});
-
 test('lockinRequestSchema - reject selection exceeding max length', () => {
   const invalidData = {
-    mode: 'explain',
     selection: 'a'.repeat(50001),
   };
 
@@ -122,7 +103,6 @@ test('lockinRequestSchema - reject selection exceeding max length', () => {
 
 test('lockinRequestSchema - reject chatHistory exceeding 50 messages', () => {
   const invalidData = {
-    mode: 'general',
     selection: 'Hello',
     chatHistory: Array(51)
       .fill(null)
@@ -135,7 +115,6 @@ test('lockinRequestSchema - reject chatHistory exceeding 50 messages', () => {
 
 test('lockinRequestSchema - reject too many attachments', () => {
   const invalidData = {
-    mode: 'explain',
     selection: 'Hello',
     attachments: Array(11)
       .fill(null)
@@ -148,7 +127,6 @@ test('lockinRequestSchema - reject too many attachments', () => {
 
 test('lockinRequestSchema - reject invalid attachment UUID', () => {
   const invalidData = {
-    mode: 'explain',
     selection: 'Hello',
     attachments: ['not-a-uuid'],
   };
@@ -159,7 +137,6 @@ test('lockinRequestSchema - reject invalid attachment UUID', () => {
 
 test('lockinRequestSchema - accept optional chatId as UUID', () => {
   const validData = {
-    mode: 'explain',
     selection: 'Hello',
     chatId: '550e8400-e29b-41d4-a716-446655440000',
   };
@@ -170,7 +147,6 @@ test('lockinRequestSchema - accept optional chatId as UUID', () => {
 
 test('lockinRequestSchema - reject invalid chatId UUID', () => {
   const invalidData = {
-    mode: 'explain',
     selection: 'Hello',
     chatId: 'not-a-uuid',
   };
@@ -181,7 +157,6 @@ test('lockinRequestSchema - reject invalid chatId UUID', () => {
 
 test('lockinRequestSchema - accept and lowercase language code', () => {
   const validData = {
-    mode: 'explain',
     selection: 'Hello',
     language: 'EN',
   };
@@ -193,7 +168,6 @@ test('lockinRequestSchema - accept and lowercase language code', () => {
 
 test('lockinRequestSchema - accept courseCode', () => {
   const validData = {
-    mode: 'explain',
     selection: 'Hello',
     courseCode: 'FIT2004',
   };
@@ -205,7 +179,6 @@ test('lockinRequestSchema - accept courseCode', () => {
 
 test('lockinRequestSchema - defaults for optional fields', () => {
   const validData = {
-    mode: 'explain',
     selection: 'Some text',
   };
 

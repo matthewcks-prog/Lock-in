@@ -43,7 +43,31 @@ async function createChatCompletion(options) {
   };
 }
 
+/**
+ * Execute streaming chat completion via provider chain
+ * @param {Array} messages - Chat messages
+ * @param {Object} [options] - Stream options
+ * @param {number} [options.temperature] - Sampling temperature
+ * @param {number} [options.maxTokens] - Max tokens
+ * @param {string} [options.operation] - Operation name for logging
+ * @param {AbortSignal} [options.signal] - Abort signal
+ * @returns {AsyncGenerator}
+ */
+async function* chatCompletionStream(messages, options = {}) {
+  const chain = getProviderChain();
+
+  const streamOptions = {
+    temperature: options.temperature,
+    maxTokens: options.maxTokens,
+    operation: options.operation || 'chat.completions.stream',
+    signal: options.signal,
+  };
+
+  yield* chain.chatCompletionStream(messages, streamOptions);
+}
+
 module.exports = {
   getProviderChain,
   createChatCompletion,
+  chatCompletionStream,
 };

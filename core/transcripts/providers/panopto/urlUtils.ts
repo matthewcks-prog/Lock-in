@@ -20,13 +20,15 @@ const LMS_REDIRECT_PATTERNS = [
   /mod\/page\/view\.php/i,
 ] as const;
 
+const MIN_DELIVERY_ID_LENGTH = 8;
+
 /**
  * Panopto video info extracted from URL
  */
-export interface PanoptoInfo {
+export type PanoptoInfo = {
   deliveryId: string;
   tenant: string;
-}
+};
 
 /**
  * Check if URL is a Panopto URL
@@ -49,37 +51,45 @@ export function isPanoptoDomain(hostname: string): boolean {
   return hostname.includes('panopto.com') || hostname.includes('panopto.');
 }
 
+function extractInfoFromMatch(match: RegExpMatchArray | null): PanoptoInfo | null {
+  if (match === null) return null;
+  const deliveryId = match[2];
+  const tenant = match[1];
+  if (
+    deliveryId !== undefined &&
+    tenant !== undefined &&
+    deliveryId.length > 0 &&
+    tenant.length > 0
+  ) {
+    return { deliveryId, tenant };
+  }
+  return null;
+}
+
+function extractInfoFromUrlObject(urlObj: URL): PanoptoInfo | null {
+  if (!isPanoptoDomain(urlObj.hostname)) return null;
+  const id = urlObj.searchParams.get('id');
+  if (id !== null && id.length >= MIN_DELIVERY_ID_LENGTH && /^[a-f0-9-]+$/i.test(id)) {
+    return { deliveryId: id, tenant: urlObj.hostname };
+  }
+  return null;
+}
+
 /**
  * Extract Panopto info from any URL format
  * More permissive than the regex patterns - handles encoded URLs and various formats
  */
 export function extractPanoptoInfo(url: string): PanoptoInfo | null {
-  const embedMatch = url.match(PANOPTO_EMBED_REGEX);
-  if (embedMatch) {
-    const deliveryId = embedMatch[2];
-    const tenant = embedMatch[1];
-    if (deliveryId && tenant) {
-      return { deliveryId, tenant };
-    }
-  }
+  const embedInfo = extractInfoFromMatch(url.match(PANOPTO_EMBED_REGEX));
+  if (embedInfo !== null) return embedInfo;
 
-  const viewerMatch = url.match(PANOPTO_VIEWER_REGEX);
-  if (viewerMatch) {
-    const deliveryId = viewerMatch[2];
-    const tenant = viewerMatch[1];
-    if (deliveryId && tenant) {
-      return { deliveryId, tenant };
-    }
-  }
+  const viewerInfo = extractInfoFromMatch(url.match(PANOPTO_VIEWER_REGEX));
+  if (viewerInfo !== null) return viewerInfo;
 
   try {
     const urlObj = new URL(url);
-    if (isPanoptoDomain(urlObj.hostname)) {
-      const id = urlObj.searchParams.get('id');
-      if (id && id.length >= 8 && /^[a-f0-9-]+$/i.test(id)) {
-        return { deliveryId: id, tenant: urlObj.hostname };
-      }
-    }
+    const info = extractInfoFromUrlObject(urlObj);
+    if (info !== null) return info;
   } catch {
     // Not a valid URL, try decoding
   }
@@ -115,5 +125,5 @@ export function buildPanoptoViewerUrl(tenant: string, deliveryId: string): strin
  */
 export function normalizePanoptoEmbedUrl(url: string): string | null {
   const info = extractPanoptoInfo(url);
-  return info ? buildPanoptoEmbedUrl(info.tenant, info.deliveryId) : null;
+  return info === null ? null : buildPanoptoEmbedUrl(info.tenant, info.deliveryId);
 }

@@ -89,6 +89,11 @@ class JwtVerificationService {
    * Tries each strategy in order until one succeeds.
    * This provides resilience and supports migration between auth methods.
    *
+   * Circuit Breaker Handling:
+   * - When a strategy fails due to circuit breaker, we always try fallback strategies
+   * - This ensures authentication continues working even during Supabase outages
+   * - Local JWKS or symmetric verification can serve as fallback
+   *
    * @param {string} token - The JWT token to verify
    * @returns {Promise<VerificationResult>} Verification result
    */
@@ -101,6 +106,7 @@ class JwtVerificationService {
     }
 
     const errors = [];
+    let hasCircuitBreakerError = false;
 
     for (const strategy of this._strategies) {
       // Check if strategy is available (e.g., has required config)
@@ -122,28 +128,53 @@ class JwtVerificationService {
           };
         }
 
+        // Track circuit breaker errors separately - always try fallback for these
+        if (result.isCircuitBreakerError) {
+          hasCircuitBreakerError = true;
+          logger.debug(
+            `[JwtVerificationService] Strategy "${strategy.name}" circuit breaker open, trying fallback`,
+          );
+        }
+
         // Strategy returned invalid but no error
         errors.push({
           strategy: strategy.name,
           error: result.error || 'Verification failed',
+          isTransient: result.isTransient || false,
         });
 
-        // If failFast is enabled, don't try other strategies
-        if (this._failFast) {
+        // If failFast is enabled and NOT a circuit breaker error, don't try other strategies
+        // Circuit breaker errors should always allow fallback to ensure availability
+        if (this._failFast && !result.isCircuitBreakerError) {
           break;
         }
       } catch (err) {
+        // Check if this is a circuit breaker error thrown as an exception
+        const isCircuitError =
+          err.name === 'CircuitOpenError' ||
+          err.code === 'SERVICE_UNAVAILABLE' ||
+          (err.message && err.message.includes('circuit open'));
+
+        if (isCircuitError) {
+          hasCircuitBreakerError = true;
+          logger.debug(
+            `[JwtVerificationService] Strategy "${strategy.name}" circuit breaker open, trying fallback`,
+          );
+        }
+
         errors.push({
           strategy: strategy.name,
           error: err.message,
+          isTransient: isCircuitError,
         });
 
         logger.debug(`[JwtVerificationService] Strategy "${strategy.name}" threw error:`, {
           error: err.message,
+          isCircuitError,
         });
 
-        // If failFast is enabled, propagate the error
-        if (this._failFast) {
+        // If failFast is enabled and NOT a circuit breaker error, propagate the error
+        if (this._failFast && !isCircuitError) {
           break;
         }
       }
@@ -156,6 +187,9 @@ class JwtVerificationService {
     return {
       valid: false,
       error: `Token verification failed: ${errorSummary}`,
+      // Signal that this failure was due to transient issues (circuit breaker)
+      // The auth middleware can use this to return 503 instead of 401
+      isServiceUnavailable: hasCircuitBreakerError && errors.every((e) => e.isTransient),
     };
   }
 

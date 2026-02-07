@@ -43,7 +43,6 @@ export async function sendMessageMutation(
 
   const requestPayload: ProcessTextParams = {
     selection: selectionPayload,
-    mode: params.mode,
     chatHistory: baseHistory,
   };
   if (userMessagePayload !== undefined) {
@@ -69,11 +68,11 @@ export async function sendMessageMutation(
 
   const response = await apiClient.processText(requestPayload);
 
-  const explanation = response?.data?.explanation || `(${params.mode}) ${params.message}`;
+  const content = response?.data?.content || params.message;
   const resolvedChatId = response?.chatId || params.chatId || `chat-${Date.now()}`;
 
   const result: ChatApiResponse & { resolvedChatId: string } = {
-    explanation,
+    content,
     resolvedChatId,
   };
   if (response?.chatId) {

@@ -3,9 +3,12 @@
  *
  * Shared type definitions for the chat feature.
  * Used by hooks, components, and API layer.
+ *
+ * Design Notes:
+ * - Response format is markdown, not structured JSON
+ * - Follows industry standards (OpenAI/Anthropic patterns)
  */
 
-import type { StudyMode } from '@core/domain/types';
 import type { ApiClient } from '@api/client';
 
 // =============================================================================
@@ -29,7 +32,6 @@ export interface ChatMessage {
   role: ChatMessageRole;
   content: string;
   timestamp: string;
-  mode?: StudyMode;
   source?: 'selection' | 'followup';
   isPending?: boolean;
   isError?: boolean;
@@ -56,8 +58,6 @@ export type HistoryTitleSource = 'local' | 'server';
 export interface SendMessageParams {
   /** The message content to send */
   message: string;
-  /** Current study mode */
-  mode: StudyMode;
   /** Source of the message */
   source: 'selection' | 'followup';
   /** Current page URL for context */
@@ -71,7 +71,8 @@ export interface SendMessageParams {
 }
 
 export interface ChatApiResponse {
-  explanation: string;
+  /** The assistant's response content (markdown) */
+  content: string;
   chatId?: string;
   chatTitle?: string;
 }
@@ -88,18 +89,17 @@ export interface UseChatOptions {
     get: <T = unknown>(key: string) => Promise<T | null>;
     set: (key: string, value: unknown) => Promise<void>;
   };
-  /** Current study mode */
-  mode: StudyMode;
   /** Current page URL */
   pageUrl: string;
   /** Course code if available */
   courseCode: string | null;
+  /** Enable streaming responses (default: false for backward compatibility) */
+  enableStreaming?: boolean;
 }
 
 export interface UseChatMessagesOptions {
   apiClient: ApiClient | null;
   chatId: string | null;
-  mode: StudyMode;
 }
 
 export interface UseChatHistoryOptions {
@@ -109,7 +109,6 @@ export interface UseChatHistoryOptions {
 
 export interface UseSendMessageOptions {
   apiClient: ApiClient | null;
-  mode: StudyMode;
   pageUrl: string;
   courseCode: string | null;
   onSuccess?: (response: ChatApiResponse, chatId: string) => void;
@@ -218,7 +217,11 @@ export function normalizeChatAttachment(raw: unknown): ChatAttachment | null {
   return attachment;
 }
 
-export function normalizeChatMessage(raw: unknown, mode: StudyMode): ChatMessage {
+/**
+ * Normalize raw message data to ChatMessage format
+ * @param raw - Raw message data from API or storage
+ */
+export function normalizeChatMessage(raw: unknown): ChatMessage {
   const record = isRecord(raw) ? raw : {};
   const attachments = Array.isArray(record['attachments'])
     ? record['attachments']
@@ -227,9 +230,6 @@ export function normalizeChatMessage(raw: unknown, mode: StudyMode): ChatMessage
           Boolean(attachment),
         )
     : undefined;
-
-  const modeValue =
-    record['mode'] === 'explain' || record['mode'] === 'general' ? record['mode'] : undefined;
 
   const message: ChatMessage = {
     id: getString(record['id']) || `msg-${Math.random().toString(16).slice(2)}`,
@@ -240,7 +240,6 @@ export function normalizeChatMessage(raw: unknown, mode: StudyMode): ChatMessage
       getString(record['input_text']) ||
       'Message',
     timestamp: getString(record['created_at']) || new Date().toISOString(),
-    mode: modeValue || mode,
   };
   if (attachments && attachments.length > 0) {
     message.attachments = attachments;

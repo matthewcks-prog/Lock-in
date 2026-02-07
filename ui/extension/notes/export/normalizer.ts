@@ -55,11 +55,30 @@ export type { FlattenOptions } from './inlineUtils';
 // Format Parsing
 // ============================================================================
 
+const DECIMAL_RADIX = 10;
+const HEADING_LEVEL_ONE = 1;
+const HEADING_LEVEL_TWO = 2;
+const HEADING_LEVEL_THREE = 3;
+const HEADING_LEVEL_FOUR = 4;
+const HEADING_LEVEL_FIVE = 5;
+const HEADING_LEVEL_SIX = 6;
+const HEADING_LEVELS = [
+  HEADING_LEVEL_ONE,
+  HEADING_LEVEL_TWO,
+  HEADING_LEVEL_THREE,
+  HEADING_LEVEL_FOUR,
+  HEADING_LEVEL_FIVE,
+  HEADING_LEVEL_SIX,
+] as const;
+type HeadingLevel = (typeof HEADING_LEVELS)[number];
+const DEFAULT_HEADING_LEVEL: HeadingLevel = HEADING_LEVEL_ONE;
+const MAX_HEADING_LEVEL: HeadingLevel = HEADING_LEVEL_SIX;
+
 /**
  * Parses Lexical's format bitmask into explicit formatting flags.
  */
 function parseFormat(format: number | undefined): TextFormatting {
-  if (!format) return {};
+  if (format === undefined || format === 0) return {};
 
   const formatting: TextFormatting = {};
   if ((format & FORMAT_BOLD) !== 0) formatting.bold = true;
@@ -75,20 +94,22 @@ function parseFormat(format: number | undefined): TextFormatting {
  * Lexical stores styles as CSS strings like "color: #ff0000; background-color: yellow;"
  */
 function parseStyles(style: string | undefined): TextStyles | undefined {
-  if (!style || style.trim() === '') return undefined;
+  if (style === undefined || style.trim().length === 0) return undefined;
 
   const styles: TextStyles = {};
 
   // Parse color property
   const colorMatch = style.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
-  if (colorMatch?.[1]) {
-    styles.color = colorMatch[1].trim();
+  const colorToken = colorMatch?.[1];
+  if (colorToken !== undefined && colorToken.trim().length > 0) {
+    styles.color = colorToken.trim();
   }
 
   // Parse background-color property
   const bgMatch = style.match(/(?:^|;)\s*background-color\s*:\s*([^;]+)/i);
-  if (bgMatch?.[1]) {
-    styles.backgroundColor = bgMatch[1].trim();
+  const bgToken = bgMatch?.[1];
+  if (bgToken !== undefined && bgToken.trim().length > 0) {
+    styles.backgroundColor = bgToken.trim();
   }
 
   return Object.keys(styles).length > 0 ? styles : undefined;
@@ -99,7 +120,7 @@ function parseStyles(style: string | undefined): TextStyles | undefined {
  * Lexical uses numeric format for element alignment (1=left, 2=center, 3=right, 4=justify)
  */
 function parseAlignment(format: number | undefined): TextAlignment | undefined {
-  if (!format || format === 0 || format === ELEMENT_FORMAT_LEFT) return undefined; // default is left, don't store
+  if (format === undefined || format === 0 || format === ELEMENT_FORMAT_LEFT) return undefined; // default is left, don't store
   if (format === ELEMENT_FORMAT_CENTER) return 'center';
   if (format === ELEMENT_FORMAT_RIGHT) return 'right';
   if (format === ELEMENT_FORMAT_JUSTIFY) return 'justify';
@@ -132,61 +153,68 @@ function isInlineContainerNode(node: LexicalNode): boolean {
  * @param children - Array of Lexical nodes to process
  * @returns Flattened array of inline content
  */
+function buildTextRun(node: LexicalNode): TextRun {
+  const textRun: TextRun = {
+    type: 'text',
+    text: node.text ?? '',
+    format: parseFormat(node.format),
+  };
+  const styles = parseStyles(node.style);
+  if (styles !== undefined) {
+    textRun.styles = styles;
+  }
+  return textRun;
+}
+
+function buildLineBreakRun(): TextRun {
+  return {
+    type: 'text',
+    text: '\n',
+    format: {},
+  };
+}
+
+function extractLinkChildren(children: LexicalNode[] | undefined): TextRun[] {
+  return extractInlineContent(children).filter((child): child is TextRun => child.type === 'text');
+}
+
+function extractInlineFromNode(node: LexicalNode): InlineContent[] {
+  if (isTextNode(node)) {
+    return [buildTextRun(node)];
+  }
+
+  if (isLinkNode(node)) {
+    return [
+      {
+        type: 'link',
+        url: node.url ?? '',
+        children: extractLinkChildren(node.children),
+      },
+    ];
+  }
+
+  if (isLineBreakNode(node)) {
+    return [buildLineBreakRun()];
+  }
+
+  if (isInlineContainerNode(node)) {
+    return extractInlineContent(node.children);
+  }
+
+  if (Array.isArray(node.children)) {
+    return extractInlineContent(node.children);
+  }
+
+  return [];
+}
+
 function extractInlineContent(children: LexicalNode[] | undefined): InlineContent[] {
-  if (!children || children.length === 0) return [];
+  if (children === undefined || children.length === 0) return [];
 
   const result: InlineContent[] = [];
 
   for (const child of children) {
-    // Case 1: Direct text node - extract text with formatting and styles
-    if (isTextNode(child)) {
-      const textRun: TextRun = {
-        type: 'text',
-        text: child.text || '',
-        format: parseFormat(child.format),
-      };
-      const styles = parseStyles(child.style);
-      if (styles) {
-        textRun.styles = styles;
-      }
-      result.push(textRun);
-      continue;
-    }
-
-    // Case 2: Link node - extract URL and recursively get text children
-    if (isLinkNode(child)) {
-      result.push({
-        type: 'link',
-        url: child.url || '',
-        children: extractInlineContent(child.children) as TextRun[],
-      });
-      continue;
-    }
-
-    // Case 3: Line break - convert to newline text
-    if (isLineBreakNode(child)) {
-      result.push({
-        type: 'text',
-        text: '\n',
-        format: {},
-      });
-      continue;
-    }
-
-    // Case 4: Container nodes (paragraph, heading, quote inside list items)
-    // Recursively extract inline content from these containers
-    if (isInlineContainerNode(child)) {
-      const nestedContent = extractInlineContent(child.children);
-      result.push(...nestedContent);
-      continue;
-    }
-
-    // Case 5: Unknown nodes with children - attempt recursive extraction
-    // This provides forward compatibility for new Lexical node types
-    if (child.children && Array.isArray(child.children)) {
-      const nestedContent = extractInlineContent(child.children);
-      result.push(...nestedContent);
-    }
+    result.push(...extractInlineFromNode(child));
   }
 
   return result;
@@ -195,15 +223,20 @@ function extractInlineContent(children: LexicalNode[] | undefined): InlineConten
 /**
  * Extracts heading level from Lexical's tag property.
  */
-function parseHeadingLevel(tag: string | undefined): 1 | 2 | 3 | 4 | 5 | 6 {
+function isHeadingLevel(level: number): level is HeadingLevel {
+  return HEADING_LEVELS.includes(level as HeadingLevel);
+}
+
+function parseHeadingLevel(tag: string | undefined): HeadingLevel {
   const match = tag?.match(/h(\d)/i);
-  if (match?.[1]) {
-    const level = parseInt(match[1], 10);
-    if (level >= 1 && level <= 6) {
-      return level as 1 | 2 | 3 | 4 | 5 | 6;
+  const token = match?.[1];
+  if (token !== undefined) {
+    const level = parseInt(token, DECIMAL_RADIX);
+    if (level >= DEFAULT_HEADING_LEVEL && level <= MAX_HEADING_LEVEL && isHeadingLevel(level)) {
+      return level;
     }
   }
-  return 1;
+  return DEFAULT_HEADING_LEVEL;
 }
 
 function normalizeParagraph(node: LexicalNode): ParagraphBlock {
@@ -212,7 +245,7 @@ function normalizeParagraph(node: LexicalNode): ParagraphBlock {
     children: extractInlineContent(node.children),
   };
   const alignment = parseAlignment(node.format);
-  if (alignment) {
+  if (alignment !== undefined) {
     block.alignment = alignment;
   }
   return block;
@@ -225,7 +258,7 @@ function normalizeHeading(node: LexicalNode): HeadingBlock {
     children: extractInlineContent(node.children),
   };
   const alignment = parseAlignment(node.format);
-  if (alignment) {
+  if (alignment !== undefined) {
     block.alignment = alignment;
   }
   return block;
@@ -234,7 +267,7 @@ function normalizeHeading(node: LexicalNode): HeadingBlock {
 function normalizeList(node: LexicalNode): ListBlock {
   const items: ListItemBlock[] = [];
 
-  for (const child of node.children || []) {
+  for (const child of node.children ?? []) {
     if (isListItemNode(child)) {
       items.push({
         type: 'listItem',
@@ -256,20 +289,20 @@ function normalizeQuote(node: LexicalNode): QuoteBlock {
     children: extractInlineContent(node.children),
   };
   const alignment = parseAlignment(node.format);
-  if (alignment) {
+  if (alignment !== undefined) {
     block.alignment = alignment;
   }
   return block;
 }
 
 function normalizeCode(node: LexicalNode): CodeBlock {
-  const codeText = (node.children || []).map((child) => child.text || '').join('\n');
+  const codeText = (node.children ?? []).map((child) => child.text ?? '').join('\n');
 
   const block: CodeBlock = {
     type: 'code',
     code: codeText,
   };
-  if (node.language) {
+  if (typeof node.language === 'string' && node.language.trim().length > 0) {
     block.language = node.language;
   }
   return block;
@@ -294,6 +327,36 @@ function emptyDocument(): NormalizedDocument {
   return { version: AST_VERSION, blocks: [] };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+function isLexicalEditorState(value: unknown): value is LexicalEditorState {
+  if (!isRecord(value)) return false;
+  const root = value['root'];
+  if (root === undefined) return true;
+  if (!isRecord(root)) return false;
+  const children = root['children'];
+  return children === undefined || Array.isArray(children);
+}
+
+function parseEditorState(editorState: unknown): LexicalEditorState | null {
+  if (editorState === null || editorState === undefined) {
+    return null;
+  }
+
+  if (typeof editorState === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(editorState);
+      return isLexicalEditorState(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return isLexicalEditorState(editorState) ? editorState : null;
+}
+
 /**
  * Normalizes a Lexical editor state into the intermediate document format.
  *
@@ -301,16 +364,8 @@ function emptyDocument(): NormalizedDocument {
  * @returns NormalizedDocument ready for export
  */
 export function normalizeEditorState(editorState: unknown): NormalizedDocument {
-  if (!editorState) {
-    return emptyDocument();
-  }
-
-  let state: LexicalEditorState;
-  try {
-    state = typeof editorState === 'string' ? JSON.parse(editorState) : editorState;
-  } catch {
-    return emptyDocument();
-  }
+  const state = parseEditorState(editorState);
+  if (state === null) return emptyDocument();
 
   const rootChildren = state?.root?.children;
   if (!Array.isArray(rootChildren)) {
@@ -320,7 +375,7 @@ export function normalizeEditorState(editorState: unknown): NormalizedDocument {
   const blocks: Block[] = [];
   for (const node of rootChildren) {
     const block = normalizeBlockNode(node);
-    if (block) {
+    if (block !== null) {
       blocks.push(block);
     }
   }

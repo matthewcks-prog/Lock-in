@@ -15,7 +15,7 @@ export interface PendingAttachment {
   /** Preview URL for images (created with URL.createObjectURL) */
   previewUrl?: string;
   /** Upload status */
-  status: 'pending' | 'uploading' | 'uploaded' | 'error';
+  status: 'pending' | 'uploading' | 'processing' | 'uploaded' | 'error';
   /** Uploaded asset ID (after upload) */
   assetId?: string;
   /** Error message if upload failed */
@@ -76,7 +76,7 @@ function AttachmentItem({
     <div
       className={`lockin-chat-attachment-item ${
         attachment.status === 'error' ? 'is-error' : ''
-      } ${attachment.status === 'uploading' ? 'is-uploading' : ''}`}
+      } ${attachment.status === 'uploading' || attachment.status === 'processing' ? 'is-uploading' : ''}`}
     >
       {/* Preview/Icon */}
       <div className="lockin-chat-attachment-thumb">
@@ -113,6 +113,8 @@ function AttachmentItem({
         <p className="lockin-chat-attachment-size">
           {attachment.status === 'uploading' ? (
             'Uploading...'
+          ) : attachment.status === 'processing' ? (
+            'Processing...'
           ) : attachment.status === 'error' ? (
             <span className="lockin-chat-attachment-error">
               {attachment.error || 'Upload failed'}
@@ -127,7 +129,9 @@ function AttachmentItem({
       <button
         type="button"
         onClick={onRemove}
-        disabled={disabled || attachment.status === 'uploading'}
+        disabled={
+          disabled || attachment.status === 'uploading' || attachment.status === 'processing'
+        }
         className="lockin-chat-attachment-remove"
         title="Remove attachment"
         aria-label={`Remove ${attachment.file.name}`}
@@ -147,7 +151,7 @@ function AttachmentItem({
       </button>
 
       {/* Upload spinner overlay */}
-      {attachment.status === 'uploading' && (
+      {(attachment.status === 'uploading' || attachment.status === 'processing') && (
         <div className="lockin-chat-attachment-overlay">
           <span className="lockin-inline-spinner" />
         </div>

@@ -21,7 +21,7 @@ export type VideoProvider = 'panopto' | 'echo360' | 'youtube' | 'html5' | 'unkno
 /**
  * A detected video on a page
  */
-export interface DetectedVideo {
+export type DetectedVideo = {
   /** Unique identifier for the video (provider-specific) */
   id: string;
   /** Video provider */
@@ -65,12 +65,12 @@ export interface DetectedVideo {
   echoMediaId?: string;
   /** Echo360 base URL (origin) for API calls */
   echoBaseUrl?: string;
-}
+};
 
 /**
  * Context for video detection on a page
  */
-export interface VideoDetectionContext {
+export type VideoDetectionContext = {
   /** Current page URL */
   pageUrl: string;
   /** All iframes on the page */
@@ -80,7 +80,7 @@ export interface VideoDetectionContext {
   }>;
   /** Document for DOM access (optional, not available in background) */
   document?: Document;
-}
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Transcript Results
@@ -89,7 +89,7 @@ export interface VideoDetectionContext {
 /**
  * A single transcript segment with timing
  */
-export interface TranscriptSegment {
+export type TranscriptSegment = {
   /** Start time in milliseconds */
   startMs: number;
   /** End time in milliseconds */
@@ -100,24 +100,24 @@ export interface TranscriptSegment {
   speaker?: string;
   /** Confidence score (optional, 0..1) */
   confidence?: number;
-}
+};
 
 /**
  * Full transcript result
  */
-export interface TranscriptResult {
+export type TranscriptResult = {
   /** Plain text version of the transcript */
   plainText: string;
   /** Timed segments */
   segments: TranscriptSegment[];
   /** Total duration in milliseconds */
   durationMs?: number;
-}
+};
 
 /**
  * Result from transcript extraction attempt
  */
-export interface TranscriptExtractionResult {
+export type TranscriptExtractionResult = {
   /** Whether extraction succeeded */
   success: boolean;
   /** Transcript data (if success) */
@@ -141,7 +141,7 @@ export interface TranscriptExtractionResult {
     | 'TIMEOUT';
   /** Whether AI transcription is available as fallback */
   aiTranscriptionAvailable?: boolean;
-}
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Interface
@@ -150,7 +150,7 @@ export interface TranscriptExtractionResult {
 /**
  * Interface for transcript providers
  */
-export interface TranscriptProvider {
+export type TranscriptProvider = {
   /** Provider type identifier */
   readonly provider: VideoProvider;
 
@@ -162,6 +162,6 @@ export interface TranscriptProvider {
 
   /** Extract caption URL from embed HTML (optional) */
   extractCaptionUrl?(html: string, video: DetectedVideo): string | null;
-}
+};
 
 // ─────────────────────────────────────────────────────────────────────────────

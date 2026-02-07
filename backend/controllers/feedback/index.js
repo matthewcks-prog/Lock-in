@@ -1,6 +1,7 @@
 // backend/controllers/feedback/index.js
 
 const { feedbackService } = require('../../services/feedbackService');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 /**
  * POST /api/feedback
@@ -15,7 +16,7 @@ async function createFeedback(req, res, next) {
       userAgent: req.headers['user-agent'],
     });
 
-    res.status(201).json({
+    res.status(HTTP_STATUS.CREATED).json({
       success: true,
       id: feedback.id,
       message: 'Thank you for your feedback!',

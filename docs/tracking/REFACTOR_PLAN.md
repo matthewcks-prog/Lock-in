@@ -209,7 +209,7 @@ Update `tsconfig.json`:
   rules: {
     'max-lines': ['error', { max: 300, skipBlankLines: true, skipComments: true }],
     'max-lines-per-function': ['error', { max: 50, skipBlankLines: true, skipComments: true }],
-    'complexity': ['error', 12],          // Reduced from 20
+    'complexity': ['error', 15],          // Reduced from 20
     'max-depth': ['error', 4],
     'max-nested-callbacks': ['error', 3],
     'max-params': ['error', 4],

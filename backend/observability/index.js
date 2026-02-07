@@ -11,8 +11,12 @@
  * Application Insights needs to instrument Node.js modules before they're loaded.
  */
 
-const shouldLoadAppInsights = Boolean(process.env.APPLICATIONINSIGHTS_CONNECTION_STRING);
-const appInsights = shouldLoadAppInsights ? require('applicationinsights') : null;
+const appInsights = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
+  ? require('applicationinsights')
+  : null;
+const { FIVE, THOUSAND } = require('../constants/numbers');
+
+const APP_INSIGHTS_FLUSH_TIMEOUT_MS = FIVE * THOUSAND;
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const LOG_LEVEL = process.env.LOG_LEVEL || (IS_PRODUCTION ? 'info' : 'debug');
@@ -82,11 +86,10 @@ suppressOTelWarningsInDev();
  *
  * @returns {boolean} Whether App Insights was initialized
  */
-function initApplicationInsights() {
-  // Prevent double-initialization (causes MeterProvider warnings with nodemon)
+function getAppInsightsConnectionString() {
   if (appInsightsInitialized) {
     console.log('[AppInsights] Already initialized, skipping');
-    return Boolean(appInsightsClient);
+    return null;
   }
 
   if (!appInsights) {
@@ -94,19 +97,22 @@ function initApplicationInsights() {
       console.log('[AppInsights] Module not loaded, skipping initialization');
     }
     appInsightsInitialized = true;
-    return false;
+    return null;
   }
 
   const connectionString = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING;
-
   if (!connectionString) {
     if (!IS_PRODUCTION) {
       console.log('[AppInsights] No connection string configured, skipping initialization');
     }
     appInsightsInitialized = true; // Mark as "handled" to prevent retry
-    return false;
+    return null;
   }
 
+  return connectionString;
+}
+
+function startApplicationInsights(connectionString) {
   try {
     appInsights
       .setup(connectionString)
@@ -143,6 +149,15 @@ function initApplicationInsights() {
   }
 }
 
+function initApplicationInsights() {
+  const connectionString = getAppInsightsConnectionString();
+  if (!connectionString) {
+    return Boolean(appInsightsClient);
+  }
+
+  return startApplicationInsights(connectionString);
+}
+
 /**
  * Gracefully dispose of Application Insights.
  * Call this during graceful shutdown to flush telemetry and clean up resources.
@@ -169,7 +184,7 @@ async function disposeApplicationInsights() {
       });
 
       // Timeout fallback in case flush hangs
-      setTimeout(resolve, 5000);
+      setTimeout(resolve, APP_INSIGHTS_FLUSH_TIMEOUT_MS);
     });
 
     // Dispose the SDK (this internally calls OpenTelemetry shutdown)
@@ -327,7 +342,42 @@ function trackLlmUsage(options) {
     latencyMs,
   } = options;
 
-  // Log token usage with structured logger
+  logLlmUsage({
+    provider,
+    operation,
+    model,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    userId,
+    requestId,
+    latencyMs,
+  });
+
+  recordLlmMetrics({
+    provider,
+    operation,
+    model,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    userId,
+    requestId,
+    latencyMs,
+  });
+}
+
+function logLlmUsage({
+  provider,
+  operation,
+  model,
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  userId,
+  requestId,
+  latencyMs,
+}) {
   logger.info(
     {
       type: 'llm_usage',
@@ -345,34 +395,47 @@ function trackLlmUsage(options) {
     },
     `LLM ${operation}: ${totalTokens} tokens (${provider}/${model})`,
   );
+}
 
-  // Track in Application Insights
-  if (appInsightsClient) {
-    trackMetric('llm.tokens.prompt', promptTokens, { provider, operation, model });
-    trackMetric('llm.tokens.completion', completionTokens, { provider, operation, model });
-    trackMetric('llm.tokens.total', totalTokens, { provider, operation, model });
-
-    if (latencyMs !== undefined) {
-      trackMetric('llm.latency.ms', latencyMs, { provider, operation, model });
-    }
-
-    trackEvent(
-      'llm.request',
-      {
-        provider,
-        operation,
-        model,
-        userId: userId || 'anonymous',
-        requestId,
-      },
-      {
-        promptTokens,
-        completionTokens,
-        totalTokens,
-        latencyMs: latencyMs || 0,
-      },
-    );
+function recordLlmMetrics({
+  provider,
+  operation,
+  model,
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  userId,
+  requestId,
+  latencyMs,
+}) {
+  if (!appInsightsClient) {
+    return;
   }
+
+  trackMetric('llm.tokens.prompt', promptTokens, { provider, operation, model });
+  trackMetric('llm.tokens.completion', completionTokens, { provider, operation, model });
+  trackMetric('llm.tokens.total', totalTokens, { provider, operation, model });
+
+  if (latencyMs !== undefined) {
+    trackMetric('llm.latency.ms', latencyMs, { provider, operation, model });
+  }
+
+  trackEvent(
+    'llm.request',
+    {
+      provider,
+      operation,
+      model,
+      userId: userId || 'anonymous',
+      requestId,
+    },
+    {
+      promptTokens,
+      completionTokens,
+      totalTokens,
+      latencyMs: latencyMs || 0,
+    },
+  );
 }
 
 // =============================================================================

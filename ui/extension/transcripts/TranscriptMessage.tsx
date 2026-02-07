@@ -6,7 +6,7 @@
 
 import { useCallback } from 'react';
 import type { DetectedVideo, TranscriptResult } from '@core/transcripts/types';
-import type { SaveNoteOptions } from '../../hooks/useNoteSave';
+import type { SaveNoteOptions } from '../hooks/useNoteSave';
 import type { Note } from '@core/domain/Note';
 import { useTranscriptCacheContext } from '../contexts/TranscriptCacheContext';
 import { downloadFile, formatAsPlainText, formatAsVtt, formatTime } from './transcriptFormatting';

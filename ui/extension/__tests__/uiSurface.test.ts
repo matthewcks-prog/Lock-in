@@ -51,7 +51,6 @@ describe('LockInUI global surface', () => {
       apiClient: null,
       isOpen: false,
       onToggle: vi.fn(),
-      currentMode: 'explain',
     });
 
     expect(instance).toBeDefined();

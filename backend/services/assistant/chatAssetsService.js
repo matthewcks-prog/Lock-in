@@ -1,4 +1,5 @@
 const { randomUUID } = require('crypto');
+const { setImmediate } = require('timers');
 const { logger: baseLogger } = require('../../observability');
 const {
   CHAT_ASSETS_BUCKET,
@@ -45,6 +46,13 @@ function createChatAssetsService(deps = {}) {
   };
 
   const { getAssetForVision, getAssetTextContent } = createChatAssetContentService(services);
+  const maxProcessedChars = deps.maxProcessedChars ?? 40000;
+
+  function truncateText(text) {
+    if (typeof text !== 'string') return '';
+    if (text.length <= maxProcessedChars) return text;
+    return text.slice(0, maxProcessedChars);
+  }
 
   async function createSignedAssetUrl(storagePath) {
     const { data, error } = await services.storageRepository.createSignedUrl(
@@ -118,7 +126,16 @@ function createChatAssetsService(deps = {}) {
       storagePath,
       fileName: file.originalname || null,
       fileSize: file.size || null,
+      processingStatus: isVisionCompatibleImage(validation.mimeType) ? 'ready' : 'pending',
     });
+
+    if (!isVisionCompatibleImage(validation.mimeType)) {
+      setImmediate(() => {
+        processAssetInBackground({ assetId: asset.id, userId }).catch((error) => {
+          services.logger.warn({ err: error }, 'Failed to process chat asset in background');
+        });
+      });
+    }
 
     const url = await createSignedAssetUrl(storagePath);
 
@@ -130,6 +147,8 @@ function createChatAssetsService(deps = {}) {
       fileSize: asset.file_size,
       url,
       createdAt: asset.created_at,
+      processingStatus: asset.processing_status,
+      processingError: asset.processing_error,
     };
   }
 
@@ -155,8 +174,32 @@ function createChatAssetsService(deps = {}) {
         fileSize: asset.file_size,
         url: await createSignedAssetUrl(asset.storage_path),
         createdAt: asset.created_at,
+        processingStatus: asset.processing_status,
+        processingError: asset.processing_error,
       })),
     );
+  }
+
+  async function getChatAssetStatus({ userId, assetId } = {}) {
+    if (!userId) {
+      throw createRequestError(500, 'User context missing.');
+    }
+    if (!assetId) {
+      throw createRequestError(400, 'Asset ID is required');
+    }
+
+    const asset = await services.chatAssetsRepository.getAssetProcessingStatus(assetId, userId);
+    if (!asset) {
+      throw createRequestError(404, 'Asset not found');
+    }
+
+    return {
+      id: asset.id,
+      processingStatus: asset.processing_status,
+      processingError: asset.processing_error,
+      processingUpdatedAt: asset.processing_updated_at,
+      processingCompletedAt: asset.processing_completed_at,
+    };
   }
 
   async function deleteChatAsset({ userId, assetId } = {}) {
@@ -184,15 +227,21 @@ function createChatAssetsService(deps = {}) {
   async function resolveAttachmentsForMessage({ userId, assetIds } = {}) {
     const processedAttachments = [];
     const linkedAssetIds = [];
+    const pendingAssetIds = [];
 
     if (!Array.isArray(assetIds) || assetIds.length === 0) {
-      return { processedAttachments, linkedAssetIds };
+      return { processedAttachments, linkedAssetIds, pendingAssetIds };
     }
 
     for (const assetId of assetIds.slice(0, 5)) {
       const asset = await services.chatAssetsRepository.getAssetById(assetId, userId);
       if (!asset) continue;
       linkedAssetIds.push(asset.id);
+
+      if (asset.processing_status && asset.processing_status !== 'ready') {
+        pendingAssetIds.push(asset.id);
+        continue;
+      }
 
       if (isVisionCompatibleImage(asset.mime_type)) {
         const visionData = await getAssetForVision(assetId, userId);
@@ -207,6 +256,16 @@ function createChatAssetsService(deps = {}) {
         continue;
       }
 
+      if (asset.processed_text) {
+        processedAttachments.push({
+          type: asset.type,
+          mimeType: asset.mime_type,
+          textContent: asset.processed_text,
+          fileName: asset.file_name,
+        });
+        continue;
+      }
+
       const textData = await getAssetTextContent(assetId, userId);
       if (textData && textData.textContent) {
         processedAttachments.push({
@@ -218,7 +277,61 @@ function createChatAssetsService(deps = {}) {
       }
     }
 
-    return { processedAttachments, linkedAssetIds };
+    return { processedAttachments, linkedAssetIds, pendingAssetIds };
+  }
+
+  async function processAssetInBackground({ assetId, userId } = {}) {
+    if (!assetId || !userId) return;
+
+    await services.chatAssetsRepository.updateAssetProcessing({
+      assetId,
+      userId,
+      updates: {
+        processing_status: 'processing',
+        processing_started_at: new Date().toISOString(),
+        processing_updated_at: new Date().toISOString(),
+        processing_error: null,
+      },
+    });
+
+    try {
+      const textData = await getAssetTextContent(assetId, userId);
+      if (!textData || !textData.textContent) {
+        await services.chatAssetsRepository.updateAssetProcessing({
+          assetId,
+          userId,
+          updates: {
+            processing_status: 'error',
+            processing_error: 'No extractable text found',
+            processing_updated_at: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+
+      await services.chatAssetsRepository.updateAssetProcessing({
+        assetId,
+        userId,
+        updates: {
+          processing_status: 'ready',
+          processed_text: truncateText(textData.textContent),
+          processing_error: null,
+          processing_updated_at: new Date().toISOString(),
+          processing_completed_at: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      await services.chatAssetsRepository.updateAssetProcessing({
+        assetId,
+        userId,
+        updates: {
+          processing_status: 'error',
+          processing_error: error instanceof Error ? error.message : 'Processing failed',
+          processing_updated_at: new Date().toISOString(),
+        },
+      });
+      throw error;
+    }
   }
 
   async function linkAssetsToMessage(assetIds, messageId, userId) {
@@ -230,6 +343,7 @@ function createChatAssetsService(deps = {}) {
     createSignedAssetUrl,
     uploadChatAsset,
     listChatAssets,
+    getChatAssetStatus,
     deleteChatAsset,
     getAssetForVision,
     getAssetTextContent,

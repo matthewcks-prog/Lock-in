@@ -15,14 +15,24 @@
     const config = registry.config.createConfig(lockinConfig);
     const respond = registry.responder.createResponder(messaging);
     const transcriptsLog = log.withPrefix('[Transcripts]');
+    const runtimeValidators = registry.validators.createRuntimeValidators();
 
-    const sessionStore = registry.sessions.createSessionStore({ chromeClient, log });
-    const settingsStore = registry.settings.createSettingsStore({ chromeClient, log });
+    const sessionStore = registry.sessions.createSessionStore({
+      chromeClient,
+      log,
+      validators: runtimeValidators,
+    });
+    const settingsStore = registry.settings.createSettingsStore({
+      chromeClient,
+      log,
+      validators: runtimeValidators,
+    });
     const authService = registry.auth.createAuthService({
       chromeClient,
       config,
       log,
       networkUtils,
+      validators: runtimeValidators,
     });
 
     const transcriptRegistry = registry.transcripts.registry.createTranscriptRegistry({
@@ -60,6 +70,7 @@
       errors: registry.errors,
       contentScriptMedia,
       log: transcriptsLog,
+      validators: runtimeValidators,
     });
 
     const sessionHandlers = registry.handlers.createSessionHandlers({ sessionStore });

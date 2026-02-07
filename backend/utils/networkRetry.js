@@ -1,3 +1,5 @@
+const { TimeoutError, AbortError } = require('../errors');
+
 const DEFAULT_RETRY_CONFIG = {
   maxRetries: 3,
   baseDelayMs: 500,
@@ -60,6 +62,7 @@ function isNetworkError(error) {
     message.includes('Failed to fetch') ||
     message.includes('NetworkError') ||
     message.includes('Network request failed') ||
+    message.includes('ERR_NETWORK') ||
     message.includes('ECONNRESET') ||
     message.includes('ETIMEDOUT') ||
     message.includes('EAI_AGAIN')
@@ -68,19 +71,26 @@ function isNetworkError(error) {
 
 function createTimeoutError(timeoutMs, context) {
   const label = context ? `${context} ` : '';
-  const error = new Error(`${label}timed out after ${timeoutMs}ms`);
-  error.code = 'TIMEOUT';
-  error.name = 'TimeoutError';
-  return error;
+  return new TimeoutError(`${label}timed out after ${timeoutMs}ms`, {
+    timeoutMs,
+    context: context ?? null,
+  });
 }
 
 function isAbortError(error) {
-  return error instanceof Error && error.name === 'AbortError';
+  return (
+    error instanceof Error &&
+    (error.name === 'AbortError' ||
+      error.code === 'ABORTED' ||
+      error.code === 'ABORT_ERR' ||
+      error.code === 'ERR_ABORTED')
+  );
 }
 
 function shouldRetryError(error, config) {
   if (!error) return false;
   if (error.code === 'TIMEOUT') return config.retryOnTimeout;
+  if (error.code === 'ABORTED') return false;
   if (isNetworkError(error)) return config.retryOnNetworkError;
   return false;
 }
@@ -98,9 +108,7 @@ async function fetchWithRetry(url, options = {}, configOverrides = {}) {
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (options.signal?.aborted) {
-      const abortError = new Error('Request aborted');
-      abortError.name = 'AbortError';
-      throw abortError;
+      throw new AbortError('Request aborted');
     }
 
     let timeoutId;
@@ -135,6 +143,8 @@ async function fetchWithRetry(url, options = {}, configOverrides = {}) {
     } catch (error) {
       if (isAbortError(error) && timedOut) {
         lastError = createTimeoutError(config.timeoutMs, config.context);
+      } else if (isAbortError(error)) {
+        lastError = new AbortError('Request aborted');
       } else {
         lastError = error instanceof Error ? error : new Error(String(error));
       }

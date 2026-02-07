@@ -5,6 +5,18 @@
 import { describe, it, expect } from 'vitest';
 import { parseWebVtt, decodeHtmlEntities, parseVttTimestamp, formatAsVtt } from '../webvttParser';
 
+const MS_430 = 430;
+const MS_5919 = 5919;
+const MS_90500 = 90500;
+const MS_1500 = 1500;
+const MS_10000 = 10000;
+const MS_60000 = 60000;
+const MS_3600000 = 3600000;
+const MS_5920 = 5920;
+
+const SEGMENT_TEXT = 'The central processing unit';
+const SEGMENT_TEXT_2 = 'is the brain of the computer.';
+
 describe('decodeHtmlEntities', () => {
   it('decodes common HTML entities', () => {
     expect(decodeHtmlEntities('I&#39;m')).toBe("I'm");
@@ -33,35 +45,35 @@ describe('parseVttTimestamp', () => {
   it('parses HH:MM:SS.mmm format', () => {
     expect(parseVttTimestamp('00:00:00.000')).toBe(0);
     expect(parseVttTimestamp('00:00:01.000')).toBe(1000);
-    expect(parseVttTimestamp('00:01:00.000')).toBe(60000);
-    expect(parseVttTimestamp('01:00:00.000')).toBe(3600000);
-    expect(parseVttTimestamp('00:00:00.430')).toBe(430);
+    expect(parseVttTimestamp('00:01:00.000')).toBe(MS_60000);
+    expect(parseVttTimestamp('01:00:00.000')).toBe(MS_3600000);
+    expect(parseVttTimestamp('00:00:00.430')).toBe(MS_430);
   });
 
   it('parses MM:SS.mmm format', () => {
     expect(parseVttTimestamp('00:00.000')).toBe(0);
-    expect(parseVttTimestamp('00:05.919')).toBe(5919);
-    expect(parseVttTimestamp('01:30.500')).toBe(90500);
+    expect(parseVttTimestamp('00:05.919')).toBe(MS_5919);
+    expect(parseVttTimestamp('01:30.500')).toBe(MS_90500);
   });
 
   it('handles various millisecond precisions', () => {
-    expect(parseVttTimestamp('00:00:01.5')).toBe(1500);
-    expect(parseVttTimestamp('00:00:01.50')).toBe(1500);
-    expect(parseVttTimestamp('00:00:01.500')).toBe(1500);
+    expect(parseVttTimestamp('00:00:01.5')).toBe(MS_1500);
+    expect(parseVttTimestamp('00:00:01.50')).toBe(MS_1500);
+    expect(parseVttTimestamp('00:00:01.500')).toBe(MS_1500);
   });
 });
 
-describe('parseWebVtt', () => {
+describe('parseWebVtt basics', () => {
   it('parses a simple VTT file', () => {
     const vtt = `WEBVTT
 
 1
 00:00:00.430 --> 00:00:05.919
-The central processing unit
+${SEGMENT_TEXT}
 
 2
 00:00:05.920 --> 00:00:10.000
-is the brain of the computer.
+${SEGMENT_TEXT_2}
 `;
 
     const result = parseWebVtt(vtt);
@@ -71,19 +83,21 @@ is the brain of the computer.
     expect(firstSegment).toBeDefined();
     expect(secondSegment).toBeDefined();
     expect(firstSegment).toEqual({
-      startMs: 430,
-      endMs: 5919,
-      text: 'The central processing unit',
+      startMs: MS_430,
+      endMs: MS_5919,
+      text: SEGMENT_TEXT,
     });
     expect(secondSegment).toEqual({
-      startMs: 5920,
-      endMs: 10000,
-      text: 'is the brain of the computer.',
+      startMs: MS_5920,
+      endMs: MS_10000,
+      text: SEGMENT_TEXT_2,
     });
-    expect(result.plainText).toBe('The central processing unit is the brain of the computer.');
-    expect(result.durationMs).toBe(10000);
+    expect(result.plainText).toBe(`${SEGMENT_TEXT} ${SEGMENT_TEXT_2}`);
+    expect(result.durationMs).toBe(MS_10000);
   });
+});
 
+describe('parseWebVtt cues', () => {
   it('handles HTML entities in captions', () => {
     const vtt = `WEBVTT
 
@@ -97,21 +111,6 @@ It&#39;s a &quot;test&quot;
     const [firstSegment] = result.segments;
     expect(firstSegment).toBeDefined();
     expect(firstSegment?.text).toBe('It\'s a "test"');
-  });
-
-  it('strips VTT formatting tags', () => {
-    const vtt = `WEBVTT
-
-1
-00:00:00.000 --> 00:00:05.000
-<v Speaker>Hello</v> <b>world</b>
-`;
-
-    const result = parseWebVtt(vtt);
-
-    const [firstSegment] = result.segments;
-    expect(firstSegment).toBeDefined();
-    expect(firstSegment?.text).toBe('Hello world');
   });
 
   it('handles multi-line cues', () => {
@@ -128,6 +127,23 @@ and this is line two
     const [firstSegment] = result.segments;
     expect(firstSegment).toBeDefined();
     expect(firstSegment?.text).toBe('This is line one and this is line two');
+  });
+});
+
+describe('parseWebVtt formatting', () => {
+  it('strips VTT formatting tags', () => {
+    const vtt = `WEBVTT
+
+1
+00:00:00.000 --> 00:00:05.000
+<v Speaker>Hello</v> <b>world</b>
+`;
+
+    const result = parseWebVtt(vtt);
+
+    const [firstSegment] = result.segments;
+    expect(firstSegment).toBeDefined();
+    expect(firstSegment?.text).toBe('Hello world');
   });
 
   it('handles VTT with NOTE and STYLE blocks', () => {
@@ -184,16 +200,16 @@ Positioned text
 describe('formatAsVtt', () => {
   it('formats segments back to VTT', () => {
     const segments = [
-      { startMs: 430, endMs: 5919, text: 'The central processing unit' },
-      { startMs: 5920, endMs: 10000, text: 'is the brain of the computer.' },
+      { startMs: MS_430, endMs: MS_5919, text: SEGMENT_TEXT },
+      { startMs: MS_5920, endMs: MS_10000, text: SEGMENT_TEXT_2 },
     ];
 
     const result = formatAsVtt(segments);
 
     expect(result).toContain('WEBVTT');
     expect(result).toContain('00:00:00.430 --> 00:00:05.919');
-    expect(result).toContain('The central processing unit');
+    expect(result).toContain(SEGMENT_TEXT);
     expect(result).toContain('00:00:05.920 --> 00:00:10.000');
-    expect(result).toContain('is the brain of the computer.');
+    expect(result).toContain(SEGMENT_TEXT_2);
   });
 });

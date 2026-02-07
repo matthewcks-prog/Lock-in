@@ -8,112 +8,32 @@
 
 import type { InlineContent, TextAlignment } from '../types';
 import { PDF_CONFIG } from './pdfConfig';
+import type { JsPDFConstructor, JsPDFInstance } from './pdfTypes';
+import {
+  buildWrappedLines,
+  DECORATION_OFFSET_RATIO,
+  ensurePageSpace,
+  getTextHeight,
+  inlineContentToSpans,
+  renderInlineSpans,
+  renderLines,
+  resetTextStyle,
+  wrapText,
+  type RenderLinesOptions,
+  type RGB,
+  type WrappedLine,
+} from './pdfTextRenderer';
 
-// ============================================================================
-// jsPDF Type Declarations
-// ============================================================================
+const HALF_LINE_HEIGHT_RATIO = 0.5;
+const QUOTE_BORDER_LINE_WIDTH = 0.5;
+const LIST_BULLET = '\u2022 ';
 
-export interface JsPDFInstance {
-  setFont(fontName: string, fontStyle: string): void;
-  setFontSize(size: number): void;
-  setTextColor(r: number, g: number, b: number): void;
-  setFillColor(r: number, g: number, b: number): void;
-  setDrawColor(r: number, g: number, b: number): void;
-  setLineWidth(width: number): void;
-  text(text: string, x: number, y: number): void;
-  rect(x: number, y: number, w: number, h: number, style?: string): void;
-  line(x1: number, y1: number, x2: number, y2: number): void;
-  addPage(): void;
-  splitTextToSize(text: string, maxWidth: number): string[];
-  getTextWidth(text: string): number;
-  output(type: 'blob'): Blob;
+interface ListLayout {
+  contentX: number;
+  contentWidth: number;
+  indentX: number;
+  prefixWidth: number;
 }
-
-export interface JsPDFConstructor {
-  new (options: { orientation: string; unit: string; format: string }): JsPDFInstance;
-}
-
-// ============================================================================
-// Types
-// ============================================================================
-
-type RGB = [number, number, number];
-
-interface TextSpan {
-  text: string;
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  strikethrough?: boolean;
-  code?: boolean;
-  color?: RGB;
-  backgroundColor?: RGB;
-}
-
-interface WrappedLine {
-  spans: TextSpan[];
-  width: number;
-}
-
-// ============================================================================
-// Color Utilities
-// ============================================================================
-
-function parseColor(cssColor: string): RGB | null {
-  const trimmed = cssColor.trim().toLowerCase();
-
-  const hexMatch = trimmed.match(/^#([a-f0-9]{3,6})$/i);
-  if (hexMatch) {
-    let hex = hexMatch[1];
-    if (!hex) {
-      return null;
-    }
-    if (hex.length === 3)
-      hex = hex
-        .split('')
-        .map((c) => c + c)
-        .join('');
-    const num = parseInt(hex, 16);
-    return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
-  }
-
-  const rgbMatch = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (rgbMatch) {
-    const [_, r, g, b] = rgbMatch;
-    if (!r || !g || !b) return null;
-    return [parseInt(r, 10), parseInt(g, 10), parseInt(b, 10)];
-  }
-
-  const namedColors: Record<string, RGB> = {
-    black: [0, 0, 0],
-    white: [255, 255, 255],
-    red: [255, 0, 0],
-    green: [0, 128, 0],
-    blue: [0, 0, 255],
-    yellow: [255, 255, 0],
-    orange: [255, 165, 0],
-    purple: [128, 0, 128],
-    pink: [255, 192, 203],
-    gray: [128, 128, 128],
-    grey: [128, 128, 128],
-  };
-  return namedColors[trimmed] ?? null;
-}
-
-function getFontStyle(span: TextSpan): string {
-  if (span.bold && span.italic) return 'bolditalic';
-  if (span.bold) return 'bold';
-  if (span.italic) return 'italic';
-  return 'normal';
-}
-
-function getFontFamily(span: TextSpan): string {
-  return span.code ? 'courier' : 'helvetica';
-}
-
-// ============================================================================
-// PDF Builder Class
-// ============================================================================
 
 export class PdfBuilder {
   private doc: JsPDFInstance;
@@ -129,10 +49,6 @@ export class PdfBuilder {
     this.setColor(PDF_CONFIG.textColor);
   }
 
-  // ---------------------------------------------------------------------------
-  // Basic Helpers
-  // ---------------------------------------------------------------------------
-
   private setColor(color: RGB): void {
     this.doc.setTextColor(color[0], color[1], color[2]);
   }
@@ -142,166 +58,85 @@ export class PdfBuilder {
   private setDrawColor(color: RGB): void {
     this.doc.setDrawColor(color[0], color[1], color[2]);
   }
-  private getTextHeight(fontSize: number): number {
-    return fontSize * PDF_CONFIG.lineHeight * 0.352778;
-  }
-  private wrapText(text: string, maxWidth: number): string[] {
-    return this.doc.splitTextToSize(text, maxWidth);
+  private ensureSpace(height: number): void {
+    this.y = ensurePageSpace(this.doc, this.y, height);
   }
 
-  private checkPageBreak(height: number): void {
-    if (this.y + height > PDF_CONFIG.pageHeight - PDF_CONFIG.marginBottom) {
-      this.doc.addPage();
-      this.y = PDF_CONFIG.marginTop;
-    }
-  }
-
-  private getAlignedX(
-    textWidth: number,
-    alignment: TextAlignment | undefined,
-    baseX: number,
-    maxWidth: number,
-  ): number {
-    if (alignment === 'center') return baseX + (maxWidth - textWidth) / 2;
-    if (alignment === 'right') return baseX + maxWidth - textWidth;
-    return baseX;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Span Conversion
-  // ---------------------------------------------------------------------------
-
-  private inlineToSpans(content: InlineContent[]): TextSpan[] {
-    const spans: TextSpan[] = [];
-    for (const item of content) {
-      if (item.type === 'text') {
-        const span: TextSpan = { text: item.text };
-        if (item.format.bold) span.bold = true;
-        if (item.format.italic) span.italic = true;
-        if (item.format.underline) span.underline = true;
-        if (item.format.strikethrough) span.strikethrough = true;
-        if (item.format.code) span.code = true;
-        const color = item.styles?.color ? parseColor(item.styles.color) : null;
-        if (color) span.color = color;
-        const backgroundColor = item.styles?.backgroundColor
-          ? parseColor(item.styles.backgroundColor)
-          : null;
-        if (backgroundColor) span.backgroundColor = backgroundColor;
-        spans.push(span);
-      } else if (item.type === 'link') {
-        for (const child of item.children) {
-          const span: TextSpan = { text: child.text, underline: true, color: [0, 0, 238] };
-          if (child.format.bold) span.bold = true;
-          if (child.format.italic) span.italic = true;
-          if (child.format.strikethrough) span.strikethrough = true;
-          if (child.format.code) span.code = true;
-          spans.push(span);
-        }
-      }
-    }
-    return spans;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Line Building
-  // ---------------------------------------------------------------------------
-
-  private buildLines(spans: TextSpan[], maxWidth: number): WrappedLine[] {
-    const lines: WrappedLine[] = [];
-    let current: TextSpan[] = [];
-    let width = 0;
-
-    const pushLine = () => {
-      if (current.length) {
-        lines.push({ spans: current, width });
-        current = [];
-        width = 0;
-      }
-    };
-
-    for (const span of spans) {
-      for (const [i, part] of span.text.split('\n').entries()) {
-        if (i > 0) pushLine();
-        if (!part) continue;
-
-        this.doc.setFont(getFontFamily(span), getFontStyle(span));
-        for (const word of part.split(/(\s+)/)) {
-          const wordWidth = this.doc.getTextWidth(word);
-          if (width + wordWidth > maxWidth && current.length) pushLine();
-          if (word.trim() || current.length) {
-            current.push({ ...span, text: word });
-            width += wordWidth;
-          }
-        }
-      }
-    }
-    pushLine();
-    return lines;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Span Rendering
-  // ---------------------------------------------------------------------------
-
-  private renderSpan(span: TextSpan, x: number, lineHeight: number): number {
-    this.doc.setFont(getFontFamily(span), getFontStyle(span));
-    const textWidth = this.doc.getTextWidth(span.text);
-
-    if (span.backgroundColor) {
-      this.setFillColor(span.backgroundColor);
-      this.doc.rect(x, this.y - lineHeight * 0.7, textWidth, lineHeight, 'F');
-    }
-
-    this.setColor(span.color || PDF_CONFIG.textColor);
-    this.doc.text(span.text, x, this.y);
-
-    if (span.underline) {
-      this.setDrawColor(span.color || PDF_CONFIG.textColor);
-      this.doc.setLineWidth(0.2);
-      this.doc.line(x, this.y + 0.5, x + textWidth, this.y + 0.5);
-    }
-    if (span.strikethrough) {
-      this.setDrawColor(span.color || PDF_CONFIG.textColor);
-      this.doc.setLineWidth(0.2);
-      this.doc.line(x, this.y - lineHeight * 0.3, x + textWidth, this.y - lineHeight * 0.3);
-    }
-
-    return textWidth;
-  }
-
-  private renderLines(
-    lines: WrappedLine[],
+  private buildRenderLinesOptions(
     fontSize: number,
     startX: number,
     maxWidth: number,
     alignment?: TextAlignment,
-  ): void {
-    const lineHeight = this.getTextHeight(fontSize);
-    this.doc.setFontSize(fontSize);
-
-    for (const line of lines) {
-      this.checkPageBreak(lineHeight);
-      let x = this.getAlignedX(line.width, alignment, startX, maxWidth);
-      for (const span of line.spans) x += this.renderSpan(span, x, lineHeight);
-      this.y += lineHeight;
+  ): RenderLinesOptions {
+    const options: RenderLinesOptions = {
+      fontSize,
+      startX,
+      maxWidth,
+    };
+    if (alignment !== undefined) {
+      options.alignment = alignment;
     }
-
-    this.doc.setFont('helvetica', 'normal');
-    this.setColor(PDF_CONFIG.textColor);
+    return options;
   }
 
-  // ---------------------------------------------------------------------------
-  // Public Methods
-  // ---------------------------------------------------------------------------
+  private getListPrefix(index: number, ordered: boolean): string {
+    return ordered ? `${index + 1}. ` : LIST_BULLET;
+  }
+
+  private getListLayout(prefixWidth: number): ListLayout {
+    const contentX = PDF_CONFIG.marginLeft + Math.max(prefixWidth, PDF_CONFIG.listIndent);
+    const contentWidth = this.contentWidth - PDF_CONFIG.listIndent;
+    const indentX = PDF_CONFIG.marginLeft + PDF_CONFIG.listIndent;
+
+    return {
+      contentX,
+      contentWidth,
+      indentX,
+      prefixWidth,
+    };
+  }
+
+  private buildListLines(content: InlineContent[], maxWidth: number): WrappedLine[] {
+    const spans = inlineContentToSpans(content);
+    return buildWrappedLines(this.doc, spans, maxWidth);
+  }
+
+  private renderListLines(lines: WrappedLine[], layout: ListLayout, lineHeight: number): void {
+    if (lines.length === 0) {
+      this.y += lineHeight;
+      return;
+    }
+
+    const firstLine = lines[0];
+    if (firstLine === undefined) {
+      this.y += lineHeight;
+      return;
+    }
+
+    renderInlineSpans(this.doc, firstLine.spans, {
+      startX: layout.contentX,
+      y: this.y,
+      lineHeight,
+    });
+    this.y += lineHeight;
+
+    if (lines.length > 1) {
+      this.y = renderLines(this.doc, lines.slice(1), this.y, {
+        fontSize: PDF_CONFIG.bodySize,
+        startX: layout.indentX,
+        maxWidth: layout.contentWidth,
+      });
+    }
+  }
 
   addTitle(title: string): void {
     this.doc.setFontSize(PDF_CONFIG.titleSize);
     this.doc.setFont('helvetica', 'bold');
     this.setColor(PDF_CONFIG.textColor);
 
-    const lineHeight = this.getTextHeight(PDF_CONFIG.titleSize);
-    for (const line of this.wrapText(title, this.contentWidth)) {
-      this.checkPageBreak(lineHeight);
+    const lineHeight = getTextHeight(PDF_CONFIG.titleSize);
+    for (const line of wrapText(this.doc, title, this.contentWidth)) {
+      this.ensureSpace(lineHeight);
       this.doc.text(line, PDF_CONFIG.marginLeft, this.y);
       this.y += lineHeight;
     }
@@ -312,12 +147,12 @@ export class PdfBuilder {
   }
 
   addMetadata(parts: string[]): void {
-    if (!parts.length) return;
+    if (parts.length === 0) return;
     this.doc.setFontSize(PDF_CONFIG.metaSize);
     this.setColor(PDF_CONFIG.metaColor);
 
-    const lineHeight = this.getTextHeight(PDF_CONFIG.metaSize);
-    this.checkPageBreak(lineHeight);
+    const lineHeight = getTextHeight(PDF_CONFIG.metaSize);
+    this.ensureSpace(lineHeight);
     this.doc.text(parts.join(' | '), PDF_CONFIG.marginLeft, this.y);
     this.y += lineHeight + PDF_CONFIG.paragraphSpacing;
 
@@ -330,75 +165,49 @@ export class PdfBuilder {
     const fontSize = PDF_CONFIG.headingSizes[headingIndex] ?? PDF_CONFIG.bodySize;
     this.y += PDF_CONFIG.headingSpacing / 2;
 
-    const spans = this.inlineToSpans(content).map((s) => ({ ...s, bold: true }));
-    this.renderLines(
-      this.buildLines(spans, this.contentWidth),
+    const spans = inlineContentToSpans(content).map((span) => ({ ...span, bold: true }));
+    const lines = buildWrappedLines(this.doc, spans, this.contentWidth);
+    const options = this.buildRenderLinesOptions(
       fontSize,
       PDF_CONFIG.marginLeft,
       this.contentWidth,
       alignment,
     );
+    this.y = renderLines(this.doc, lines, this.y, options);
     this.y += PDF_CONFIG.paragraphSpacing;
   }
 
   addParagraph(content: InlineContent[], alignment?: TextAlignment): void {
-    const spans = this.inlineToSpans(content);
-    if (spans.every((s) => !s.text.trim())) return;
+    const spans = inlineContentToSpans(content);
+    if (spans.every((s) => s.text.trim().length === 0)) return;
 
-    this.renderLines(
-      this.buildLines(spans, this.contentWidth),
+    const lines = buildWrappedLines(this.doc, spans, this.contentWidth);
+    const options = this.buildRenderLinesOptions(
       PDF_CONFIG.bodySize,
       PDF_CONFIG.marginLeft,
       this.contentWidth,
       alignment,
     );
+    this.y = renderLines(this.doc, lines, this.y, options);
     this.y += PDF_CONFIG.paragraphSpacing;
   }
 
   addListItem(content: InlineContent[], index: number, ordered: boolean): void {
-    const prefix = ordered ? `${index + 1}. ` : '\u2022 ';
-    const lineHeight = this.getTextHeight(PDF_CONFIG.bodySize);
+    const prefix = this.getListPrefix(index, ordered);
+    const lineHeight = getTextHeight(PDF_CONFIG.bodySize);
 
-    this.checkPageBreak(lineHeight);
+    this.ensureSpace(lineHeight);
     this.doc.setFontSize(PDF_CONFIG.bodySize);
     this.doc.setFont('helvetica', 'normal');
     this.setColor(PDF_CONFIG.textColor);
     this.doc.text(prefix, PDF_CONFIG.marginLeft, this.y);
 
     const prefixWidth = this.doc.getTextWidth(prefix);
-    const contentX = PDF_CONFIG.marginLeft + Math.max(prefixWidth, PDF_CONFIG.listIndent);
-    const contentWidth = this.contentWidth - PDF_CONFIG.listIndent;
+    const layout = this.getListLayout(prefixWidth);
+    const lines = this.buildListLines(content, layout.contentWidth - layout.prefixWidth);
 
-    const spans = this.inlineToSpans(content);
-    const lines = this.buildLines(spans, contentWidth - prefixWidth);
-
-    if (!lines.length) {
-      this.y += lineHeight;
-      return;
-    }
-
-    // First line rendered inline with prefix
-    let x = contentX;
-    const firstLine = lines[0];
-    if (!firstLine) {
-      this.y += lineHeight;
-      return;
-    }
-    for (const span of firstLine.spans) x += this.renderSpan(span, x, lineHeight);
-    this.y += lineHeight;
-
-    // Remaining lines at indent
-    if (lines.length > 1) {
-      this.renderLines(
-        lines.slice(1),
-        PDF_CONFIG.bodySize,
-        PDF_CONFIG.marginLeft + PDF_CONFIG.listIndent,
-        contentWidth,
-      );
-    }
-
-    this.doc.setFont('helvetica', 'normal');
-    this.setColor(PDF_CONFIG.textColor);
+    this.renderListLines(lines, layout, lineHeight);
+    resetTextStyle(this.doc);
   }
 
   endList(): void {
@@ -406,61 +215,63 @@ export class PdfBuilder {
   }
 
   addQuote(content: InlineContent[], alignment?: TextAlignment): void {
-    const spans = this.inlineToSpans(content);
-    if (spans.every((s) => !s.text.trim())) return;
+    const spans = inlineContentToSpans(content);
+    if (spans.every((s) => s.text.trim().length === 0)) return;
 
     const quoteWidth = this.contentWidth - PDF_CONFIG.quoteIndent;
-    const lineHeight = this.getTextHeight(PDF_CONFIG.bodySize);
+    const lineHeight = getTextHeight(PDF_CONFIG.bodySize);
     const estimatedHeight =
-      this.wrapText(spans.map((s) => s.text).join(''), quoteWidth).length * lineHeight;
+      wrapText(this.doc, spans.map((s) => s.text).join(''), quoteWidth).length * lineHeight;
 
-    this.checkPageBreak(estimatedHeight);
+    this.ensureSpace(estimatedHeight);
 
     // Left border
     this.setDrawColor(PDF_CONFIG.quoteBorder);
-    this.doc.setLineWidth(0.5);
+    this.doc.setLineWidth(QUOTE_BORDER_LINE_WIDTH);
     this.doc.line(
       PDF_CONFIG.marginLeft,
-      this.y - lineHeight * 0.3,
+      this.y - lineHeight * DECORATION_OFFSET_RATIO,
       PDF_CONFIG.marginLeft,
-      this.y + estimatedHeight - lineHeight * 0.5,
+      this.y + estimatedHeight - lineHeight * HALF_LINE_HEIGHT_RATIO,
     );
 
     const quotedSpans = spans.map((s) => ({
       ...s,
       italic: true,
-      color: s.color || (PDF_CONFIG.metaColor as RGB),
+      color: s.color ?? (PDF_CONFIG.metaColor as RGB),
     }));
-    this.renderLines(
-      this.buildLines(quotedSpans, quoteWidth),
+    const quotedLines = buildWrappedLines(this.doc, quotedSpans, quoteWidth);
+    const options = this.buildRenderLinesOptions(
       PDF_CONFIG.bodySize,
       PDF_CONFIG.marginLeft + PDF_CONFIG.quoteIndent,
       quoteWidth,
       alignment,
     );
+    this.y = renderLines(this.doc, quotedLines, this.y, options);
     this.y += PDF_CONFIG.paragraphSpacing;
 
-    this.doc.setFont('helvetica', 'normal');
-    this.setColor(PDF_CONFIG.textColor);
+    resetTextStyle(this.doc);
   }
 
   addCodeBlock(code: string): void {
-    if (!code.trim()) return;
+    if (code.trim().length === 0) return;
 
     this.doc.setFontSize(PDF_CONFIG.codeSize);
     this.doc.setFont('courier', 'normal');
 
     const codeWidth = this.contentWidth - PDF_CONFIG.codeIndent * 2;
-    const codeLines = code.split('\n').flatMap((line) => this.wrapText(line || ' ', codeWidth));
-    const lineHeight = this.getTextHeight(PDF_CONFIG.codeSize);
+    const codeLines = code
+      .split('\n')
+      .flatMap((line) => wrapText(this.doc, line.length === 0 ? ' ' : line, codeWidth));
+    const lineHeight = getTextHeight(PDF_CONFIG.codeSize);
     const blockHeight = codeLines.length * lineHeight + PDF_CONFIG.codeIndent;
 
-    this.checkPageBreak(blockHeight);
+    this.ensureSpace(blockHeight);
 
     this.setFillColor(PDF_CONFIG.codeBackground);
     this.doc.rect(
       PDF_CONFIG.marginLeft,
-      this.y - lineHeight * 0.5,
+      this.y - lineHeight * HALF_LINE_HEIGHT_RATIO,
       this.contentWidth,
       blockHeight,
       'F',

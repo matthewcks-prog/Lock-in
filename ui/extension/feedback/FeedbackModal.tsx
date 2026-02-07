@@ -35,13 +35,17 @@ const FEEDBACK_TYPES: { value: FeedbackType; label: string; description: string 
   { value: 'other', label: '💬 Other', description: 'General feedback or comments' },
 ];
 
+type ChromeRuntimeLike = {
+  runtime?: { getManifest?: () => { version?: string } };
+};
+
 /**
  * Get extension version from Chrome runtime
  */
 function getExtensionVersion(): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (globalThis as any).chrome?.runtime?.getManifest?.()?.version || 'unknown';
+    const chromeRuntime = (globalThis as typeof globalThis & { chrome?: ChromeRuntimeLike }).chrome;
+    return chromeRuntime?.runtime?.getManifest?.()?.version || 'unknown';
   } catch {
     return 'unknown';
   }

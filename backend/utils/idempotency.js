@@ -163,6 +163,41 @@ function createIdempotencyStore(options = {}) {
   return {
     run,
     getEntry,
+    begin: async (key, userId) => {
+      if (!key || !userId) {
+        return { status: 'disabled' };
+      }
+
+      const now = new Date();
+      const nowIso = now.toISOString();
+      const expiresAt = new Date(now.getTime() + ttlMs).toISOString();
+
+      await cleanupExpired(userId, nowIso);
+
+      const insertResult = await insertEntry(key, userId, nowIso, expiresAt);
+      if (insertResult.inserted) {
+        return { status: 'new' };
+      }
+
+      const existing = await getEntry(key, userId);
+      if (existing?.expires_at && new Date(existing.expires_at).getTime() <= Date.now()) {
+        await deleteEntry(key, userId);
+        return { status: 'retry' };
+      }
+
+      if (existing?.status === 'completed' && existing.response) {
+        return { status: 'completed', response: existing.response };
+      }
+
+      return { status: 'in_progress' };
+    },
+    complete: async (key, userId, response) => {
+      if (!key || !userId) return;
+      await updateEntry(key, userId, { status: 'completed', response });
+    },
+    fail: async (key, userId) => {
+      await deleteEntry(key, userId);
+    },
   };
 }
 

@@ -1,6 +1,7 @@
 const { chatService } = require('../../services/assistant/chatService');
 const { chatTitleService } = require('../../services/assistant/chatTitleService');
 const { buildInitialChatTitle } = require('../../utils/chatTitle');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 /**
  * POST /api/chats/:chatId/title
@@ -17,7 +18,9 @@ async function generateChatTitle(req, res, _next) {
   try {
     const chat = await chatService.getChatById({ userId, chatId });
     if (!chat) {
-      return res.status(404).json({ success: false, error: { message: 'Chat not found' } });
+      return res
+        .status(HTTP_STATUS.NOT_FOUND)
+        .json({ success: false, error: { message: 'Chat not found' } });
     }
 
     fallbackTitle = await chatTitleService.buildFallbackTitle({
@@ -48,7 +51,7 @@ async function generateChatTitle(req, res, _next) {
       console.error('Failed to persist fallback chat title:', storageError);
     }
 
-    return res.status(200).json({
+    return res.status(HTTP_STATUS.OK).json({
       success: true,
       chatId,
       title: safeTitle,

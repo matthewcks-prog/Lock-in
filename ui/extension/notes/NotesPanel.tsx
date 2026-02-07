@@ -27,7 +27,7 @@ interface NotesPanelProps {
 }
 
 function formatLinkedLabel(week: number | null | undefined): string | null {
-  if (week != null && week > 0) {
+  if (week !== null && week !== undefined && week > 0) {
     return `Week ${week}`;
   }
   return null;
@@ -52,7 +52,7 @@ export function NotesPanel({
   const [filter, setFilter] = useState<'course' | 'all' | 'starred'>('course');
   const [search, setSearch] = useState('');
   const { toast, showToast, hideToast } = useToast();
-  const hasValidWeek = currentWeek != null && currentWeek > 0;
+  const hasValidWeek = currentWeek !== null && currentWeek !== undefined && currentWeek > 0;
   const effectiveSourceUrl = hasValidWeek ? pageUrl : null;
 
   const {

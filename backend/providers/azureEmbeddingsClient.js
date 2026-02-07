@@ -13,6 +13,16 @@
  */
 
 const { AzureOpenAI } = require('openai');
+const { TWO, THREE, NINE, TEN, HUNDRED, THOUSAND, SIXTY } = require('../constants/numbers');
+const HTTP_STATUS = require('../constants/httpStatus');
+
+const DEFAULT_TIMEOUT_MS = SIXTY * THOUSAND;
+const DEFAULT_MAX_RETRIES = THREE;
+const TOKENS_PER_MILLION = THOUSAND * THOUSAND;
+const COST_PER_MILLION_TOKENS = TWO / HUNDRED;
+const KIBIBYTE = Math.pow(TWO, TEN);
+const DEFAULT_BATCH_SIZE = KIBIBYTE * TWO;
+const DIAGNOSTIC_DIMENSIONS = Math.pow(TWO, NINE);
 
 /**
  * Azure Embeddings client configuration
@@ -46,8 +56,8 @@ class AzureEmbeddingsClient {
       apiKey: config.apiKey,
       apiVersion: config.apiVersion,
       endpoint: config.endpoint,
-      timeout: 60000, // 60 second timeout for embeddings
-      maxRetries: 3, // Retry failed requests up to 3 times
+      timeout: DEFAULT_TIMEOUT_MS, // 60 second timeout for embeddings
+      maxRetries: DEFAULT_MAX_RETRIES, // Retry failed requests up to 3 times
     });
 
     // Usage tracking for monitoring and cost estimation
@@ -67,7 +77,7 @@ class AzureEmbeddingsClient {
   getStats() {
     return {
       ...this.stats,
-      estimatedCost: (this.stats.totalTokens / 1000000) * 0.02, // $0.02 per 1M tokens for text-embedding-3-small
+      estimatedCost: (this.stats.totalTokens / TOKENS_PER_MILLION) * COST_PER_MILLION_TOKENS, // $0.02 per 1M tokens for text-embedding-3-small
     };
   }
 
@@ -144,7 +154,7 @@ class AzureEmbeddingsClient {
    * @returns {Promise<number[][]>} Array of embedding vectors
    */
   async batchEmbed(texts, options = {}) {
-    const batchSize = options.batchSize || 2048;
+    const batchSize = options.batchSize || DEFAULT_BATCH_SIZE;
     const embeddings = [];
 
     for (let i = 0; i < texts.length; i += batchSize) {
@@ -176,7 +186,7 @@ class AzureEmbeddingsClient {
     }
 
     // Rate limiting
-    if (error.status === 429) {
+    if (error.status === HTTP_STATUS.TOO_MANY_REQUESTS) {
       const retryAfter = error.headers?.['retry-after'] || 'unknown';
       return new Error(
         `Azure embeddings quota exceeded or rate limited. ` +
@@ -186,7 +196,7 @@ class AzureEmbeddingsClient {
     }
 
     // Authentication errors
-    if (error.status === 401 || error.status === 403) {
+    if (error.status === HTTP_STATUS.UNAUTHORIZED || error.status === HTTP_STATUS.FORBIDDEN) {
       return new Error(
         `Azure embeddings authentication failed. ` +
           `Please verify: 1) AZURE_OPENAI_API_KEY is correct, ` +
@@ -196,7 +206,7 @@ class AzureEmbeddingsClient {
     }
 
     // Resource not found
-    if (error.status === 404) {
+    if (error.status === HTTP_STATUS.NOT_FOUND) {
       return new Error(
         `Azure embeddings deployment not found. ` +
           `Please verify deployment '${errorContext.deployment}' exists at ${errorContext.endpoint}. ` +
@@ -205,7 +215,7 @@ class AzureEmbeddingsClient {
     }
 
     // Service errors
-    if (error.status >= 500) {
+    if (error.status >= HTTP_STATUS.INTERNAL_SERVER_ERROR) {
       return new Error(
         `Azure embeddings service error (${error.status}): ${error.message}. ` +
           `The Azure OpenAI service may be experiencing issues. ` +
@@ -248,7 +258,9 @@ class AzureEmbeddingsClient {
 
     // Test 1: Basic connectivity
     try {
-      const testEmbedding = await this.embed('diagnostic test', { dimensions: 512 });
+      const testEmbedding = await this.embed('diagnostic test', {
+        dimensions: DIAGNOSTIC_DIMENSIONS,
+      });
       diagnostics.tests.connectivity = {
         status: 'passed',
         embeddingLength: testEmbedding.length,

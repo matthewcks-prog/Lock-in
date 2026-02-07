@@ -3,10 +3,21 @@
   const registry = root.LockInBackground || (root.LockInBackground = {});
   const transcripts = registry.transcripts || (registry.transcripts = {});
 
-  function createAiTranscriptionRequests({ config, networkUtils, aiUtils }) {
+  function createAiTranscriptionRequests({ config, networkUtils, aiUtils, validators }) {
     const fetchWithRetry = networkUtils?.fetchWithRetry;
     const AUTH_REQUEST_MAX_RETRIES = 2;
     const AUTH_REQUEST_TIMEOUT_MS = 15000;
+    const runtimeValidators =
+      validators || registry.validators?.createRuntimeValidators?.() || null;
+    const validateJobResponse =
+      runtimeValidators?.validateTranscriptJobResponse ||
+      ((value) => ({ ok: true, value: value || { success: false } }));
+    const validateJobListResponse =
+      runtimeValidators?.validateTranscriptJobListResponse ||
+      ((value) => ({ ok: true, value: value || { success: false, jobs: [] } }));
+    const validateCancelAllResponse =
+      runtimeValidators?.validateTranscriptCancelAllResponse ||
+      ((value) => ({ ok: true, value: value || { success: false, canceledIds: [] } }));
 
     function buildAuthHeaders(token, extraHeaders) {
       return Object.assign({}, extraHeaders || {}, {
@@ -106,12 +117,17 @@
 
     async function createTranscriptionJob({ token, payload, signal }) {
       const backendUrl = config.getBackendUrl();
-      return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs`, token, {
+      const data = await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs`, token, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         signal,
       });
+      const parsed = validateJobResponse(data);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || 'Invalid transcript job response');
+      }
+      return parsed.value;
     }
 
     async function finalizeTranscriptionJob({
@@ -126,40 +142,68 @@
       if (expectedTotalChunks) {
         payload.expectedTotalChunks = expectedTotalChunks;
       }
-      return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}/finalize`, token, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal,
-      });
+      const data = await fetchJsonWithAuth(
+        `${backendUrl}/api/transcripts/jobs/${jobId}/finalize`,
+        token,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal,
+        },
+      );
+      const parsed = validateJobResponse(data);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || 'Invalid transcript finalize response');
+      }
+      return parsed.value;
     }
 
     async function cancelTranscriptJob({ jobId, token }) {
       if (!jobId || !token) return;
       const backendUrl = config.getBackendUrl();
-      return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/${jobId}/cancel`, token, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
+      const data = await fetchJsonWithAuth(
+        `${backendUrl}/api/transcripts/jobs/${jobId}/cancel`,
+        token,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        },
+      );
+      const parsed = validateJobResponse(data);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || 'Invalid transcript cancel response');
+      }
+      return parsed.value;
     }
 
     async function listActiveTranscriptJobs({ token }) {
       if (!token) throw new Error('No auth token provided');
       const backendUrl = config.getBackendUrl();
-      return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/active`, token, {
+      const data = await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/active`, token, {
         method: 'GET',
       });
+      const parsed = validateJobListResponse(data);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || 'Invalid transcript list response');
+      }
+      return parsed.value;
     }
 
     async function cancelAllActiveTranscriptJobs({ token }) {
       if (!token) throw new Error('No auth token provided');
       const backendUrl = config.getBackendUrl();
-      return fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/cancel-all`, token, {
+      const data = await fetchJsonWithAuth(`${backendUrl}/api/transcripts/jobs/cancel-all`, token, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
+      const parsed = validateCancelAllResponse(data);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || 'Invalid transcript cancel-all response');
+      }
+      return parsed.value;
     }
 
     return {

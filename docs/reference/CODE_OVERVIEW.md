@@ -284,9 +284,6 @@ This is a living overview of the current codebase. Update it whenever files move
 - **`providers/storageProvider.js`**
   - Supabase Storage wrapper used by asset and transcript services.
 
-- **`providers/withFallback.js`**
-  - Generic retry + fallback wrapper with exponential backoff and structured logging.
-
 ### External Services
 
 - **`services/llmClient.js`**

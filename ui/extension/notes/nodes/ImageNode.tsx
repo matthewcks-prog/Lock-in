@@ -87,7 +87,7 @@ function ResizableImage({
 
   // Sync with prop changes
   useEffect(() => {
-    if (width != null && height != null) {
+    if (width !== null && width !== undefined && height !== null && height !== undefined) {
       setDimensions((prev) => ({
         ...prev,
         width,
@@ -137,7 +137,7 @@ function ResizableImage({
     });
 
     // Persist if not already saved
-    if (width == null || height == null) {
+    if (width === null || width === undefined || height === null || height === undefined) {
       editor.update(() => {
         const node = $getNodeByKey(nodeKey);
         if ($isImageNode(node)) {

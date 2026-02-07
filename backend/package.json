@@ -17,8 +17,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "node --test --test-reporter=spec",
-    "test:ci": "node --test --test-reporter=spec",
+    "test": "node --test --test-reporter=spec --test-force-exit",
+    "test:ci": "node --test --test-reporter=spec --test-force-exit",
     "test:azure": "node scripts/verify-azure-embeddings.js",
     "docker:build": "cd .. && docker build -f backend/Dockerfile -t lock-in-backend .",
     "docker:run": "docker rm -f lock-in-backend-local || true && docker run --name lock-in-backend-local -p 3000:3000 --env-file ../.env lock-in-backend"
@@ -46,6 +46,7 @@
     "openai": "^4.77.0",
     "pdf-parse": "^1.1.1",
     "pino": "^10.2.0",
+    "redis": "^4.7.0",
     "pino-http": "^11.0.0",
     "uuid": "^9.0.1",
     "zod": "^3.25.76"

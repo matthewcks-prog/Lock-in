@@ -1,8 +1,4 @@
-Invalid request data when trying to send a chat...
-
-Note that i have just implemented Zod and validators..so there might be other bugs for other features as well. Make sure we dont. Add tests if needed to verify that all our features are really working. Make sure npm run valuidate still passes. No regression.
-
-Please find the root source of the issue and not just implement a temporary fix. Implement industry-grade bulletproof approach for scalablity, reliability, testability, modularity, low coupling, and maintainability principles. Make sure you delete old legacy code/docs affect so that our codebase is updated and we dont build up dirty code.# 🔧 Your Current .env Migration Checklist
+# 🔧 Your Current .env Migration Checklist
 
 ## Current State Analysis
 

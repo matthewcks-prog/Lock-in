@@ -20,7 +20,7 @@ import type { AsyncFetcher, EnhancedAsyncFetcher } from './fetchers/types';
 /**
  * Extended provider interface with async support
  */
-export interface TranscriptProviderV2 {
+export type TranscriptProviderV2 = {
   /** Provider type identifier */
   readonly provider: VideoProvider;
 
@@ -65,7 +65,7 @@ export interface TranscriptProviderV2 {
    * Returns null if no hint is available.
    */
   getEmptyDetectionHint?(context: VideoDetectionContext): string | null;
-}
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider Registry
@@ -99,7 +99,8 @@ class ProviderRegistry {
    * Get provider that can handle a URL
    */
   getProviderForUrl(url: string): TranscriptProviderV2 | null {
-    return this.providers.find((p) => p.canHandle(url)) || null;
+    const provider = this.providers.find((p) => p.canHandle(url));
+    return provider ?? null;
   }
 
   /**
@@ -112,7 +113,7 @@ class ProviderRegistry {
   } {
     // First, find provider that handles this URL
     const provider = this.getProviderForUrl(context.pageUrl);
-    if (!provider) {
+    if (provider === null) {
       return { videos: [], provider: null, requiresAsync: false };
     }
 
