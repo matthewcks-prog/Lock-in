@@ -40,6 +40,7 @@ type LockinRequestBody = {
   language?: string;
   attachments?: string[];
   idempotencyKey?: string;
+  regenerate?: boolean;
 };
 
 const RETRYABLE_STATUSES = [
@@ -65,32 +66,21 @@ function normalizeChatHistory(
 }
 
 function buildLockinRequestBody(params: ProcessTextParams): LockinRequestBody {
-  const {
-    selection,
-    chatHistory,
-    newUserMessage,
-    chatId,
-    pageContext,
-    pageUrl,
-    courseCode,
-    language,
-    attachments,
-    idempotencyKey,
-  } = params;
-
   const body: LockinRequestBody = {
-    selection: isNonEmptyString(selection) ? selection : '',
-    chatHistory: normalizeChatHistory(chatHistory),
+    selection: isNonEmptyString(params.selection) ? params.selection : '',
+    chatHistory: normalizeChatHistory(params.chatHistory),
   };
 
-  if (isNonEmptyString(newUserMessage)) body.newUserMessage = newUserMessage;
-  if (isNonEmptyString(chatId)) body.chatId = chatId;
-  if (isNonEmptyString(pageContext)) body.pageContext = pageContext;
-  if (isNonEmptyString(pageUrl)) body.pageUrl = sanitizeUrl(pageUrl);
-  if (isNonEmptyString(courseCode)) body.courseCode = courseCode;
-  if (isNonEmptyString(language)) body.language = language;
-  if (Array.isArray(attachments) && attachments.length > 0) body.attachments = attachments;
-  if (isNonEmptyString(idempotencyKey)) body.idempotencyKey = idempotencyKey;
+  if (isNonEmptyString(params.newUserMessage)) body.newUserMessage = params.newUserMessage;
+  if (isNonEmptyString(params.chatId)) body.chatId = params.chatId;
+  if (isNonEmptyString(params.pageContext)) body.pageContext = params.pageContext;
+  if (isNonEmptyString(params.pageUrl)) body.pageUrl = sanitizeUrl(params.pageUrl);
+  if (isNonEmptyString(params.courseCode)) body.courseCode = params.courseCode;
+  if (isNonEmptyString(params.language)) body.language = params.language;
+  if (Array.isArray(params.attachments) && params.attachments.length > 0)
+    body.attachments = params.attachments;
+  if (isNonEmptyString(params.idempotencyKey)) body.idempotencyKey = params.idempotencyKey;
+  if (params.regenerate === true) body.regenerate = true;
 
   return body;
 }

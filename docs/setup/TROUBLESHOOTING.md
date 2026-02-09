@@ -223,7 +223,7 @@ npx supabase status -o env
 ```javascript
 // Check manifest.json content_scripts matches
 {
-  "matches": ["https://moodle.monash.edu/*"],
+  "matches": ["https://learning.monash.edu/*"],
   "js": ["contentScript.js"]
 }
 

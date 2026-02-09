@@ -168,7 +168,7 @@ export function ExportDropdown({
               key={format.format}
               type="button"
               className={`lockin-export-item ${exportingFormat === format.format ? 'is-active' : ''}`}
-              onClick={() => handleExport(format.format)}
+              onClick={async () => handleExport(format.format)}
               role="option"
               aria-selected={exportingFormat === format.format}
             >

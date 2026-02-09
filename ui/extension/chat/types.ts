@@ -34,8 +34,15 @@ export interface ChatMessage {
   timestamp: string;
   source?: 'selection' | 'followup';
   isPending?: boolean;
+  isStreaming?: boolean;
   isError?: boolean;
   attachments?: ChatAttachment[];
+  /** Per-message delivery status */
+  status?: 'sending' | 'sent' | 'failed';
+  /** When this message was superseded by an edit */
+  editedAt?: string;
+  /** If this is a revision, the original message ID */
+  revisionOf?: string;
 }
 
 // =============================================================================
@@ -243,6 +250,18 @@ export function normalizeChatMessage(raw: unknown): ChatMessage {
   };
   if (attachments && attachments.length > 0) {
     message.attachments = attachments;
+  }
+  const editedAt = getString(record['edited_at']) || getString(record['editedAt']);
+  if (editedAt) {
+    message.editedAt = editedAt;
+  }
+  const revisionOf = getString(record['revision_of']) || getString(record['revisionOf']);
+  if (revisionOf) {
+    message.revisionOf = revisionOf;
+  }
+  const status = getString(record['status']);
+  if (status === 'sending' || status === 'sent' || status === 'failed') {
+    message.status = status;
   }
   return message;
 }

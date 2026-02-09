@@ -1,0 +1,151 @@
+@layer lockin.notes {
+  /* ========================================
+   Image Node - Resizable Image Component
+   Industry-standard patterns (Notion, Figma)
+   ======================================== */
+
+  /* Wrapper for Lexical node DOM - inline-block allows text flow */
+  #lockin-root .lockin-image-wrapper {
+    display: inline-block;
+    max-width: 100%;
+    margin: var(--lockin-size-4) 0;
+    line-height: 0; /* Prevent extra space below image */
+    vertical-align: top;
+  }
+
+  /* Image container with selection state */
+  #lockin-root .lockin-image-container {
+    position: relative;
+    display: inline-block;
+    box-sizing: border-box;
+    max-width: 100%;
+    border: var(--lockin-size-2) solid transparent;
+    border-radius: var(--lockin-radius-lg);
+    transition:
+      border-color var(--lockin-duration-150) var(--lockin-ease-default),
+      box-shadow var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-image-container.is-selected {
+    border-color: var(--lockin-color-brand);
+    box-shadow: var(--lockin-shadow-04);
+  }
+
+  #lockin-root .lockin-image-container.is-resizing {
+    cursor: nwse-resize;
+    user-select: none;
+  }
+
+  /* The actual image */
+  #lockin-root .lockin-image {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: var(--lockin-radius-md);
+    pointer-events: none;
+    object-fit: contain;
+  }
+
+  /* Corner resize handles */
+  #lockin-root .lockin-resize-handle {
+    position: absolute;
+    z-index: var(--lockin-z-dropdown);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-2) solid var(--lockin-color-brand);
+    border-radius: var(--lockin-radius-sm);
+    box-shadow: var(--lockin-shadow-09);
+    transition:
+      transform var(--lockin-duration-100) var(--lockin-ease-default),
+      background var(--lockin-duration-100) var(--lockin-ease-default);
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  #lockin-root .lockin-resize-handle:hover {
+    background: var(--lockin-color-accent-surface);
+    transform: scale(1.15);
+  }
+
+  /* Corner handle base size */
+  #lockin-root .lockin-resize-handle.corner {
+    width: var(--lockin-size-12);
+    height: var(--lockin-size-12);
+  }
+
+  /* Corner positions */
+  #lockin-root .lockin-resize-handle.corner.nw {
+    top: var(--lockin-size-neg-6);
+    left: var(--lockin-size-neg-6);
+    cursor: nwse-resize;
+  }
+
+  #lockin-root .lockin-resize-handle.corner.ne {
+    top: var(--lockin-size-neg-6);
+    right: var(--lockin-size-neg-6);
+    cursor: nesw-resize;
+  }
+
+  #lockin-root .lockin-resize-handle.corner.sw {
+    bottom: var(--lockin-size-neg-6);
+    left: var(--lockin-size-neg-6);
+    cursor: nesw-resize;
+  }
+
+  #lockin-root .lockin-resize-handle.corner.se {
+    right: var(--lockin-size-neg-6);
+    bottom: var(--lockin-size-neg-6);
+    cursor: nwse-resize;
+  }
+
+  /* Edge handles */
+  #lockin-root .lockin-resize-handle.edge {
+    border-radius: var(--lockin-radius-sm);
+  }
+
+  /* Horizontal edge handles (top/bottom) */
+  #lockin-root .lockin-resize-handle.edge.n,
+  #lockin-root .lockin-resize-handle.edge.s {
+    left: 50%;
+    width: var(--lockin-size-32);
+    height: var(--lockin-size-6);
+    transform: translateX(-50%);
+    cursor: ns-resize;
+  }
+
+  #lockin-root .lockin-resize-handle.edge.n:hover,
+  #lockin-root .lockin-resize-handle.edge.s:hover {
+    transform: translateX(-50%) scaleY(1.3);
+  }
+
+  #lockin-root .lockin-resize-handle.edge.n {
+    top: var(--lockin-size-neg-3);
+  }
+
+  #lockin-root .lockin-resize-handle.edge.s {
+    bottom: var(--lockin-size-neg-3);
+  }
+
+  /* Vertical edge handles (left/right) */
+  #lockin-root .lockin-resize-handle.edge.e,
+  #lockin-root .lockin-resize-handle.edge.w {
+    top: 50%;
+    width: var(--lockin-size-6);
+    height: var(--lockin-size-32);
+    transform: translateY(-50%);
+    cursor: ew-resize;
+  }
+
+  #lockin-root .lockin-resize-handle.edge.e:hover,
+  #lockin-root .lockin-resize-handle.edge.w:hover {
+    transform: translateY(-50%) scaleX(1.3);
+  }
+
+  #lockin-root .lockin-resize-handle.edge.e {
+    right: var(--lockin-size-neg-3);
+  }
+
+  #lockin-root .lockin-resize-handle.edge.w {
+    left: var(--lockin-size-neg-3);
+  }
+}

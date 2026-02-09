@@ -117,7 +117,7 @@ function createStorage(): Storage {
   return {
     STORAGE_KEYS,
 
-    get<T = unknown>(keys: string | string[]): Promise<Record<string, T>> {
+    async get<T = unknown>(keys: string | string[]): Promise<Record<string, T>> {
       return new Promise((resolve, reject) => {
         try {
           chrome.storage.sync.get(keys, (result) => {
@@ -134,7 +134,7 @@ function createStorage(): Storage {
       });
     },
 
-    set(data: Record<string, unknown>): Promise<void> {
+    async set(data: Record<string, unknown>): Promise<void> {
       return new Promise((resolve, reject) => {
         try {
           const sanitized = validateStorageWrite(data, SYNC_SCHEMA_MAP, 'sync');
@@ -151,7 +151,7 @@ function createStorage(): Storage {
       });
     },
 
-    remove(keys: string | string[]): Promise<void> {
+    async remove(keys: string | string[]): Promise<void> {
       return new Promise((resolve, reject) => {
         try {
           chrome.storage.sync.remove(keys, () => {
@@ -167,7 +167,7 @@ function createStorage(): Storage {
       });
     },
 
-    getLocal<T = unknown>(keys: string | string[]): Promise<Record<string, T>> {
+    async getLocal<T = unknown>(keys: string | string[]): Promise<Record<string, T>> {
       return new Promise((resolve, reject) => {
         try {
           chrome.storage.local.get(keys, (result) => {
@@ -184,7 +184,7 @@ function createStorage(): Storage {
       });
     },
 
-    setLocal(key: string, value: unknown): Promise<void> {
+    async setLocal(key: string, value: unknown): Promise<void> {
       return new Promise((resolve, reject) => {
         try {
           const sanitized = validateStorageWrite({ [key]: value }, LOCAL_SCHEMA_MAP, 'local');
@@ -201,7 +201,7 @@ function createStorage(): Storage {
       });
     },
 
-    removeLocal(keys: string | string[]): Promise<void> {
+    async removeLocal(keys: string | string[]): Promise<void> {
       return new Promise((resolve, reject) => {
         try {
           chrome.storage.local.remove(keys, () => {

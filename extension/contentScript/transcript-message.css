@@ -1,0 +1,153 @@
+@layer lockin.tools {
+  /* Auth Required Prompt */
+  #lockin-root .lockin-video-auth-required {
+    padding: var(--lockin-size-20);
+    text-align: center;
+  }
+
+  #lockin-root .lockin-video-auth-message {
+    margin: 0 0 var(--lockin-size-16) 0;
+    font-size: var(--lockin-size-14);
+    color: var(--lockin-color-text-body);
+  }
+
+  #lockin-root .lockin-video-auth-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-10) var(--lockin-size-20);
+    font-size: var(--lockin-size-14);
+    font-weight: 600;
+    color: var(--lockin-color-surface);
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-4a1d96) 0%,
+      var(--lockin-color-6d28d9) 100%
+    );
+    border: none;
+    border-radius: var(--lockin-size-8);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-video-auth-button:hover {
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-5b21b6) 0%,
+      var(--lockin-color-7c3aed) 100%
+    );
+    box-shadow: var(--lockin-shadow-16);
+    transform: translateY(var(--lockin-size-neg-1));
+  }
+
+  #lockin-root .lockin-video-auth-hint {
+    margin: var(--lockin-size-12) 0 0 0;
+    font-size: var(--lockin-size-12);
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-video-extract-icon {
+    font-size: var(--lockin-size-16);
+    color: var(--lockin-color-text-secondary);
+    transition: transform var(--lockin-duration-150) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-video-item-main:hover .lockin-video-extract-icon {
+    color: var(--lockin-color-accent);
+    transform: translateX(var(--lockin-size-2));
+  }
+
+  /* Transcript Message */
+  #lockin-root .lockin-transcript-message {
+    max-width: 100%;
+    overflow: hidden;
+    background: var(--lockin-color-f8fafc);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-size-12);
+  }
+
+  #lockin-root .lockin-transcript-header {
+    padding: var(--lockin-size-12) var(--lockin-size-16);
+    color: var(--lockin-color-surface);
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-1e3a5f) 0%,
+      var(--lockin-color-brand) 100%
+    );
+  }
+
+  #lockin-root .lockin-transcript-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-transcript-icon {
+    font-size: var(--lockin-size-18);
+  }
+
+  #lockin-root .lockin-transcript-title {
+    overflow: hidden;
+    font-size: var(--lockin-size-14);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #lockin-root .lockin-transcript-meta {
+    margin-top: var(--lockin-size-4);
+    font-size: var(--lockin-size-11);
+    color: var(--lockin-color-rgba-255-255-255-08);
+  }
+
+  #lockin-root .lockin-transcript-content {
+    max-height: var(--lockin-size-500);
+    padding: var(--lockin-size-16);
+    overflow-y: auto;
+    font-size: var(--lockin-size-13);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--lockin-color-text-body);
+  }
+
+  #lockin-root .lockin-transcript-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-12) var(--lockin-size-16);
+    background: var(--lockin-color-surface-muted);
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-transcript-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    padding: var(--lockin-size-6) var(--lockin-size-12);
+    font-size: var(--lockin-size-12);
+    font-weight: 500;
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-size-6);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-action-btn:hover {
+    background: var(--lockin-color-surface-subtle);
+    border-color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary {
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-brand);
+    border-color: var(--lockin-color-brand);
+  }
+
+  #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary:hover {
+    background: var(--lockin-color-1d4ed8);
+    border-color: var(--lockin-color-1d4ed8);
+  }
+}

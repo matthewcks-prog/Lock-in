@@ -1,0 +1,102 @@
+@layer lockin.responsive {
+  /* ================================================================
+     BREAKPOINTS
+     - sm:  <=768px   (mobile / tablet)
+     - md:  <=1024px  (small laptop / narrow window)
+     - lg:  <=1440px  (standard laptop)
+     - xl:  >1440px   (large monitor)
+     ================================================================ */
+
+  /* --- Small laptop (<=1024px) – sidebar overlays, no page push --- */
+  @media (max-width: 1024px) {
+    body.lockin-sidebar-open #lockin-page-wrapper {
+      width: 100%;
+      max-width: 100%;
+      margin-right: 0;
+      margin-inline-end: 0;
+    }
+
+    #lockin-sidebar {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    #lockin-root .lockin-sidebar-resize-handle {
+      display: none;
+    }
+
+    /* History panel overlays on narrow viewports */
+    #lockin-root .lockin-chat-history-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: var(--lockin-z-dropdown, 10);
+      box-shadow: var(--lockin-shadow-24);
+    }
+  }
+
+  /* --- Mobile / Tablet (<=768px) – tighter spacing --- */
+  @media (max-width: 768px) {
+    #lockin-root .lockin-chat-messages {
+      padding: var(--lockin-space-3) var(--lockin-space-3);
+    }
+
+    #lockin-root .lockin-top-bar {
+      padding: var(--lockin-space-2) var(--lockin-space-3);
+    }
+
+    #lockin-root .lockin-chat-bottom-section {
+      padding: var(--lockin-space-2) var(--lockin-space-3);
+    }
+
+    #lockin-root .lockin-chat-toolbar {
+      padding: var(--lockin-space-2) var(--lockin-space-3);
+    }
+
+    /* Ensure touch targets are at least 44px */
+    #lockin-root .lockin-tab,
+    #lockin-root .lockin-close-btn,
+    #lockin-root .lockin-history-toggle-btn,
+    #lockin-root .lockin-msg-action-btn,
+    #lockin-root .lockin-send-btn {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /* --- Touch devices – always-visible interactive elements --- */
+  @media (hover: none) {
+    #lockin-root .lockin-msg-action-bar {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #lockin-root .lockin-note-card-actions {
+      opacity: 1;
+    }
+  }
+
+  /* --- Reduced motion – respect user preference --- */
+  @media (prefers-reduced-motion: reduce) {
+    #lockin-sidebar,
+    #lockin-root .lockin-chat-history-panel,
+    #lockin-toggle-pill,
+    #lockin-root .lockin-close-btn,
+    #lockin-root .lockin-confirm-backdrop,
+    #lockin-root .lockin-confirm-dialog,
+    #lockin-root .lockin-toast {
+      transition: none;
+      animation: none;
+    }
+  }
+
+  /* --- High contrast – reinforce borders & focus --- */
+  @media (forced-colors: active) {
+    #lockin-root .lockin-msg-action-btn:focus-visible,
+    #lockin-root .lockin-send-btn:focus-visible,
+    #lockin-root .lockin-tab:focus-visible {
+      outline: 2px solid CanvasText;
+    }
+  }
+}

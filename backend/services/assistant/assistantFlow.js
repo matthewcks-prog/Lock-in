@@ -31,6 +31,7 @@ function buildRequestContext(payload = {}, attachmentTitleSeed = DEFAULT_ATTACHM
     courseCode,
     language = 'en',
     attachments = [],
+    regenerate = false,
   } = payload;
 
   const isInitialRequest = chatHistory.length === 0;
@@ -66,6 +67,7 @@ function buildRequestContext(payload = {}, attachmentTitleSeed = DEFAULT_ATTACHM
     initialTitle,
     firstUserMessage,
     initialTitleFromHistory,
+    regenerate,
   };
 }
 

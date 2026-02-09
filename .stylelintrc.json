@@ -1,0 +1,201 @@
+{
+  "extends": ["stylelint-config-standard"],
+  "plugins": ["stylelint-order"],
+  "rules": {
+    "comment-empty-line-before": null,
+    "rule-empty-line-before": null,
+    "at-rule-empty-line-before": null,
+
+    "no-duplicate-selectors": true,
+    "no-descending-specificity": [true, { "severity": "warning" }],
+    "declaration-block-no-duplicate-properties": [
+      true,
+      { "ignore": ["consecutive-duplicates-with-different-syntaxes"] }
+    ],
+    "no-duplicate-at-import-rules": true,
+    "keyframes-name-pattern": "^lockin-[a-z][a-z0-9-]*$",
+    "selector-class-pattern": [
+      "^(lockin-[a-z0-9-]+|is-[a-z0-9-]+|has-[a-z0-9-]+|edge|corner|n|s|e|w|ne|nw|se|sw|active|container-fluid)$",
+      {
+        "message": "Class names must use 'lockin-' prefix, 'is-'/'has-' state modifier, or whitelisted utility"
+      }
+    ],
+    "custom-property-pattern": "^lockin-[a-z][a-z0-9-]*$",
+
+    "value-keyword-case": [
+      "lower",
+      {
+        "ignoreFunctions": ["local"],
+        "ignoreKeywords": [
+          "BlinkMacSystemFont",
+          "SFMono-Regular",
+          "Menlo",
+          "Monaco",
+          "Consolas",
+          "Helvetica",
+          "Arial"
+        ]
+      }
+    ],
+
+    "color-function-notation": null,
+    "color-function-alias-notation": null,
+    "alpha-value-notation": null,
+    "color-hex-length": null,
+    "media-feature-range-notation": null,
+
+    "property-no-deprecated": [true, { "severity": "warning" }],
+    "declaration-property-value-keyword-no-deprecated": [true, { "severity": "warning" }],
+
+    "selector-max-id": 2,
+    "selector-max-compound-selectors": 5,
+    "max-nesting-depth": 3,
+    "declaration-block-no-shorthand-property-overrides": true,
+    "font-family-no-duplicate-names": true,
+    "function-calc-no-unspaced-operator": true,
+    "color-no-invalid-hex": true,
+
+    "selector-pseudo-class-no-unknown": [true, { "ignorePseudoClasses": ["global", "local"] }],
+
+    "at-rule-no-unknown": [true, { "ignoreAtRules": ["layer", "tailwind", "apply", "screen"] }],
+
+    "import-notation": null,
+
+    "order/properties-order": [
+      [
+        {
+          "groupName": "positioning",
+          "properties": ["position", "inset", "top", "right", "bottom", "left", "z-index"]
+        },
+        {
+          "groupName": "box-model",
+          "properties": [
+            "display",
+            "flex",
+            "flex-direction",
+            "flex-wrap",
+            "flex-grow",
+            "flex-shrink",
+            "flex-basis",
+            "align-items",
+            "align-self",
+            "justify-content",
+            "gap",
+            "grid",
+            "grid-template-columns",
+            "grid-template-rows",
+            "grid-column",
+            "grid-row",
+            "float",
+            "clear",
+            "box-sizing",
+            "width",
+            "min-width",
+            "max-width",
+            "height",
+            "min-height",
+            "max-height",
+            "margin",
+            "margin-top",
+            "margin-right",
+            "margin-bottom",
+            "margin-left",
+            "padding",
+            "padding-top",
+            "padding-right",
+            "padding-bottom",
+            "padding-left",
+            "overflow",
+            "overflow-x",
+            "overflow-y"
+          ]
+        },
+        {
+          "groupName": "typography",
+          "properties": [
+            "font",
+            "font-family",
+            "font-size",
+            "font-weight",
+            "font-style",
+            "line-height",
+            "letter-spacing",
+            "text-align",
+            "text-decoration",
+            "text-transform",
+            "text-overflow",
+            "white-space",
+            "word-break",
+            "word-wrap",
+            "color"
+          ]
+        },
+        {
+          "groupName": "visual",
+          "properties": [
+            "background",
+            "background-color",
+            "background-image",
+            "background-position",
+            "background-size",
+            "border",
+            "border-top",
+            "border-right",
+            "border-bottom",
+            "border-left",
+            "border-radius",
+            "border-color",
+            "border-style",
+            "border-width",
+            "outline",
+            "box-shadow",
+            "opacity",
+            "visibility"
+          ]
+        },
+        {
+          "groupName": "animation",
+          "properties": [
+            "transition",
+            "transition-property",
+            "transition-duration",
+            "transition-timing-function",
+            "animation",
+            "animation-name",
+            "animation-duration",
+            "animation-timing-function",
+            "transform",
+            "cursor",
+            "pointer-events",
+            "user-select",
+            "resize"
+          ]
+        }
+      ],
+      {
+        "severity": "warning",
+        "unspecified": "bottomAlphabetical"
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["extension/contentScript/**/*.css"],
+      "rules": {
+        "selector-class-pattern": [
+          "^(lockin-[a-z0-9-]+|is-[a-z0-9-]+|has-[a-z0-9-]+|edge|corner|n|s|e|w|ne|nw|se|sw|active|container-fluid)$",
+          {
+            "message": "Content script classes must use 'lockin-' prefix, 'is-'/'has-' state modifier, or whitelisted utility"
+          }
+        ],
+        "custom-property-pattern": "^lockin-[a-z][a-z0-9-]*$"
+      }
+    },
+    {
+      "files": ["extension/contentScript/layout.css"],
+      "rules": {
+        "selector-max-id": 3
+      }
+    }
+  ]
+}

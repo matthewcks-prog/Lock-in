@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranscriptCache } from '../../transcripts/hooks/useTranscriptCache';
-import type { ChatApiResponse, UseSendMessageOptions, ChatMessage } from '../types';
+import type { ChatApiResponse, UseSendMessageOptions } from '../types';
 import {
   buildIdempotencyKey,
   type SendMessageMutationParams,
@@ -31,6 +31,7 @@ import type {
 } from '@api/client';
 import { chatMessagesKeys } from './useChatMessages';
 import { chatHistoryKeys } from './useChatHistory';
+import { finalizeStreamMessage, updateOptimisticMessage } from './streamMessageCache';
 
 /**
  * State for streaming message
@@ -98,6 +99,7 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
   const queryClient = useQueryClient();
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingSendKeyRef = useRef<string | null>(null);
+  const activeRequestIdRef = useRef<string | null>(null);
   const { cacheTranscript } = useTranscriptCache(apiClient);
 
   const [streamingState, setStreamingState] = useState<StreamingState>({
@@ -137,6 +139,7 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
       abortControllerRef.current = null;
     }
     pendingSendKeyRef.current = null;
+    activeRequestIdRef.current = null;
     resetState();
   }, [resetState]);
 
@@ -158,6 +161,10 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
         abortControllerRef.current.abort();
       }
       abortControllerRef.current = new AbortController();
+
+      // Generate a unique requestId to guard against stale deltas
+      const requestId = crypto.randomUUID();
+      activeRequestIdRef.current = requestId;
 
       if (!apiClient?.processTextStream) {
         const error: StreamErrorEvent = {
@@ -217,6 +224,9 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
       if (params.attachmentIds && params.attachmentIds.length > 0) {
         requestPayload.attachments = params.attachmentIds;
       }
+      if (params.isRegeneration) {
+        requestPayload.regenerate = true;
+      }
 
       let accumulated = '';
       let streamMeta: StreamMetaEvent | null = null;
@@ -225,12 +235,16 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
 
       // Setup callbacks
       requestPayload.onMeta = (meta) => {
+        if (activeRequestIdRef.current !== requestId) return;
         streamMeta = meta;
         setStreamingState((prev) => ({ ...prev, meta }));
         onStreamStart?.(meta);
       };
 
       requestPayload.onDelta = (delta) => {
+        // Guard against stale deltas from a previous request
+        if (activeRequestIdRef.current !== requestId) return;
+
         accumulated += delta.content;
         setStreamingState((prev) => ({
           ...prev,
@@ -245,6 +259,7 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
       };
 
       requestPayload.onFinal = (final) => {
+        if (activeRequestIdRef.current !== requestId) return;
         finalContent = final.content;
         // Update with final content
         setStreamingState((prev) => ({
@@ -256,6 +271,7 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
       };
 
       requestPayload.onError = (error) => {
+        if (activeRequestIdRef.current !== requestId) return;
         setStreamingState((prev) => ({
           ...prev,
           error,
@@ -292,12 +308,23 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
           return failResult;
         }
 
-        // Success
+        // Success -- mark stream complete in hook state
         setStreamingState((prev) => ({
           ...prev,
           isStreaming: false,
           isComplete: true,
         }));
+
+        // Clear isStreaming on the message in the query cache
+        const metaChatId = (streamMeta as StreamMetaEvent | null)?.chatId;
+        const finalChatId = metaChatId || params.chatId;
+        if (finalChatId) {
+          finalizeStreamMessage(
+            queryClient,
+            finalChatId,
+            finalContent || result.content || accumulated,
+          );
+        }
 
         const resolvedChatId = result.chatId || params.chatId || `chat-${Date.now()}`;
 
@@ -314,11 +341,17 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
         }
         onSuccess?.(response, resolvedChatId);
 
-        // Invalidate chat queries to refresh from server
+        // Invalidate chat queries to refresh from server.
+        // For regeneration requests, skip message invalidation -- the cache
+        // already has the correct canonical timeline from the edit/regenerate
+        // hook + the finalized streamed assistant message. Invalidating would
+        // cause a refetch that races with the optimistic state.
         if (result.chatId) {
-          queryClient.invalidateQueries({
-            queryKey: chatMessagesKeys.byId(result.chatId),
-          });
+          if (!params.isRegeneration) {
+            queryClient.invalidateQueries({
+              queryKey: chatMessagesKeys.byId(result.chatId),
+            });
+          }
           queryClient.invalidateQueries({
             queryKey: chatHistoryKeys.all,
           });
@@ -385,22 +418,4 @@ export function useSendMessageStream(options: UseSendMessageStreamOptions) {
     cancelPending,
     reset: resetState,
   };
-}
-
-/**
- * Update optimistic assistant message in query cache
- */
-function updateOptimisticMessage(
-  queryClient: ReturnType<typeof useQueryClient>,
-  chatId: string,
-  content: string,
-): void {
-  queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), (oldMessages) => {
-    if (!oldMessages) return oldMessages;
-
-    // Find the pending assistant message and update it
-    return oldMessages.map((msg) =>
-      msg.role === 'assistant' && msg.isPending ? { ...msg, content, isPending: true } : msg,
-    );
-  });
 }

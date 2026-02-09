@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Lock-in",
   "version": "1.0.0",
-  "description": "AI-powered study assistant - Explain text on any webpage",
+  "description": "AI-powered study assistant - Independent learning project by an aspiring software engineer; not affiliated with or endorsed by Monash University.",
   "permissions": ["activeTab", "scripting", "storage", "contextMenus", "tabs", "webNavigation"],
   "host_permissions": [
     "http://localhost:3000/*",

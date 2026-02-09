@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import type { LexicalEditor, LexicalNode, NodeKey } from 'lexical';
 import {
   $getNodeByKey,
   CLICK_COMMAND,
@@ -7,9 +8,6 @@ import {
   DecoratorNode,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
-  LexicalEditor,
-  LexicalNode,
-  NodeKey,
 } from 'lexical';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { useLexicalNodeSelection } from '@lexical/react/useLexicalNodeSelection';

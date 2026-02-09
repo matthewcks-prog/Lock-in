@@ -81,6 +81,7 @@ function createStreamingAssistantService(deps = {}) {
       initialTitle,
       firstUserMessage,
       initialTitleFromHistory,
+      regenerate,
     } = buildRequestContext(payload, 'Attachment analysis');
 
     if (!userId) {
@@ -163,19 +164,25 @@ function createStreamingAssistantService(deps = {}) {
       });
     }
 
-    // Insert user message
-    const userMessage = await services.chatRepository.insertChatMessage({
-      chat_id: chatId,
-      user_id: userId,
-      role: 'user',
-      mode: effectiveMode,
-      source: 'highlight',
-      input_text: userInputText,
-      output_text: null,
-    });
+    // Insert user message — SKIP for regeneration requests.
+    // When regenerate=true, the canonical timeline already has the user message
+    // (from the edit/regenerate truncation flow). Inserting again would create a
+    // duplicate row in the database.
+    let userMessage = null;
+    if (!regenerate) {
+      userMessage = await services.chatRepository.insertChatMessage({
+        chat_id: chatId,
+        user_id: userId,
+        role: 'user',
+        mode: effectiveMode,
+        source: 'highlight',
+        input_text: userInputText,
+        output_text: null,
+      });
+    }
 
-    // Link assets to user message
-    if (linkedAssetIds.length > 0 && userMessage?.id) {
+    // Link assets to user message (only if we created one)
+    if (!regenerate && linkedAssetIds.length > 0 && userMessage?.id) {
       await services.chatAssetsService.linkAssetsToMessage(linkedAssetIds, userMessage.id, userId);
     }
 
@@ -216,7 +223,7 @@ function createStreamingAssistantService(deps = {}) {
       const stream = services.chatCompletionStream({
         messages: finalMessages,
         temperature: 0.4,
-        maxTokens: 1500,
+        maxTokens: 4096,
         // No responseFormat - LLM returns natural markdown (industry standard)
         operation: 'chat.completions.stream',
       });

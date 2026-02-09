@@ -1,0 +1,137 @@
+@layer lockin.components {
+  /* === PRIVACY NOTICE === */
+
+  #lockin-root .lockin-privacy-notice {
+    position: relative;
+    margin: var(--lockin-size-8) var(--lockin-size-12);
+    padding: var(--lockin-size-12) var(--lockin-size-14);
+    font-size: var(--lockin-size-13);
+    color: var(--lockin-color-166534);
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-f0fdf4) 0%,
+      var(--lockin-color-ecfeff) 100%
+    );
+    border: var(--lockin-size-1) solid var(--lockin-color-86efac);
+    border-radius: var(--lockin-size-8);
+    box-shadow: var(--lockin-shadow-07);
+  }
+
+  #lockin-root .lockin-privacy-content {
+    margin-bottom: var(--lockin-size-10);
+  }
+
+  #lockin-root .lockin-privacy-header {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    margin-bottom: var(--lockin-size-8);
+    font-weight: 600;
+    color: var(--lockin-color-15803d);
+  }
+
+  #lockin-root .lockin-privacy-icon {
+    font-size: var(--lockin-size-14);
+  }
+
+  #lockin-root .lockin-privacy-message {
+    margin: 0 0 var(--lockin-size-8) 0;
+    line-height: 1.5;
+    color: var(--lockin-color-166534);
+  }
+
+  #lockin-root .lockin-privacy-list {
+    margin: 0;
+    padding: 0 0 0 var(--lockin-size-4);
+    font-size: var(--lockin-size-12);
+    color: var(--lockin-color-15803d);
+    list-style: none;
+  }
+
+  #lockin-root .lockin-privacy-list li {
+    margin-bottom: var(--lockin-size-4);
+    padding-left: var(--lockin-size-4);
+  }
+
+  #lockin-root .lockin-privacy-dismiss {
+    display: block;
+    width: 100%;
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    font-size: var(--lockin-size-13);
+    font-weight: 500;
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-16a34a);
+    border: none;
+    border-radius: var(--lockin-size-6);
+    transition: background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-privacy-dismiss:hover {
+    background: var(--lockin-color-15803d);
+  }
+
+  #lockin-root .lockin-privacy-dismiss:active {
+    background: var(--lockin-color-166534);
+  }
+
+  /* Compact inline version */
+  #lockin-root .lockin-privacy-compact {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    font-size: var(--lockin-size-12);
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-fafafa);
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-privacy-compact .lockin-privacy-icon {
+    font-size: var(--lockin-size-12);
+  }
+
+  #lockin-root .lockin-privacy-compact .lockin-privacy-text {
+    flex: 1;
+    line-height: 1.4;
+  }
+
+  #lockin-root .lockin-privacy-link {
+    padding: 0;
+    font-size: var(--lockin-size-12);
+    text-decoration: underline;
+    color: var(--lockin-color-brand);
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-privacy-link:hover {
+    color: var(--lockin-color-1d4ed8);
+  }
+
+  /* Footer version for settings */
+  #lockin-root .lockin-privacy-footer {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--lockin-size-8);
+    margin: var(--lockin-size-12);
+    padding: var(--lockin-size-12) var(--lockin-size-14);
+    font-size: var(--lockin-size-12);
+    line-height: 1.5;
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface-subtle);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-size-6);
+  }
+
+  #lockin-root .lockin-privacy-footer .lockin-privacy-icon {
+    flex-shrink: 0;
+    margin-top: var(--lockin-size-1);
+    font-size: var(--lockin-size-14);
+  }
+
+  #lockin-root .lockin-privacy-footer .lockin-privacy-text {
+    flex: 1;
+  }
+}

@@ -1,0 +1,201 @@
+@layer lockin.notes {
+  /* === EDITOR SURFACE & SCROLL === */
+  #lockin-root .lockin-note-editor-surface {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+  }
+
+  #lockin-root .lockin-note-editor-scroll {
+    position: relative;
+    flex: 1;
+    padding: var(--lockin-size-20) var(--lockin-size-24) var(--lockin-size-32);
+    overflow: hidden auto;
+    /* Enable smooth scroll for programmatic scrolls, but CaretScrollPlugin
+     controls behavior per-scroll for optimal UX */
+  }
+
+  /* Scroll-past-end: Allow scrolling so last line can reach the middle of viewport.
+   This is a standard UX pattern in editors (VS Code, Notion, etc.) */
+  #lockin-root .lockin-note-editor-scroll::after {
+    display: block;
+    height: 50vh;
+    pointer-events: none;
+    content: '';
+  }
+
+  /* Custom scrollbar for editor */
+  #lockin-root .lockin-note-editor-scroll::-webkit-scrollbar {
+    width: var(--lockin-size-6);
+  }
+
+  #lockin-root .lockin-note-editor-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  #lockin-root .lockin-note-editor-scroll::-webkit-scrollbar-thumb {
+    background: var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-sm);
+  }
+
+  #lockin-root .lockin-note-editor-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-note-editor-area {
+    min-height: 100%;
+    font-family: inherit;
+    font-size: var(--lockin-text-md);
+    line-height: 1.7;
+    white-space: pre-wrap;
+    color: var(--lockin-color-text-primary);
+    border: none;
+    outline: none;
+    /* Ensure caret is visible and properly sized */
+    caret-color: var(--lockin-color-brand);
+    direction: ltr;
+    /* Improve text rendering and selection */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-wrap: break-word;
+  }
+
+  #lockin-root .lockin-note-placeholder {
+    position: absolute;
+    top: var(--lockin-size-20);
+    left: var(--lockin-size-24);
+    font-size: var(--lockin-text-md);
+    color: var(--lockin-color-text-muted);
+    pointer-events: none;
+  }
+
+  #lockin-root .lockin-note-inline-error {
+    margin: var(--lockin-size-8) var(--lockin-size-12) var(--lockin-size-12);
+    padding: var(--lockin-size-10) var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-danger-strong);
+    background: var(--lockin-color-danger-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-danger-border);
+    border-radius: var(--lockin-radius-xl);
+  }
+
+  /* === BLOCK STYLES === */
+  #lockin-root .lockin-note-paragraph {
+    margin: 0 0 var(--lockin-size-12);
+  }
+
+  #lockin-root .lockin-note-heading-h1 {
+    margin: var(--lockin-size-14) 0 var(--lockin-size-8);
+    font-size: var(--lockin-text-xl);
+    font-weight: 800;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-note-heading-h2 {
+    margin: var(--lockin-size-12) 0 var(--lockin-size-8);
+    font-size: var(--lockin-text-lg);
+    font-weight: 700;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-note-heading-h3 {
+    margin: var(--lockin-size-10) 0 var(--lockin-size-6);
+    font-size: var(--lockin-text-md);
+    font-weight: 700;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-note-quote {
+    margin: var(--lockin-size-12) 0;
+    padding-left: var(--lockin-size-10);
+    color: var(--lockin-color-text-emphasis);
+    border-left: var(--lockin-size-3) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-note-list {
+    margin: 0 0 var(--lockin-size-12);
+    padding-left: var(--lockin-size-20);
+  }
+
+  #lockin-root .lockin-note-list-item {
+    margin-bottom: var(--lockin-size-6);
+  }
+
+  /* === INLINE STYLES === */
+  #lockin-root .lockin-note-text-bold {
+    font-weight: 700;
+  }
+
+  #lockin-root .lockin-note-text-italic {
+    font-style: italic;
+  }
+
+  #lockin-root .lockin-note-text-underline {
+    text-decoration: underline;
+  }
+
+  #lockin-root .lockin-note-text-code {
+    padding: var(--lockin-size-2) var(--lockin-size-5);
+    font-family: var(--lockin-font-family-mono);
+    background: var(--lockin-color-surface-muted);
+    border-radius: var(--lockin-radius-md);
+  }
+
+  #lockin-root .lockin-note-code {
+    padding: var(--lockin-size-10);
+    overflow-x: auto;
+    font-family: var(--lockin-font-family-mono);
+    color: var(--lockin-color-surface-muted);
+    background: var(--lockin-color-text-primary);
+    border-radius: var(--lockin-radius-xl);
+  }
+
+  #lockin-root .lockin-note-link {
+    text-decoration: underline;
+    color: var(--lockin-color-brand);
+  }
+
+  /* === ATTACHMENT CHIPS === */
+  #lockin-root .lockin-note-attachment-wrapper {
+    display: inline-block;
+  }
+
+  #lockin-root .lockin-note-attachment-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-6) var(--lockin-size-10);
+    text-decoration: none;
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-surface-subtle);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-06);
+  }
+
+  #lockin-root .lockin-note-attachment-chip:hover {
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-14);
+  }
+
+  #lockin-root .lockin-note-attachment-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-18);
+    height: var(--lockin-size-18);
+    color: var(--lockin-color-text-emphasis);
+  }
+
+  #lockin-root .lockin-note-attachment-name {
+    font-weight: 700;
+  }
+
+  #lockin-root .lockin-note-attachment-meta {
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-secondary);
+  }
+}

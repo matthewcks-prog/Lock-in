@@ -15,6 +15,23 @@ export type ChatListResponse = {
   };
 };
 
+export type EditMessageResponse = {
+  revision: {
+    id: string;
+    role: string;
+    content: string;
+    createdAt: string;
+    revisionOf: string;
+  };
+  canonicalMessages: Record<string, unknown>[];
+  truncatedCount: number;
+};
+
+export type RegenerateResponse = {
+  canonicalMessages: Record<string, unknown>[];
+  truncatedCount: number;
+};
+
 export type ChatsClient = {
   createChat: (params?: {
     title?: string;
@@ -27,6 +44,8 @@ export type ChatsClient = {
   getChatMessages: (chatId: string) => Promise<Record<string, unknown>[]>;
   deleteChat: (chatId: string) => Promise<void>;
   generateChatTitle: (chatId: string) => Promise<{ chatId: string; title: string }>;
+  editMessage: (chatId: string, messageId: string, content: string) => Promise<EditMessageResponse>;
+  regenerateMessage: (chatId: string) => Promise<RegenerateResponse>;
 };
 
 const FALLBACK_CHAT_LIST_LIMIT = 20;
@@ -111,6 +130,37 @@ async function generateChatTitleRequest(
   return validateChatTitleResponse(raw, 'generateChatTitle');
 }
 
+async function editMessageRequest(
+  apiRequest: ApiRequest,
+  chatId: string,
+  messageId: string,
+  content: string,
+): Promise<EditMessageResponse> {
+  if (!chatId || !messageId) {
+    throw new Error('Chat ID and Message ID are required');
+  }
+
+  const raw = await apiRequest<EditMessageResponse>(`/api/chats/${chatId}/messages/${messageId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ content }),
+  });
+  return raw as EditMessageResponse;
+}
+
+async function regenerateMessageRequest(
+  apiRequest: ApiRequest,
+  chatId: string,
+): Promise<RegenerateResponse> {
+  if (!chatId) {
+    throw new Error('Chat ID is required');
+  }
+
+  const raw = await apiRequest<RegenerateResponse>(`/api/chats/${chatId}/regenerate`, {
+    method: 'POST',
+  });
+  return raw as RegenerateResponse;
+}
+
 export function createChatsClient(apiRequest: ApiRequest): ChatsClient {
   return {
     createChat: async (params) => createChatRequest(apiRequest, params),
@@ -118,5 +168,8 @@ export function createChatsClient(apiRequest: ApiRequest): ChatsClient {
     getChatMessages: async (chatId) => getChatMessagesRequest(apiRequest, chatId),
     deleteChat: async (chatId) => deleteChatRequest(apiRequest, chatId),
     generateChatTitle: async (chatId) => generateChatTitleRequest(apiRequest, chatId),
+    editMessage: async (chatId, messageId, content) =>
+      editMessageRequest(apiRequest, chatId, messageId, content),
+    regenerateMessage: async (chatId) => regenerateMessageRequest(apiRequest, chatId),
   };
 }

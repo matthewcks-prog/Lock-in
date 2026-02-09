@@ -2,7 +2,7 @@
  * Tabs Component
  *
  * Reusable tabbed interface component.
- * Uses Tailwind CSS for styling.
+ * Uses Tailwind CSS with lockin design tokens for styling.
  */
 
 import React from 'react';
@@ -24,18 +24,20 @@ export interface TabsProps {
 export function Tabs({ tabs, activeTab, onTabChange, variant = 'line', ariaLabel }: TabsProps) {
   const containerClasses =
     variant === 'line'
-      ? 'flex gap-0 border-b border-gray-200'
-      : 'flex gap-2 bg-gray-100 p-1 rounded-lg';
+      ? 'flex gap-0 border-b border-line'
+      : 'flex gap-lockin-1 bg-surface-muted p-lockin-1 rounded-lockin-lg';
 
   const tabClasses = (isActive: boolean) =>
     variant === 'line'
-      ? `px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+      ? `px-lockin-4 py-lockin-2 text-lockin-sm font-medium transition-colors duration-lockin-base border-b-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
           isActive
-            ? 'border-blue-600 text-blue-600'
-            : 'border-transparent text-gray-600 hover:text-gray-900'
+            ? 'border-accent text-accent'
+            : 'border-transparent text-text-secondary hover:text-text-body'
         }`
-      : `px-4 py-2 text-sm font-medium transition-colors rounded-md ${
-          isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+      : `px-lockin-4 py-lockin-2 text-lockin-sm font-medium transition-colors duration-lockin-base rounded-lockin-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+          isActive
+            ? 'bg-surface text-accent shadow-lockin-xs'
+            : 'text-text-secondary hover:text-text-body'
         }`;
 
   const tabRefs = React.useRef<(HTMLButtonElement | null)[]>([]);

@@ -1,103 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
-import type { ApiClient } from '@api/client';
+import { describe, expect, it, vi } from 'vitest';
+import { screen } from '@testing-library/react';
 import { RateLimitError } from '@core/errors';
+import { createApiClientStub, createStorageStub, renderWithProviders } from '@shared/test';
 import { LockInSidebar } from '../LockInSidebar';
 
-const actEnvironment = globalThis as typeof globalThis & {
-  IS_REACT_ACT_ENVIRONMENT?: boolean;
-};
-actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
-
-type StorageStub = {
-  get: <T = unknown>(key: string) => Promise<T | null>;
-  set: (key: string, value: unknown) => Promise<void>;
-  getLocal: <T = unknown>(key: string) => Promise<T | null>;
-  setLocal: (key: string, value: unknown) => Promise<void>;
-};
-
-function createStorageStub(values: Record<string, unknown> = {}): StorageStub {
-  const get = vi.fn(<T = unknown,>(key: string) =>
-    Promise.resolve(Object.prototype.hasOwnProperty.call(values, key) ? (values[key] as T) : null),
-  ) as StorageStub['get'];
-  const getLocal = vi.fn(<T = unknown,>() =>
-    Promise.resolve<T | null>(null),
-  ) as StorageStub['getLocal'];
-
-  return {
-    get,
-    set: vi.fn(() => Promise.resolve()),
-    getLocal,
-    setLocal: vi.fn(() => Promise.resolve()),
-  };
-}
-
-function createApiClientStub(overrides: Partial<ApiClient> = {}): ApiClient {
-  return {
-    processText: vi.fn(),
-    createChat: vi.fn(),
-    getRecentChats: vi.fn(),
-    getChatMessages: vi.fn(),
-    deleteChat: vi.fn(),
-    generateChatTitle: vi.fn(),
-    createNote: vi.fn(),
-    updateNote: vi.fn(),
-    deleteNote: vi.fn(),
-    toggleNoteStar: vi.fn(),
-    setNoteStar: vi.fn(),
-    listNotes: vi.fn(),
-    searchNotes: vi.fn(),
-    chatWithNotes: vi.fn(),
-    uploadNoteAsset: vi.fn(),
-    listNoteAssets: vi.fn(),
-    deleteNoteAsset: vi.fn(),
-    uploadChatAsset: vi.fn(),
-    listChatAssets: vi.fn(),
-    deleteChatAsset: vi.fn(),
-    submitFeedback: vi.fn(),
-    listFeedback: vi.fn(),
-    getFeedback: vi.fn(),
-    ...overrides,
-  } as ApiClient;
-}
-
-async function flushPromises(cycles = 1) {
-  for (let i = 0; i < cycles; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-}
-
-function setTextareaValue(element: HTMLTextAreaElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
-  if (setter) {
-    setter.call(element, value);
-  } else {
-    element.value = value;
-  }
-  element.dispatchEvent(new Event('input', { bubbles: true }));
-  element.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
 describe('LockInSidebar chat send reliability', () => {
-  let container: HTMLDivElement;
-  let root: Root;
-
-  beforeEach(() => {
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
-  });
-
-  afterEach(() => {
-    act(() => {
-      root.unmount();
-    });
-    container.remove();
-    document.body.innerHTML = '';
-    vi.restoreAllMocks();
-  });
-
   it('deduplicates rapid send actions', async () => {
     const processText = vi.fn().mockResolvedValue({
       data: { content: 'Reply' },
@@ -113,25 +20,14 @@ describe('LockInSidebar chat send reliability', () => {
     });
     const storage = createStorageStub();
 
-    await act(async () => {
-      root.render(
-        <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
-      );
-    });
-    await act(async () => {
-      await flushPromises(2);
-    });
+    const { user } = renderWithProviders(
+      <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
+    );
 
-    const sendButton = document.querySelector('.lockin-send-btn') as HTMLButtonElement | null;
-    expect(sendButton).not.toBeNull();
-    expect(sendButton?.disabled).toBe(true);
+    const sendButton = await screen.findByRole('button', { name: /^send$/i });
+    expect(sendButton).toBeDisabled();
 
-    await act(async () => {
-      sendButton?.click();
-    });
-    await act(async () => {
-      await flushPromises(2);
-    });
+    await user.click(sendButton);
 
     expect(processText).not.toHaveBeenCalled();
   });
@@ -146,46 +42,19 @@ describe('LockInSidebar chat send reliability', () => {
     });
     const storage = createStorageStub();
 
-    await act(async () => {
-      root.render(
-        <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
-      );
-    });
-    await act(async () => {
-      await flushPromises(2);
-    });
-
-    const textarea = document.querySelector(
-      '.lockin-chat-input-field',
-    ) as HTMLTextAreaElement | null;
-    expect(textarea).not.toBeNull();
-
-    await act(async () => {
-      if (textarea) {
-        setTextareaValue(textarea, 'Hello');
-      }
-    });
-    await act(async () => {
-      await flushPromises(2);
-    });
-
-    const sendButton = document.querySelector('.lockin-send-btn') as HTMLButtonElement | null;
-    expect(sendButton).not.toBeNull();
-    expect(sendButton?.disabled).toBe(false);
-
-    await act(async () => {
-      sendButton?.click();
-    });
-    await act(async () => {
-      await flushPromises(4);
-    });
-
-    const errorBanner = document.querySelector('.lockin-chat-error');
-    const bubbleTexts = Array.from(document.querySelectorAll('.lockin-chat-bubble')).map(
-      (node) => node.textContent || '',
+    const { user } = renderWithProviders(
+      <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
     );
-    const combinedText = [errorBanner?.textContent || '', ...bubbleTexts].join(' ');
-    expect(combinedText).toContain("You're sending too fast - try again in 3s.");
+
+    const input = await screen.findByRole('textbox', { name: /chat message/i });
+    await user.type(input, 'Hello');
+
+    const sendButton = screen.getByRole('button', { name: /^send$/i });
+    await user.click(sendButton);
+
+    expect(
+      await screen.findByText(/you're sending too fast - try again in 3s\./i),
+    ).toBeInTheDocument();
   });
 
   it('does not show save note button on error messages', async () => {
@@ -198,45 +67,17 @@ describe('LockInSidebar chat send reliability', () => {
     });
     const storage = createStorageStub();
 
-    await act(async () => {
-      root.render(
-        <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
-      );
-    });
-    await act(async () => {
-      await flushPromises(2);
-    });
+    const { user } = renderWithProviders(
+      <LockInSidebar apiClient={apiClient} isOpen={true} onToggle={vi.fn()} storage={storage} />,
+    );
 
-    const textarea = document.querySelector(
-      '.lockin-chat-input-field',
-    ) as HTMLTextAreaElement | null;
-    expect(textarea).not.toBeNull();
+    const input = await screen.findByRole('textbox', { name: /chat message/i });
+    await user.type(input, 'Hello');
 
-    await act(async () => {
-      if (textarea) {
-        setTextareaValue(textarea, 'Hello');
-      }
-    });
-    await act(async () => {
-      await flushPromises(2);
-    });
+    const sendButton = screen.getByRole('button', { name: /^send$/i });
+    await user.click(sendButton);
 
-    const sendButton = document.querySelector('.lockin-send-btn') as HTMLButtonElement | null;
-    expect(sendButton).not.toBeNull();
-
-    await act(async () => {
-      sendButton?.click();
-    });
-    await act(async () => {
-      await flushPromises(4);
-    });
-
-    // Verify error message is shown in a bubble with error styling
-    const errorBubbles = document.querySelectorAll('.lockin-chat-msg-error');
-    expect(errorBubbles.length).toBeGreaterThan(0);
-
-    // Verify NO save note button is present for error messages
-    const saveNoteButtons = document.querySelectorAll('.lockin-chat-save-note-btn');
-    expect(saveNoteButtons.length).toBe(0);
+    await screen.findByText(/please sign in to continue/i);
+    expect(screen.queryByRole('button', { name: /save note/i })).toBeNull();
   });
 });

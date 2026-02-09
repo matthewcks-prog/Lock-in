@@ -40,4 +40,5 @@ export function getCurrentAdapter(): BaseAdapter {
 }
 
 // Export adapter classes for direct use if needed
-export { BaseAdapter, GenericAdapter, MoodleAdapter, EdstemAdapter };
+export type { BaseAdapter };
+export { GenericAdapter, MoodleAdapter, EdstemAdapter };

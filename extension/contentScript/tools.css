@@ -1,0 +1,197 @@
+@layer lockin.tools {
+  /* === STUDY TOOLS DROPDOWN === */
+  #lockin-root .lockin-top-bar-right {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-study-tools-container {
+    position: relative;
+  }
+
+  #lockin-root .lockin-study-tools-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-6) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    font-weight: 500;
+    color: var(--lockin-color-text-body);
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-surface-subtle) 0%,
+      var(--lockin-color-surface-muted) 100%
+    );
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-study-tools-btn:hover {
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-surface-muted) 0%,
+      var(--lockin-color-border) 100%
+    );
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-study-tools-chevron {
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-study-tools-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: var(--lockin-z-overlay);
+    min-width: var(--lockin-size-180);
+    margin-top: var(--lockin-size-4);
+    padding: var(--lockin-size-6);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-15);
+  }
+
+  #lockin-root .lockin-study-tools-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    text-align: left;
+    color: var(--lockin-color-text-strong);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-study-tools-item:hover:not(:disabled) {
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-study-tools-item-disabled {
+    color: var(--lockin-color-text-muted);
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-coming-soon {
+    font-size: var(--lockin-text-xs);
+    font-style: italic;
+    color: var(--lockin-color-text-muted);
+  }
+
+  /* === CLOSABLE TAB === */
+  #lockin-root .lockin-tab-closable {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding-right: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-16);
+    height: var(--lockin-size-16);
+    font-size: var(--lockin-text-md);
+    line-height: 1;
+    color: var(--lockin-color-text-muted);
+    border-radius: 50%;
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-tab-close:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-rgba-0-0-0-01);
+  }
+
+  /* === TOOL PANEL === */
+  #lockin-root .lockin-tool-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-tool-content {
+    flex: 1;
+    padding: var(--lockin-size-16);
+    overflow-y: auto;
+  }
+
+  #lockin-root .lockin-tool-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: var(--lockin-size-32);
+    font-size: var(--lockin-text-md);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  /* === TRANSCRIPT TOOL SPECIFIC === */
+  #lockin-root .lockin-transcript-tool {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lockin-size-16);
+  }
+
+  #lockin-root .lockin-transcript-change-video {
+    padding: var(--lockin-size-12) 0;
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-transcript-change-video-btn {
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    color: var(--lockin-color-text-body);
+    background: none;
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-change-video-btn:hover {
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-transcript-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--lockin-size-12);
+    padding: var(--lockin-size-32);
+    text-align: center;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-transcript-retry-btn {
+    padding: var(--lockin-size-8) var(--lockin-size-16);
+    font-size: var(--lockin-text-base);
+    font-weight: 500;
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-text-primary);
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: opacity var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-retry-btn:hover {
+    opacity: 0.9;
+  }
+}

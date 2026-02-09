@@ -133,7 +133,7 @@ export function useChatHistory(options: UseChatHistoryOptions) {
     [pageSize, queryClient],
   );
 
-  const invalidate = useCallback(() => {
+  const invalidate = useCallback(async () => {
     return queryClient.invalidateQueries({ queryKey: chatHistoryKeys.all });
   }, [queryClient]);
 

@@ -1,0 +1,201 @@
+@layer lockin.layout {
+  /* === ROOT CONTAINER === */
+  #lockin-root {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 2147483647;
+    width: auto;
+    height: auto;
+    font-family: var(--lockin-font-family-base);
+    pointer-events: none;
+  }
+
+  /* Host styles on target sites can hide extension buttons; force toggle visibility. */
+  #lockin-root > #lockin-toggle-pill,
+  #lockin-root #lockin-toggle-pill {
+    display: inline-flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
+  html {
+    /* Sidebar width uses design tokens with viewport constraints. */
+    --lockin-sidebar-min: var(--lockin-size-360);
+    --lockin-sidebar-max: min(var(--lockin-size-1500), 75vw);
+    --lockin-sidebar-ideal: 35vw;
+    --lockin-sidebar-width: clamp(
+      var(--lockin-sidebar-min),
+      var(--lockin-sidebar-ideal),
+      var(--lockin-sidebar-max)
+    );
+    /* Content width is the remaining space after sidebar (100vw - sidebar width) */
+    --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
+  }
+
+  /* Only apply restrictive styles when sidebar is open - avoid breaking site layouts */
+  body.lockin-sidebar-open {
+    overflow-x: hidden;
+  }
+
+  /* Page content wrapper (injected) */
+  #lockin-page-wrapper {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    transition:
+      width var(--lockin-duration-300) var(--lockin-ease-standard),
+      max-width var(--lockin-duration-300) var(--lockin-ease-standard),
+      margin-right var(--lockin-duration-300) var(--lockin-ease-standard),
+      margin-inline-end var(--lockin-duration-300) var(--lockin-ease-standard);
+  }
+
+  /* When sidebar is expanded (desktop mode), page content wrapper takes remaining space */
+  body.lockin-sidebar-open #lockin-page-wrapper {
+    width: var(--lockin-content-width);
+    max-width: var(--lockin-content-width);
+    margin-right: var(--lockin-sidebar-width);
+    margin-inline-end: var(--lockin-sidebar-width);
+  }
+
+  /* Host page wrappers can re-enable overflow; keep transitions from causing horizontal jitter. */
+  html.lockin-sidebar-transitioning {
+    overflow-x: hidden !important;
+  }
+
+  /* On Monash/Moodle pages the main wrapper is centered with a fixed max width.
+   When the sidebar opens, let the wrapper stretch so there is no white gutter
+   between the content and the sidebar. */
+  body.lockin-sidebar-open #page-wrapper {
+    width: 100% !important;
+    /* Moodle layout wrappers apply fixed widths; this must win to avoid content gutters. */
+    max-width: none !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Only target Moodle-specific container wrappers - avoid breaking other sites */
+  body.lockin-sidebar-open #lockin-page-wrapper > #page-wrapper > .container-fluid,
+  body.lockin-sidebar-open #lockin-page-wrapper > #page > #page-content,
+  body.lockin-sidebar-open #lockin-page-wrapper > #region-main-box {
+    width: 100% !important;
+    /* Moodle child containers enforce max-width/padding; override to honor sidebar split. */
+    max-width: 100% !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* === SIDEBAR PANEL === */
+  #lockin-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 2147483647;
+    display: flex;
+    flex-direction: column;
+    width: var(--lockin-sidebar-width);
+    min-width: var(--lockin-sidebar-min);
+    max-width: var(--lockin-sidebar-max);
+    height: 100vh;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border-left: var(--lockin-size-1) solid var(--lockin-color-border);
+    box-shadow: var(--lockin-shadow-25);
+    transition: transform var(--lockin-duration-300) var(--lockin-ease-standard);
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  #lockin-root .lockin-sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    width: var(--lockin-size-6);
+    height: 100%;
+    background: transparent;
+    outline: none;
+    box-shadow: none;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  #lockin-root .lockin-sidebar-resize-handle:focus,
+  #lockin-root .lockin-sidebar-resize-handle:focus-visible {
+    outline: none;
+  }
+
+  #lockin-sidebar[data-state='collapsed'] {
+    transform: translateX(100%);
+  }
+
+  html.lockin-sidebar-resizing,
+  html.lockin-sidebar-resizing body {
+    /* Host pages can set competing cursors during drag; force resize cursor while active. */
+    cursor: col-resize !important;
+  }
+
+  html.lockin-sidebar-resizing body {
+    transition: none !important;
+    /* Disable selection/transition while dragging to prevent host text selection artifacts. */
+    user-select: none !important;
+  }
+
+  html.lockin-sidebar-resizing #lockin-sidebar {
+    /* Prevent transition lag while host page repaints during manual resize. */
+    transition: none !important;
+  }
+
+  /* === TOGGLE PILL (COLLAPSED STATE) === */
+  #lockin-toggle-pill {
+    /* Host styles frequently target generic buttons; pin all critical presentation values. */
+    position: fixed !important;
+    top: var(--lockin-size-16) !important;
+    right: var(--lockin-size-16) !important;
+    bottom: auto !important;
+    z-index: 2147483646 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--lockin-size-8) !important;
+    width: auto !important;
+    height: auto !important;
+    padding: var(--lockin-size-10) var(--lockin-size-18) !important;
+    font-size: var(--lockin-size-14) !important;
+    font-weight: 600 !important;
+    color: var(--lockin-color-surface) !important;
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-brand) 0%,
+      var(--lockin-color-7c3aed) 100%
+    ) !important;
+    border: none !important;
+    border-radius: var(--lockin-size-9999) !important;
+    box-shadow: var(--lockin-shadow-17) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transition: all var(--lockin-duration-250) var(--lockin-ease-standard) !important;
+    transform: none !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+  }
+
+  #lockin-toggle-pill:hover {
+    box-shadow: var(--lockin-shadow-21) !important;
+    transform: scale(1.05) !important;
+  }
+
+  #lockin-toggle-pill:active {
+    transform: scale(0.95) !important;
+  }
+
+  #lockin-sidebar[data-state='expanded'] ~ #lockin-toggle-pill {
+    opacity: 0;
+    pointer-events: none;
+  }
+}

@@ -1,0 +1,296 @@
+@layer lockin.chrome {
+  /* === MINIMAL TOP BAR === */
+  #lockin-root .lockin-top-bar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lockin-size-12);
+    padding: var(--lockin-size-12) var(--lockin-size-16);
+    background: var(--lockin-color-surface);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-top-bar-left {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--lockin-size-12);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-tabs-wrapper {
+    display: flex;
+    gap: var(--lockin-size-4);
+    padding: var(--lockin-size-2);
+    background: var(--lockin-color-surface-subtle);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-tab {
+    padding: var(--lockin-size-6) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--lockin-color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-tab:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-rgba-0-0-0-003);
+  }
+
+  #lockin-root .lockin-tab.lockin-tab-active {
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-surface);
+    box-shadow: var(--lockin-shadow-06);
+  }
+
+  #lockin-root .lockin-close-btn {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-28);
+    height: var(--lockin-size-28);
+    padding: var(--lockin-size-6);
+    font-size: var(--lockin-text-xl);
+    color: var(--lockin-color-text-secondary);
+    background: none;
+    border: none;
+    border-radius: var(--lockin-radius-sm);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-close-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+  }
+
+  /* === CHAT CONTAINER (History Panel + Main Chat) === */
+  #lockin-root .lockin-chat-container {
+    display: grid;
+    flex: 1;
+    gap: 0;
+    grid-template-columns: var(--lockin-size-260) 1fr;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-chat-container[data-history-state='closed'] {
+    grid-template-columns: 0 1fr;
+  }
+
+  /* === CHAT HISTORY PANEL (Left Side) === */
+  #lockin-root .lockin-chat-history-panel {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: var(--lockin-size-260);
+    min-width: var(--lockin-size-240);
+    max-width: var(--lockin-size-280);
+    overflow: hidden;
+    background: var(--lockin-color-surface-subtle);
+    border-right: var(--lockin-size-1) solid var(--lockin-color-border);
+    transition:
+      transform var(--lockin-duration-240) var(--lockin-ease-standard),
+      opacity var(--lockin-duration-240) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-chat-history-panel[data-state='closed'] {
+    width: 0;
+    min-width: 0;
+    border-right: none;
+    opacity: 0;
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+
+  #lockin-root .lockin-chat-history-panel[data-state='open'] {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  #lockin-root .lockin-new-chat-btn {
+    padding: var(--lockin-size-4) var(--lockin-size-8);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-text-primary);
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: opacity var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-new-chat-btn:hover {
+    opacity: 0.9;
+  }
+
+  #lockin-root .lockin-new-chat-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-history-list {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--lockin-size-6);
+    min-height: 0;
+    padding: var(--lockin-size-12);
+    overflow-y: auto;
+  }
+
+  #lockin-root .lockin-history-item {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-history-item:hover {
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-10);
+  }
+
+  #lockin-root .lockin-history-item.active {
+    background: var(--lockin-color-accent-surface);
+    border-color: var(--lockin-color-accent);
+    box-shadow: var(--lockin-shadow-01);
+  }
+
+  #lockin-root .lockin-history-item-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--lockin-size-4);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-history-title {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lockin-color-text-strong);
+  }
+
+  #lockin-root .lockin-history-meta {
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-history-empty {
+    padding: var(--lockin-size-16);
+    font-size: var(--lockin-text-sm);
+    text-align: center;
+    color: var(--lockin-color-text-muted);
+  }
+
+  /* === CHAT MAIN AREA === */
+  #lockin-root .lockin-chat-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+  }
+
+  #lockin-root .lockin-chat-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lockin-size-12);
+    padding: var(--lockin-size-10) var(--lockin-size-16);
+    background: var(--lockin-color-surface);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-chat-toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-10);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-chat-toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-history-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-8);
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-xl);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-history-toggle-btn:hover {
+    background: var(--lockin-color-border);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-history-toggle-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--lockin-size-4);
+  }
+
+  #lockin-root .lockin-history-toggle-line {
+    display: block;
+    width: var(--lockin-size-14);
+    height: var(--lockin-size-2);
+    background: var(--lockin-color-text-primary);
+    border-radius: var(--lockin-radius-full);
+  }
+
+  #lockin-root .lockin-chat-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-chat-messages-wrapper {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-chat-messages {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--lockin-size-12);
+    min-height: 0;
+    padding: var(--lockin-size-16);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

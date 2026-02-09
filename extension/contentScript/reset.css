@@ -1,0 +1,17 @@
+@layer lockin.base {
+  #lockin-root,
+  #lockin-root * {
+    box-sizing: border-box;
+  }
+
+  #lockin-root button,
+  #lockin-root input,
+  #lockin-root select,
+  #lockin-root textarea {
+    font: inherit;
+  }
+
+  #lockin-root button {
+    color: inherit;
+  }
+}

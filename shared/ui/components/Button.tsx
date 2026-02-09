@@ -2,7 +2,7 @@
  * Button Component
  *
  * Reusable button component with variants.
- * Uses Tailwind CSS for styling.
+ * Uses Tailwind CSS with lockin design tokens for styling.
  */
 
 import React from 'react';
@@ -24,19 +24,23 @@ export function Button({
   ...props
 }: ButtonProps) {
   const baseClasses =
-    'font-medium transition-colors rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed';
+    'inline-flex items-center justify-center gap-2 font-medium transition-colors duration-lockin-base rounded-lockin-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 focus:ring-blue-500',
-    secondary: 'bg-gray-200 text-gray-900 hover:bg-gray-300 active:bg-gray-400 focus:ring-gray-500',
-    ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 active:bg-gray-200 focus:ring-gray-400',
-    danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 focus:ring-red-500',
+    primary:
+      'bg-accent text-white hover:bg-accent-strong active:bg-accent-stronger focus-visible:ring-accent',
+    secondary:
+      'bg-surface-muted text-text-strong border border-line hover:bg-line active:bg-line-strong focus-visible:ring-accent',
+    ghost:
+      'bg-transparent text-text-body hover:bg-surface-muted active:bg-line focus-visible:ring-accent',
+    danger:
+      'bg-danger text-white hover:bg-danger-strong active:bg-danger-strong focus-visible:ring-danger',
   };
 
   const sizeClasses = {
-    sm: 'px-2 py-1 text-sm',
-    md: 'px-4 py-2 text-base',
-    lg: 'px-6 py-3 text-lg',
+    sm: 'px-lockin-2 py-lockin-1 text-lockin-sm min-h-[28px]',
+    md: 'px-lockin-4 py-lockin-2 text-lockin-md min-h-[36px]',
+    lg: 'px-lockin-6 py-lockin-3 text-lockin-lg min-h-[44px]',
   };
 
   return (
@@ -46,15 +50,13 @@ export function Button({
       aria-busy={isLoading}
       {...props}
     >
-      <span className="flex items-center justify-center gap-2">
-        {isLoading && (
-          <span
-            className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-            aria-hidden
-          />
-        )}
-        <span className={isLoading ? 'opacity-80' : undefined}>{children}</span>
-      </span>
+      {isLoading && (
+        <span
+          className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+          aria-hidden
+        />
+      )}
+      <span className={isLoading ? 'opacity-80' : undefined}>{children}</span>
     </button>
   );
 }

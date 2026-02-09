@@ -1,0 +1,159 @@
+@layer lockin.dialogs {
+  /* === FEEDBACK MODAL CHROME === */
+  #lockin-root .lockin-feedback-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--lockin-z-toast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-16);
+    background: var(--lockin-color-rgba-0-0-0-05);
+    animation: lockin-fade-in var(--lockin-duration-150) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-feedback-modal {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: var(--lockin-size-500);
+    max-height: 90vh;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border-radius: var(--lockin-radius-2xl);
+    box-shadow: var(--lockin-shadow-13);
+    animation: lockin-slide-up var(--lockin-duration-200) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-feedback-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--lockin-size-16) var(--lockin-size-20);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-feedback-title {
+    margin: 0;
+    font-size: var(--lockin-text-xl);
+    font-weight: 600;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-feedback-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-32);
+    height: var(--lockin-size-32);
+    font-size: var(--lockin-text-3xl);
+    color: var(--lockin-color-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-feedback-close:hover:not(:disabled) {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-feedback-close:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-feedback-body {
+    flex: 1;
+    padding: var(--lockin-size-20);
+    overflow-y: auto;
+  }
+
+  #lockin-root .lockin-feedback-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-16) var(--lockin-size-20);
+    background: var(--lockin-color-surface-subtle);
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-feedback-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-10) var(--lockin-size-20);
+    font-size: var(--lockin-text-md);
+    font-weight: 500;
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-feedback-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-feedback-btn-secondary {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-feedback-btn-secondary:hover:not(:disabled) {
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-feedback-btn-primary {
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-text-primary);
+    border: none;
+  }
+
+  #lockin-root .lockin-feedback-btn-primary:hover:not(:disabled) {
+    background: var(--lockin-color-text-strong);
+  }
+
+  #lockin-root .lockin-feedback-spinner {
+    width: var(--lockin-size-16);
+    height: var(--lockin-size-16);
+    border: var(--lockin-size-2) solid var(--lockin-color-rgba-255-255-255-03);
+    border-radius: 50%;
+    animation: lockin-spin var(--lockin-duration-800) var(--lockin-ease-linear) infinite;
+    border-top-color: var(--lockin-color-surface);
+  }
+
+  /* Feedback trigger button in top bar */
+  #lockin-root .lockin-feedback-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-32);
+    height: var(--lockin-size-32);
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-feedback-trigger-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-feedback-trigger-btn:active {
+    background: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-feedback-trigger-btn svg {
+    flex-shrink: 0;
+  }
+}

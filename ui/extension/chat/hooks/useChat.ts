@@ -6,7 +6,7 @@
  */
 
 import { useQueryClient } from '@tanstack/react-query';
-import type { UseChatOptions } from '../types';
+import type { ChatMessage, UseChatOptions } from '../types';
 import { useChatMessages } from './useChatMessages';
 import { useChatHistory } from './useChatHistory';
 import { useSendMessage } from './useSendMessage';
@@ -16,8 +16,11 @@ import { createSendSuccessHandler } from './createSendSuccessHandler';
 import { createSelectChat } from './createSelectChat';
 import { createStartBlankChat } from './createStartBlankChat';
 import { createStartNewChat } from './createStartNewChat';
+import { useMessageEdit } from './useMessageEdit';
+import { useRegenerateMessage } from './useRegenerateMessage';
 import type { UseChatReturn } from './chatHookTypes';
 import { useChatSessionState } from './useChatSessionState';
+import type { SendMessageMutationParams } from './sendMessageUtils';
 
 /**
  * Main chat hook that orchestrates all chat functionality.
@@ -87,17 +90,16 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     },
   });
 
-  // Streaming message send (only active when enableStreaming is true)
-  // Note: sendMessageStream and resetStream available for future UI integration
+  // Streaming message send
   const {
-    // sendMessageStream, // Reserved for direct streaming API
+    sendMessageStream,
     isStreaming,
     streamedContent,
     meta: streamMeta,
     error: streamError,
     isComplete: streamComplete,
     cancelPending: cancelStream,
-    // reset: resetStream, // Reserved for stream reset
+    reset: _resetStream,
   } = useSendMessageStream({
     apiClient,
     pageUrl,
@@ -155,6 +157,67 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     setMessages,
   });
 
+  /**
+   * Dispatches a regeneration request using the canonical timeline.
+   * Used by both edit-as-rewrite and regenerate flows to avoid duplicating
+   * a user message — the canonical timeline already contains it.
+   *
+   * When streaming is enabled, routes through the streaming path for
+   * progressive content delivery; otherwise uses blocking mutation.
+   */
+  function dispatchRegeneration(canonicalMessages: ChatMessage[], chatId: string): void {
+    const lastUserMsg = [...canonicalMessages].reverse().find((m) => m.role === 'user');
+    if (!lastUserMsg) return;
+
+    const payload: SendMessageMutationParams = {
+      message: lastUserMsg.content,
+      source: 'followup',
+      pageUrl,
+      chatId,
+      currentMessages: canonicalMessages,
+      activeChatId: chatId,
+    };
+    if (courseCode) {
+      payload.courseCode = courseCode;
+    }
+
+    if (enableStreaming && sendMessageStream) {
+      void sendMessageStream(payload);
+    } else {
+      sendMessageMutation(payload);
+    }
+  }
+
+  // Message editing (auto-cancels stream, auto-regenerates after save)
+  const messageEdit = useMessageEdit({
+    apiClient,
+    chatId: activeChatId,
+    cancelStream,
+    onEditComplete: (_editedContent, canonicalMessages) => {
+      // After a successful edit, the backend has already:
+      //   1. Marked the old message as non-canonical
+      //   2. Inserted the revision as canonical
+      //   3. Truncated all subsequent messages
+      // The canonicalMessages array already contains the revised user message.
+      // We must NOT re-add a user message — just trigger a new assistant response.
+      if (activeChatId) {
+        dispatchRegeneration(canonicalMessages, activeChatId);
+      }
+    },
+  });
+
+  // Regeneration (auto-cancels stream, then re-triggers with canonical timeline)
+  const regeneration = useRegenerateMessage({
+    apiClient,
+    chatId: activeChatId,
+    cancelStream,
+    onRegenerateReady: (canonicalMessages) => {
+      if (activeChatId) {
+        dispatchRegeneration(canonicalMessages, activeChatId);
+      }
+    },
+  });
+
   // Build base return object
   const baseReturn: UseChatReturn = {
     activeChatId,
@@ -176,6 +239,8 @@ export function useChat(options: UseChatOptions): UseChatReturn {
     clearError,
     isHistoryOpen,
     setIsHistoryOpen,
+    messageEdit,
+    regeneration,
   };
 
   // Add streaming fields only if streaming is enabled (exactOptionalPropertyTypes)

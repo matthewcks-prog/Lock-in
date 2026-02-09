@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ApiClient } from '@api/client';
-import {
-  AttachmentButton,
-  AttachmentPreview,
-  ChatMessage as ChatMessageComponent,
-} from '../chat/components';
+import { AttachmentButton, AttachmentPreview, MessageBlock } from '../chat/components';
 import {
   useChat,
   useChatAttachments,
@@ -14,6 +10,7 @@ import {
   type ChatMessage,
 } from '../chat';
 import { useNoteSaveContext } from '../contexts/NoteSaveContext';
+import { scanContent } from '../../../core/services/contentSafetyFilter';
 import type { StorageAdapter } from './types';
 
 interface ChatSectionProps {
@@ -25,32 +22,6 @@ interface ChatSectionProps {
   onClearPrefill?: () => void;
   isOpen: boolean;
   isActive: boolean;
-}
-
-function SaveNoteAction({ content }: { content: string }) {
-  const { saveNote } = useNoteSaveContext();
-
-  const handleSave = async () => {
-    await saveNote({
-      content,
-      noteType: 'manual',
-    });
-  };
-
-  return (
-    <div className="lockin-chat-save-note-action">
-      <button
-        className="lockin-chat-save-note-btn"
-        onClick={(event) => {
-          event.stopPropagation();
-          void handleSave();
-        }}
-        type="button"
-      >
-        Save note
-      </button>
-    </div>
-  );
 }
 
 export function ChatSection({
@@ -80,6 +51,8 @@ export function ChatSection({
     isLoadingMoreHistory,
     loadMoreHistory,
     isLoadingHistory,
+    messageEdit,
+    regeneration,
   } = (() => {
     const chatOptions: {
       apiClient: ApiClient | null;
@@ -109,6 +82,8 @@ export function ChatSection({
   } = useChatAttachments({ maxAttachments: 5 });
 
   const [composerError, setComposerError] = useState<string | null>(null);
+  const [safetyWarning, setSafetyWarning] = useState<string | null>(null);
+  const [safetyBypass, setSafetyBypass] = useState(false);
   const prefillSourceRef = useRef(false);
   const hasPendingAttachments = pendingAttachments.length > 0;
 
@@ -225,6 +200,17 @@ export function ChatSection({
 
       setComposerError(null);
 
+      // Content safety pre-flight check
+      if (hasText && !safetyBypass) {
+        const safetyResult = scanContent(trimmed);
+        if (safetyResult.hasSensitiveContent) {
+          setSafetyWarning(safetyResult.summary);
+          return false; // Block send — user must dismiss or edit
+        }
+      }
+      setSafetyWarning(null);
+      setSafetyBypass(false);
+
       let attachmentIds: string[] = [];
       let messageAttachments: ChatAttachment[] = [];
 
@@ -281,6 +267,7 @@ export function ChatSection({
       waitForAttachmentsReady,
       sendMessage,
       clearAttachments,
+      safetyBypass,
     ],
   );
 
@@ -319,6 +306,16 @@ export function ChatSection({
     syncTextareaHeight();
   }, [isOpen, isActive, inputValue, syncTextareaHeight]);
 
+  const { saveNote } = useNoteSaveContext();
+
+  const handleSaveNote = useCallback(
+    (content: string): void => {
+      // Fire-and-forget: useNoteSave already handles errors internally via try/catch.
+      void saveNote({ content, noteType: 'manual' });
+    },
+    [saveNote],
+  );
+
   const renderChatMessages = () => {
     if (!messages.length) {
       return (
@@ -326,16 +323,38 @@ export function ChatSection({
       );
     }
 
-    return messages.map((message: ChatMessage) => (
-      <ChatMessageComponent
+    // Find the index of the last assistant message for scoping regenerate
+    let lastAssistantIdx = -1;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg !== undefined && msg.role === 'assistant' && !msg.isPending && !msg.isStreaming) {
+        lastAssistantIdx = i;
+        break;
+      }
+    }
+
+    return messages.map((message: ChatMessage, index: number) => (
+      <MessageBlock
         key={message.id}
         message={message}
-        action={
-          message.role === 'assistant' && !message.isPending && !message.isError ? (
-            <SaveNoteAction content={message.content} />
-          ) : null
+        isEditing={messageEdit.editingMessageId === message.id}
+        editDraft={messageEdit.editDraft}
+        isSubmittingEdit={messageEdit.isSubmittingEdit}
+        onStartEdit={messageEdit.startEdit}
+        onCancelEdit={messageEdit.cancelEdit}
+        onSubmitEdit={messageEdit.submitEdit}
+        onEditDraftChange={messageEdit.setEditDraft}
+        onRegenerate={regeneration.regenerate}
+        isRegenerating={regeneration.isRegenerating}
+        isLastAssistantMessage={index === lastAssistantIdx}
+        onSaveNote={
+          message.role === 'assistant' &&
+          !message.isPending &&
+          !message.isStreaming &&
+          !message.isError
+            ? handleSaveNote
+            : undefined
         }
-        isThinking={Boolean(message.isPending)}
       />
     ));
   };
@@ -430,6 +449,28 @@ export function ChatSection({
               {!isStreaming && streamError && (
                 <div className="lockin-chat-error">{streamError.message}</div>
               )}
+              {/* Content safety warning */}
+              {safetyWarning && (
+                <div className="lockin-safety-warning" role="alert">
+                  <span className="lockin-safety-warning-icon" aria-hidden="true">
+                    ⚠️
+                  </span>
+                  <span className="lockin-safety-warning-text">
+                    <strong>Sensitive content detected.</strong> {safetyWarning}. Edit your message
+                    or send anyway.
+                  </span>
+                  <button
+                    type="button"
+                    className="lockin-safety-dismiss-btn"
+                    onClick={() => {
+                      setSafetyBypass(true);
+                      setSafetyWarning(null);
+                    }}
+                  >
+                    Send anyway
+                  </button>
+                </div>
+              )}
               <AttachmentPreview
                 attachments={pendingAttachments}
                 onRemove={removeAttachment}
@@ -445,6 +486,7 @@ export function ChatSection({
                 <textarea
                   className="lockin-chat-input-field"
                   placeholder="Ask a follow-up question..."
+                  aria-label="Chat message"
                   value={inputValue}
                   ref={inputRef}
                   onChange={handleInputChange}
@@ -458,6 +500,16 @@ export function ChatSection({
                 >
                   Send
                 </button>
+                {isStreaming && cancelStream && (
+                  <button
+                    className="lockin-cancel-btn"
+                    type="button"
+                    onClick={() => cancelStream()}
+                    aria-label="Cancel generation"
+                  >
+                    Cancel
+                  </button>
+                )}
               </div>
             </div>
           </div>

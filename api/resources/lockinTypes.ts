@@ -18,6 +18,7 @@ export interface ProcessTextParams {
   language?: string;
   attachments?: string[];
   idempotencyKey?: string;
+  regenerate?: boolean;
 }
 
 export interface ProcessTextStreamParams extends ProcessTextParams {

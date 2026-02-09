@@ -35,7 +35,7 @@ export interface Messaging {
  */
 function createMessaging(): Messaging {
   return {
-    sendToBackground<T = unknown>(message: unknown): Promise<T> {
+    async sendToBackground<T = unknown>(message: unknown): Promise<T> {
       return new Promise((resolve, reject) => {
         try {
           chrome.runtime.sendMessage(message, (response: T) => {
@@ -90,7 +90,7 @@ function createMessaging(): Messaging {
       };
     },
 
-    sendToTab<T = unknown>(tabId: number, message: unknown): Promise<T> {
+    async sendToTab<T = unknown>(tabId: number, message: unknown): Promise<T> {
       return new Promise((resolve, reject) => {
         try {
           chrome.tabs.sendMessage(tabId, message, (response: T) => {

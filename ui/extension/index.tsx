@@ -5,7 +5,8 @@
  * The actual sidebar implementation lives in `LockInSidebar.tsx`.
  */
 
-import { createRoot, Root } from 'react-dom/client';
+import type { Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { LockInSidebar } from './LockInSidebar';
 import type { LockInSidebarProps } from './LockInSidebar';
 

@@ -2,7 +2,7 @@
  * TextInput Component
  *
  * Reusable text input component.
- * Uses Tailwind CSS for styling.
+ * Uses Tailwind CSS with lockin design tokens for styling.
  */
 
 import React, { useId } from 'react';
@@ -22,13 +22,15 @@ export function TextInput({ label, error, helperText, className = '', ...props }
   return (
     <div className="flex flex-col gap-1">
       {label && (
-        <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+        <label htmlFor={inputId} className="text-lockin-sm font-medium text-text-body">
           {label}
         </label>
       )}
       <input
-        className={`px-3 py-2 border rounded-md text-base focus:outline-none focus:ring-2 transition-colors ${
-          error ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'
+        className={`px-lockin-3 py-lockin-2 border rounded-lockin-lg text-lockin-md transition-colors duration-lockin-base focus:outline-none focus-visible:ring-2 ${
+          error
+            ? 'border-danger focus-visible:ring-danger'
+            : 'border-line-strong focus-visible:ring-accent'
         } ${className}`}
         id={inputId}
         aria-invalid={Boolean(error)}
@@ -36,12 +38,12 @@ export function TextInput({ label, error, helperText, className = '', ...props }
         {...props}
       />
       {error && (
-        <span id={errorId} className="text-sm text-red-600">
+        <span id={errorId} className="text-lockin-sm text-danger" role="alert">
           {error}
         </span>
       )}
       {helperText && !error && (
-        <span id={helperId} className="text-sm text-gray-500">
+        <span id={helperId} className="text-lockin-sm text-text-muted">
           {helperText}
         </span>
       )}

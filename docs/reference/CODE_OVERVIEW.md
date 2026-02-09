@@ -136,8 +136,13 @@ This is a living overview of the current codebase. Update it whenever files move
 
 ### Styling
 
-- **`contentScript.css`**
-  - Sidebar and UI styling, responsive breakpoints, and page split layout.
+- **`extension/contentScript/`**
+  - Modular content-script CSS source split by layer/feature (`tokens.css`, `layout.css`, chat/notes/dialog/tool modules, `responsive.css`).
+  - `index.css` declares `@layer` order and imports all modules.
+
+- **`extension/contentScript.css`**
+  - Generated single-file bundle used by `manifest.json` content script injection.
+  - Built from `extension/contentScript/index.css` via `npm run build:css`.
 
 ## Backend Structure (`backend/`)
 
@@ -421,6 +426,7 @@ The system is designed to handle thousands of concurrent users:
 
 **Documentation:**
 
+- [UI Testing Guide](../testing/UI_TESTING.md) - React Testing Library standards
 - [Backend Testing Guide](../testing/BACKEND_TESTING.md) - Comprehensive testing standards
 - [Backend README.md](../../backend/README.md#testing) - Quick test commands
 

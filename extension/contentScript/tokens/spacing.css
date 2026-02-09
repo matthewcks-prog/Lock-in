@@ -1,0 +1,132 @@
+@layer lockin.tokens {
+  #lockin-root {
+    /* ================================================================
+       MOTION
+       ================================================================ */
+    --lockin-duration-fast: 120ms;
+    --lockin-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+    --lockin-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --lockin-ease-default: ease;
+    --lockin-ease-in-out: ease-in-out;
+    --lockin-ease-linear: linear;
+    --lockin-ease-step-end: step-end;
+
+    /* ================================================================
+       SPACING SCALE (4px base)
+       ================================================================ */
+    --lockin-space-0: 0px;
+    --lockin-space-px: 1px;
+    --lockin-space-0-5: 2px;
+    --lockin-space-1: 4px;
+    --lockin-space-1-5: 6px;
+    --lockin-space-2: 8px;
+    --lockin-space-2-5: 10px;
+    --lockin-space-3: 12px;
+    --lockin-space-4: 16px;
+    --lockin-space-5: 20px;
+    --lockin-space-6: 24px;
+    --lockin-space-7: 28px;
+    --lockin-space-8: 32px;
+    --lockin-space-10: 40px;
+    --lockin-space-12: 48px;
+    --lockin-space-16: 64px;
+
+    /* ================================================================
+       BORDER RADIUS
+       ================================================================ */
+    --lockin-radius-sm: 4px;
+    --lockin-radius-md: 6px;
+    --lockin-radius-lg: 8px;
+    --lockin-radius-xl: 10px;
+    --lockin-radius-2xl: 12px;
+    --lockin-radius-full: 9999px;
+
+    /* ================================================================
+       Z-INDEX SCALE
+       ================================================================ */
+    --lockin-z-base: 1;
+    --lockin-z-dropdown: 10;
+    --lockin-z-sticky: 20;
+    --lockin-z-overlay: 100;
+    --lockin-z-modal: 10001;
+    --lockin-z-toast: 10002;
+    --lockin-z-max: 2147483647;
+
+    /* ================================================================
+       FOCUS RING
+       ================================================================ */
+    --lockin-focus-ring-width: 2px;
+    --lockin-focus-ring-offset: 1px;
+    --lockin-focus-ring-color: var(--lockin-color-accent);
+
+    /* ================================================================
+       SIZES
+       ================================================================ */
+    --lockin-size-neg-32: -32px;
+    --lockin-size-neg-6: -6px;
+    --lockin-size-neg-4: -4px;
+    --lockin-size-neg-3: -3px;
+    --lockin-size-neg-1: -1px;
+    --lockin-size-1: 1px;
+    --lockin-size-2: 2px;
+    --lockin-size-3: 3px;
+    --lockin-size-4: 4px;
+    --lockin-size-5: 5px;
+    --lockin-size-6: 6px;
+    --lockin-size-7: 7px;
+    --lockin-size-8: 8px;
+    --lockin-size-10: 10px;
+    --lockin-size-11: 11px;
+    --lockin-size-12: 12px;
+    --lockin-size-13: 13px;
+    --lockin-size-14: 14px;
+    --lockin-size-16: 16px;
+    --lockin-size-18: 18px;
+    --lockin-size-20: 20px;
+    --lockin-size-22: 22px;
+    --lockin-size-24: 24px;
+    --lockin-size-25: 25px;
+    --lockin-size-28: 28px;
+    --lockin-size-32: 32px;
+    --lockin-size-40: 40px;
+    --lockin-size-45: 45px;
+    --lockin-size-48: 48px;
+    --lockin-size-56: 56px;
+    --lockin-size-60: 60px;
+    --lockin-size-80: 80px;
+    --lockin-size-90: 90px;
+    --lockin-size-120: 120px;
+    --lockin-size-150: 150px;
+    --lockin-size-160: 160px;
+    --lockin-size-180: 180px;
+    --lockin-size-190: 190px;
+    --lockin-size-200: 200px;
+    --lockin-size-220: 220px;
+    --lockin-size-240: 240px;
+    --lockin-size-260: 260px;
+    --lockin-size-280: 280px;
+    --lockin-size-360: 360px;
+    --lockin-size-400: 400px;
+    --lockin-size-500: 500px;
+    --lockin-size-520: 520px;
+    --lockin-size-700: 700px;
+    --lockin-size-1500: 1500px;
+    --lockin-size-999: 999px;
+    --lockin-size-9999: 9999px;
+
+    /* ================================================================
+       DURATIONS
+       ================================================================ */
+    --lockin-duration-100: 0.1s;
+    --lockin-duration-120: 0.12s;
+    --lockin-duration-150: 0.15s;
+    --lockin-duration-200: 0.2s;
+    --lockin-duration-240: 0.24s;
+    --lockin-duration-250: 0.25s;
+    --lockin-duration-300: 0.3s;
+    --lockin-duration-600: 0.6s;
+    --lockin-duration-800: 0.8s;
+    --lockin-duration-1000: 1s;
+    --lockin-duration-1200: 1.2s;
+  }
+}

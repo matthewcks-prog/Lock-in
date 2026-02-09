@@ -28,13 +28,13 @@ import { $createHeadingNode, $isHeadingNode } from '@lexical/rich-text';
 import { $createCodeNode } from '@lexical/code';
 import { $patchStyleText, $setBlocksType } from '@lexical/selection';
 import { mergeRegister } from '@lexical/utils';
+import type { EditorState } from 'lexical';
 import {
   $createParagraphNode,
   $getSelection,
   $isElementNode,
   $isRangeSelection,
   COMMAND_PRIORITY_LOW,
-  EditorState,
   FORMAT_ELEMENT_COMMAND,
   FORMAT_TEXT_COMMAND,
   REDO_COMMAND,

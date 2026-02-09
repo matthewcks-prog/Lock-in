@@ -65,6 +65,9 @@ export async function sendMessageMutation(
   if (idempotencyKey) {
     requestPayload.idempotencyKey = idempotencyKey;
   }
+  if (params.isRegeneration) {
+    requestPayload.regenerate = true;
+  }
 
   const response = await apiClient.processText(requestPayload);
 

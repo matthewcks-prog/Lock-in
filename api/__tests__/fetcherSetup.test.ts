@@ -11,7 +11,7 @@ describe('resolveFetch', () => {
   });
 
   it('binds the global fetch to avoid illegal invocation', async () => {
-    const strictFetch = function (this: unknown, _input: RequestInfo | URL) {
+    const strictFetch = async function (this: unknown, _input: RequestInfo | URL) {
       if (this !== globalThis) {
         throw new TypeError('Illegal invocation');
       }

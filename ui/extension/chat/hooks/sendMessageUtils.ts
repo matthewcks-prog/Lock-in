@@ -17,6 +17,8 @@ export interface SendMessageWithAttachmentsParams extends SendMessageParams {
   idempotencyKey?: string;
   /** Optional transcript context to cache before sending */
   transcriptContext?: TranscriptCacheInput;
+  /** Whether this is a regeneration of a previous assistant response */
+  isRegeneration?: boolean;
 }
 
 export type SendMessageMutationParams = SendMessageWithAttachmentsParams & {
@@ -65,9 +67,14 @@ export function buildChatHistory(params: SendMessageMutationParams): ChatHistory
 }
 
 export function resolveApiChatId(params: SendMessageMutationParams): string | undefined {
-  return typeof params.chatId === 'string' && isValidUUID(params.chatId)
-    ? params.chatId
-    : undefined;
+  // Prefer the chatId field, fallback to activeChatId — both must be valid UUIDs
+  if (typeof params.chatId === 'string' && isValidUUID(params.chatId)) {
+    return params.chatId;
+  }
+  if (typeof params.activeChatId === 'string' && isValidUUID(params.activeChatId)) {
+    return params.activeChatId;
+  }
+  return undefined;
 }
 
 export function resolveSelectionPayload(params: SendMessageMutationParams): string {

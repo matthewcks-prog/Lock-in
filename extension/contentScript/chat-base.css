@@ -1,0 +1,195 @@
+@layer lockin.chat {
+  /* Chat panel container */
+
+  /* Chat message styles (component uses these class names) */
+  /* ============================================================
+   MESSAGE BLOCK DESIGN
+   ============================================================ */
+
+  /* Message blocks: flex column for content + action bar layout */
+  #lockin-root .lockin-msg-block {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--lockin-size-2);
+    width: 100%;
+    padding: var(--lockin-size-12) 0;
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-msg-block:last-child {
+    border-bottom: none;
+  }
+
+  /* Body content */
+  #lockin-root .lockin-msg-body {
+    font-size: var(--lockin-text-md);
+    line-height: 1.7;
+    word-break: break-word;
+    color: var(--lockin-color-text-strong);
+    overflow-wrap: anywhere;
+    /* NO max-height, NO overflow hidden, NO line-clamp — content expands fully */
+  }
+
+  /* User body color now set in the bubble section */
+
+  #lockin-root .lockin-msg-user-text {
+    margin: 0;
+    white-space: pre-wrap;
+  }
+
+  /* Accent bar for assistant messages */
+  #lockin-root .lockin-msg-block--assistant {
+    padding-left: var(--lockin-size-12);
+    border-left: var(--lockin-size-3) solid var(--lockin-color-accent-border);
+  }
+
+  /* Error state */
+  #lockin-root .lockin-msg-block--error .lockin-msg-body {
+    color: var(--lockin-color-danger-strong);
+  }
+
+  #lockin-root .lockin-msg-block--error {
+    padding: var(--lockin-size-12);
+    background: var(--lockin-color-danger-surface);
+    border-radius: var(--lockin-radius-md);
+    border-left-color: var(--lockin-color-danger-border);
+  }
+
+  #lockin-root .lockin-msg-error-text {
+    margin: 0;
+    font-size: var(--lockin-text-base);
+  }
+
+  /* Streaming caret animation */
+  #lockin-root .lockin-msg-caret {
+    display: inline-block;
+    width: var(--lockin-size-2);
+    height: 1em;
+    margin-left: var(--lockin-size-2);
+    background: var(--lockin-color-accent);
+    animation: lockin-caret-blink var(--lockin-duration-800) var(--lockin-ease-step-end) infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes lockin-caret-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  /* Thinking indicator (new naming) */
+  #lockin-root .lockin-msg-thinking {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    font-size: var(--lockin-text-base);
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-msg-thinking-text {
+    font-style: italic;
+  }
+
+  #lockin-root .lockin-msg-thinking-dots {
+    display: inline-flex;
+    gap: var(--lockin-size-4);
+  }
+
+  #lockin-root .lockin-msg-thinking-dot {
+    width: var(--lockin-size-5);
+    height: var(--lockin-size-5);
+    background: var(--lockin-color-text-muted);
+    border-radius: var(--lockin-radius-full);
+    animation: lockin-bounce var(--lockin-duration-800) var(--lockin-ease-in-out) infinite;
+  }
+
+  /* Code block copy button */
+  #lockin-root .lockin-code-copy-btn {
+    padding: var(--lockin-size-2) var(--lockin-size-6);
+    font-size: var(--lockin-text-md);
+    line-height: 1;
+    color: var(--lockin-color-text-muted);
+    background: none;
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-sm);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-code-copy-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  /* Code block wrapper */
+  #lockin-root .lockin-code-block-wrapper {
+    margin: var(--lockin-size-12) 0;
+    overflow: hidden;
+    border: var(--lockin-size-1) solid var(--lockin-color-text-body);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--lockin-size-4) var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    background: var(--lockin-color-text-strong);
+  }
+
+  #lockin-root .lockin-code-block-lang {
+    font-weight: 600;
+    text-transform: lowercase;
+    color: var(--lockin-color-text-muted);
+  }
+
+  /* Markdown content container — no truncation allowed */
+  #lockin-root .lockin-markdown {
+    font-size: var(--lockin-text-md);
+    line-height: 1.7;
+    color: var(--lockin-color-text-strong);
+  }
+
+  /* Attachment slots for message blocks */
+  #lockin-root .lockin-msg-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--lockin-size-8);
+    margin-top: var(--lockin-size-6);
+  }
+
+  #lockin-root .lockin-msg-attachment-thumb {
+    width: var(--lockin-size-120);
+    height: var(--lockin-size-90);
+    overflow: hidden;
+    background: var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-msg-attachment-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  #lockin-root .lockin-msg-attachment-file {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-6) var(--lockin-size-8);
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-text-body);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-md);
+  }
+
+  #lockin-root .lockin-msg-attachment-name {
+    max-width: var(--lockin-size-150);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

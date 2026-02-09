@@ -2,7 +2,7 @@
  * Card Component
  *
  * Reusable card component for content containers.
- * Uses Tailwind CSS for styling.
+ * Uses Tailwind CSS with lockin design tokens for styling.
  */
 
 import React from 'react';
@@ -17,10 +17,24 @@ export interface CardProps {
 export function Card({ children, className = '', onClick, isActive = false }: CardProps) {
   return (
     <div
-      className={`p-3 border rounded-lg bg-white transition-colors ${
-        isActive ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+      className={`p-lockin-3 border rounded-lockin-lg bg-surface transition-colors duration-lockin-base ${
+        isActive
+          ? 'border-accent bg-accent-surface shadow-lockin-focus-accent'
+          : 'border-line hover:border-line-strong'
       } ${onClick ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
     >
       {children}
     </div>

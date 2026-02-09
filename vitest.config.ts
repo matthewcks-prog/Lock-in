@@ -9,11 +9,13 @@ export default defineConfig({
       { find: '@core', replacement: resolve(process.cwd(), 'core') },
       { find: '@api', replacement: resolve(process.cwd(), 'api') },
       { find: '@shared/ui', replacement: resolve(process.cwd(), 'shared/ui') },
+      { find: '@shared/test', replacement: resolve(process.cwd(), 'shared/test') },
       { find: '@ui', replacement: resolve(process.cwd(), 'ui') },
     ],
   },
   test: {
     environment: 'jsdom',
+    setupFiles: ['tests/setupTests.ts'],
     include: ['**/__tests__/**/*.test.{ts,tsx}', '**/__tests__/**/*.test.js'],
     exclude: [
       '**/node_modules/**',

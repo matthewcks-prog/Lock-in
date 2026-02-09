@@ -1,0 +1,302 @@
+@layer lockin.chat {
+  /* ============================================================
+   MESSAGE ACTION BAR — hover/focus reveal
+   ============================================================ */
+  #lockin-root .lockin-msg-action-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-2);
+    min-height: var(--lockin-size-28);
+    opacity: 0;
+    transition: opacity var(--lockin-duration-150) var(--lockin-ease-default);
+    pointer-events: none;
+  }
+
+  /* Reveal on hover or keyboard focus within the message block */
+  #lockin-root .lockin-msg-block:hover > .lockin-msg-action-bar,
+  #lockin-root .lockin-msg-block:focus-within > .lockin-msg-action-bar {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Actions below message body (both user and assistant) */
+  #lockin-root .lockin-msg-action-bar--below {
+    justify-content: flex-start;
+    padding: var(--lockin-size-4) 0 0 0;
+  }
+
+  /* User actions: right-aligned below the user bubble */
+  #lockin-root .lockin-msg-action-bar--user {
+    justify-content: flex-end;
+  }
+
+  /* Touch fallback: always show a subtle kebab on touch-only devices */
+  /* Action button */
+  #lockin-root .lockin-msg-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-28);
+    height: var(--lockin-size-28);
+    padding: 0;
+    font-size: var(--lockin-text-md);
+    line-height: 1;
+    color: var(--lockin-color-text-secondary);
+    background: none;
+    border: var(--lockin-size-1) solid transparent;
+    border-radius: var(--lockin-radius-md);
+    transition:
+      background var(--lockin-duration-120) var(--lockin-ease-default),
+      color var(--lockin-duration-120) var(--lockin-ease-default),
+      border-color var(--lockin-duration-120) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-msg-action-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-msg-action-btn:focus-visible {
+    outline: var(--lockin-size-2) solid var(--lockin-color-accent);
+    outline-offset: var(--lockin-size-1);
+  }
+
+  #lockin-root .lockin-msg-action-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-msg-action-btn svg {
+    width: var(--lockin-size-16);
+    height: var(--lockin-size-16);
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+  }
+
+  /* Spinner for loading state */
+  #lockin-root .lockin-msg-action-spinner {
+    display: inline-block;
+    width: var(--lockin-size-14);
+    height: var(--lockin-size-14);
+    border: var(--lockin-size-2) solid var(--lockin-color-border);
+    border-radius: 50%;
+    animation: lockin-spin var(--lockin-duration-600) var(--lockin-ease-linear) infinite;
+    border-top-color: var(--lockin-color-accent);
+  }
+
+  /* ============================================================
+   USER MESSAGE BUBBLE
+
+   ARCHITECTURE: State-based styling pattern
+   - Base state: Right-aligned bubble with background and padding
+   - Edit state: Bubble styling moves from .lockin-msg-body to .lockin-msg-editor
+
+   RATIONALE:
+   1. MessageEditor renders inside .lockin-msg-body wrapper
+   2. Applying bubble styles to both creates nested container conflicts
+   3. Solution: Use --editing modifier to conditionally apply styles
+
+   BENEFITS:
+   - Seamless visual transition between view/edit modes
+   - No layout shift or reflow
+   - Maintains right-alignment in all states
+   - Testable: Each state is independently verifiable
+   ============================================================ */
+  /* Right-align user message block with flex */
+  #lockin-root .lockin-msg-block--user {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  /* User message bubble - right-aligned with appropriate max-width */
+  #lockin-root .lockin-msg-block--user .lockin-msg-body {
+    width: fit-content;
+    max-width: 85%;
+    margin-left: auto;
+    padding: var(--lockin-size-10) var(--lockin-size-16);
+    text-align: left;
+    color: var(--lockin-color-accent-text);
+    background: var(--lockin-color-accent-surface);
+    border-radius: var(--lockin-size-18) var(--lockin-size-18) var(--lockin-radius-sm)
+      var(--lockin-size-18);
+  }
+
+  /* STATE: Remove bubble styling when editing to prevent nested container conflicts */
+  #lockin-root .lockin-msg-block--user.lockin-msg-block--editing .lockin-msg-body {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+  }
+
+  #lockin-root .lockin-msg-block--user.lockin-msg-block--error .lockin-msg-body {
+    background: var(--lockin-color-danger-surface);
+  }
+
+  /* ============================================================
+   EDITED INDICATOR
+   ============================================================ */
+  #lockin-root .lockin-msg-edited-badge {
+    display: inline-block;
+    margin-top: var(--lockin-size-2);
+    font-size: var(--lockin-text-xs);
+    font-style: italic;
+    color: var(--lockin-color-text-muted);
+    cursor: default;
+  }
+
+  /* Right-align edited badge for user messages */
+  #lockin-root .lockin-msg-block--user .lockin-msg-edited-badge {
+    margin-left: auto;
+    padding-right: var(--lockin-size-2);
+  }
+  /* ============================================================
+   MESSAGE EDITOR (inline edit mode)
+   ============================================================ */
+  #lockin-root .lockin-msg-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lockin-size-8);
+    width: 100%;
+  }
+
+  /* STATE: Apply bubble styling to editor for user messages to match view mode */
+  #lockin-root .lockin-msg-block--user.lockin-msg-block--editing .lockin-msg-editor {
+    width: fit-content;
+    min-width: 50%;
+    max-width: 85%;
+    margin-left: auto;
+    padding: var(--lockin-size-10) var(--lockin-size-16);
+    background: var(--lockin-color-accent-surface);
+    border-radius: var(--lockin-size-18) var(--lockin-size-18) var(--lockin-radius-sm)
+      var(--lockin-size-18);
+  }
+
+  #lockin-root .lockin-msg-editor-textarea {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: var(--lockin-size-40);
+    max-height: var(--lockin-size-200);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    font-family: inherit;
+    font-size: var(--lockin-text-md);
+    line-height: 1.7;
+    color: var(--lockin-color-accent-text);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    resize: none;
+  }
+
+  #lockin-root .lockin-msg-editor-textarea:focus {
+    outline: none;
+  }
+
+  #lockin-root .lockin-msg-editor-textarea:disabled {
+    color: var(--lockin-color-text-muted);
+    background: var(--lockin-color-surface-subtle);
+  }
+
+  #lockin-root .lockin-msg-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--lockin-size-6);
+    margin-top: var(--lockin-size-4);
+  }
+
+  #lockin-root .lockin-msg-editor-cancel {
+    padding: var(--lockin-size-5) var(--lockin-size-14);
+    font-size: var(--lockin-text-base);
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    transition: background var(--lockin-duration-120) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-msg-editor-cancel:hover {
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-msg-editor-cancel:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-msg-editor-submit {
+    padding: var(--lockin-size-5) var(--lockin-size-14);
+    font-size: var(--lockin-text-base);
+    font-weight: 600;
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-accent-strong);
+    border: none;
+    border-radius: var(--lockin-radius-lg);
+    transition: background var(--lockin-duration-120) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-msg-editor-submit:hover {
+    background: var(--lockin-color-accent-stronger);
+  }
+
+  #lockin-root .lockin-msg-editor-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ============================================================
+   MESSAGE STATUS INDICATORS
+   ============================================================ */
+  #lockin-root .lockin-msg-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    padding: var(--lockin-size-2) 0;
+    font-size: var(--lockin-text-xs);
+  }
+
+  /* Right-align status for user messages */
+  #lockin-root .lockin-msg-block--user .lockin-msg-status {
+    margin-left: auto;
+    padding-right: var(--lockin-size-2);
+  }
+
+  #lockin-root .lockin-msg-status--sending {
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-msg-status-dot {
+    display: inline-block;
+    width: var(--lockin-size-6);
+    height: var(--lockin-size-6);
+    background: var(--lockin-color-text-muted);
+    border-radius: 50%;
+    animation: lockin-pulse var(--lockin-duration-1200) var(--lockin-ease-in-out) infinite;
+  }
+
+  @keyframes lockin-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  #lockin-root .lockin-msg-status--failed {
+    font-weight: 600;
+    color: var(--lockin-color-danger-strong);
+  }
+}

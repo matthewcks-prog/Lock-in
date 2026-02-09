@@ -175,6 +175,7 @@ export type {
   TranscriptCacheMeta,
   TranscriptCacheResponse,
 };
+export type { EditMessageResponse, RegenerateResponse } from './resources/chatsClient';
 export type {
   StreamEvent,
   StreamMetaEvent,

@@ -1,0 +1,273 @@
+@layer lockin.notes {
+  #lockin-root .lockin-notes-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    background: var(--lockin-color-surface);
+  }
+
+  #lockin-root .lockin-notes-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-10) var(--lockin-size-12);
+    background: var(--lockin-color-surface);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-notes-header.lockin-notes-header-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lockin-size-12);
+    padding: var(--lockin-size-10) var(--lockin-size-14);
+  }
+
+  #lockin-root .lockin-notes-header-left {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    gap: var(--lockin-size-1);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-notes-header-center {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #lockin-root .lockin-notes-header-right {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  #lockin-root .lockin-notes-course-row {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-text-emphasis);
+  }
+
+  #lockin-root .lockin-notes-label {
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-notes-course-value {
+    font-size: var(--lockin-text-sm);
+    font-weight: 700;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-notes-link-row {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-notes-link-href {
+    font-size: var(--lockin-text-xs);
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--lockin-color-brand);
+  }
+
+  #lockin-root .lockin-notes-link-href:hover {
+    text-decoration: underline;
+  }
+
+  #lockin-root .lockin-notes-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-2);
+    padding: var(--lockin-size-2);
+    background: var(--lockin-color-surface-muted);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-notes-toggle-btn {
+    padding: var(--lockin-size-6) var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--lockin-color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-notes-toggle-btn:hover {
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-notes-toggle-btn.is-active {
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-surface);
+    box-shadow: var(--lockin-shadow-08);
+  }
+
+  #lockin-root .lockin-btn-primary {
+    padding: var(--lockin-size-6) var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-text-primary);
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition:
+      opacity var(--lockin-duration-150) var(--lockin-ease-default),
+      background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-btn-primary:hover {
+    background: var(--lockin-color-text-strong);
+  }
+
+  #lockin-root .lockin-btn-ghost {
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    color: var(--lockin-color-text-primary);
+    background: transparent;
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-btn-ghost:hover {
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-notes-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--lockin-size-10);
+    min-height: 0;
+    padding: var(--lockin-size-12) var(--lockin-size-16) var(--lockin-size-14);
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-note-shell-card {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: var(--lockin-size-500);
+    max-height: var(--lockin-size-700);
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-2xl);
+    box-shadow: var(--lockin-shadow-20);
+  }
+
+  #lockin-root .lockin-note-shell-head {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-12);
+    padding: var(--lockin-size-12) var(--lockin-size-14);
+    background: var(--lockin-color-surface-subtle);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-note-title-input {
+    width: 100%;
+    padding: var(--lockin-size-8) var(--lockin-size-10);
+    font-family: inherit;
+    font-size: var(--lockin-text-lg);
+    font-weight: 700;
+    color: var(--lockin-color-text-primary);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-xl);
+    transition:
+      box-shadow var(--lockin-duration-150) var(--lockin-ease-default),
+      background var(--lockin-duration-150) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-note-title-input:focus {
+    background: var(--lockin-color-surface);
+    outline: none;
+    box-shadow: var(--lockin-shadow-03);
+  }
+
+  #lockin-root .lockin-note-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-6) var(--lockin-size-8);
+    font-size: var(--lockin-text-sm);
+    white-space: nowrap;
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface-muted);
+    border-radius: var(--lockin-radius-xl);
+  }
+
+  #lockin-root .lockin-note-status.is-success {
+    color: var(--lockin-color-success-text);
+    background: var(--lockin-color-success-surface);
+  }
+
+  #lockin-root .lockin-note-status.is-error {
+    color: var(--lockin-color-danger-strong);
+    background: var(--lockin-color-danger-surface);
+  }
+
+  #lockin-root .lockin-note-status.is-muted {
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-inline-spinner {
+    width: var(--lockin-size-14);
+    height: var(--lockin-size-14);
+    border: var(--lockin-size-2) solid var(--lockin-color-border);
+    border-radius: 50%;
+    animation: lockin-spin var(--lockin-duration-800) var(--lockin-ease-linear) infinite;
+    border-top-color: var(--lockin-color-accent);
+  }
+
+  #lockin-root .lockin-note-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: var(--lockin-z-base);
+    display: flex;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-10) var(--lockin-size-16);
+    background: var(--lockin-color-surface-subtle);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-note-toolbar-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+  }
+
+  #lockin-root .lockin-note-toolbar-divider {
+    width: var(--lockin-size-1);
+    height: var(--lockin-size-22);
+    margin: 0 var(--lockin-size-4);
+    background: var(--lockin-color-border);
+  }
+}

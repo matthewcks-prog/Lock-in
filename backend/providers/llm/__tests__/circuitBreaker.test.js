@@ -4,7 +4,7 @@ const { CircuitBreaker } = require('../circuitBreaker');
 
 describe('CircuitBreaker', () => {
   test('opens after failure threshold and blocks requests', async () => {
-    let now = 1000;
+    const now = 1000;
     const breaker = new CircuitBreaker({
       failureThreshold: 2,
       openDurationMs: 30000,

@@ -16,3 +16,5 @@ export {
 } from './useSendMessageStream';
 export { useChatInput } from './useChatInput';
 export { useChatAttachments } from './useChatAttachments';
+export { useMessageEdit, type UseMessageEditReturn } from './useMessageEdit';
+export { useRegenerateMessage, type UseRegenerateMessageReturn } from './useRegenerateMessage';

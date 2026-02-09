@@ -15,6 +15,7 @@ const {
   deleteChat,
   listChatMessages,
 } = require('../controllers/assistant/chat');
+const { editMessage, regenerateMessage } = require('../controllers/assistant/chatEdit');
 const { generateChatTitle } = require('../controllers/assistant/title');
 const {
   uploadChatAsset,
@@ -30,6 +31,8 @@ const {
   createChatSessionSchema,
   listChatsQuerySchema,
   assetIdParamSchema,
+  messageIdParamSchema,
+  editMessageSchema,
 } = require('../validators/assistantValidators');
 
 const router = express.Router();
@@ -60,6 +63,23 @@ router.post(
   requireSupabaseUser,
   validateParams(chatIdParamSchema),
   generateChatTitle,
+);
+
+// Message editing
+router.put(
+  '/chats/:chatId/messages/:messageId',
+  requireSupabaseUser,
+  validateParams(messageIdParamSchema),
+  validate(editMessageSchema),
+  editMessage,
+);
+
+// Regeneration
+router.post(
+  '/chats/:chatId/regenerate',
+  requireSupabaseUser,
+  validateParams(chatIdParamSchema),
+  regenerateMessage,
 );
 
 // Chat asset endpoints

@@ -125,7 +125,8 @@ async function getRecentChats(userId, options = {}) {
 }
 
 /**
- * Fetch all messages for a chat if owned by user.
+ * Fetch canonical messages for a chat (the current visible timeline).
+ * Non-canonical messages (superseded by edits) are excluded.
  * @param {string} userId
  * @param {string} chatId
  * @returns {Promise<object[]>}
@@ -133,9 +134,12 @@ async function getRecentChats(userId, options = {}) {
 async function getChatMessages(userId, chatId) {
   const { data, error } = await supabase
     .from('chat_messages')
-    .select('id,role,mode,source,input_text,output_text,created_at,chat_id,user_id')
+    .select(
+      'id,role,mode,source,input_text,output_text,created_at,status,edited_at,revision_of,chat_id,user_id',
+    )
     .eq('chat_id', chatId)
     .eq('user_id', userId)
+    .eq('is_canonical', true)
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -207,6 +211,128 @@ async function deleteChat({ userId, chatId }) {
   }
 }
 
+/**
+ * Fetch a single message by ID, ensuring ownership.
+ * @param {string} userId
+ * @param {string} chatId
+ * @param {string} messageId
+ * @returns {Promise<object|null>}
+ */
+async function getMessageById(userId, chatId, messageId) {
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .select('*')
+    .eq('id', messageId)
+    .eq('chat_id', chatId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to fetch message: ${error.message}`);
+  }
+  return data || null;
+}
+
+/**
+ * Edit a user message: mark the original as non-canonical and insert a revision row.
+ * Returns the new canonical revision message.
+ *
+ * @param {object} params
+ * @param {string} params.userId
+ * @param {string} params.chatId
+ * @param {string} params.messageId - original message to revise
+ * @param {string} params.newContent - updated message content
+ * @returns {Promise<object>} the new revision row
+ */
+async function editMessage({ userId, chatId, messageId, newContent }) {
+  // 1. Mark original as non-canonical
+  const now = new Date().toISOString();
+  const { error: updateError } = await supabase
+    .from('chat_messages')
+    .update({ is_canonical: false, edited_at: now })
+    .eq('id', messageId)
+    .eq('chat_id', chatId)
+    .eq('user_id', userId);
+
+  if (updateError) {
+    throw new Error(`Failed to mark message as edited: ${updateError.message}`);
+  }
+
+  // 2. Fetch original to copy its metadata
+  const original = await getMessageById(userId, chatId, messageId);
+  if (!original) {
+    throw new Error('Original message not found after update');
+  }
+
+  // 3. Insert revision row
+  const revision = await insertChatMessage({
+    chat_id: chatId,
+    user_id: userId,
+    role: original.role,
+    mode: original.mode || null,
+    source: original.source || null,
+    input_text: newContent,
+    output_text: null,
+    revision_of: messageId,
+    is_canonical: true,
+    status: 'sent',
+  });
+
+  return revision;
+}
+
+/**
+ * Truncate all messages after a given message in a chat.
+ * Sets is_canonical = false for all messages created after the reference message.
+ *
+ * @param {object} params
+ * @param {string} params.userId
+ * @param {string} params.chatId
+ * @param {string} params.afterMessageId - messages after this one get truncated
+ * @returns {Promise<number>} count of truncated messages
+ */
+async function truncateAfterMessage({ userId, chatId, afterMessageId }) {
+  // Get the reference message's created_at
+  const refMessage = await getMessageById(userId, chatId, afterMessageId);
+  if (!refMessage) {
+    throw new Error('Reference message not found for truncation');
+  }
+
+  const { data, error } = await supabase
+    .from('chat_messages')
+    .update({ is_canonical: false })
+    .eq('chat_id', chatId)
+    .eq('user_id', userId)
+    .eq('is_canonical', true)
+    .gt('created_at', refMessage.created_at)
+    .select('id');
+
+  if (error) {
+    throw new Error(`Failed to truncate messages: ${error.message}`);
+  }
+
+  return (data || []).length;
+}
+
+/**
+ * Update the delivery status of a message.
+ * @param {string} userId
+ * @param {string} messageId
+ * @param {string} status - 'sending' | 'sent' | 'failed'
+ * @returns {Promise<void>}
+ */
+async function updateMessageStatus(userId, messageId, status) {
+  const { error } = await supabase
+    .from('chat_messages')
+    .update({ status })
+    .eq('id', messageId)
+    .eq('user_id', userId);
+
+  if (error) {
+    throw new Error(`Failed to update message status: ${error.message}`);
+  }
+}
+
 module.exports = {
   createChat,
   getChatById,
@@ -214,6 +340,10 @@ module.exports = {
   touchChat,
   getRecentChats,
   getChatMessages,
+  getMessageById,
+  editMessage,
+  truncateAfterMessage,
+  updateMessageStatus,
   updateChatTitle,
   deleteChatMessages,
   deleteChat,

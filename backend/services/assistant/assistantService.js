@@ -62,6 +62,7 @@ function createAssistantService(deps = {}) {
       initialTitle,
       firstUserMessage,
       initialTitleFromHistory,
+      regenerate,
     } = buildRequestContext(payload);
 
     if (!userId) {
@@ -100,15 +101,18 @@ function createAssistantService(deps = {}) {
         );
       }
 
-      const userMessage = await services.chatRepository.insertChatMessage({
-        chat_id: chatId,
-        user_id: userId,
-        role: 'user',
-        mode: effectiveMode,
-        source: 'highlight',
-        input_text: userInputText,
-        output_text: null,
-      });
+      let userMessage;
+      if (!regenerate) {
+        userMessage = await services.chatRepository.insertChatMessage({
+          chat_id: chatId,
+          user_id: userId,
+          role: 'user',
+          mode: effectiveMode,
+          source: 'highlight',
+          input_text: userInputText,
+          output_text: null,
+        });
+      }
 
       // Generate natural markdown response (industry standard - no forced JSON)
       let responseContent;
@@ -146,7 +150,7 @@ function createAssistantService(deps = {}) {
         );
       }
 
-      if (linkedAssetIds.length > 0 && userMessage?.id) {
+      if (!regenerate && linkedAssetIds.length > 0 && userMessage?.id) {
         await services.chatAssetsService.linkAssetsToMessage(
           linkedAssetIds,
           userMessage.id,

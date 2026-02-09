@@ -395,5 +395,79 @@ describe('createStreamingAssistantService', () => {
       const [content] = sseWriter.writeFinal.mock.calls[0].arguments;
       assert.strictEqual(content, 'Plain text response without JSON');
     });
+
+    it('skips user message insertion when regenerate is true', async () => {
+      const sseWriter = createMockSSEWriter();
+      const signal = new AbortController().signal;
+
+      mockDeps.chatCompletionStream.mock.mockImplementation(async function* () {
+        yield { type: 'delta', content: 'Regenerated response' };
+        yield { type: 'final', content: 'Regenerated response' };
+      });
+
+      await service.handleLockinStreamRequest({
+        userId: 'user-123',
+        payload: { selection: 'test', chatId: 'chat-123', regenerate: true },
+        requestId: 'req-regen',
+        signal,
+        sseWriter,
+      });
+
+      // insertChatMessage should be called only once (for the assistant message)
+      // NOT twice (no user message insertion for regeneration)
+      const insertCalls = mockDeps.chatRepository.insertChatMessage.mock.calls;
+      assert.strictEqual(insertCalls.length, 1);
+      assert.strictEqual(insertCalls[0].arguments[0].role, 'assistant');
+    });
+
+    it('inserts user message when regenerate is false or absent', async () => {
+      const sseWriter = createMockSSEWriter();
+      const signal = new AbortController().signal;
+
+      mockDeps.chatCompletionStream.mock.mockImplementation(async function* () {
+        yield { type: 'delta', content: 'Normal response' };
+        yield { type: 'final', content: 'Normal response' };
+      });
+
+      await service.handleLockinStreamRequest({
+        userId: 'user-123',
+        payload: { selection: 'test' },
+        requestId: 'req-normal',
+        signal,
+        sseWriter,
+      });
+
+      // insertChatMessage should be called twice (user + assistant)
+      const insertCalls = mockDeps.chatRepository.insertChatMessage.mock.calls;
+      assert.strictEqual(insertCalls.length, 2);
+      assert.strictEqual(insertCalls[0].arguments[0].role, 'user');
+      assert.strictEqual(insertCalls[1].arguments[0].role, 'assistant');
+    });
+
+    it('skips asset linking when regenerate is true', async () => {
+      const sseWriter = createMockSSEWriter();
+      const signal = new AbortController().signal;
+
+      mockDeps.chatAssetsService.resolveAttachmentsForMessage.mock.mockImplementation(async () => ({
+        processedAttachments: [{ type: 'image', data: 'base64...' }],
+        linkedAssetIds: ['asset-1'],
+        pendingAssetIds: [],
+      }));
+
+      mockDeps.chatCompletionStream.mock.mockImplementation(async function* () {
+        yield { type: 'final', content: 'Regenerated' };
+      });
+
+      await service.handleLockinStreamRequest({
+        userId: 'user-123',
+        payload: { selection: '', attachments: ['asset-1'], chatId: 'chat-123', regenerate: true },
+        requestId: 'req-regen-asset',
+        signal,
+        sseWriter,
+      });
+
+      // linkAssetsToMessage should NOT be called for regeneration
+      assert.strictEqual(mockDeps.chatAssetsService.linkAssetsToMessage.mock.calls.length, 0);
+    });
   });
 });

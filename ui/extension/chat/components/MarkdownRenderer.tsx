@@ -1,11 +1,16 @@
 /**
  * MarkdownRenderer Component
  *
- * Renders markdown content with syntax highlighting for code blocks.
- * Uses react-markdown with remark-gfm for GitHub Flavored Markdown.
+ * Renders markdown content with syntax highlighting, per-block copy buttons,
+ * and security hardening (no raw HTML, safe links, XSS-resistant).
+ *
+ * Security:
+ * - rehype-sanitize strips raw HTML to prevent XSS
+ * - All external links get rel="noreferrer noopener" and target="_blank"
+ * - No dangerouslySetInnerHTML
  */
 
-import React, { memo } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -19,7 +24,35 @@ interface MarkdownRendererProps {
 }
 
 /**
- * Custom code block component with syntax highlighting
+ * Copy-to-clipboard button for code blocks
+ */
+function CodeCopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      className="lockin-code-copy-btn"
+      onClick={handleCopy}
+      aria-label={copied ? 'Copied' : 'Copy code'}
+      title={copied ? 'Copied!' : 'Copy'}
+    >
+      {copied ? '✓' : '⎘'}
+    </button>
+  );
+}
+
+/**
+ * Custom code block component with syntax highlighting + copy button
  */
 type CodeProps = Omit<React.HTMLAttributes<HTMLElement>, 'style'> & {
   inline?: boolean;
@@ -46,14 +79,13 @@ const CodeBlock = memo(function CodeBlock({ inline, className, children, ...prop
     );
   }
 
-  // Code block with syntax highlighting
+  // Code block with syntax highlighting + copy button
   return (
-    <div className="relative my-3 rounded-lg overflow-hidden">
-      {language && (
-        <div className="absolute top-0 right-0 px-2 py-1 text-xs text-gray-400 bg-gray-800 rounded-bl">
-          {language}
-        </div>
-      )}
+    <div className="lockin-code-block-wrapper">
+      <div className="lockin-code-block-header">
+        {language && <span className="lockin-code-block-lang">{language}</span>}
+        <CodeCopyButton text={codeString} />
+      </div>
       <SyntaxHighlighter
         style={syntaxStyle}
         language={language || 'text'}
@@ -62,7 +94,7 @@ const CodeBlock = memo(function CodeBlock({ inline, className, children, ...prop
           margin: 0,
           padding: '1rem',
           fontSize: '0.875rem',
-          borderRadius: '0.5rem',
+          borderRadius: '0 0 0.5rem 0.5rem',
         }}
         {...props}
       >
@@ -159,8 +191,19 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   if (!content) return null;
 
   return (
-    <div className={`markdown-content text-gray-900 ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+    <div className={`lockin-markdown ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={markdownComponents}
+        /* Security: disallow raw HTML in markdown to prevent XSS */
+        skipHtml
+        /* Security: disallow dangerous protocols in URLs */
+        urlTransform={(url: string) => {
+          // Block javascript: and data: protocols
+          if (/^(javascript|data|vbscript):/i.test(url)) return '';
+          return url;
+        }}
+      >
         {content}
       </ReactMarkdown>
     </div>

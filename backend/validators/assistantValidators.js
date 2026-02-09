@@ -137,6 +137,26 @@ const assetIdParamSchema = z.object({
   assetId: uuidSchema,
 });
 
+/**
+ * Schema for message ID parameter
+ * Used in PUT /api/chats/:chatId/messages/:messageId
+ */
+const messageIdParamSchema = z.object({
+  chatId: uuidSchema,
+  messageId: uuidSchema,
+});
+
+/**
+ * Schema for editing a message
+ * PUT /api/chats/:chatId/messages/:messageId
+ */
+const editMessageSchema = z.object({
+  content: z
+    .string()
+    .min(1, 'Message content is required')
+    .max(MAX_USER_MESSAGE_LENGTH, `Message too long (max ${MAX_USER_MESSAGE_LENGTH} chars)`),
+});
+
 module.exports = {
   lockinRequestSchema,
   chatIdParamSchema,
@@ -144,4 +164,6 @@ module.exports = {
   listChatsQuerySchema,
   generateChatTitleSchema,
   assetIdParamSchema,
+  messageIdParamSchema,
+  editMessageSchema,
 };

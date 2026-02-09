@@ -1,4 +1,5 @@
-import { DecoratorNode, LexicalNode, NodeKey } from 'lexical';
+import type { LexicalNode, NodeKey } from 'lexical';
+import { DecoratorNode } from 'lexical';
 
 export type SerializedAttachmentNode = {
   type: 'attachment';

@@ -1,0 +1,85 @@
+@layer lockin.base {
+  /* === SHARED KEYFRAMES === */
+  @keyframes lockin-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes lockin-bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+
+  /* === FOCUS RING — single consistent style for all interactive elements === */
+  #lockin-root .lockin-tab:focus-visible,
+  #lockin-root .lockin-close-btn:focus-visible,
+  #lockin-root .lockin-new-chat-btn:focus-visible,
+  #lockin-root .lockin-history-toggle-btn:focus-visible,
+  #lockin-root .lockin-history-item:focus-visible,
+  #lockin-root .lockin-send-btn:focus-visible,
+  #lockin-root .lockin-chat-input-field:focus-visible,
+  #lockin-root .lockin-chat-stop-btn:focus-visible,
+  #lockin-root .lockin-chat-attach-btn:focus-visible,
+  #lockin-root .lockin-note-card:focus-visible,
+  #lockin-root .lockin-notes-toggle-btn:focus-visible,
+  #lockin-root .lockin-btn-primary:focus-visible,
+  #lockin-root .lockin-btn-ghost:focus-visible,
+  #lockin-root .lockin-note-tool-btn:focus-visible,
+  #lockin-root .lockin-notes-filter-select:focus-visible,
+  #lockin-root .lockin-notes-search-input:focus-visible,
+  #lockin-root .lockin-safety-dismiss-btn:focus-visible,
+  #lockin-root .lockin-chat-attachment-remove:focus-visible {
+    outline: var(--lockin-focus-ring-width, 2px) solid
+      var(--lockin-focus-ring-color, var(--lockin-color-accent));
+    outline-offset: var(--lockin-focus-ring-offset, 1px);
+  }
+
+  /* === SCROLLBARS === */
+  #lockin-root .lockin-chat-messages::-webkit-scrollbar,
+  #lockin-root .lockin-history-list::-webkit-scrollbar,
+  #lockin-root .lockin-notes-list::-webkit-scrollbar,
+  #lockin-root .lockin-video-list-body::-webkit-scrollbar {
+    width: var(--lockin-size-6);
+  }
+
+  #lockin-root .lockin-chat-messages::-webkit-scrollbar-track,
+  #lockin-root .lockin-history-list::-webkit-scrollbar-track,
+  #lockin-root .lockin-notes-list::-webkit-scrollbar-track,
+  #lockin-root .lockin-video-list-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  #lockin-root .lockin-chat-messages::-webkit-scrollbar-thumb,
+  #lockin-root .lockin-history-list::-webkit-scrollbar-thumb,
+  #lockin-root .lockin-notes-list::-webkit-scrollbar-thumb,
+  #lockin-root .lockin-video-list-body::-webkit-scrollbar-thumb {
+    background: var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-sm);
+  }
+
+  #lockin-root .lockin-chat-messages::-webkit-scrollbar-thumb:hover,
+  #lockin-root .lockin-history-list::-webkit-scrollbar-thumb:hover,
+  #lockin-root .lockin-notes-list::-webkit-scrollbar-thumb:hover,
+  #lockin-root .lockin-video-list-body::-webkit-scrollbar-thumb:hover {
+    background: var(--lockin-color-text-muted);
+  }
+
+  /* === ACCESSIBILITY === */
+  #lockin-root .lockin-sr-only {
+    position: absolute;
+    width: var(--lockin-size-1);
+    height: var(--lockin-size-1);
+    margin: var(--lockin-size-neg-1);
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+  }
+}

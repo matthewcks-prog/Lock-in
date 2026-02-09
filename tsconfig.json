@@ -22,23 +22,27 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitOverride": true,
     "useUnknownInCatchVariables": true,
-    "types": ["chrome", "vite/client"],
+    "types": ["chrome", "vite/client", "vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
       "@core/*": ["core/*"],
       "@api/*": ["api/*"],
       "@ui/*": ["ui/*"],
       "@shared/ui": ["shared/ui"],
-      "@shared/ui/*": ["shared/ui/*"]
+      "@shared/ui/*": ["shared/ui/*"],
+      "@shared/test": ["shared/test"],
+      "@shared/test/*": ["shared/test/*"]
     }
   },
   "include": [
     "core/**/*",
     "api/**/*",
+    "shared/**/*",
     "ui/**/*",
     "integrations/**/*",
     "extension/**/*.ts",
-    "types/**/*.d.ts"
+    "types/**/*.d.ts",
+    "tests/**/*"
   ],
   "exclude": ["node_modules", "backend"]
 }

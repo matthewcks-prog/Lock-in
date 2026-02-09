@@ -1,0 +1,133 @@
+@layer lockin.notes {
+  /* === TOOLTIP WRAPPER === */
+  #lockin-root .lockin-tooltip-wrapper {
+    position: relative;
+    display: inline-flex;
+  }
+
+  #lockin-root .lockin-tooltip {
+    position: absolute;
+    bottom: calc(100% + var(--lockin-size-8));
+    left: 50%;
+    z-index: var(--lockin-z-overlay);
+    padding: var(--lockin-size-6) var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-text-strong);
+    border-radius: var(--lockin-radius-md);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity var(--lockin-duration-150) var(--lockin-ease-default),
+      visibility var(--lockin-duration-150) var(--lockin-ease-default);
+    transform: translateX(-50%);
+    pointer-events: none;
+  }
+
+  #lockin-root .lockin-tooltip::after {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    border: var(--lockin-size-5) solid transparent;
+    transform: translateX(-50%);
+    border-top-color: var(--lockin-color-text-strong);
+    content: '';
+  }
+
+  #lockin-root .lockin-tooltip-wrapper:hover .lockin-tooltip {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* === TOOLBAR BUTTON === */
+  #lockin-root .lockin-note-tool-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--lockin-size-2);
+    min-width: var(--lockin-size-32);
+    height: var(--lockin-size-32);
+    padding: 0 var(--lockin-size-8);
+    font-size: var(--lockin-text-base);
+    font-weight: 600;
+    color: var(--lockin-color-text-body);
+    background: transparent;
+    border: var(--lockin-size-1) solid transparent;
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-note-tool-btn:hover {
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-accent-surface);
+    border-color: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-note-tool-btn.is-active {
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-accent-surface);
+    border-color: var(--lockin-color-accent-border);
+  }
+
+  #lockin-root .lockin-note-tool-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Swatch indicator for color/highlight buttons */
+  #lockin-root .lockin-tool-swatch {
+    position: absolute;
+    bottom: var(--lockin-size-4);
+    left: 50%;
+    width: var(--lockin-size-14);
+    height: var(--lockin-size-3);
+    border: var(--lockin-size-1) solid var(--lockin-color-rgba-0-0-0-01);
+    border-radius: var(--lockin-radius-sm);
+    transform: translateX(-50%);
+  }
+
+  #lockin-root .lockin-note-block-select {
+    padding: var(--lockin-size-6) var(--lockin-size-10);
+    font-family: inherit;
+    font-size: var(--lockin-text-base);
+    color: var(--lockin-color-text-strong);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-note-toolbar-menu {
+    position: relative;
+  }
+
+  #lockin-root .lockin-note-color-menu {
+    position: absolute;
+    top: calc(100% + var(--lockin-size-6));
+    left: 0;
+    z-index: var(--lockin-z-dropdown);
+    display: grid;
+    gap: var(--lockin-size-8);
+    grid-template-columns: repeat(6, var(--lockin-size-20));
+    padding: var(--lockin-size-10);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-xl);
+    box-shadow: var(--lockin-shadow-23);
+  }
+
+  #lockin-root .lockin-color-swatch {
+    width: var(--lockin-size-20);
+    height: var(--lockin-size-20);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-md);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-color-swatch:hover {
+    border-color: var(--lockin-color-text-muted);
+  }
+}

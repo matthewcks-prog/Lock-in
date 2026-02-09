@@ -1,0 +1,209 @@
+@layer lockin.tools {
+  /* === VIDEO LIST PANEL === */
+
+  #lockin-root .lockin-video-list-panel {
+    display: flex;
+    flex-direction: column;
+    min-height: var(--lockin-size-220);
+    max-height: min(60vh, var(--lockin-size-520));
+    margin: 0 var(--lockin-size-12) var(--lockin-size-12);
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-2xl);
+    box-shadow: var(--lockin-shadow-18);
+  }
+
+  #lockin-root .lockin-video-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--lockin-size-12) var(--lockin-size-16);
+    background: var(--lockin-color-surface-subtle);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-video-list-title {
+    margin: 0;
+    font-size: var(--lockin-text-md);
+    font-weight: 600;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-video-list-close {
+    padding: var(--lockin-size-4) var(--lockin-size-8);
+    font-size: var(--lockin-text-2xl);
+    color: var(--lockin-color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-sm);
+    transition:
+      color var(--lockin-duration-150) var(--lockin-ease-default),
+      background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-video-list-close:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-video-list-body {
+    flex: 1;
+    padding: var(--lockin-size-12) var(--lockin-size-14) var(--lockin-size-14);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  #lockin-root .lockin-video-list-loading,
+  #lockin-root .lockin-video-list-empty,
+  #lockin-root .lockin-video-list-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-24) var(--lockin-size-16);
+    font-size: var(--lockin-text-base);
+    text-align: center;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-video-list-error {
+    padding: var(--lockin-size-12);
+    color: var(--lockin-color-danger-strong);
+    background: var(--lockin-color-danger-surface);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-video-list-hint {
+    margin-top: var(--lockin-size-4);
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-video-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lockin-size-10);
+    min-height: 0;
+  }
+
+  #lockin-root .lockin-video-list-footer {
+    padding: var(--lockin-size-8) var(--lockin-size-16);
+    background: var(--lockin-color-surface-subtle);
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-video-list-info {
+    margin: 0;
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  /* === VIDEO ITEM === */
+  #lockin-root .lockin-video-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-video-item-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: var(--lockin-size-12);
+    text-align: left;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    transition:
+      background var(--lockin-duration-150) var(--lockin-ease-default),
+      border-color var(--lockin-duration-150) var(--lockin-ease-default),
+      box-shadow var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-video-item-main:hover {
+    background: var(--lockin-color-surface-subtle);
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-12);
+  }
+
+  #lockin-root .lockin-video-item-main:disabled {
+    opacity: var(--lockin-opacity-disabled);
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-video-item.is-extracting .lockin-video-item-main {
+    background: var(--lockin-color-accent-surface);
+    border-color: var(--lockin-color-accent);
+  }
+
+  #lockin-root .lockin-video-item-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-video-item-header {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-video-provider-badge {
+    flex-shrink: 0;
+    padding: var(--lockin-size-2) var(--lockin-size-6);
+    font-size: var(--lockin-text-xs);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    border-radius: var(--lockin-radius-sm);
+  }
+
+  #lockin-root .lockin-video-item-title {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: var(--lockin-text-base);
+    font-weight: 600;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: normal;
+    color: var(--lockin-color-text-primary);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  #lockin-root .lockin-video-item-action {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-32);
+    height: var(--lockin-size-32);
+  }
+
+  #lockin-root .lockin-video-item-badge {
+    flex-shrink: 0;
+    margin-left: var(--lockin-size-6);
+    padding: var(--lockin-size-2) var(--lockin-size-6);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--lockin-color-warning-text);
+    background: var(--lockin-color-warning-surface-strong);
+    border-radius: var(--lockin-radius-full);
+  }
+
+  #lockin-root .lockin-video-item-error {
+    padding: var(--lockin-size-8) var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-danger-strong);
+    background: var(--lockin-color-danger-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-danger-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+}

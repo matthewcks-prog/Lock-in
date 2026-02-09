@@ -17,6 +17,7 @@ function configureSSE(res) {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  res.setHeader('Transfer-Encoding', 'chunked'); // Azure Envoy proxy compat
   res.flushHeaders();
 }
 

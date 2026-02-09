@@ -1,0 +1,230 @@
+@layer lockin.notes {
+  /* === NOTE CARD ACTIONS (Star/Delete buttons) === */
+  #lockin-root .lockin-note-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-note-card-title-row {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-note-star-indicator {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--lockin-color-warning);
+  }
+
+  #lockin-root .lockin-note-card-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    opacity: 0;
+    transition: opacity var(--lockin-duration-150) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-note-card:hover .lockin-note-card-actions {
+    opacity: 1;
+  }
+
+  /* Always show actions on touch devices */
+  #lockin-root .lockin-note-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-4) var(--lockin-size-6);
+    font-size: var(--lockin-text-md);
+    line-height: 1;
+    background: transparent;
+    border: var(--lockin-size-1) solid transparent;
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-note-action-btn:hover {
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-note-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-note-star-btn {
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-note-star-btn:hover {
+    color: var(--lockin-color-warning);
+  }
+
+  #lockin-root .lockin-note-star-btn.is-starred {
+    color: var(--lockin-color-warning);
+  }
+
+  #lockin-root .lockin-note-delete-btn {
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-note-delete-btn:hover {
+    color: var(--lockin-color-danger);
+    background: var(--lockin-color-danger-surface);
+    border-color: var(--lockin-color-danger-border);
+  }
+
+  /* Starred note card styling */
+  #lockin-root .lockin-note-card.is-starred {
+    border-left: var(--lockin-size-3) solid var(--lockin-color-warning);
+  }
+
+  /* === NOTES HEADER ACTIONS === */
+  #lockin-root .lockin-notes-header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    margin-right: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-notes-header-actions .lockin-note-action-btn {
+    padding: var(--lockin-size-6) var(--lockin-size-8);
+    font-size: var(--lockin-text-lg);
+  }
+
+  /* Spinner inside action buttons */
+  #lockin-root .lockin-note-action-btn .lockin-inline-spinner {
+    width: var(--lockin-size-14);
+    height: var(--lockin-size-14);
+    border-width: var(--lockin-size-2);
+  }
+
+  /* === EXPORT DROPDOWN === */
+  #lockin-root .lockin-export-dropdown {
+    position: relative;
+    display: inline-flex;
+  }
+
+  #lockin-root .lockin-export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-6) var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-export-btn:hover:not(.is-disabled) {
+    background: var(--lockin-color-surface-subtle);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-export-btn.is-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-export-btn.is-exporting {
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-export-chevron {
+    margin-left: var(--lockin-size-2);
+    font-size: 8px;
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-export-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: var(--lockin-z-overlay);
+    min-width: var(--lockin-size-160);
+    margin-top: var(--lockin-size-4);
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-15);
+  }
+
+  #lockin-root .lockin-export-item {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    width: 100%;
+    padding: var(--lockin-size-10) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    text-align: left;
+    color: var(--lockin-color-text-body);
+    background: transparent;
+    border: none;
+    transition: background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-export-item:hover {
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-export-item.is-active {
+    color: var(--lockin-color-accent-strong);
+    background: var(--lockin-color-accent-surface);
+  }
+
+  #lockin-root .lockin-export-item-label {
+    flex: 1;
+  }
+
+  #lockin-root .lockin-export-item-ext {
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-muted);
+  }
+
+  /* === NOTES ERROR MESSAGE === */
+  #lockin-root .lockin-notes-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lockin-size-8);
+    margin: var(--lockin-size-8) var(--lockin-size-16);
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    color: var(--lockin-color-danger-strong);
+    background: var(--lockin-color-danger-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-danger-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-notes-error-dismiss {
+    padding: var(--lockin-size-2) var(--lockin-size-6);
+    font-size: var(--lockin-text-lg);
+    line-height: 1;
+    color: var(--lockin-color-danger-strong);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-sm);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-notes-error-dismiss:hover {
+    background: var(--lockin-color-danger-border);
+  }
+}

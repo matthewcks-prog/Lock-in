@@ -2,6 +2,8 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { ChatHistoryItem, ChatMessage } from '../types';
 import type { SendChatOptionsInput } from './chatSendOptions';
 import type { StreamingState } from './useSendMessageStream';
+import type { UseMessageEditReturn } from './useMessageEdit';
+import type { UseRegenerateMessageReturn } from './useRegenerateMessage';
 
 export interface UseChatReturn {
   // Current chat state
@@ -36,4 +38,10 @@ export interface UseChatReturn {
   // Streaming (optional - only present when enableStreaming is true)
   streaming?: StreamingState;
   cancelStream?: () => void;
+
+  // Message editing
+  messageEdit: UseMessageEditReturn;
+
+  // Regeneration
+  regeneration: UseRegenerateMessageReturn;
 }
