@@ -25,6 +25,7 @@ describe('manifest content_scripts order', () => {
       'content/sidebarHost.js',
       'content/sessionManager.js',
       'content/interactions.js',
+      'content/fakeFullscreen.js',
       'src/networkRetry.js',
       'content/mediaFetcher.js',
       'dist/ui/index.js',

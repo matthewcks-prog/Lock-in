@@ -3780,3 +3780,116 @@ html.lockin-sidebar-resizing #lockin-sidebar {
 .lockin-privacy-footer .lockin-privacy-text {
   flex: 1;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FAKE FULLSCREEN
+   Intercepts native fullscreen when the sidebar is open and simulates it
+   with CSS so the video fills the content area while the sidebar stays
+   visible and interactive. A floating toggle button lets the user exit.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* --- Video element fills content area --- */
+.lockin-fake-fullscreen-video {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: var(--lockin-content-width) !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  z-index: 2147483642 !important;
+  object-fit: contain !important;
+  background: #000 !important;
+  transform: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+/* --- Body state: hide scrollbars, pin page wrapper --- */
+body.lockin-fake-fullscreen {
+  overflow: hidden !important;
+}
+
+body.lockin-fake-fullscreen.lockin-sidebar-open #lockin-page-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--lockin-content-width) !important;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 2147483641;
+}
+
+/* --- Sidebar CLOSED: video fills entire viewport, Lock-in pill visible --- */
+body.lockin-fake-fullscreen:not(.lockin-sidebar-open) .lockin-fake-fullscreen-video {
+  width: 100vw !important;
+}
+
+body.lockin-fake-fullscreen:not(.lockin-sidebar-open) #lockin-page-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw !important;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 2147483641;
+}
+
+/* --- Ensure sidebar stays on top --- */
+body.lockin-fake-fullscreen #lockin-root {
+  z-index: 2147483647;
+}
+
+body.lockin-fake-fullscreen #lockin-sidebar {
+  z-index: 2147483647;
+}
+
+/* --- Floating toggle button --- */
+#lockin-fake-fs-toggle {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 2147483645;
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 500;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition:
+    opacity 0.2s ease,
+    background 0.15s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#lockin-fake-fs-toggle.lockin-fake-fs-toggle--visible {
+  display: flex;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#lockin-fake-fs-toggle:hover {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+/* --- Mobile: video fills full width, sidebar overlays --- */
+@media (max-width: 1024px) {
+  .lockin-fake-fullscreen-video {
+    width: 100vw !important;
+  }
+
+  body.lockin-fake-fullscreen.lockin-sidebar-open #lockin-page-wrapper {
+    width: 100vw !important;
+  }
+}

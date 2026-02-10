@@ -61,6 +61,7 @@ async function bootstrap() {
     createSidebarHost,
     createSessionManager,
     createInteractionController,
+    createFakeFullscreen,
   } = ContentHelpers;
 
   if (
@@ -116,6 +117,21 @@ async function bootstrap() {
     };
 
     const initialState = await stateStore.loadInitial();
+
+    // Restore persisted sidebar width before first render to prevent flash
+    const runtimeStorage = Runtime.storage || null;
+    if (runtimeStorage && typeof runtimeStorage.getLocal === 'function') {
+      try {
+        const data = await runtimeStorage.getLocal('lockin_sidebar_width');
+        const width = data && data['lockin_sidebar_width'];
+        if (typeof width === 'number' && width > 0) {
+          document.documentElement.style.setProperty('--lockin-sidebar-width', width + 'px');
+        }
+      } catch (_) {
+        // useResize hook will retry from the React side
+      }
+    }
+
     sidebarHost.renderSidebar({
       apiClient,
       adapter,
@@ -142,6 +158,17 @@ async function bootstrap() {
     });
 
     interactionController.bind();
+
+    // Initialize fake fullscreen (optional — gracefully skipped if not loaded)
+    if (typeof createFakeFullscreen === 'function') {
+      const fakeFullscreen = createFakeFullscreen({
+        Logger,
+        stateStore,
+      });
+      fakeFullscreen.init();
+      window.LockInContent.fakeFullscreen = fakeFullscreen;
+      Logger.debug('Fake fullscreen initialized');
+    }
 
     if (Messaging && typeof Messaging.onMessage === 'function') {
       Messaging.onMessage((message) => {
