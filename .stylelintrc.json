@@ -7,7 +7,7 @@
     "at-rule-empty-line-before": null,
 
     "no-duplicate-selectors": true,
-    "no-descending-specificity": [true, { "severity": "warning" }],
+    "no-descending-specificity": true,
     "declaration-block-no-duplicate-properties": [
       true,
       { "ignore": ["consecutive-duplicates-with-different-syntaxes"] }
@@ -44,8 +44,8 @@
     "color-hex-length": null,
     "media-feature-range-notation": null,
 
-    "property-no-deprecated": [true, { "severity": "warning" }],
-    "declaration-property-value-keyword-no-deprecated": [true, { "severity": "warning" }],
+    "property-no-deprecated": true,
+    "declaration-property-value-keyword-no-deprecated": true,
 
     "selector-max-id": 2,
     "selector-max-compound-selectors": 5,
@@ -173,7 +173,7 @@
         }
       ],
       {
-        "severity": "warning",
+        "severity": "error",
         "unspecified": "bottomAlphabetical"
       }
     ]

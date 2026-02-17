@@ -1,6 +1,8 @@
 const { z } = require('zod');
 const { AppError } = require('../../errors');
 
+const HTTP_STATUS_BAD_GATEWAY = 502;
+
 const UsageSchema = z
   .object({
     prompt_tokens: z.number().int().nonnegative().optional(),
@@ -56,7 +58,7 @@ function parseWithSchema(schema, value, label) {
   if (result.success) {
     return result.data;
   }
-  const error = new AppError(`Invalid ${label} response`, 'PARSE_ERROR', 502, {
+  const error = new AppError(`Invalid ${label} response`, 'PARSE_ERROR', HTTP_STATUS_BAD_GATEWAY, {
     provider: label,
     issues: result.error.issues,
   });

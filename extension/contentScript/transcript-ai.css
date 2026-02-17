@@ -100,15 +100,15 @@
     background: var(--lockin-color-text-secondary);
   }
 
-  #lockin-root .lockin-video-item-ai-active .lockin-video-item-ai-btn:hover {
-    background: var(--lockin-color-text-emphasis);
-  }
-
   #lockin-root .lockin-video-item-ai-error .lockin-video-item-ai-btn {
     background: var(--lockin-color-danger-strong);
   }
 
   #lockin-root .lockin-video-item-ai-error .lockin-video-item-ai-btn:hover {
     background: var(--lockin-color-danger-strong);
+  }
+
+  #lockin-root .lockin-video-item-ai-active .lockin-video-item-ai-btn:hover {
+    background: var(--lockin-color-text-emphasis);
   }
 }

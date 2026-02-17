@@ -12,15 +12,62 @@ type BootstrapTestWindow = Omit<
 
 const originalReadyState = Object.getOwnPropertyDescriptor(document, 'readyState');
 
-function setReadyState(value: DocumentReadyState) {
+type MockFn = ReturnType<typeof vi.fn>;
+
+type LoggerMocks = {
+  debug: MockFn;
+  info: MockFn;
+  warn: MockFn;
+  error: MockFn;
+};
+
+type ContentHelpers = {
+  logger: LoggerMocks;
+  stateStore: {
+    subscribe: MockFn;
+    startSync: MockFn;
+    loadInitial: MockFn;
+    getSnapshot: MockFn;
+    setSidebarOpen: MockFn;
+  };
+  sidebarHost: {
+    renderSidebar: MockFn;
+    updatePropsFromState: MockFn;
+  };
+  sessionManager: {
+    getTabId: MockFn;
+    restoreSession: MockFn;
+  };
+  interactionController: {
+    bind: MockFn;
+  };
+  lockInContent: {
+    logger: LoggerMocks;
+    resolveAdapterContext: MockFn;
+    createStateStore: MockFn;
+    createSidebarHost: MockFn;
+    createSessionManager: MockFn;
+    createInteractionController: MockFn;
+    storage: Record<string, unknown>;
+    messaging: Record<string, unknown>;
+  };
+  lockInUIFactory: {
+    createLockInSidebar: MockFn;
+  };
+  apiClient: {
+    toggleNoteStar: MockFn;
+  };
+};
+
+function setReadyState(value: DocumentReadyState): void {
   Object.defineProperty(document, 'readyState', {
     configurable: true,
     get: () => value,
   });
 }
 
-function resetReadyState() {
-  if (originalReadyState) {
+function resetReadyState(): void {
+  if (originalReadyState !== undefined) {
     Object.defineProperty(document, 'readyState', originalReadyState);
   } else {
     const mutableDocument = document as unknown as { readyState?: DocumentReadyState };
@@ -28,7 +75,7 @@ function resetReadyState() {
   }
 }
 
-function setupChromeRuntime() {
+function setupChromeRuntime(): void {
   const storageSync = {
     get: vi.fn((_keys: string | string[], cb: (value: Record<string, unknown>) => void) => cb({})),
     set: vi.fn((_data: Record<string, unknown>, cb: () => void = () => {}) => cb()),
@@ -52,7 +99,37 @@ function setupChromeRuntime() {
   });
 }
 
-function createContentHelpers() {
+function captureDomReadyHandlers(): Array<() => void> {
+  const handlers: Array<() => void> = [];
+  const originalAddEventListener = document.addEventListener;
+  vi.spyOn(document, 'addEventListener').mockImplementation(function (
+    this: Document,
+    type: string,
+    listener: EventListenerOrEventListenerObject,
+    options?: boolean | AddEventListenerOptions,
+  ) {
+    if (type === 'DOMContentLoaded' && typeof listener === 'function') {
+      handlers.push(listener as () => void);
+    }
+    return originalAddEventListener.call(this, type, listener, options);
+  });
+  return handlers;
+}
+
+function expectSingleBootstrap(
+  lockInContent: ContentHelpers['lockInContent'],
+  lockInUIFactory: ContentHelpers['lockInUIFactory'],
+  stateStore: ContentHelpers['stateStore'],
+  interactionController: ContentHelpers['interactionController'],
+): void {
+  expect(lockInContent.createStateStore).toHaveBeenCalledTimes(1);
+  expect(lockInContent.createSidebarHost).toHaveBeenCalledTimes(1);
+  expect(lockInUIFactory.createLockInSidebar).toHaveBeenCalledTimes(1);
+  expect(stateStore.subscribe).toHaveBeenCalledTimes(1);
+  expect(interactionController.bind).toHaveBeenCalledTimes(1);
+}
+
+function createContentHelpers(): ContentHelpers {
   const logger = {
     debug: vi.fn(),
     info: vi.fn(),
@@ -140,9 +217,9 @@ function createContentHelpers() {
   };
 }
 
-async function loadContentScript() {
+async function loadContentScript(): Promise<void> {
   // @ts-expect-error - content script bundle is JS without types
-  return import('../../contentScript-react.js');
+  await import('../../contentScript-react.js');
 }
 
 describe('contentScript-react bootstrap init order', () => {
@@ -228,19 +305,7 @@ describe('contentScript-react bootstrap init order', () => {
     testWindow.LockInAPI = apiClient;
     testWindow.LockInUI = lockInUIFactory;
 
-    const domReadyHandlers: Array<() => void> = [];
-    const originalAddEventListener = document.addEventListener;
-    vi.spyOn(document, 'addEventListener').mockImplementation(function (
-      this: Document,
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-      options?: boolean | AddEventListenerOptions,
-    ) {
-      if (type === 'DOMContentLoaded' && typeof listener === 'function') {
-        domReadyHandlers.push(listener as () => void);
-      }
-      return originalAddEventListener.call(this, type, listener, options);
-    });
+    const domReadyHandlers = captureDomReadyHandlers();
 
     await loadContentScript();
 
@@ -255,10 +320,6 @@ describe('contentScript-react bootstrap init order', () => {
     await vi.runAllTimersAsync();
     await Promise.resolve();
 
-    expect(lockInContent.createStateStore).toHaveBeenCalledTimes(1);
-    expect(lockInContent.createSidebarHost).toHaveBeenCalledTimes(1);
-    expect(lockInUIFactory.createLockInSidebar).toHaveBeenCalledTimes(1);
-    expect(stateStore.subscribe).toHaveBeenCalledTimes(1);
-    expect(interactionController.bind).toHaveBeenCalledTimes(1);
+    expectSingleBootstrap(lockInContent, lockInUIFactory, stateStore, interactionController);
   });
 });

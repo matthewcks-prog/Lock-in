@@ -20,16 +20,16 @@ let maxComplexity = 0;
 
 for (const result of results) {
   for (const message of result.messages || []) {
-    if (message.ruleId === 'complexity') {
-      complexityMessages.push(message);
-      const match = /complexity of (\d+)/i.exec(message.message || '');
-      if (match) {
-        const value = Number(match[1]);
-        if (!Number.isNaN(value)) {
-          maxComplexity = Math.max(maxComplexity, value);
-        }
-      }
-    }
+    if (message.ruleId !== 'complexity') continue;
+
+    complexityMessages.push(message);
+    const match = /complexity of (\d+)/i.exec(message.message || '');
+    if (!match) continue;
+
+    const value = Number(match[1]);
+    if (Number.isNaN(value)) continue;
+
+    maxComplexity = Math.max(maxComplexity, value);
   }
 }
 

@@ -69,105 +69,100 @@ const errorFromZod = (error: z.ZodError): MessageValidationResult => ({
 });
 
 const ensureObject = (value: unknown): Record<string, unknown> => {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;
   }
   return {};
 };
 
-export function createMessageValidators(): Record<string, MessageValidator> {
+function createSessionMessageValidators(): Record<string, MessageValidator> {
+  const parseSession = (message: unknown): MessageValidationResult => {
+    const parsed = SessionMessageSchema.safeParse(message);
+    if (!parsed.success) return errorFromZod(parsed.error);
+    return {
+      ok: true,
+      payload: {
+        sessionData: parsed.data.sessionData ?? parsed.data.payload?.sessionData,
+      },
+    };
+  };
   return {
     getTabId: () => ({ ok: true }),
     GET_TAB_ID: () => ({ ok: true }),
     getSession: () => ({ ok: true }),
     GET_SESSION: () => ({ ok: true }),
-    saveSession: (message) => {
-      const parsed = SessionMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return {
-        ok: true,
-        payload: {
-          sessionData: parsed.data.sessionData ?? parsed.data.payload?.sessionData,
-        },
-      };
-    },
-    SAVE_SESSION: (message) => {
-      const parsed = SessionMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return {
-        ok: true,
-        payload: {
-          sessionData: parsed.data.sessionData ?? parsed.data.payload?.sessionData,
-        },
-      };
-    },
+    saveSession: parseSession,
+    SAVE_SESSION: parseSession,
     clearSession: () => ({ ok: true }),
     CLEAR_SESSION: () => ({ ok: true }),
+  };
+}
+
+function createSettingsMessageValidators(): Record<string, MessageValidator> {
+  const parseSettings = (message: unknown): MessageValidationResult => {
+    const parsed = SettingsMessageSchema.safeParse(message);
+    if (!parsed.success) return errorFromZod(parsed.error);
+    return {
+      ok: true,
+      payload: {
+        settings: ensureObject(parsed.data.settings ?? parsed.data.payload?.settings),
+      },
+    };
+  };
+  return {
     getSettings: () => ({ ok: true }),
     GET_SETTINGS: () => ({ ok: true }),
-    saveSettings: (message) => {
-      const parsed = SettingsMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return {
-        ok: true,
-        payload: {
-          settings: ensureObject(parsed.data.settings ?? parsed.data.payload?.settings),
-        },
-      };
-    },
-    UPDATE_SETTINGS: (message) => {
-      const parsed = SettingsMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return {
-        ok: true,
-        payload: {
-          settings: ensureObject(parsed.data.settings ?? parsed.data.payload?.settings),
-        },
-      };
-    },
-    extractTranscript: (message) => {
-      const parsed = VideoMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return { ok: true, payload: { video: parsed.data.video ?? parsed.data.payload?.video } };
-    },
-    EXTRACT_TRANSCRIPT: (message) => {
-      const parsed = VideoMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return { ok: true, payload: { video: parsed.data.video ?? parsed.data.payload?.video } };
-    },
-    DETECT_ECHO360_VIDEOS: (message) => {
-      const parsed = ContextMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return {
-        ok: true,
-        payload: { context: parsed.data.context ?? parsed.data.payload?.context },
-      };
-    },
-    FETCH_PANOPTO_MEDIA_URL: (message) => {
-      const parsed = VideoMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return { ok: true, payload: { video: parsed.data.video ?? parsed.data.payload?.video } };
-    },
-    TRANSCRIBE_MEDIA_AI: (message) => {
-      const parsed = MessageWithPayloadSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return { ok: true, payload: ensureObject(parsed.data.payload ?? parsed.data) };
-    },
-    MEDIA_CHUNK: (message) => {
-      const parsed = MessageWithPayloadSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return { ok: true, payload: ensureObject(parsed.data.payload) };
-    },
-    LIST_ACTIVE_TRANSCRIPT_JOBS: (message) => {
-      const parsed = TokenMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return { ok: true, payload: { token: parsed.data.token ?? parsed.data.payload?.token } };
-    },
-    CANCEL_ALL_ACTIVE_TRANSCRIPT_JOBS: (message) => {
-      const parsed = TokenMessageSchema.safeParse(message);
-      if (!parsed.success) return errorFromZod(parsed.error);
-      return { ok: true, payload: { token: parsed.data.token ?? parsed.data.payload?.token } };
-    },
+    saveSettings: parseSettings,
+    UPDATE_SETTINGS: parseSettings,
+  };
+}
+
+function createTranscriptMessageValidators(): Record<string, MessageValidator> {
+  const parseVideo = (message: unknown): MessageValidationResult => {
+    const parsed = VideoMessageSchema.safeParse(message);
+    if (!parsed.success) return errorFromZod(parsed.error);
+    return { ok: true, payload: { video: parsed.data.video ?? parsed.data.payload?.video } };
+  };
+  const parseContext = (message: unknown): MessageValidationResult => {
+    const parsed = ContextMessageSchema.safeParse(message);
+    if (!parsed.success) return errorFromZod(parsed.error);
+    return {
+      ok: true,
+      payload: { context: parsed.data.context ?? parsed.data.payload?.context },
+    };
+  };
+  const parseTranscribe = (message: unknown): MessageValidationResult => {
+    const parsed = MessageWithPayloadSchema.safeParse(message);
+    if (!parsed.success) return errorFromZod(parsed.error);
+    return { ok: true, payload: ensureObject(parsed.data.payload ?? parsed.data) };
+  };
+  const parseMediaChunk = (message: unknown): MessageValidationResult => {
+    const parsed = MessageWithPayloadSchema.safeParse(message);
+    if (!parsed.success) return errorFromZod(parsed.error);
+    return { ok: true, payload: ensureObject(parsed.data.payload) };
+  };
+  const parseToken = (message: unknown): MessageValidationResult => {
+    const parsed = TokenMessageSchema.safeParse(message);
+    if (!parsed.success) return errorFromZod(parsed.error);
+    return { ok: true, payload: { token: parsed.data.token ?? parsed.data.payload?.token } };
+  };
+  return {
+    extractTranscript: parseVideo,
+    EXTRACT_TRANSCRIPT: parseVideo,
+    DETECT_ECHO360_VIDEOS: parseContext,
+    FETCH_PANOPTO_MEDIA_URL: parseVideo,
+    TRANSCRIBE_MEDIA_AI: parseTranscribe,
+    MEDIA_CHUNK: parseMediaChunk,
+    LIST_ACTIVE_TRANSCRIPT_JOBS: parseToken,
+    CANCEL_ALL_ACTIVE_TRANSCRIPT_JOBS: parseToken,
+  };
+}
+
+export function createMessageValidators(): Record<string, MessageValidator> {
+  return {
+    ...createSessionMessageValidators(),
+    ...createSettingsMessageValidators(),
+    ...createTranscriptMessageValidators(),
   };
 }
 

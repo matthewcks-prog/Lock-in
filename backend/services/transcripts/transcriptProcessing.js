@@ -14,8 +14,10 @@ const { cleanupJobFiles } = require('./transcriptFs');
 const { createProcessingState } = require('./transcriptProcessingUtils');
 const { createProcessingMonitor } = require('./transcriptProcessingMonitor');
 const { processTranscriptJob } = require('./transcriptProcessingJob');
+const { SIXTY, THOUSAND } = require('../../constants/numbers');
 
 const WORKER_ID = randomUUID();
+const MS_PER_MINUTE = SIXTY * THOUSAND;
 const startProcessingMonitor = createProcessingMonitor({
   getTranscriptJob,
   updateTranscriptJob,
@@ -34,7 +36,7 @@ async function appendTranscriptChunk({ jobId, userId, chunk, chunkIndex }) {
 
 async function startTranscriptProcessing(job, options) {
   const staleMinutes = Math.max(1, TRANSCRIPT_PROCESSING_STALE_MINUTES);
-  const staleBefore = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
+  const staleBefore = new Date(Date.now() - staleMinutes * MS_PER_MINUTE).toISOString();
   const claimedJob = await claimTranscriptJobForProcessing({
     jobId: job.id,
     workerId: WORKER_ID,

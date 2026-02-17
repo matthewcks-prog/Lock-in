@@ -1,7 +1,18 @@
 const feedbackRepo = require('../repositories/feedbackRepository');
+const HTTP_STATUS = require('../constants/httpStatus');
 
 const MAX_MESSAGE_LENGTH = 5000;
 const VALID_TYPES = ['bug', 'feature', 'question', 'other'];
+const MAX_CONTEXT_URL_LENGTH = 2000;
+const MAX_CONTEXT_COURSE_CODE_LENGTH = 50;
+const MAX_CONTEXT_EXTENSION_VERSION_LENGTH = 20;
+const MAX_CONTEXT_BROWSER_LENGTH = 200;
+const MAX_CONTEXT_PAGE_LENGTH = 200;
+const MAX_SERVER_USER_AGENT_LENGTH = 500;
+const LIST_LIMIT_DEFAULT = 50;
+const LIST_LIMIT_MIN = 1;
+const LIST_LIMIT_MAX = 100;
+const DECIMAL_RADIX = 10;
 
 function createRequestError(status, payload) {
   const error = new Error(payload?.error?.message || 'Request error');
@@ -14,7 +25,7 @@ function ensureValidType(type) {
   if (type && VALID_TYPES.includes(type)) {
     return;
   }
-  throw createRequestError(400, {
+  throw createRequestError(HTTP_STATUS.BAD_REQUEST, {
     success: false,
     error: {
       code: 'INVALID_TYPE',
@@ -25,7 +36,7 @@ function ensureValidType(type) {
 
 function ensureValidMessage(message) {
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
-    throw createRequestError(400, {
+    throw createRequestError(HTTP_STATUS.BAD_REQUEST, {
       success: false,
       error: {
         code: 'MISSING_MESSAGE',
@@ -35,7 +46,7 @@ function ensureValidMessage(message) {
   }
 
   if (message.length > MAX_MESSAGE_LENGTH) {
-    throw createRequestError(400, {
+    throw createRequestError(HTTP_STATUS.BAD_REQUEST, {
       success: false,
       error: {
         code: 'MESSAGE_TOO_LONG',
@@ -48,23 +59,26 @@ function ensureValidMessage(message) {
 function sanitizeContext(context, userAgent) {
   const sanitizedContext = context
     ? {
-        url: context.url?.slice(0, 2000) || null,
-        courseCode: context.courseCode?.slice(0, 50) || null,
-        extensionVersion: context.extensionVersion?.slice(0, 20) || null,
-        browser: context.browser?.slice(0, 200) || null,
-        page: context.page?.slice(0, 200) || null,
+        url: context.url?.slice(0, MAX_CONTEXT_URL_LENGTH) || null,
+        courseCode: context.courseCode?.slice(0, MAX_CONTEXT_COURSE_CODE_LENGTH) || null,
+        extensionVersion:
+          context.extensionVersion?.slice(0, MAX_CONTEXT_EXTENSION_VERSION_LENGTH) || null,
+        browser: context.browser?.slice(0, MAX_CONTEXT_BROWSER_LENGTH) || null,
+        page: context.page?.slice(0, MAX_CONTEXT_PAGE_LENGTH) || null,
       }
     : null;
 
   return {
     ...sanitizedContext,
-    serverUserAgent: userAgent?.slice(0, 500) || null,
+    serverUserAgent: userAgent?.slice(0, MAX_SERVER_USER_AGENT_LENGTH) || null,
     submittedAt: new Date().toISOString(),
   };
 }
 
 function normalizeLimit(limit) {
-  return limit ? Math.min(Math.max(parseInt(limit, 10), 1), 100) : 50;
+  return limit
+    ? Math.min(Math.max(parseInt(limit, DECIMAL_RADIX), LIST_LIMIT_MIN), LIST_LIMIT_MAX)
+    : LIST_LIMIT_DEFAULT;
 }
 
 function isValidUUID(str) {
@@ -74,7 +88,7 @@ function isValidUUID(str) {
 
 function ensureValidFeedbackId(feedbackId) {
   if (!feedbackId || !isValidUUID(feedbackId)) {
-    throw createRequestError(400, {
+    throw createRequestError(HTTP_STATUS.BAD_REQUEST, {
       success: false,
       error: {
         code: 'INVALID_FEEDBACK_ID',
@@ -113,7 +127,7 @@ function createFeedbackService(deps = {}) {
 
     const feedback = await repo.getFeedbackById(feedbackId, userId);
     if (!feedback) {
-      throw createRequestError(404, {
+      throw createRequestError(HTTP_STATUS.NOT_FOUND, {
         success: false,
         error: {
           code: 'NOT_FOUND',

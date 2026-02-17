@@ -39,12 +39,12 @@ export function renderWithProviders(
 
   const client = queryClient ?? createTestQueryClient(queryClientConfig);
 
-  function Providers({ children }: PropsWithChildren) {
+  function Providers({ children }: PropsWithChildren): JSX.Element {
     let content = children;
     if (withQueryClient) {
       content = <QueryClientProvider client={client}>{content}</QueryClientProvider>;
     }
-    if (OuterWrapper) {
+    if (OuterWrapper !== undefined) {
       content = <OuterWrapper>{content}</OuterWrapper>;
     }
     return <>{content}</>;

@@ -134,9 +134,9 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
   const streamingConfig: StreamingConfig = {
     backendUrl: config.backendUrl,
     getAccessToken: async () =>
-      config.authClient.getValidAccessToken().then((token) => token || ''),
+      config.authClient.getValidAccessToken().then((token) => token ?? ''),
   };
-  if (config.fetcher) {
+  if (config.fetcher !== undefined) {
     streamingConfig.fetcher = config.fetcher;
   }
 

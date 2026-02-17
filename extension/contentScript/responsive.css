@@ -1,11 +1,27 @@
 @layer lockin.responsive {
   /* ================================================================
      BREAKPOINTS
-     - sm:  <=768px   (mobile / tablet)
+     - xs:  <=480px   (mobile phone — extension disabled)
+     - sm:  <=768px   (tablet)
      - md:  <=1024px  (small laptop / narrow window)
      - lg:  <=1440px  (standard laptop)
      - xl:  >1440px   (large monitor)
      ================================================================ */
+
+  /* --- Mobile phone (<=480px) – hide the extension entirely --- */
+  @media (max-width: 480px) {
+    #lockin-root {
+      display: none !important;
+      pointer-events: none !important;
+    }
+
+    body.lockin-sidebar-open #lockin-page-wrapper {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-right: 0 !important;
+      margin-inline-end: 0 !important;
+    }
+  }
 
   /* --- Small laptop (<=1024px) – sidebar overlays, no page push --- */
   @media (max-width: 1024px) {
@@ -21,6 +37,7 @@
       max-width: 100%;
     }
 
+    /* Disable resize handle in overlay mode — sidebar is full-width */
     #lockin-root .lockin-sidebar-resize-handle {
       display: none;
     }
@@ -36,32 +53,41 @@
     }
   }
 
-  /* --- Mobile / Tablet (<=768px) – tighter spacing --- */
+  /* --- Tablet (<=768px) – tighter spacing --- */
   @media (max-width: 768px) {
     #lockin-root .lockin-chat-messages {
       padding: var(--lockin-space-3) var(--lockin-space-3);
     }
 
     #lockin-root .lockin-top-bar {
-      padding: var(--lockin-space-2) var(--lockin-space-3);
+      padding: var(--lockin-size-6) var(--lockin-size-8);
     }
 
     #lockin-root .lockin-chat-bottom-section {
       padding: var(--lockin-space-2) var(--lockin-space-3);
     }
 
-    #lockin-root .lockin-chat-toolbar {
-      padding: var(--lockin-space-2) var(--lockin-space-3);
+    #lockin-root .lockin-tab-toolbar {
+      padding: var(--lockin-size-4) var(--lockin-size-8);
     }
 
-    /* Ensure touch targets are at least 44px */
+    /* Notes context-bar compact layout */
+    #lockin-root .lockin-notes-context-bar {
+      padding: var(--lockin-size-4) var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-notes-header-actions {
+      gap: var(--lockin-size-2);
+    }
+
+    /* Ensure touch targets are at least 44px on touch devices */
     #lockin-root .lockin-tab,
     #lockin-root .lockin-close-btn,
     #lockin-root .lockin-history-toggle-btn,
     #lockin-root .lockin-msg-action-btn,
     #lockin-root .lockin-send-btn {
-      min-height: 44px;
       min-width: 44px;
+      min-height: 44px;
     }
   }
 

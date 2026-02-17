@@ -6,7 +6,7 @@ type LockInSidebarFactory = (props: LockInSidebarProps) => SidebarInstance;
 
 type LockInUISurface = {
   createLockInSidebar: LockInSidebarFactory;
-  LockInSidebar: typeof import('../LockInSidebar').LockInSidebar;
+  LockInSidebar: (props: LockInSidebarProps) => unknown;
 };
 
 type TestWindow = typeof window & {

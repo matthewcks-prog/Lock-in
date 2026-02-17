@@ -15,14 +15,24 @@
 const { BaseAdapter } = require('./baseAdapter');
 const { fetchWithRetry } = require('../../../utils/networkRetry');
 const { parseGeminiResponse } = require('../responseSchemas');
-const { resolveTimeoutMs } = require('../requestBudget');
-const { createDeltaChunk, createFinalChunk, createStreamErrorChunk } = require('../contracts');
+const { createFinalChunk } = require('../contracts');
+const {
+  createGeminiStreamAbortContext,
+  fetchGeminiStreamResponse,
+  parseGeminiSSEStream,
+  parseGeminiSSEEvent,
+  createGeminiStreamErrorChunk,
+} = require('./geminiStreamHelpers');
 
 const DEFAULT_MODEL = 'gemini-2.0-flash';
 const UPGRADED_MODEL = 'gemini-2.5-flash';
 const PREMIUM_MODEL = 'gemini-2.5-pro';
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 const REQUEST_TIMEOUT_MS = 60000;
+const LONG_INPUT_THRESHOLD = 3000;
+const DEFAULT_TEMPERATURE = 0.7;
+const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
+const ERROR_DETAILS_MAX_LENGTH = 200;
 
 /**
  * Gemini API adapter
@@ -57,47 +67,53 @@ class GeminiAdapter extends BaseAdapter {
 
     for (const msg of messages) {
       if (msg.role === 'system') {
-        // Gemini uses systemInstruction separately
-        systemInstruction = {
-          parts: [{ text: msg.content }],
-        };
+        systemInstruction = { parts: [{ text: msg.content }] };
         continue;
       }
 
-      // Map roles: user → user, assistant → model
       const role = msg.role === 'assistant' ? 'model' : 'user';
-
-      // Handle multimodal content
-      let parts;
-      if (typeof msg.content === 'string') {
-        parts = [{ text: msg.content }];
-      } else if (Array.isArray(msg.content)) {
-        parts = msg.content.map((part) => {
-          if (part.type === 'text') {
-            return { text: part.text };
-          }
-          if (part.type === 'image_url' && part.image_url?.url) {
-            // Convert data URL to inline_data
-            const match = part.image_url.url.match(/^data:([^;]+);base64,(.+)$/);
-            if (match) {
-              return {
-                inline_data: {
-                  mime_type: match[1],
-                  data: match[2],
-                },
-              };
-            }
-          }
-          return { text: '[unsupported content]' };
-        });
-      } else {
-        parts = [{ text: String(msg.content) }];
-      }
-
+      const parts = this._convertMessageParts(msg.content);
       contents.push({ role, parts });
     }
 
     return { systemInstruction, contents };
+  }
+
+  _convertMessageParts(content) {
+    if (typeof content === 'string') {
+      return [{ text: content }];
+    }
+
+    if (Array.isArray(content)) {
+      return content.map((part) => {
+        if (part.type === 'text') {
+          return { text: part.text };
+        }
+
+        if (part.type === 'image_url' && part.image_url?.url) {
+          const inlineData = this._toInlineData(part.image_url.url);
+          if (inlineData) {
+            return { inline_data: inlineData };
+          }
+        }
+
+        return { text: '[unsupported content]' };
+      });
+    }
+
+    return [{ text: String(content) }];
+  }
+
+  _toInlineData(url) {
+    const match = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) {
+      return null;
+    }
+
+    return {
+      mime_type: match[1],
+      data: match[2],
+    };
   }
 
   /**
@@ -108,24 +124,16 @@ class GeminiAdapter extends BaseAdapter {
    * @returns {string} Selected model name
    */
   _selectModel(messages, options) {
-    // Use premium model if explicitly requested for critical correctness
     if (options.usePremiumModel) {
       return this.premiumModel;
     }
 
-    // Use upgraded model if explicitly requested
     if (options.useUpgradedModel) {
       return this.upgradedModel;
     }
 
-    // Auto-detect need for upgraded model
     const lastUserMessage = this._getLastUserMessageContent(messages);
-
-    if (this._needsUpgradedModel(lastUserMessage, options)) {
-      return this.upgradedModel;
-    }
-
-    return this.model;
+    return this._needsUpgradedModel(lastUserMessage, options) ? this.upgradedModel : this.model;
   }
 
   /**
@@ -133,11 +141,11 @@ class GeminiAdapter extends BaseAdapter {
    * @private
    */
   _needsUpgradedModel(userMessage, options) {
-    if (!userMessage) return false;
+    if (!userMessage) {
+      return false;
+    }
 
     const lowerMessage = userMessage.toLowerCase();
-
-    // Upgrade indicators (per user requirements)
     const upgradePatterns = [
       'step-by-step',
       'step by step',
@@ -146,10 +154,7 @@ class GeminiAdapter extends BaseAdapter {
       'comprehensive',
     ];
 
-    // Long input threshold (big lecture chunk)
-    const isLongInput = userMessage.length > 3000;
-
-    // Needs structured output (JSON/table)
+    const isLongInput = userMessage.length > LONG_INPUT_THRESHOLD;
     const needsStructuredOutput =
       options.responseFormat?.type === 'json_object' ||
       lowerMessage.includes('table') ||
@@ -180,8 +185,8 @@ class GeminiAdapter extends BaseAdapter {
     const requestBody = {
       contents,
       generationConfig: {
-        temperature: options.temperature ?? 0.7,
-        maxOutputTokens: options.maxTokens ?? 1024,
+        temperature: options.temperature ?? DEFAULT_TEMPERATURE,
+        maxOutputTokens: options.maxTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       },
     };
 
@@ -197,12 +202,15 @@ class GeminiAdapter extends BaseAdapter {
   }
 
   _parseErrorDetails(errorBody) {
-    if (!errorBody) return '';
+    if (!errorBody) {
+      return '';
+    }
+
     try {
       const parsed = JSON.parse(errorBody);
-      return parsed.error?.message || errorBody.substring(0, 200);
+      return parsed.error?.message || errorBody.substring(0, ERROR_DETAILS_MAX_LENGTH);
     } catch {
-      return errorBody.substring(0, 200);
+      return errorBody.substring(0, ERROR_DETAILS_MAX_LENGTH);
     }
   }
 
@@ -215,7 +223,6 @@ class GeminiAdapter extends BaseAdapter {
   }
 
   async _executeRequest(url, requestBody, requestOptions = {}) {
-    const timeoutMs = resolveTimeoutMs(requestOptions.timeoutMs, REQUEST_TIMEOUT_MS);
     const response = await fetchWithRetry(
       url,
       {
@@ -229,7 +236,7 @@ class GeminiAdapter extends BaseAdapter {
       },
       {
         maxRetries: 0,
-        timeoutMs,
+        timeoutMs: requestOptions.timeoutMs ?? REQUEST_TIMEOUT_MS,
         context: 'gemini chatCompletion',
       },
     );
@@ -253,6 +260,7 @@ class GeminiAdapter extends BaseAdapter {
     if (!data.usageMetadata) {
       return null;
     }
+
     return {
       prompt_tokens: data.usageMetadata.promptTokenCount || 0,
       completion_tokens: data.usageMetadata.candidatesTokenCount || 0,
@@ -285,14 +293,12 @@ class GeminiAdapter extends BaseAdapter {
         signal: options.signal,
       });
       const parsed = parseGeminiResponse(data);
-      const content = this._extractContent(parsed);
-      const usage = this._extractUsage(parsed);
 
       return {
-        content,
+        content: this._extractContent(parsed),
         provider: this.getProviderName(),
         model: selectedModel,
-        usage,
+        usage: this._extractUsage(parsed),
       };
     } catch (error) {
       throw this._wrapChatCompletionError(error);
@@ -307,6 +313,55 @@ class GeminiAdapter extends BaseAdapter {
     return true;
   }
 
+  _buildStreamRequest(messages, options) {
+    const { systemInstruction, contents } = this._convertMessages(messages);
+    const selectedModel = this._selectModel(messages, options);
+    return {
+      requestBody: this._buildRequestBody(systemInstruction, contents, options),
+      url: `${this.baseUrl}/models/${selectedModel}:streamGenerateContent?alt=sse`,
+    };
+  }
+
+  async _createStreamResponse(streamRequest, options) {
+    const abortContext = createGeminiStreamAbortContext({
+      timeoutMs: options.timeoutMs,
+      fallbackTimeoutMs: REQUEST_TIMEOUT_MS,
+      signal: options.signal,
+    });
+
+    try {
+      const response = await fetchGeminiStreamResponse({
+        url: streamRequest.url,
+        apiKey: this.config.apiKey,
+        requestBody: streamRequest.requestBody,
+        signal: abortContext.signal,
+      });
+      return { response, abortContext };
+    } catch (error) {
+      abortContext.cleanup();
+      throw error;
+    }
+  }
+
+  _createStreamState() {
+    let accumulatedContent = '';
+    let usage = null;
+
+    return {
+      onChunk(chunk) {
+        if (chunk.content) {
+          accumulatedContent += chunk.content;
+        }
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+      },
+      getFinalChunk() {
+        return createFinalChunk(accumulatedContent, usage);
+      },
+    };
+  }
+
   /**
    * Execute streaming chat completion via Gemini REST API
    * Uses streamGenerateContent endpoint with SSE format.
@@ -316,123 +371,30 @@ class GeminiAdapter extends BaseAdapter {
    * @returns {AsyncGenerator<import('../contracts').ProviderStreamChunk>}
    */
   async *chatCompletionStream(messages, options = {}) {
-    const { systemInstruction, contents } = this._convertMessages(messages);
-    const selectedModel = this._selectModel(messages, options);
-    const requestBody = this._buildRequestBody(systemInstruction, contents, options);
-    const url = `${this.baseUrl}/models/${selectedModel}:streamGenerateContent?alt=sse`;
+    const streamRequest = this._buildStreamRequest(messages, options);
 
-    const timeoutMs = resolveTimeoutMs(options.timeoutMs, REQUEST_TIMEOUT_MS);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    // Link external signal if provided
-    if (options.signal) {
-      if (options.signal.aborted) {
-        controller.abort();
-      } else {
-        options.signal.addEventListener('abort', () => controller.abort(), { once: true });
-      }
-    }
-
-    let response;
+    let streamResponse;
     try {
-      response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-goog-api-key': this.config.apiKey,
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
+      streamResponse = await this._createStreamResponse(streamRequest, options);
     } catch (error) {
-      clearTimeout(timeoutId);
       throw this._wrapChatCompletionError(error);
     }
 
-    if (!response.ok) {
-      clearTimeout(timeoutId);
-      throw await this._buildHttpError(response);
+    if (!streamResponse.response.ok) {
+      streamResponse.abortContext.cleanup();
+      throw await this._buildHttpError(streamResponse.response);
     }
 
-    // Stream the response
-    let accumulatedContent = '';
-    let usage = null;
+    const streamState = this._createStreamState();
 
     try {
-      yield* this._parseSSEStream(response.body, (chunk) => {
-        if (chunk.content) {
-          accumulatedContent += chunk.content;
-        }
-        if (chunk.usage) {
-          usage = chunk.usage;
-        }
-      });
-
-      // Yield final chunk with accumulated content
-      yield createFinalChunk(accumulatedContent, usage);
+      yield* parseGeminiSSEStream(streamResponse.response.body, streamState.onChunk);
+      yield streamState.getFinalChunk();
     } catch (error) {
-      if (error.name === 'AbortError') {
-        yield createStreamErrorChunk('ABORTED', 'Request was cancelled', false);
-      } else {
-        yield createStreamErrorChunk(
-          'UPSTREAM_ERROR',
-          error.message || 'Stream processing failed',
-          true,
-        );
-      }
+      yield createGeminiStreamErrorChunk(error);
       throw this._wrapChatCompletionError(error);
     } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  /**
-   * Parse Gemini SSE stream and yield delta chunks
-   * @private
-   * @param {ReadableStream} body - Response body stream
-   * @param {Function} onChunk - Callback to track accumulated state
-   * @returns {AsyncGenerator<import('../contracts').ProviderStreamChunk>}
-   */
-  async *_parseSSEStream(body, onChunk) {
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Process complete SSE events (separated by double newlines)
-        const events = buffer.split('\n\n');
-        buffer = events.pop() || ''; // Keep incomplete event in buffer
-
-        for (const event of events) {
-          const chunk = this._parseSSEEvent(event);
-          if (chunk) {
-            onChunk(chunk);
-            if (chunk.type === 'delta') {
-              yield chunk;
-            }
-          }
-        }
-      }
-
-      // Process any remaining buffer
-      if (buffer.trim()) {
-        const chunk = this._parseSSEEvent(buffer);
-        if (chunk) {
-          onChunk(chunk);
-          if (chunk.type === 'delta') {
-            yield chunk;
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
+      streamResponse.abortContext.cleanup();
     }
   }
 
@@ -443,44 +405,7 @@ class GeminiAdapter extends BaseAdapter {
    * @returns {import('../contracts').ProviderStreamChunk|null}
    */
   _parseSSEEvent(event) {
-    const lines = event.split('\n');
-    let data = '';
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        data = line.slice(6);
-      }
-    }
-
-    if (!data) return null;
-
-    try {
-      const parsed = JSON.parse(data);
-
-      // Extract text from Gemini response format
-      const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        return createDeltaChunk(text);
-      }
-
-      // Extract usage metadata if present (usually in final chunk)
-      if (parsed.usageMetadata) {
-        return {
-          type: 'delta',
-          content: '',
-          usage: {
-            prompt_tokens: parsed.usageMetadata.promptTokenCount || 0,
-            completion_tokens: parsed.usageMetadata.candidatesTokenCount || 0,
-            total_tokens: parsed.usageMetadata.totalTokenCount || 0,
-          },
-        };
-      }
-
-      return null;
-    } catch {
-      // Ignore parse errors for malformed events
-      return null;
-    }
+    return parseGeminiSSEEvent(event);
   }
 }
 

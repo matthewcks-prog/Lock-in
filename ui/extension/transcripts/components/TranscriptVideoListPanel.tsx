@@ -54,6 +54,67 @@ export interface TranscriptVideoListPanelProps {
   onCancelAi: () => void;
 }
 
+function buildPanelOptionalProps({
+  error,
+  detectionHint,
+  authRequired,
+}: {
+  error: string | undefined;
+  detectionHint: string | undefined;
+  authRequired: { provider: string; signInUrl: string } | undefined;
+}): {
+  error?: string;
+  detectionHint?: string;
+  authRequired?: { provider: string; signInUrl: string };
+} {
+  const panelOptionalProps: {
+    error?: string;
+    detectionHint?: string;
+    authRequired?: { provider: string; signInUrl: string };
+  } = {};
+
+  if (error !== undefined && error.length > 0) {
+    panelOptionalProps.error = error;
+  }
+  if (detectionHint !== undefined && detectionHint.length > 0) {
+    panelOptionalProps.detectionHint = detectionHint;
+  }
+  if (authRequired !== undefined) {
+    panelOptionalProps.authRequired = authRequired;
+  }
+
+  return panelOptionalProps;
+}
+
+function isVideoDisabledForExtraction({
+  video,
+  isExtracting,
+  extractingVideoId,
+  isAiBusy,
+}: {
+  video: DetectedVideo;
+  isExtracting: boolean;
+  extractingVideoId: string | null;
+  isAiBusy: boolean;
+}): boolean {
+  const isThisExtracting = isExtracting && extractingVideoId === video.id;
+  const isAnotherExtracting = isExtracting && extractingVideoId !== video.id;
+  return isAnotherExtracting || (isAiBusy && !isThisExtracting);
+}
+
+function renderNoTranscriptBadge({
+  video,
+  extractionResults,
+}: {
+  video: DetectedVideo;
+  extractionResults: Record<string, VideoExtractionResult>;
+}): JSX.Element | null {
+  const result = extractionResults[video.id];
+  const noCaptions =
+    result !== undefined && result.success === false && result.errorCode === 'NO_CAPTIONS';
+  return noCaptions ? <span className="lockin-video-item-badge">No transcript</span> : null;
+}
+
 export function TranscriptVideoListPanel({
   videos,
   isLoading,
@@ -68,7 +129,7 @@ export function TranscriptVideoListPanel({
   aiTranscription,
   onTranscribeWithAI,
   onCancelAi,
-}: TranscriptVideoListPanelProps) {
+}: TranscriptVideoListPanelProps): JSX.Element {
   const isAiBusy = isAiTranscriptionBusy(aiTranscription.status);
 
   return (
@@ -77,35 +138,25 @@ export function TranscriptVideoListPanel({
       isLoading={isLoading}
       onSelectVideo={onSelectVideo}
       onClose={onClose}
-      {...(error ? { error } : {})}
-      {...(detectionHint ? { detectionHint } : {})}
-      {...(authRequired ? { authRequired } : {})}
+      {...buildPanelOptionalProps({ error, detectionHint, authRequired })}
       selectedVideoId={extractingVideoId}
-      isVideoDisabled={(video) => {
-        // Disable if another video is extracting or AI is busy on a different video
-        const isThisExtracting = isExtracting && extractingVideoId === video.id;
-        const isAnotherExtracting = isExtracting && extractingVideoId !== video.id;
-        return isAnotherExtracting || (isAiBusy && !isThisExtracting);
-      }}
-      renderItemBadge={({ video }) => {
-        // Show "No transcript" badge for videos without captions
-        const result = extractionResults[video.id];
-        const noCaptions = result && !result.success && result.errorCode === 'NO_CAPTIONS';
-        return noCaptions ? <span className="lockin-video-item-badge">No transcript</span> : null;
-      }}
-      renderItemActions={({ video }) => {
-        const extractionResult = extractionResults[video.id];
-        const statusProps = {
-          video,
-          aiTranscription,
-          isExtracting,
-          isAiBusy,
-          onTranscribeWithAI,
-          onCancelAi,
-          ...(extractionResult ? { extractionResult } : {}),
-        };
-        return <TranscriptVideoStatus {...statusProps} />;
-      }}
+      isVideoDisabled={(video) =>
+        isVideoDisabledForExtraction({ video, isExtracting, extractingVideoId, isAiBusy })
+      }
+      renderItemBadge={({ video }) => renderNoTranscriptBadge({ video, extractionResults })}
+      renderItemActions={({ video }) => (
+        <TranscriptVideoStatus
+          video={video}
+          aiTranscription={aiTranscription}
+          isExtracting={isExtracting}
+          isAiBusy={isAiBusy}
+          onTranscribeWithAI={onTranscribeWithAI}
+          onCancelAi={onCancelAi}
+          {...(extractionResults[video.id] !== undefined
+            ? { extractionResult: extractionResults[video.id] }
+            : {})}
+        />
+      )}
     />
   );
 }

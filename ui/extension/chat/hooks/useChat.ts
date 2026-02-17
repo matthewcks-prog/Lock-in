@@ -1,259 +1,179 @@
-/**
- * useChat Hook
- *
- * Main orchestration hook that combines all chat functionality.
- * Provides a unified API for the sidebar component.
- */
-
 import { useQueryClient } from '@tanstack/react-query';
-import type { ChatMessage, UseChatOptions } from '../types';
-import { useChatMessages } from './useChatMessages';
+import type { UseChatOptions } from '../types';
+import { createChatReturn, type CreateChatReturnParams } from './createChatReturn';
+import { useChatActions, type UseChatActionsParams } from './useChatActions';
 import { useChatHistory } from './useChatHistory';
-import { useSendMessage } from './useSendMessage';
-import { useSendMessageStream } from './useSendMessageStream';
-import { createSendMessage } from './createSendMessage';
-import { createSendSuccessHandler } from './createSendSuccessHandler';
-import { createSelectChat } from './createSelectChat';
-import { createStartBlankChat } from './createStartBlankChat';
-import { createStartNewChat } from './createStartNewChat';
-import { useMessageEdit } from './useMessageEdit';
-import { useRegenerateMessage } from './useRegenerateMessage';
+import { useChatMessages } from './useChatMessages';
 import type { UseChatReturn } from './chatHookTypes';
+import { useChatRegenerationMutations } from './useChatMutations';
+import { useChatSenders, type UseChatSendersParams } from './useChatSenders';
 import { useChatSessionState } from './useChatSessionState';
-import type { SendMessageMutationParams } from './sendMessageUtils';
 
-/**
- * Main chat hook that orchestrates all chat functionality.
- *
- * Features:
- * - Manages active chat session state
- * - Coordinates message sending with history updates
- * - Handles storage persistence for active chat ID
- * - Optional streaming support (enableStreaming flag)
- */
+function buildSendersParams({
+  apiClient,
+  pageUrl,
+  courseCode,
+  enableStreaming,
+  queryClient,
+  session,
+  upsertHistory,
+}: {
+  apiClient: UseChatOptions['apiClient'];
+  pageUrl: string;
+  courseCode: string | null;
+  enableStreaming: boolean | undefined;
+  queryClient: ReturnType<typeof useQueryClient>;
+  session: ReturnType<typeof useChatSessionState>;
+  upsertHistory: ReturnType<typeof useChatHistory>['upsertHistory'];
+}): UseChatSendersParams {
+  return {
+    apiClient,
+    pageUrl,
+    courseCode,
+    enableStreaming,
+    queryClient,
+    activeChatIdRef: session.activeChatIdRef,
+    activeHistoryIdRef: session.activeHistoryIdRef,
+    setActiveChatId: session.setActiveChatId,
+    setActiveHistoryId: session.setActiveHistoryId,
+    setError: session.setError,
+    upsertHistory,
+  };
+}
+
+function buildActionsParams({
+  apiClient,
+  pageUrl,
+  courseCode,
+  queryClient,
+  session,
+  messagesState,
+  upsertHistory,
+  sendMessageMutation,
+}: {
+  apiClient: UseChatOptions['apiClient'];
+  pageUrl: string;
+  courseCode: string | null;
+  queryClient: ReturnType<typeof useQueryClient>;
+  session: ReturnType<typeof useChatSessionState>;
+  messagesState: ReturnType<typeof useChatMessages>;
+  upsertHistory: ReturnType<typeof useChatHistory>['upsertHistory'];
+  sendMessageMutation: ReturnType<typeof useChatSenders>['sendMessageMutation'];
+}): UseChatActionsParams {
+  return {
+    apiClient,
+    pageUrl,
+    courseCode,
+    queryClient,
+    activeChatId: session.activeChatId,
+    activeHistoryId: session.activeHistoryId,
+    messages: messagesState.messages,
+    setMessages: messagesState.setMessages,
+    upsertHistory,
+    sendMessageMutation,
+    setActiveChatId: session.setActiveChatId,
+    setActiveHistoryId: session.setActiveHistoryId,
+    setIsHistoryOpen: session.setIsHistoryOpen,
+    setError: session.setError,
+  };
+}
+
+function buildReturnParams({
+  enableStreaming,
+  session,
+  messagesState,
+  historyState,
+  actions,
+  senders,
+  mutations,
+}: {
+  enableStreaming: boolean | undefined;
+  session: ReturnType<typeof useChatSessionState>;
+  messagesState: ReturnType<typeof useChatMessages>;
+  historyState: ReturnType<typeof useChatHistory>;
+  actions: ReturnType<typeof useChatActions>;
+  senders: ReturnType<typeof useChatSenders>;
+  mutations: ReturnType<typeof useChatRegenerationMutations>;
+}): CreateChatReturnParams {
+  return { enableStreaming, session, messagesState, historyState, actions, senders, mutations };
+}
+
+function resolveChatReturn({
+  enableStreaming,
+  session,
+  messagesState,
+  historyState,
+  actions,
+  senders,
+  mutations,
+}: {
+  enableStreaming: boolean | undefined;
+  session: ReturnType<typeof useChatSessionState>;
+  messagesState: ReturnType<typeof useChatMessages>;
+  historyState: ReturnType<typeof useChatHistory>;
+  actions: ReturnType<typeof useChatActions>;
+  senders: ReturnType<typeof useChatSenders>;
+  mutations: ReturnType<typeof useChatRegenerationMutations>;
+}): UseChatReturn {
+  return createChatReturn(
+    buildReturnParams({
+      enableStreaming,
+      session,
+      messagesState,
+      historyState,
+      actions,
+      senders,
+      mutations,
+    }),
+  );
+}
+
 export function useChat(options: UseChatOptions): UseChatReturn {
   const { apiClient, storage, pageUrl, courseCode, enableStreaming } = options;
   const queryClient = useQueryClient();
-
-  const {
-    activeChatId,
-    setActiveChatId,
-    activeHistoryId,
-    setActiveHistoryId,
-    activeChatIdRef,
-    activeHistoryIdRef,
-    isHistoryOpen,
-    setIsHistoryOpen,
-    error,
-    setError,
-    clearError,
-    ensureChatId,
-  } = useChatSessionState({ apiClient, storage });
-
-  const {
-    messages,
-    isLoading: isLoadingMessages,
-    setMessages,
-  } = useChatMessages({
-    apiClient,
-    chatId: activeChatId,
-  });
-
-  const {
-    recentChats,
-    isLoading: isLoadingHistory,
-    hasMore: hasMoreHistory,
-    loadMore: loadMoreHistory,
-    isFetchingNextPage: isLoadingMoreHistory,
-    upsertHistory,
-  } = useChatHistory({
-    apiClient,
-  });
-
-  const handleSendSuccess = createSendSuccessHandler({
-    queryClient,
-    activeChatIdRef,
-    activeHistoryIdRef,
-    setActiveChatId,
-    setActiveHistoryId,
-    upsertHistory,
-  });
-
-  // Blocking (non-streaming) message send
-  const { sendMessage: sendMessageMutation, isSending: isSendingBlocking } = useSendMessage({
-    apiClient,
-    pageUrl,
-    courseCode,
-    onSuccess: handleSendSuccess,
-    onError: (err) => {
-      setError(err);
-    },
-  });
-
-  // Streaming message send
-  const {
-    sendMessageStream,
-    isStreaming,
-    streamedContent,
-    meta: streamMeta,
-    error: streamError,
-    isComplete: streamComplete,
-    cancelPending: cancelStream,
-    reset: _resetStream,
-  } = useSendMessageStream({
-    apiClient,
-    pageUrl,
-    courseCode,
-    onSuccess: handleSendSuccess,
-    onError: (err) => {
-      setError(err);
-    },
-  });
-
-  // Combined sending state
-  const isSending = enableStreaming ? isStreaming : isSendingBlocking;
-
-  const startNewChat = createStartNewChat({
-    pageUrl,
-    courseCode,
-    setMessages,
-    upsertHistory,
-    sendMessage: sendMessageMutation,
-    setActiveChatId,
-    setActiveHistoryId,
-    setIsHistoryOpen,
-    setError,
-  });
-
-  const sendMessage = createSendMessage({
-    activeChatId,
-    activeHistoryId,
-    messages,
-    pageUrl,
-    courseCode,
-    queryClient,
-    upsertHistory,
-    sendMessage: sendMessageMutation,
-    startNewChat,
-    setActiveHistoryId,
-    setIsHistoryOpen,
-    setError,
-  });
-
-  const startBlankChat = createStartBlankChat({
-    setMessages,
-    upsertHistory,
-    setActiveChatId,
-    setActiveHistoryId,
-    setIsHistoryOpen,
-    setError,
-  });
-
-  const selectChat = createSelectChat({
-    apiClient,
-    setActiveChatId,
-    setActiveHistoryId,
-    setError,
-    setMessages,
-  });
-
-  /**
-   * Dispatches a regeneration request using the canonical timeline.
-   * Used by both edit-as-rewrite and regenerate flows to avoid duplicating
-   * a user message — the canonical timeline already contains it.
-   *
-   * When streaming is enabled, routes through the streaming path for
-   * progressive content delivery; otherwise uses blocking mutation.
-   */
-  function dispatchRegeneration(canonicalMessages: ChatMessage[], chatId: string): void {
-    const lastUserMsg = [...canonicalMessages].reverse().find((m) => m.role === 'user');
-    if (!lastUserMsg) return;
-
-    const payload: SendMessageMutationParams = {
-      message: lastUserMsg.content,
-      source: 'followup',
+  const session = useChatSessionState({ apiClient, storage });
+  const messagesState = useChatMessages({ apiClient, chatId: session.activeChatId });
+  const historyState = useChatHistory({ apiClient });
+  const senders = useChatSenders(
+    buildSendersParams({
+      apiClient,
       pageUrl,
-      chatId,
-      currentMessages: canonicalMessages,
-      activeChatId: chatId,
-    };
-    if (courseCode) {
-      payload.courseCode = courseCode;
-    }
-
-    if (enableStreaming && sendMessageStream) {
-      void sendMessageStream(payload);
-    } else {
-      sendMessageMutation(payload);
-    }
-  }
-
-  // Message editing (auto-cancels stream, auto-regenerates after save)
-  const messageEdit = useMessageEdit({
+      courseCode,
+      enableStreaming,
+      queryClient,
+      session,
+      upsertHistory: historyState.upsertHistory,
+    }),
+  );
+  const actions = useChatActions(
+    buildActionsParams({
+      apiClient,
+      pageUrl,
+      courseCode,
+      queryClient,
+      session,
+      messagesState,
+      upsertHistory: historyState.upsertHistory,
+      sendMessageMutation: senders.sendMessageMutation,
+    }),
+  );
+  const mutations = useChatRegenerationMutations({
     apiClient,
-    chatId: activeChatId,
-    cancelStream,
-    onEditComplete: (_editedContent, canonicalMessages) => {
-      // After a successful edit, the backend has already:
-      //   1. Marked the old message as non-canonical
-      //   2. Inserted the revision as canonical
-      //   3. Truncated all subsequent messages
-      // The canonicalMessages array already contains the revised user message.
-      // We must NOT re-add a user message — just trigger a new assistant response.
-      if (activeChatId) {
-        dispatchRegeneration(canonicalMessages, activeChatId);
-      }
-    },
+    activeChatId: session.activeChatId,
+    pageUrl,
+    courseCode,
+    enableStreaming,
+    sendMessageMutation: senders.sendMessageMutation,
+    sendMessageStream: senders.sendMessageStream,
+    cancelStream: senders.cancelStream,
   });
-
-  // Regeneration (auto-cancels stream, then re-triggers with canonical timeline)
-  const regeneration = useRegenerateMessage({
-    apiClient,
-    chatId: activeChatId,
-    cancelStream,
-    onRegenerateReady: (canonicalMessages) => {
-      if (activeChatId) {
-        dispatchRegeneration(canonicalMessages, activeChatId);
-      }
-    },
+  return resolveChatReturn({
+    enableStreaming,
+    session,
+    messagesState,
+    historyState,
+    actions,
+    senders,
+    mutations,
   });
-
-  // Build base return object
-  const baseReturn: UseChatReturn = {
-    activeChatId,
-    activeHistoryId,
-    messages,
-    isLoadingMessages,
-    recentChats,
-    isLoadingHistory,
-    hasMoreHistory,
-    isLoadingMoreHistory,
-    loadMoreHistory,
-    sendMessage,
-    startNewChat,
-    startBlankChat,
-    selectChat,
-    ensureChatId,
-    isSending,
-    error,
-    clearError,
-    isHistoryOpen,
-    setIsHistoryOpen,
-    messageEdit,
-    regeneration,
-  };
-
-  // Add streaming fields only if streaming is enabled (exactOptionalPropertyTypes)
-  if (enableStreaming) {
-    baseReturn.streaming = {
-      isStreaming,
-      streamedContent,
-      meta: streamMeta,
-      error: streamError,
-      isComplete: streamComplete,
-    };
-    baseReturn.cancelStream = cancelStream;
-  }
-
-  return baseReturn;
 }

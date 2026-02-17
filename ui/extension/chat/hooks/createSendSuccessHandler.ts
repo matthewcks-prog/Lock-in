@@ -4,6 +4,8 @@ import type { ChatApiResponse, ChatHistoryItem, ChatMessage, HistoryTitleSource 
 import { buildInitialChatTitle, coerceChatTitle } from '../types';
 import { chatMessagesKeys } from './useChatMessages';
 
+const CHAT_TITLE_PREVIEW_CHARS = 50;
+
 type UpsertHistory = (
   item: ChatHistoryItem,
   previousId?: string | null,
@@ -26,19 +28,32 @@ interface SendSuccessDeps {
 export function createSendSuccessHandler(deps: SendSuccessDeps) {
   return (response: ChatApiResponse, resolvedChatId: string) => {
     const now = new Date().toISOString();
-    const previousChatId = deps.activeChatIdRef.current || deps.activeHistoryIdRef.current;
-    if (previousChatId && previousChatId !== resolvedChatId) {
+    const activeChatId = deps.activeChatIdRef.current;
+    const activeHistoryId = deps.activeHistoryIdRef.current;
+    const previousChatId =
+      activeChatId !== null && activeChatId.length > 0
+        ? activeChatId
+        : activeHistoryId !== null && activeHistoryId.length > 0
+          ? activeHistoryId
+          : null;
+    if (previousChatId !== null && previousChatId !== resolvedChatId) {
       const cachedMessages = deps.queryClient.getQueryData<ChatMessage[]>(
         chatMessagesKeys.byId(previousChatId),
       );
-      if (cachedMessages && cachedMessages.length > 0) {
+      if (cachedMessages !== undefined && cachedMessages.length > 0) {
         deps.queryClient.setQueryData(chatMessagesKeys.byId(resolvedChatId), cachedMessages);
       }
     }
-    const fallbackTitle = buildInitialChatTitle(response.content.slice(0, 50));
+    const fallbackTitle = buildInitialChatTitle(
+      response.content.slice(0, CHAT_TITLE_PREVIEW_CHARS),
+    );
     const serverTitle = response.chatTitle;
-    const resolvedTitle = serverTitle ? coerceChatTitle(serverTitle, fallbackTitle) : fallbackTitle;
-    const titleSource: HistoryTitleSource = serverTitle ? 'server' : 'local';
+    const hasServerTitle =
+      serverTitle !== null && serverTitle !== undefined && serverTitle.length > 0;
+    const resolvedTitle = hasServerTitle
+      ? coerceChatTitle(serverTitle, fallbackTitle)
+      : fallbackTitle;
+    const titleSource: HistoryTitleSource = hasServerTitle ? 'server' : 'local';
 
     deps.setActiveChatId(resolvedChatId);
     deps.setActiveHistoryId(resolvedChatId);

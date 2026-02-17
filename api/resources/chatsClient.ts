@@ -54,6 +54,10 @@ const DEFAULT_CHAT_LIST_LIMIT = Number.isFinite(parsedDefaultLimit)
   ? parsedDefaultLimit
   : FALLBACK_CHAT_LIST_LIMIT;
 
+function hasText(value: string): boolean {
+  return value.trim().length > 0;
+}
+
 function buildChatListQuery(params: { limit?: number; cursor?: string | null } = {}): string {
   const queryParams = new URLSearchParams();
   const limit =
@@ -136,7 +140,7 @@ async function editMessageRequest(
   messageId: string,
   content: string,
 ): Promise<EditMessageResponse> {
-  if (!chatId || !messageId) {
+  if (!hasText(chatId) || !hasText(messageId)) {
     throw new Error('Chat ID and Message ID are required');
   }
 
@@ -151,7 +155,7 @@ async function regenerateMessageRequest(
   apiRequest: ApiRequest,
   chatId: string,
 ): Promise<RegenerateResponse> {
-  if (!chatId) {
+  if (!hasText(chatId)) {
     throw new Error('Chat ID is required');
   }
 

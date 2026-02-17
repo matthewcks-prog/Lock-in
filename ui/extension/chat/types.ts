@@ -130,13 +130,17 @@ export const CHAT_TITLE_MAX_WORDS = 6;
 export const CHAT_TITLE_MAX_LENGTH = 80;
 export const FALLBACK_CHAT_TITLE = 'New chat';
 export const ACTIVE_CHAT_ID_KEY = 'lockin_sidebar_activeChatId';
+const MS_PER_MINUTE = 60_000;
+const MINUTES_PER_HOUR = 60;
+const HOURS_PER_DAY = 24;
+const RANDOM_RADIX_HEX = 16;
 
 // =============================================================================
 // Utility Functions
 // =============================================================================
 
 export function isValidUUID(value: string | null | undefined): boolean {
-  if (!value) return false;
+  if (value === null || value === undefined || value.length === 0) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
@@ -146,7 +150,7 @@ export function normalizeSpaces(text: string): string {
 
 export function clampChatTitle(text = ''): string {
   const normalized = normalizeSpaces(text);
-  if (!normalized) return '';
+  if (normalized.length === 0) return '';
 
   const limitedWords = normalized.split(' ').slice(0, CHAT_TITLE_MAX_WORDS).join(' ').trim();
 
@@ -158,11 +162,11 @@ export function clampChatTitle(text = ''): string {
 }
 
 export function coerceChatTitle(candidate?: string | null, fallback?: string): string {
-  const normalizedCandidate = clampChatTitle(candidate || '');
-  if (normalizedCandidate) return normalizedCandidate;
+  const normalizedCandidate = clampChatTitle(candidate ?? '');
+  if (normalizedCandidate.length > 0) return normalizedCandidate;
 
-  const normalizedFallback = clampChatTitle(fallback || '');
-  return normalizedFallback || FALLBACK_CHAT_TITLE;
+  const normalizedFallback = clampChatTitle(fallback ?? '');
+  return normalizedFallback.length > 0 ? normalizedFallback : FALLBACK_CHAT_TITLE;
 }
 
 export function buildInitialChatTitle(text: string): string {
@@ -179,34 +183,49 @@ function getString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function firstNonEmptyString(values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    if (value !== undefined && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 export function relativeTimeLabel(iso: string | null | undefined): string {
-  if (!iso) return 'just now';
+  if (iso === null || iso === undefined || iso.length === 0) return 'just now';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return 'just now';
   const delta = Date.now() - date.getTime();
-  const minutes = Math.round(delta / 60000);
+  const minutes = Math.round(delta / MS_PER_MINUTE);
   if (minutes <= 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
+  if (minutes < MINUTES_PER_HOUR) return `${minutes}m ago`;
+  const hours = Math.round(minutes / MINUTES_PER_HOUR);
+  if (hours < HOURS_PER_DAY) return `${hours}h ago`;
+  const days = Math.round(hours / HOURS_PER_DAY);
   return `${days}d ago`;
 }
 
 export function normalizeChatAttachment(raw: unknown): ChatAttachment | null {
   if (!isRecord(raw)) return null;
 
-  const kindValue = getString(raw['kind']) || getString(raw['type']) || 'other';
+  const kindValue =
+    firstNonEmptyString([getString(raw['kind']), getString(raw['type'])]) ?? 'other';
   const kind = (
     ['image', 'document', 'code', 'other'].includes(kindValue) ? kindValue : 'other'
   ) as ChatAttachmentKind;
   const mime =
-    getString(raw['mime']) || getString(raw['mimeType']) || getString(raw['mime_type']) || '';
+    firstNonEmptyString([
+      getString(raw['mime']),
+      getString(raw['mimeType']),
+      getString(raw['mime_type']),
+    ]) ?? '';
   const name =
-    getString(raw['name']) ||
-    getString(raw['fileName']) ||
-    getString(raw['file_name']) ||
-    'Attachment';
+    firstNonEmptyString([
+      getString(raw['name']),
+      getString(raw['fileName']),
+      getString(raw['file_name']),
+    ]) ?? 'Attachment';
   const dataUrl = getString(raw['dataUrl']);
   const url = getString(raw['url']);
 
@@ -215,10 +234,10 @@ export function normalizeChatAttachment(raw: unknown): ChatAttachment | null {
     mime,
     name,
   };
-  if (dataUrl) {
+  if (dataUrl !== undefined && dataUrl.length > 0) {
     attachment.dataUrl = dataUrl;
   }
-  if (url) {
+  if (url !== undefined && url.length > 0) {
     attachment.url = url;
   }
   return attachment;
@@ -233,30 +252,39 @@ export function normalizeChatMessage(raw: unknown): ChatMessage {
   const attachments = Array.isArray(record['attachments'])
     ? record['attachments']
         .map(normalizeChatAttachment)
-        .filter((attachment: ChatAttachment | null): attachment is ChatAttachment =>
-          Boolean(attachment),
+        .filter(
+          (attachment: ChatAttachment | null): attachment is ChatAttachment => attachment !== null,
         )
     : undefined;
 
   const message: ChatMessage = {
-    id: getString(record['id']) || `msg-${Math.random().toString(16).slice(2)}`,
+    id:
+      firstNonEmptyString([getString(record['id'])]) ??
+      `msg-${Math.random().toString(RANDOM_RADIX_HEX).slice(2)}`,
     role: record['role'] === 'assistant' ? 'assistant' : 'user',
     content:
-      getString(record['content']) ||
-      getString(record['output_text']) ||
-      getString(record['input_text']) ||
-      'Message',
-    timestamp: getString(record['created_at']) || new Date().toISOString(),
+      firstNonEmptyString([
+        getString(record['content']),
+        getString(record['output_text']),
+        getString(record['input_text']),
+      ]) ?? 'Message',
+    timestamp: firstNonEmptyString([getString(record['created_at'])]) ?? new Date().toISOString(),
   };
-  if (attachments && attachments.length > 0) {
+  if (attachments !== undefined && attachments.length > 0) {
     message.attachments = attachments;
   }
-  const editedAt = getString(record['edited_at']) || getString(record['editedAt']);
-  if (editedAt) {
+  const editedAt = firstNonEmptyString([
+    getString(record['edited_at']),
+    getString(record['editedAt']),
+  ]);
+  if (editedAt !== undefined) {
     message.editedAt = editedAt;
   }
-  const revisionOf = getString(record['revision_of']) || getString(record['revisionOf']);
-  if (revisionOf) {
+  const revisionOf = firstNonEmptyString([
+    getString(record['revision_of']),
+    getString(record['revisionOf']),
+  ]);
+  if (revisionOf !== undefined) {
     message.revisionOf = revisionOf;
   }
   const status = getString(record['status']);

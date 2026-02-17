@@ -22,17 +22,18 @@ interface MarkdownRendererProps {
   /** Additional CSS classes */
   className?: string;
 }
+const COPY_FEEDBACK_TIMEOUT_MS = 1500;
 
 /**
  * Copy-to-clipboard button for code blocks
  */
-function CodeCopyButton({ text }: { text: string }) {
+function CodeCopyButton({ text }: { text: string }): JSX.Element {
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_TIMEOUT_MS);
     } catch {
       /* clipboard unavailable */
     }
@@ -42,7 +43,9 @@ function CodeCopyButton({ text }: { text: string }) {
     <button
       type="button"
       className="lockin-code-copy-btn"
-      onClick={handleCopy}
+      onClick={() => {
+        void handleCopy();
+      }}
       aria-label={copied ? 'Copied' : 'Copy code'}
       title={copied ? 'Copied!' : 'Copy'}
     >
@@ -63,12 +66,12 @@ const syntaxStyle = oneDark as unknown as Record<string, React.CSSProperties>;
 
 const CodeBlock = memo(function CodeBlock({ inline, className, children, ...props }: CodeProps) {
   // Extract language from className (e.g., "language-javascript")
-  const match = /language-(\w+)/.exec(className || '');
-  const language = match ? match[1] : '';
+  const match = /language-(\w+)/.exec(className ?? '');
+  const language = match?.[1] ?? '';
   const codeString = String(children).replace(/\n$/, '');
 
   // Inline code
-  if (inline) {
+  if (inline === true) {
     return (
       <code
         className="px-1.5 py-0.5 mx-0.5 rounded bg-gray-100 text-gray-800 font-mono text-sm"
@@ -83,12 +86,12 @@ const CodeBlock = memo(function CodeBlock({ inline, className, children, ...prop
   return (
     <div className="lockin-code-block-wrapper">
       <div className="lockin-code-block-header">
-        {language && <span className="lockin-code-block-lang">{language}</span>}
+        {language.length > 0 && <span className="lockin-code-block-lang">{language}</span>}
         <CodeCopyButton text={codeString} />
       </div>
       <SyntaxHighlighter
         style={syntaxStyle}
-        language={language || 'text'}
+        language={language.length > 0 ? language : 'text'}
         PreTag="div"
         customStyle={{
           margin: 0,
@@ -188,7 +191,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
   className = '',
 }: MarkdownRendererProps) {
-  if (!content) return null;
+  if (content.length === 0) return null;
 
   return (
     <div className={`lockin-markdown ${className}`}>

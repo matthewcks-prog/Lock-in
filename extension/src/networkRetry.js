@@ -1,17 +1,32 @@
-(() => {
-  const root = typeof globalThis !== 'undefined' ? globalThis : self;
+/**
+ * Network Retry Utilities
+ *
+ * Provides robust retry logic with exponential backoff, timeout handling,
+ * and configurable retry conditions for network requests.
+ */
+
+// eslint-disable-next-line max-statements -- IIFE wrapper required for Chrome extension scope isolation
+(function () {
+  // Configuration constants
+  const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
+  const HTTP_STATUS_UNAUTHORIZED = 401;
+  const HTTP_STATUS_FORBIDDEN = 403;
+  const HTTP_STATUS_NOT_FOUND = 404;
+  const HTTP_STATUS_SERVER_ERROR_MIN = 500;
+  const RETRY_JITTER_FACTOR = 0.3;
 
   const DEFAULT_RETRY_CONFIG = {
     maxRetries: 3,
     baseDelayMs: 500,
     maxDelayMs: 5000,
     timeoutMs: 30000,
-    retryableStatuses: [429],
+    retryableStatuses: [HTTP_STATUS_TOO_MANY_REQUESTS],
     retryOnServerError: true,
     retryOnNetworkError: true,
     retryOnTimeout: true,
   };
 
+  // Configuration helpers
   function normalizeConfig(overrides) {
     if (!overrides) return { ...DEFAULT_RETRY_CONFIG };
     const retryableStatuses = Array.isArray(overrides.retryableStatuses)
@@ -20,14 +35,17 @@
     return { ...DEFAULT_RETRY_CONFIG, ...overrides, retryableStatuses };
   }
 
+  // Utility functions
   function sleep(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms);
+    });
   }
 
   function calculateRetryDelay(attempt, config) {
     const exponentialDelay = config.baseDelayMs * Math.pow(2, attempt);
     const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
-    const jitter = cappedDelay * (Math.random() * 0.3);
+    const jitter = cappedDelay * (Math.random() * RETRY_JITTER_FACTOR);
     return Math.floor(cappedDelay + jitter);
   }
 
@@ -36,23 +54,25 @@
     if (!value) return undefined;
 
     const seconds = Number(value);
-    if (!Number.isNaN(seconds)) {
-      return Math.max(0, seconds * 1000);
-    }
+    if (!Number.isNaN(seconds)) return Math.max(0, seconds * 1000);
 
     const dateMs = Date.parse(value);
-    if (!Number.isNaN(dateMs)) {
-      return Math.max(0, dateMs - Date.now());
-    }
-
+    if (!Number.isNaN(dateMs)) return Math.max(0, dateMs - Date.now());
     return undefined;
   }
 
+  // Status and error checking
   function isRetryableStatus(status, config) {
     if (status === 0) return false;
-    if (status === 401 || status === 403 || status === 404) return false;
+    if (
+      status === HTTP_STATUS_UNAUTHORIZED ||
+      status === HTTP_STATUS_FORBIDDEN ||
+      status === HTTP_STATUS_NOT_FOUND
+    ) {
+      return false;
+    }
     if (config.retryableStatuses.includes(status)) return true;
-    if (config.retryOnServerError && status >= 500) return true;
+    if (config.retryOnServerError && status >= HTTP_STATUS_SERVER_ERROR_MIN) return true;
     return false;
   }
 
@@ -90,12 +110,14 @@
     return false;
   }
 
+  // Timeout handling
   async function withTimeout(promise, timeoutMs, context) {
     if (!timeoutMs || timeoutMs <= 0) return promise;
-
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(createTimeoutError(timeoutMs, context)), timeoutMs);
+      timeoutId = setTimeout(() => {
+        reject(createTimeoutError(timeoutMs, context));
+      }, timeoutMs);
     });
 
     try {
@@ -105,107 +127,171 @@
     }
   }
 
+  // Abort handling
+  function createAbortError() {
+    const abortError = new Error('Request aborted');
+    abortError.name = 'AbortError';
+    return abortError;
+  }
+
+  function toError(error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  function bindAbortSignal(signal, controller, abortFromSignal) {
+    if (!signal) return () => {};
+    if (signal.aborted) {
+      controller.abort();
+      return () => {};
+    }
+    signal.addEventListener('abort', abortFromSignal, { once: true });
+    return () => {
+      signal.removeEventListener('abort', abortFromSignal);
+    };
+  }
+
+  function createAttemptAbortState(options, config) {
+    const controller = new AbortController();
+    let timedOut = false;
+    const abortFromSignal = () => {
+      controller.abort();
+    };
+    const unbindAbortSignal = bindAbortSignal(options.signal, controller, abortFromSignal);
+    const timeoutId =
+      config.timeoutMs && config.timeoutMs > 0
+        ? setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+          }, config.timeoutMs)
+        : null;
+
+    return {
+      controller,
+      isTimedOut: () => timedOut,
+      cleanup: () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        unbindAbortSignal();
+      },
+    };
+  }
+
+  // Attempt execution
+  async function executeAttempt({ url, options, config, fetcher }) {
+    const abortState = createAttemptAbortState(options, config);
+    try {
+      const response = await fetcher(url, { ...options, signal: abortState.controller.signal });
+      return { response, error: null };
+    } catch (error) {
+      const timedOut = abortState.isTimedOut();
+      const normalizedError =
+        isAbortError(error) && timedOut
+          ? createTimeoutError(config.timeoutMs, config.context)
+          : toError(error);
+      return {
+        response: null,
+        error: normalizedError,
+        externalAbort: Boolean(options.signal?.aborted && !timedOut),
+      };
+    } finally {
+      abortState.cleanup();
+    }
+  }
+
+  // Retry logic
+  function resolveAttemptResult({ attemptResult, config, state }) {
+    if (attemptResult.response) {
+      state.lastResponse = attemptResult.response;
+      if (attemptResult.response.ok || !isRetryableStatus(attemptResult.response.status, config)) {
+        return { returnResponse: attemptResult.response };
+      }
+      state.lastError = new Error(
+        `HTTP ${attemptResult.response.status}: ${attemptResult.response.statusText}`,
+      );
+      return {};
+    }
+
+    state.lastError = attemptResult.error;
+    if (attemptResult.externalAbort) {
+      return { throwError: state.lastError };
+    }
+    return {};
+  }
+
+  function shouldRetryAttempt({ state, attempt, maxAttempts, config }) {
+    if (attempt >= maxAttempts - 1) return false;
+    if (state.lastResponse && isRetryableStatus(state.lastResponse.status, config)) {
+      return true;
+    }
+    return shouldRetryError(state.lastError, config);
+  }
+
+  function resolveRetryDelay(lastResponse, attempt, config) {
+    const retryAfterMs = lastResponse ? parseRetryAfterMs(lastResponse) : undefined;
+    if (typeof retryAfterMs === 'number') return retryAfterMs;
+    return calculateRetryDelay(attempt, config);
+  }
+
+  function emitRetry(config, { attempt, delayMs, status, error }) {
+    if (typeof config.onRetry !== 'function') return;
+    config.onRetry({
+      attempt: attempt + 1,
+      maxRetries: config.maxRetries,
+      delayMs,
+      status,
+      error,
+    });
+  }
+
+  function resolveTerminalResult(state, afterRetries = false) {
+    if (state.lastResponse) return state.lastResponse;
+    if (state.lastError) throw state.lastError;
+    throw new Error(afterRetries ? 'Request failed after retries' : 'Request failed');
+  }
+
+  // Main retry function
   async function fetchWithRetry(url, options = {}, configOverrides = {}) {
     const config = normalizeConfig(configOverrides);
-    const fetcher = config.fetcher || root.fetch;
+    const fetcher = config.fetcher || globalThis.fetch;
     if (typeof fetcher !== 'function') {
       throw new Error('Fetch implementation is required.');
     }
 
+    const state = { lastError: null, lastResponse: null };
     const maxAttempts = Math.max(0, config.maxRetries) + 1;
-    let lastError = null;
-    let lastResponse = null;
-
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       if (options.signal?.aborted) {
-        const abortError = new Error('Request aborted');
-        abortError.name = 'AbortError';
-        throw abortError;
+        throw createAbortError();
       }
 
-      let timeoutId;
-      let timedOut = false;
-      const controller = new AbortController();
-      const abortFromSignal = () => controller.abort();
+      const attemptResult = await executeAttempt({ url, options, config, fetcher });
+      const resolution = resolveAttemptResult({ attemptResult, config, state });
+      if (resolution.returnResponse) return resolution.returnResponse;
+      if (resolution.throwError) throw resolution.throwError;
 
-      if (options.signal) {
-        if (options.signal.aborted) {
-          controller.abort();
-        } else {
-          options.signal.addEventListener('abort', abortFromSignal, { once: true });
-        }
+      if (!shouldRetryAttempt({ state, attempt, maxAttempts, config })) {
+        return resolveTerminalResult(state);
       }
 
-      if (config.timeoutMs && config.timeoutMs > 0) {
-        timeoutId = setTimeout(() => {
-          timedOut = true;
-          controller.abort();
-        }, config.timeoutMs);
-      }
-
-      try {
-        const response = await fetcher(url, { ...options, signal: controller.signal });
-        lastResponse = response;
-
-        if (response.ok || !isRetryableStatus(response.status, config)) {
-          return response;
-        }
-
-        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      } catch (error) {
-        if (isAbortError(error) && timedOut) {
-          lastError = createTimeoutError(config.timeoutMs, config.context);
-        } else {
-          lastError = error instanceof Error ? error : new Error(String(error));
-        }
-
-        if (options.signal?.aborted && !timedOut) {
-          throw lastError;
-        }
-      } finally {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (options.signal) {
-          options.signal.removeEventListener('abort', abortFromSignal);
-        }
-      }
-
-      const shouldRetry =
-        lastResponse && isRetryableStatus(lastResponse.status, config)
-          ? true
-          : shouldRetryError(lastError, config);
-
-      if (!shouldRetry || attempt >= maxAttempts - 1) {
-        if (lastResponse) {
-          return lastResponse;
-        }
-        throw lastError || new Error('Request failed');
-      }
-
-      const retryAfterMs = lastResponse ? parseRetryAfterMs(lastResponse) : undefined;
-      const delayMs =
-        typeof retryAfterMs === 'number' ? retryAfterMs : calculateRetryDelay(attempt, config);
-
-      if (typeof config.onRetry === 'function') {
-        config.onRetry({
-          attempt: attempt + 1,
-          maxRetries: config.maxRetries,
-          delayMs,
-          status: lastResponse?.status,
-          error: lastError,
-        });
-      }
-
+      const delayMs = resolveRetryDelay(state.lastResponse, attempt, config);
+      emitRetry(config, {
+        attempt,
+        delayMs,
+        status: state.lastResponse?.status,
+        error: state.lastError,
+      });
       await sleep(delayMs);
     }
 
-    if (lastResponse) return lastResponse;
-    throw lastError || new Error('Request failed after retries');
+    return resolveTerminalResult(state, true);
   }
 
-  root.LockInNetworkRetry = {
-    DEFAULT_RETRY_CONFIG,
-    fetchWithRetry,
-    withTimeout,
-    parseRetryAfterMs,
-  };
+  // Export to window global for content script usage
+  if (typeof window !== 'undefined') {
+    window.LockInNetworkRetry = {
+      DEFAULT_RETRY_CONFIG,
+      fetchWithRetry,
+      withTimeout,
+      parseRetryAfterMs,
+    };
+  }
 })();

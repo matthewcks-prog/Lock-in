@@ -1,8 +1,12 @@
 const { AppError } = require('../../errors');
 const { TRANSCRIPT_PROCESSING_STALE_MINUTES } = require('../../config');
+const { SIXTY, THOUSAND } = require('../../constants/numbers');
 const { coerceNumber } = require('./transcriptJobUtils');
 const { JOB_STATUS } = require('./transcriptJobConstants');
 const { parseExpectedTotalChunks } = require('./transcriptJobValidation');
+const HTTP_STATUS = require('../../constants/httpStatus');
+
+const MINUTES_TO_MILLISECONDS = SIXTY * THOUSAND;
 
 async function updateJobUploadState({
   repo,
@@ -40,7 +44,7 @@ async function updateJobUploadState({
 
 function isProcessingStale(job) {
   if (!TRANSCRIPT_PROCESSING_STALE_MINUTES || !job) return false;
-  const cutoff = Date.now() - TRANSCRIPT_PROCESSING_STALE_MINUTES * 60 * 1000;
+  const cutoff = Date.now() - TRANSCRIPT_PROCESSING_STALE_MINUTES * MINUTES_TO_MILLISECONDS;
   const heartbeat = job.processing_heartbeat_at
     ? new Date(job.processing_heartbeat_at).getTime()
     : null;
@@ -101,7 +105,7 @@ async function ensureAllChunksPresent(repo, jobId, expectedChunks) {
     throw new AppError(
       'Expected total chunks not provided.',
       'TRANSCRIPT_TOTAL_CHUNKS_REQUIRED',
-      400,
+      HTTP_STATUS.BAD_REQUEST,
     );
   }
 
@@ -111,10 +115,15 @@ async function ensureAllChunksPresent(repo, jobId, expectedChunks) {
     stats.minIndex !== 0 ||
     stats.maxIndex !== expectedChunks - 1
   ) {
-    throw new AppError('Upload incomplete: missing chunks.', 'TRANSCRIPT_MISSING_CHUNKS', 400, {
-      expectedTotalChunks: expectedChunks,
-      receivedChunks: stats.count,
-    });
+    throw new AppError(
+      'Upload incomplete: missing chunks.',
+      'TRANSCRIPT_MISSING_CHUNKS',
+      HTTP_STATUS.BAD_REQUEST,
+      {
+        expectedTotalChunks: expectedChunks,
+        receivedChunks: stats.count,
+      },
+    );
   }
 }
 

@@ -19,6 +19,14 @@ const MAX_SELECTION_LENGTH = 50000;
 const MAX_PAGE_CONTEXT_LENGTH = 100000;
 const MAX_USER_MESSAGE_LENGTH = 10000;
 const MAX_HISTORY_MESSAGES = 50;
+const MAX_URL_LENGTH = 2000;
+const MAX_COURSE_CODE_LENGTH = 50;
+const MAX_LANGUAGE_CODE_LENGTH = 10;
+const MAX_ATTACHMENTS = 10;
+const MAX_IDEMPOTENCY_KEY_LENGTH = 100;
+const MAX_TITLE_LENGTH = 200;
+const MAX_INITIAL_MESSAGE_LENGTH = 5000;
+const MAX_CHAT_LIST_LIMIT = 100;
 
 /**
  * Chat message schema for history array
@@ -62,21 +70,29 @@ const lockinRequestSchema = z
       .max(MAX_PAGE_CONTEXT_LENGTH, `Context too long (max ${MAX_PAGE_CONTEXT_LENGTH} chars)`)
       .optional()
       .nullable(),
-    pageUrl: z.string().max(2000, 'URL too long').optional().nullable(),
-    courseCode: z.string().max(50, 'Course code too long').optional().nullable(),
+    pageUrl: z.string().max(MAX_URL_LENGTH, 'URL too long').optional().nullable(),
+    courseCode: z
+      .string()
+      .max(MAX_COURSE_CODE_LENGTH, 'Course code too long')
+      .optional()
+      .nullable(),
     chatId: uuidSchema.optional().nullable(),
     language: z
       .string()
-      .max(10, 'Language code too long')
+      .max(MAX_LANGUAGE_CODE_LENGTH, 'Language code too long')
       .optional()
       .nullable()
       .transform((val) => val?.toLowerCase()),
     attachments: z
       .array(uuidSchema)
-      .max(10, 'Maximum 10 attachments allowed')
+      .max(MAX_ATTACHMENTS, `Maximum ${MAX_ATTACHMENTS} attachments allowed`)
       .optional()
       .default([]),
-    idempotencyKey: z.string().max(100, 'Idempotency key too long').optional().nullable(),
+    idempotencyKey: z
+      .string()
+      .max(MAX_IDEMPOTENCY_KEY_LENGTH, 'Idempotency key too long')
+      .optional()
+      .nullable(),
   })
   .refine(
     (data) => {
@@ -108,8 +124,12 @@ const chatIdParamSchema = z.object({
  * POST /api/chats
  */
 const createChatSessionSchema = z.object({
-  title: z.string().max(200, 'Title too long').optional().nullable(),
-  initialMessage: z.string().max(5000, 'Initial message too long').optional().nullable(),
+  title: z.string().max(MAX_TITLE_LENGTH, 'Title too long').optional().nullable(),
+  initialMessage: z
+    .string()
+    .max(MAX_INITIAL_MESSAGE_LENGTH, 'Initial message too long')
+    .optional()
+    .nullable(),
 });
 
 /**
@@ -117,7 +137,7 @@ const createChatSessionSchema = z.object({
  * GET /api/chats
  */
 const listChatsQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_CHAT_LIST_LIMIT).optional(),
   cursor: z.string().optional(),
 });
 

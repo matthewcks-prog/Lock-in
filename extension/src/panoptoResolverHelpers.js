@@ -21,8 +21,10 @@
       .trim();
   }
 
-  const PANOPTO_MEDIA_EXTENSIONS = ['.mp4', '.m4a', '.mp3'];
-  const PANOPTO_MEDIA_HINTS = ['/podcast/', 'podcast', 'download'];
+  const PANOPTO_MEDIA_EXTENSIONS = ['.mp4', '.m4a', '.mp3'],
+    PANOPTO_MEDIA_HINTS = ['/podcast/', 'podcast', 'download'],
+    MAX_TRUNCATED_URL_LENGTH = 120,
+    PODCAST_PATH_CANDIDATE_SCORE = 3;
 
   function parseBooleanConfig(value) {
     if (typeof value === 'boolean') return value;
@@ -47,8 +49,8 @@
 
   function truncateUrl(value) {
     if (!value || typeof value !== 'string') return '';
-    if (value.length <= 120) return value;
-    return `${value.slice(0, 120)}...`;
+    if (value.length <= MAX_TRUNCATED_URL_LENGTH) return value;
+    return `${value.slice(0, MAX_TRUNCATED_URL_LENGTH)}...`;
   }
 
   function createPanoptoResolverLogger(jobId, debugEnabled) {
@@ -120,16 +122,8 @@
     }
   }
 
-  function extractPanoptoMediaCandidatesFromHtml(html, baseUrl) {
+  function extractUrlCandidatesFromHtml(html, baseUrl) {
     const candidates = [];
-    let podcastDisabled = false;
-    let downloadEnabled = false;
-    let disabledReason = null;
-
-    if (!html || typeof html !== 'string') {
-      return { candidates, podcastDisabled, downloadEnabled, disabledReason };
-    }
-
     const urlMatches = html.match(/https?:\/\/[^"'\\s<>]+/gi) || [];
     for (const match of urlMatches) {
       if (!looksLikePanoptoMediaUrl(match)) continue;
@@ -138,7 +132,11 @@
         candidates.push({ url: normalized, source: 'html:url' });
       }
     }
+    return candidates;
+  }
 
+  function extractJsonCandidatesFromHtml(html, baseUrl) {
+    const candidates = [];
     const jsonMatches = html.match(/"(?:DownloadUrl|downloadUrl)"\s*:\s*"([^"]+)"/gi) || [];
     for (const match of jsonMatches) {
       const [, urlRaw] = match.match(/"([^"]+)"/) || [];
@@ -150,23 +148,41 @@
         candidates.push({ url: normalized, source: 'html:json' });
       }
     }
+    return candidates;
+  }
 
-    if (/PodcastDownloadEnabled\s*:\s*false/i.test(html)) {
-      podcastDisabled = true;
-      disabledReason = 'Podcast downloads disabled';
-    }
-    if (/DownloadEnabled\s*:\s*true/i.test(html)) {
-      downloadEnabled = true;
-    }
+  function resolveDownloadFlags(html) {
+    const podcastDisabled = /PodcastDownloadEnabled\s*:\s*false/i.test(html);
+    const downloadEnabled = /DownloadEnabled\s*:\s*true/i.test(html);
+    return {
+      podcastDisabled,
+      downloadEnabled,
+      disabledReason: podcastDisabled ? 'Podcast downloads disabled' : null,
+    };
+  }
 
-    return { candidates, podcastDisabled, downloadEnabled, disabledReason };
+  function extractPanoptoMediaCandidatesFromHtml(html, baseUrl) {
+    if (!html || typeof html !== 'string') {
+      return {
+        candidates: [],
+        podcastDisabled: false,
+        downloadEnabled: false,
+        disabledReason: null,
+      };
+    }
+    const candidates = [
+      ...extractUrlCandidatesFromHtml(html, baseUrl),
+      ...extractJsonCandidatesFromHtml(html, baseUrl),
+    ];
+    const flags = resolveDownloadFlags(html);
+    return { candidates, ...flags };
   }
 
   function scorePanoptoCandidate(candidate) {
     if (!candidate?.url) return 0;
     const url = candidate.url.toLowerCase();
     let score = 0;
-    if (url.includes('/podcast/')) score += 3;
+    if (url.includes('/podcast/')) score += PODCAST_PATH_CANDIDATE_SCORE;
     if (url.includes('download')) score += 2;
     if (url.endsWith('.mp4')) score += 2;
     if (url.endsWith('.m4a') || url.endsWith('.mp3')) score += 1;
@@ -186,6 +202,47 @@
     return deduped.sort((a, b) => scorePanoptoCandidate(b) - scorePanoptoCandidate(a));
   }
 
+  function resolvePanoptoContextUrl({ providedUrl, tenant, deliveryId, urlBuilder }) {
+    if (providedUrl) return providedUrl;
+    if (!tenant || !deliveryId || typeof urlBuilder !== 'function') {
+      return null;
+    }
+    return urlBuilder(tenant, deliveryId);
+  }
+
+  function resolvePanoptoContext({
+    tenant,
+    deliveryId,
+    viewerUrl,
+    embedUrl,
+    extractor,
+    viewerUrlBuilder,
+    embedUrlBuilder,
+  }) {
+    const info = typeof extractor === 'function' ? extractor(embedUrl || viewerUrl || '') : null;
+    const resolvedTenant = tenant || info?.tenant || null;
+    const resolvedDeliveryId = deliveryId || info?.deliveryId || null;
+    const resolvedViewerUrl = resolvePanoptoContextUrl({
+      providedUrl: viewerUrl,
+      tenant: resolvedTenant,
+      deliveryId: resolvedDeliveryId,
+      urlBuilder: viewerUrlBuilder,
+    });
+    const resolvedEmbedUrl = resolvePanoptoContextUrl({
+      providedUrl: embedUrl,
+      tenant: resolvedTenant,
+      deliveryId: resolvedDeliveryId,
+      urlBuilder: embedUrlBuilder,
+    });
+    return {
+      resolvedTenant,
+      resolvedDeliveryId,
+      resolvedViewerUrl,
+      resolvedEmbedUrl,
+      primaryUrl: resolvedViewerUrl || resolvedEmbedUrl,
+    };
+  }
+
   if (typeof self !== 'undefined') {
     self.LockInPanoptoResolverHelpers = {
       getConfigValue,
@@ -200,6 +257,7 @@
       extractPanoptoMediaCandidatesFromHtml,
       scorePanoptoCandidate,
       dedupeAndSortPanoptoCandidates,
+      resolvePanoptoContext,
     };
   }
 })();

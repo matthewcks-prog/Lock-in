@@ -7,50 +7,44 @@
     background: var(--lockin-color-surface);
   }
 
+  /* Notes header: thin wrapper with no border.
+     In current-view the context-bar supplies the bottom border;
+     in all-notes view the body separates visually via its own padding/bg. */
   #lockin-root .lockin-notes-header {
     display: flex;
     flex-direction: column;
-    gap: var(--lockin-size-8);
-    padding: var(--lockin-size-10) var(--lockin-size-12);
     background: var(--lockin-color-surface);
+  }
+
+  /* Tab-toolbar border removed inside notes header to prevent a double-line
+     between the toggle row and the context-bar / body content. */
+  #lockin-root .lockin-notes-header > .lockin-tab-toolbar {
+    border-bottom: none;
+  }
+
+  /* Context bar: course info + action buttons, only visible in current view */
+  #lockin-root .lockin-notes-context-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-6) var(--lockin-size-12);
     border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
   }
 
-  #lockin-root .lockin-notes-header.lockin-notes-header-row {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--lockin-size-12);
-    padding: var(--lockin-size-10) var(--lockin-size-14);
-  }
-
-  #lockin-root .lockin-notes-header-left {
+  #lockin-root .lockin-notes-info-bar {
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
     gap: var(--lockin-size-1);
     min-width: 0;
-  }
-
-  #lockin-root .lockin-notes-header-center {
-    display: flex;
-    flex: 1;
-    align-items: center;
-    justify-content: center;
-  }
-
-  #lockin-root .lockin-notes-header-right {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
+    overflow: hidden;
   }
 
   #lockin-root .lockin-notes-course-row {
     display: flex;
     align-items: center;
     gap: var(--lockin-size-4);
-    font-size: var(--lockin-text-sm);
+    font-size: var(--lockin-text-xs);
     color: var(--lockin-color-text-emphasis);
   }
 
@@ -61,7 +55,7 @@
   }
 
   #lockin-root .lockin-notes-course-value {
-    font-size: var(--lockin-text-sm);
+    font-size: var(--lockin-text-xs);
     font-weight: 700;
     color: var(--lockin-color-text-primary);
   }
@@ -89,8 +83,12 @@
 
   #lockin-root .lockin-notes-toggle {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
     gap: var(--lockin-size-2);
+    box-sizing: border-box;
+    /* Same height as the hamburger button so toolbar rows match exactly */
+    height: var(--lockin-size-28);
     padding: var(--lockin-size-2);
     background: var(--lockin-color-surface-muted);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
@@ -98,8 +96,8 @@
   }
 
   #lockin-root .lockin-notes-toggle-btn {
-    padding: var(--lockin-size-6) var(--lockin-size-10);
-    font-size: var(--lockin-text-sm);
+    padding: var(--lockin-size-4) var(--lockin-size-8);
+    font-size: var(--lockin-text-xs);
     font-weight: 600;
     white-space: nowrap;
     color: var(--lockin-color-text-secondary);
@@ -112,6 +110,12 @@
 
   #lockin-root .lockin-notes-toggle-btn:hover {
     color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-rgba-0-0-0-003);
+  }
+
+  #lockin-root .lockin-notes-toggle-btn:focus-visible {
+    outline: var(--lockin-size-2) solid var(--lockin-color-accent);
+    outline-offset: var(--lockin-size-2);
   }
 
   #lockin-root .lockin-notes-toggle-btn.is-active {
@@ -120,23 +124,53 @@
     box-shadow: var(--lockin-shadow-08);
   }
 
-  #lockin-root .lockin-btn-primary {
-    padding: var(--lockin-size-6) var(--lockin-size-12);
-    font-size: var(--lockin-text-sm);
+  /* Unified "+ New" button shared by both Chat and Notes */
+  #lockin-root .lockin-btn-new {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    padding: var(--lockin-size-3) var(--lockin-size-8);
+    font-size: var(--lockin-text-xs);
     font-weight: 600;
+    line-height: var(--lockin-leading-snug);
     white-space: nowrap;
     color: var(--lockin-color-surface);
-    background: var(--lockin-color-text-primary);
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-brand) 0%,
+      var(--lockin-color-brand-gradient-end) 100%
+    );
     border: none;
-    border-radius: var(--lockin-radius-md);
+    border-radius: var(--lockin-radius-xl);
+    box-shadow: var(--lockin-shadow-06);
     transition:
-      opacity var(--lockin-duration-150) var(--lockin-ease-default),
-      background var(--lockin-duration-150) var(--lockin-ease-default);
+      filter var(--lockin-duration-150) var(--lockin-ease-default),
+      box-shadow var(--lockin-duration-150) var(--lockin-ease-default),
+      transform var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
 
-  #lockin-root .lockin-btn-primary:hover {
-    background: var(--lockin-color-text-strong);
+  #lockin-root .lockin-btn-new:hover {
+    box-shadow: var(--lockin-shadow-10);
+    filter: brightness(1.1);
+  }
+
+  #lockin-root .lockin-btn-new:active {
+    box-shadow: var(--lockin-shadow-03);
+    transform: scale(0.97);
+  }
+
+  #lockin-root .lockin-btn-new:focus-visible {
+    outline: var(--lockin-size-2) solid var(--lockin-color-accent);
+    outline-offset: var(--lockin-size-2);
+  }
+
+  #lockin-root .lockin-btn-new:disabled {
+    box-shadow: none;
+    opacity: 0.5;
+    transform: none;
+    cursor: not-allowed;
   }
 
   #lockin-root .lockin-btn-ghost {

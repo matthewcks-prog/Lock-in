@@ -2,7 +2,7 @@ import { CHAT_TAB_ID, NOTES_TAB_ID, TOOL_TAB_ID } from './constants';
 import type { SidebarTabId } from './types';
 
 export function isValidUUID(value: string | null | undefined): boolean {
-  if (!value) return false;
+  if (value === undefined || value === null || value.length === 0) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 

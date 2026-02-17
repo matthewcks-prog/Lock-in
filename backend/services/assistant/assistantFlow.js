@@ -12,6 +12,38 @@ const {
 
 const DEFAULT_ATTACHMENT_TITLE_SEED = 'Attachment-based question';
 
+function normalizeTrimmedString(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+}
+
+function normalizeAttachmentIds(attachments) {
+  if (!Array.isArray(attachments)) {
+    return [];
+  }
+  return attachments;
+}
+
+function resolveUserInputText({
+  trimmedUserMessage,
+  trimmedSelection,
+  hasAttachmentIds,
+  attachmentTitleSeed,
+}) {
+  if (trimmedUserMessage) {
+    return trimmedUserMessage;
+  }
+  if (trimmedSelection) {
+    return trimmedSelection;
+  }
+  if (hasAttachmentIds) {
+    return attachmentTitleSeed;
+  }
+  return '';
+}
+
 /**
  * Build normalized request context for assistant services.
  * Pure transformation from payload to derived values.
@@ -37,12 +69,16 @@ function buildRequestContext(payload = {}, attachmentTitleSeed = DEFAULT_ATTACHM
   const isInitialRequest = chatHistory.length === 0;
   const effectiveMode = isInitialRequest ? 'explain' : 'general';
 
-  const trimmedSelection = typeof selection === 'string' ? selection.trim() : '';
-  const trimmedUserMessage = newUserMessage ? newUserMessage.trim() : '';
-  const hasAttachmentIds = Array.isArray(attachments) && attachments.length > 0;
-
-  const userInputText =
-    trimmedUserMessage || trimmedSelection || (hasAttachmentIds ? attachmentTitleSeed : '');
+  const trimmedSelection = normalizeTrimmedString(selection);
+  const trimmedUserMessage = normalizeTrimmedString(newUserMessage);
+  const attachmentIds = normalizeAttachmentIds(attachments);
+  const hasAttachmentIds = attachmentIds.length > 0;
+  const userInputText = resolveUserInputText({
+    trimmedUserMessage,
+    trimmedSelection,
+    hasAttachmentIds,
+    attachmentTitleSeed,
+  });
 
   const initialTitle = buildInitialChatTitle(userInputText || '');
   const firstUserMessage = extractFirstUserMessage(chatHistory);
@@ -57,7 +93,7 @@ function buildRequestContext(payload = {}, attachmentTitleSeed = DEFAULT_ATTACHM
     pageUrl,
     courseCode,
     language,
-    attachments,
+    attachments: attachmentIds,
     isInitialRequest,
     effectiveMode,
     trimmedSelection,

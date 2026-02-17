@@ -8,7 +8,8 @@ const actEnvironment = globalThis as typeof globalThis & {
 };
 actEnvironment.IS_REACT_ACT_ENVIRONMENT = true;
 
-if (!window.matchMedia) {
+const hasMatchMedia = 'matchMedia' in window && typeof window.matchMedia === 'function';
+if (!hasMatchMedia) {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn().mockImplementation((query: string) => ({
@@ -26,7 +27,9 @@ if (!window.matchMedia) {
 
 window.scrollTo = vi.fn();
 
-if (!navigator.clipboard) {
+const hasClipboard =
+  'clipboard' in navigator && navigator.clipboard !== undefined && navigator.clipboard !== null;
+if (!hasClipboard) {
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: {
@@ -35,11 +38,11 @@ if (!navigator.clipboard) {
   });
 }
 
-if (!URL.createObjectURL) {
+if (typeof URL.createObjectURL !== 'function') {
   URL.createObjectURL = vi.fn(() => 'blob:mock');
 }
 
-if (!URL.revokeObjectURL) {
+if (typeof URL.revokeObjectURL !== 'function') {
   URL.revokeObjectURL = vi.fn();
 }
 

@@ -17,7 +17,10 @@ const {
   MIN_SELECTION_PRIMARY_CHARS,
   ATTACHMENT_ONLY_SELECTION_PLACEHOLDER,
 } = require('./constants');
+const { FOUR, SIX } = require('../../constants/numbers');
 const { sanitizeHistory } = require('./history');
+
+const MAX_IMAGE_ATTACHMENTS = FOUR;
 
 /**
  * Normalize selection text
@@ -35,7 +38,7 @@ function normalizeSelection(selection) {
  * @param {number} maxHeadings
  * @returns {string[]}
  */
-function extractHeadingLines(text, maxHeadings = 6) {
+function extractHeadingLines(text, maxHeadings = SIX) {
   const headings = [];
   const lines = text.split(/\r?\n/);
   for (const line of lines) {
@@ -124,6 +127,35 @@ function resolveUserQuestion(newUserMessage) {
     hasUserQuestion: trimmed.length > 0,
     userQuestion: trimmed,
   };
+}
+
+function resolveBuildOptions(options = {}) {
+  const {
+    selection,
+    pageContext,
+    pageUrl,
+    courseCode,
+    language = 'en',
+    chatHistory = [],
+    newUserMessage,
+    attachments = [],
+  } = options;
+  return {
+    selection,
+    pageContext,
+    pageUrl,
+    courseCode,
+    language,
+    chatHistory,
+    newUserMessage,
+    attachments,
+  };
+}
+
+function assertPromptContext(selectionContext) {
+  if (!selectionContext.hasSelection && !selectionContext.hasAttachments) {
+    throw new Error('Selection or attachments are required to generate a response');
+  }
 }
 
 /**
@@ -259,7 +291,7 @@ function buildUserMessage(userTextContent, attachments) {
   }
 
   const contentParts = [{ type: 'text', text: userTextContent }];
-  for (const img of imageAttachments.slice(0, 4)) {
+  for (const img of imageAttachments.slice(0, MAX_IMAGE_ATTACHMENTS)) {
     contentParts.push({
       type: 'image_url',
       image_url: {
@@ -298,18 +330,15 @@ function buildStructuredStudyMessages(options) {
     pageContext,
     pageUrl,
     courseCode,
-    language = 'en',
-    chatHistory = [],
+    language,
+    chatHistory,
     newUserMessage,
-    attachments = [],
-  } = options;
+    attachments,
+  } = resolveBuildOptions(options);
 
   const selectionContext = resolveSelectionContext(selection, attachments);
   const userQuestion = resolveUserQuestion(newUserMessage);
-
-  if (!selectionContext.hasSelection && !selectionContext.hasAttachments) {
-    throw new Error('Selection or attachments are required to generate a response');
-  }
+  assertPromptContext(selectionContext);
 
   const systemPrompt = buildSystemPrompt({
     focusInstruction: buildFocusInstruction({

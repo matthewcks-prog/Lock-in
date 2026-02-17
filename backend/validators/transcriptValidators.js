@@ -11,6 +11,10 @@ const { z } = require('zod');
 
 // UUID validation helper
 const uuidSchema = z.string().uuid({ message: 'Must be a valid UUID' });
+const MAX_VIDEO_ID_LENGTH = 500;
+const MAX_URL_LENGTH = 2000;
+const MIN_TOTAL_CHUNKS = 1;
+const MIN_SEGMENT_TIME = 0;
 
 /**
  * Schema for job ID parameter
@@ -25,8 +29,8 @@ const jobIdParamSchema = z.object({
  * POST /api/transcripts/jobs
  */
 const createJobSchema = z.object({
-  videoId: z.string().min(1, 'Video ID is required').max(500, 'Video ID too long'),
-  videoUrl: z.string().url('Invalid video URL').max(2000, 'URL too long'),
+  videoId: z.string().min(1, 'Video ID is required').max(MAX_VIDEO_ID_LENGTH, 'Video ID too long'),
+  videoUrl: z.string().url('Invalid video URL').max(MAX_URL_LENGTH, 'URL too long'),
   provider: z
     .enum(['panopto', 'youtube', 'vimeo', 'custom'], {
       errorMap: () => ({ message: 'Provider must be one of: panopto, youtube, vimeo, custom' }),
@@ -35,7 +39,7 @@ const createJobSchema = z.object({
     .default('custom'),
   metadata: z
     .object({
-      title: z.string().max(500).optional(),
+      title: z.string().max(MAX_VIDEO_ID_LENGTH).optional(),
       duration: z.number().positive().optional(),
     })
     .passthrough()
@@ -47,7 +51,7 @@ const createJobSchema = z.object({
  * POST /api/transcripts/jobs/:id/finalize
  */
 const finalizeJobSchema = z.object({
-  totalChunks: z.coerce.number().int().min(1, 'At least one chunk required'),
+  totalChunks: z.coerce.number().int().min(MIN_TOTAL_CHUNKS, 'At least one chunk required'),
   checksum: z.string().optional(),
 });
 
@@ -56,18 +60,18 @@ const finalizeJobSchema = z.object({
  * POST /api/transcripts/cache
  */
 const cacheTranscriptSchema = z.object({
-  videoId: z.string().min(1, 'Video ID is required').max(500),
-  videoUrl: z.string().url('Invalid video URL').max(2000),
+  videoId: z.string().min(1, 'Video ID is required').max(MAX_VIDEO_ID_LENGTH),
+  videoUrl: z.string().url('Invalid video URL').max(MAX_URL_LENGTH),
   transcript: z.object({
     segments: z
       .array(
         z.object({
-          start: z.number().min(0),
-          end: z.number().min(0),
+          start: z.number().min(MIN_SEGMENT_TIME),
+          end: z.number().min(MIN_SEGMENT_TIME),
           text: z.string(),
         }),
       )
-      .min(1, 'At least one segment required'),
+      .min(MIN_TOTAL_CHUNKS, 'At least one segment required'),
     language: z.string().optional(),
     source: z.string().optional(),
   }),

@@ -20,6 +20,10 @@ const DEFAULT_MODEL = 'llama-3.1-8b-instant';
 const FALLBACK_MODEL = 'llama-3.3-70b-versatile';
 const BASE_URL = 'https://api.groq.com/openai/v1';
 const REQUEST_TIMEOUT_MS = 60000;
+const DEFAULT_TEMPERATURE = 0.7;
+const DEFAULT_MAX_TOKENS = 1024;
+const ERROR_DETAILS_MAX_LENGTH = 200;
+const LONG_INPUT_THRESHOLD = 3000;
 
 /**
  * Groq API adapter (OpenAI-compatible)
@@ -44,8 +48,8 @@ class GroqAdapter extends BaseAdapter {
     const requestBody = {
       model,
       messages: this._formatMessages(messages),
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 1024,
+      temperature: options.temperature ?? DEFAULT_TEMPERATURE,
+      max_tokens: options.maxTokens ?? DEFAULT_MAX_TOKENS,
     };
 
     if (options.responseFormat?.type === 'json_object') {
@@ -59,9 +63,9 @@ class GroqAdapter extends BaseAdapter {
     if (!errorBody) return '';
     try {
       const parsed = JSON.parse(errorBody);
-      return parsed.error?.message || errorBody.substring(0, 200);
+      return parsed.error?.message || errorBody.substring(0, ERROR_DETAILS_MAX_LENGTH);
     } catch {
-      return errorBody.substring(0, 200);
+      return errorBody.substring(0, ERROR_DETAILS_MAX_LENGTH);
     }
   }
 
@@ -201,7 +205,7 @@ class GroqAdapter extends BaseAdapter {
     ];
 
     // Long input threshold (likely lecture chunk)
-    const isLongInput = userMessage.length > 3000;
+    const isLongInput = userMessage.length > LONG_INPUT_THRESHOLD;
 
     // Check for structured output requirements
     const needsStructuredOutput =

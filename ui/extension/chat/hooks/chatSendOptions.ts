@@ -13,7 +13,7 @@ export interface SendChatMessageOptions {
 export type SendChatOptionsInput = 'selection' | 'followup' | SendChatMessageOptions;
 
 export function coerceSendOptions(options?: SendChatOptionsInput): SendChatMessageOptions {
-  if (!options) return {};
+  if (options === undefined) return {};
   if (typeof options === 'string') {
     return { source: options };
   }

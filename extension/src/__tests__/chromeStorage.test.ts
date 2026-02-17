@@ -7,40 +7,60 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { chromeStorage, chromeLocalStorage } from '../chromeStorage';
 
+type StorageItems = Record<string, unknown>;
+type StorageGetCallback = (items: StorageItems) => void;
+type StorageGetFn = (keys: string | string[], callback: StorageGetCallback) => void;
+type StorageSetFn = (data: StorageItems, callback: () => void) => void;
+type StorageRemoveFn = (keys: string | string[], callback: () => void) => void;
+type StorageChangeListener = (
+  changes: Record<string, chrome.storage.StorageChange>,
+  areaName: string,
+) => void;
+
 // Mock Chrome APIs
 const mockChromeStorageSync = {
-  get: vi.fn(),
-  set: vi.fn(),
-  remove: vi.fn(),
+  get: vi.fn<StorageGetFn>(),
+  set: vi.fn<StorageSetFn>(),
+  remove: vi.fn<StorageRemoveFn>(),
 };
 
 const mockChromeStorageLocal = {
-  get: vi.fn(),
-  set: vi.fn(),
-  remove: vi.fn(),
+  get: vi.fn<StorageGetFn>(),
+  set: vi.fn<StorageSetFn>(),
+  remove: vi.fn<StorageRemoveFn>(),
 };
 
 const mockChromeStorageOnChanged = {
-  addListener: vi.fn(),
-  removeListener: vi.fn(),
+  addListener: vi.fn<(listener: StorageChangeListener) => void>(),
+  removeListener: vi.fn<(listener: StorageChangeListener) => void>(),
 };
+
+let registeredStorageChangeListener: StorageChangeListener | null = null;
 
 // Setup global chrome mock
 beforeEach(() => {
-  // @ts-expect-error - Mocking Chrome APIs
   global.chrome = {
     storage: {
       sync: mockChromeStorageSync,
       local: mockChromeStorageLocal,
       onChanged: mockChromeStorageOnChanged,
-    },
+    } as unknown as typeof chrome.storage,
     runtime: {
-      lastError: null,
-    },
-  };
+      lastError: undefined,
+    } as unknown as typeof chrome.runtime,
+  } as typeof chrome;
 
   // Reset all mocks
   vi.clearAllMocks();
+  registeredStorageChangeListener = null;
+  mockChromeStorageOnChanged.addListener.mockImplementation((listener) => {
+    registeredStorageChangeListener = listener;
+  });
+  mockChromeStorageOnChanged.removeListener.mockImplementation((listener) => {
+    if (registeredStorageChangeListener === listener) {
+      registeredStorageChangeListener = null;
+    }
+  });
   mockChromeStorageSync.get.mockImplementation((_keys, callback) => {
     callback({});
   });
@@ -89,8 +109,9 @@ describe('chromeStorage', () => {
 
     it('should reject on Chrome runtime error', async () => {
       mockChromeStorageSync.get.mockImplementation((_keys, callback) => {
-        // @ts-expect-error - Mocking Chrome error
-        global.chrome.runtime.lastError = { message: 'Storage error' };
+        (global.chrome.runtime as { lastError?: { message: string } }).lastError = {
+          message: 'Storage error',
+        };
         callback({});
       });
 
@@ -122,8 +143,9 @@ describe('chromeStorage', () => {
 
     it('should reject on Chrome runtime error', async () => {
       mockChromeStorageSync.set.mockImplementation((_data, callback) => {
-        // @ts-expect-error - Mocking Chrome error
-        global.chrome.runtime.lastError = { message: 'Storage error' };
+        (global.chrome.runtime as { lastError?: { message: string } }).lastError = {
+          message: 'Storage error',
+        };
         callback();
       });
 
@@ -157,8 +179,9 @@ describe('chromeStorage', () => {
 
     it('should reject on Chrome runtime error', async () => {
       mockChromeStorageSync.remove.mockImplementation((_keys, callback) => {
-        // @ts-expect-error - Mocking Chrome error
-        global.chrome.runtime.lastError = { message: 'Storage error' };
+        (global.chrome.runtime as { lastError?: { message: string } }).lastError = {
+          message: 'Storage error',
+        };
         callback();
       });
 
@@ -179,9 +202,8 @@ describe('chromeStorage', () => {
       const callback = vi.fn();
       chromeStorage.onChanged(callback);
 
-      const listener = mockChromeStorageOnChanged.addListener.mock.calls[0]?.[0];
-      expect(listener).toBeDefined();
-      listener?.(
+      expect(registeredStorageChangeListener).toBeDefined();
+      registeredStorageChangeListener?.(
         {
           key1: { oldValue: 'old', newValue: 'new' },
           key2: { oldValue: undefined, newValue: 'added' },
@@ -255,15 +277,14 @@ describe('chromeLocalStorage', () => {
       const callback = vi.fn();
       chromeLocalStorage.onChanged(callback);
 
-      const listener = mockChromeStorageOnChanged.addListener.mock.calls[0]?.[0];
-      expect(listener).toBeDefined();
+      expect(registeredStorageChangeListener).toBeDefined();
 
       // Should ignore sync changes
-      listener?.({ key1: { newValue: 'value' } }, 'sync');
+      registeredStorageChangeListener?.({ key1: { newValue: 'value' } }, 'sync');
       expect(callback).not.toHaveBeenCalled();
 
       // Should fire for local changes
-      listener?.({ key1: { newValue: 'value' } }, 'local');
+      registeredStorageChangeListener?.({ key1: { newValue: 'value' } }, 'local');
       expect(callback).toHaveBeenCalled();
     });
   });

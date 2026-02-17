@@ -81,12 +81,12 @@ export interface ParagraphBlock {
   alignment?: TextAlignment;
 }
 
-/**
- * A heading with level 1-6.
- */
+type HeadingTag = `h${'1' | '2' | '3' | '4' | '5' | '6'}`;
+export type HeadingLevel = HeadingTag extends `h${infer Level extends number}` ? Level : never;
+
 export interface HeadingBlock {
   type: 'heading';
-  level: 1 | 2 | 3 | 4 | 5 | 6;
+  level: HeadingLevel;
   children: InlineContent[];
   alignment?: TextAlignment;
 }

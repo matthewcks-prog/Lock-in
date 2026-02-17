@@ -106,6 +106,9 @@ function resolveProcessingStatus(
   value?: string | null,
 ): 'pending' | 'processing' | 'ready' | 'error' | null {
   switch (value) {
+    case null:
+    case undefined:
+      return null;
     case 'pending':
     case 'processing':
     case 'ready':

@@ -14,10 +14,10 @@
   #lockin-root .lockin-study-tools-btn {
     display: inline-flex;
     align-items: center;
-    gap: var(--lockin-size-6);
-    padding: var(--lockin-size-6) var(--lockin-size-12);
-    font-size: var(--lockin-text-base);
-    font-weight: 500;
+    gap: var(--lockin-size-4);
+    padding: var(--lockin-size-4) var(--lockin-size-8);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
     color: var(--lockin-color-text-body);
     background: linear-gradient(
       135deg,
@@ -40,7 +40,7 @@
   }
 
   #lockin-root .lockin-study-tools-chevron {
-    font-size: var(--lockin-text-xs);
+    font-size: 9px;
     color: var(--lockin-color-text-muted);
   }
 
@@ -63,8 +63,8 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding: var(--lockin-size-8) var(--lockin-size-12);
-    font-size: var(--lockin-text-base);
+    padding: var(--lockin-size-6) var(--lockin-size-10);
+    font-size: var(--lockin-text-xs);
     text-align: left;
     color: var(--lockin-color-text-strong);
     background: transparent;

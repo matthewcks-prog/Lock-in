@@ -2,21 +2,20 @@
  * Environment Variable Validation Utility
  *
  * Provides fail-fast validation for required environment variables.
- * Prevents runtime errors by checking configuration at startup.
- *
- * Industry best practices:
- * - Fail fast: Validate on startup, not on first use
- * - Clear errors: Tell developers exactly what's missing
- * - Environment-aware: Different requirements for dev/prod
- * - Single source of truth: One place for all validation logic
  */
+
+const ENV_DEVELOPMENT = 'development';
+const ENV_PRODUCTION = 'production';
+const PROD_ONLY_SUFFIX = '[PROD ONLY]';
+const DEV_ONLY_SUFFIX = '[DEV ONLY]';
+const SHOW_SUCCESS_FLAG = 'SHOW_ENV_VALIDATION_SUCCESS';
+const SHOW_SUCCESS_VALUE = 'true';
 
 // Simple console color helpers (no dependencies)
 const colors = {
   red: (text) => `\x1b[31m${text}\x1b[0m`,
   yellow: (text) => `\x1b[33m${text}\x1b[0m`,
   green: (text) => `\x1b[32m${text}\x1b[0m`,
-  reset: (text) => text,
 };
 
 class ValidationError extends Error {
@@ -27,118 +26,131 @@ class ValidationError extends Error {
   }
 }
 
+function getCurrentEnvironment(envValues = process.env) {
+  return envValues.NODE_ENV || ENV_DEVELOPMENT;
+}
+
+function hasNonEmptyEnvValue(key, envValues = process.env) {
+  const value = envValues[key];
+  return typeof value === 'string' ? value.trim().length > 0 : Boolean(value);
+}
+
+function formatMissingVariable(key, description, suffix = '') {
+  return suffix ? `${key} (${description}) ${suffix}` : `${key} (${description})`;
+}
+
+function collectMissingVariables(requiredMap, suffix = '', envValues = process.env) {
+  if (!requiredMap) return [];
+
+  const missing = [];
+  for (const [key, description] of Object.entries(requiredMap)) {
+    if (!hasNonEmptyEnvValue(key, envValues)) {
+      missing.push(formatMissingVariable(key, description, suffix));
+    }
+  }
+  return missing;
+}
+
+function collectAtLeastOneErrors(atLeastOneMap, envValues = process.env) {
+  if (!atLeastOneMap) return [];
+
+  const errors = [];
+  for (const [groupName, keys] of Object.entries(atLeastOneMap)) {
+    const hasAnyKey = keys.some((key) => hasNonEmptyEnvValue(key, envValues));
+    if (!hasAnyKey) {
+      errors.push(`${groupName}: At least one of [${keys.join(', ')}] must be set`);
+    }
+  }
+  return errors;
+}
+
+function normalizeWarningRules(warnings) {
+  if (Array.isArray(warnings)) {
+    return warnings.filter(
+      (rule) => typeof rule?.when === 'function' && typeof rule?.message === 'string',
+    );
+  }
+  return [];
+}
+
+function collectWarningMessages(warnings, envValues = process.env) {
+  const rules = normalizeWarningRules(warnings);
+  const messages = [];
+
+  for (const rule of rules) {
+    if (rule.when(envValues)) {
+      messages.push(rule.message);
+    }
+  }
+  return messages;
+}
+
 /**
  * Validates that required environment variables are set.
  *
  * @param {Object} schema - Validation schema
- * @param {Object} schema.required - Always required variables (all environments)
- * @param {Object} schema.requiredInProd - Required only in production
- * @param {Object} schema.atLeastOne - At least one from the list must be set
- * @returns {Object} Validation result { valid, errors, warnings }
+ * @returns {{valid:boolean, errors:string[], warnings:string[]}}
  */
 function validateEnv(schema = {}) {
-  const env = process.env.NODE_ENV || 'development';
-  const isProd = env === 'production';
-  const isDev = env === 'development';
+  const env = getCurrentEnvironment();
+  const isProd = env === ENV_PRODUCTION;
+  const isDev = env === ENV_DEVELOPMENT;
+  const errors = [
+    ...collectMissingVariables(schema.required),
+    ...(isProd ? collectMissingVariables(schema.requiredInProd, PROD_ONLY_SUFFIX) : []),
+    ...(isDev ? collectMissingVariables(schema.requiredInDev, DEV_ONLY_SUFFIX) : []),
+    ...collectAtLeastOneErrors(schema.atLeastOne),
+  ];
+  const warnings = collectWarningMessages(schema.warnings);
 
-  const errors = [];
-  const warnings = [];
+  return { valid: errors.length === 0, errors, warnings };
+}
 
-  // Check always-required variables
-  if (schema.required) {
-    for (const [key, description] of Object.entries(schema.required)) {
-      if (!process.env[key]) {
-        errors.push(`${key} (${description})`);
-      }
-    }
+function printWarnings(warnings) {
+  if (!Array.isArray(warnings) || warnings.length === 0) return;
+
+  console.warn(colors.yellow('Environment configuration warnings:'));
+  warnings.forEach((warning) => console.warn(colors.yellow(`  - ${warning}`)));
+  console.warn('');
+}
+
+function printValidationFailure(env, errors) {
+  console.error(colors.red('Environment validation failed'));
+  console.error(colors.red(`  Current environment: ${env}`));
+  console.error('');
+  console.error(colors.red('Missing required variables:'));
+  errors.forEach((error) => console.error(colors.red(`  - ${error}`)));
+  console.error('');
+  console.error(colors.yellow('Fix:'));
+  console.error(colors.yellow('  1. Copy backend/.env.example to backend/.env'));
+  console.error(colors.yellow('  2. Fill in the required values'));
+  console.error(colors.yellow('  3. Restart the server'));
+  console.error('');
+}
+
+function printSuccessWhenVerbose(envValues = process.env) {
+  if (envValues[SHOW_SUCCESS_FLAG] === SHOW_SUCCESS_VALUE) {
+    console.log(colors.green('Environment validation passed'));
   }
-
-  // Check production-only requirements
-  if (isProd && schema.requiredInProd) {
-    for (const [key, description] of Object.entries(schema.requiredInProd)) {
-      if (!process.env[key]) {
-        errors.push(`${key} (${description}) [PROD ONLY]`);
-      }
-    }
-  }
-
-  // Check development-only requirements
-  if (isDev && schema.requiredInDev) {
-    for (const [key, description] of Object.entries(schema.requiredInDev)) {
-      if (!process.env[key]) {
-        errors.push(`${key} (${description}) [DEV ONLY]`);
-      }
-    }
-  }
-
-  // Check "at least one" requirements
-  if (schema.atLeastOne) {
-    for (const [groupName, keys] of Object.entries(schema.atLeastOne)) {
-      const hasAtLeastOne = keys.some((key) => process.env[key]);
-      if (!hasAtLeastOne) {
-        errors.push(`${groupName}: At least one of [${keys.join(', ')}] must be set`);
-      }
-    }
-  }
-
-  // Check for common misconfigurations
-  if (schema.warnings) {
-    for (const [condition, message] of Object.entries(schema.warnings)) {
-      if (eval(condition)) {
-        warnings.push(message);
-      }
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
-  };
 }
 
 /**
- * Validates and fails fast if required variables are missing.
- * Prints colored output to help developers quickly identify issues.
+ * Validates and exits on configuration errors.
  *
  * @param {Object} schema - Validation schema (same as validateEnv)
- * @throws {ValidationError} If validation fails
  */
 function validateEnvOrExit(schema) {
-  const env = process.env.NODE_ENV || 'development';
+  const env = getCurrentEnvironment();
   const result = validateEnv(schema);
 
-  if (result.warnings.length > 0) {
-    console.warn(colors.yellow('⚠️  Environment Configuration Warnings:'));
-    result.warnings.forEach((warning) => {
-      console.warn(colors.yellow(`   - ${warning}`));
-    });
-    console.warn('');
-  }
+  printWarnings(result.warnings);
 
   if (!result.valid) {
-    console.error(colors.red('❌ Environment Validation Failed'));
-    console.error(colors.red(`   Current environment: ${env}`));
-    console.error('');
-    console.error(colors.red('Missing required variables:'));
-    result.errors.forEach((error) => {
-      console.error(colors.red(`   ❌ ${error}`));
-    });
-    console.error('');
-    console.error(colors.yellow('💡 Fix:'));
-    console.error(colors.yellow('   1. Copy backend/.env.example to backend/.env'));
-    console.error(colors.yellow('   2. Fill in the required values'));
-    console.error(colors.yellow('   3. Restart the server'));
-    console.error('');
-
-    // Exit with error code
+    printValidationFailure(env, result.errors);
     process.exit(1);
   }
 
-  // Success message (only in verbose mode)
-  if (process.env.SHOW_ENV_VALIDATION_SUCCESS === 'true') {
-    console.log(colors.green('✅ Environment validation passed'));
-  }
+  printSuccessWhenVerbose();
 }
 
 /**
@@ -163,16 +175,34 @@ const LOCKIN_BACKEND_SCHEMA = {
     'AI Provider': ['AZURE_OPENAI_API_KEY', 'OPENAI_API_KEY'],
   },
 
-  warnings: {
-    'process.env.SUPABASE_URL && !process.env.SUPABASE_URL_DEV && !process.env.SUPABASE_URL_PROD':
-      'Found legacy SUPABASE_URL. Use SUPABASE_URL_DEV or SUPABASE_URL_PROD instead.',
-    'process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY_DEV && !process.env.SUPABASE_SERVICE_ROLE_KEY_PROD':
-      'Found legacy SUPABASE_SERVICE_ROLE_KEY. Use environment-specific keys instead.',
-    'process.env.NODE_ENV === "development" && process.env.SUPABASE_URL_PROD':
-      'NODE_ENV=development but SUPABASE_URL_PROD is set. Risk of accidental prod writes!',
-    'process.env.NODE_ENV === "production" && process.env.SUPABASE_URL_DEV':
-      'NODE_ENV=production but SUPABASE_URL_DEV is set. Should only have prod vars.',
-  },
+  warnings: [
+    {
+      when: (envValues) =>
+        Boolean(
+          envValues.SUPABASE_URL && !envValues.SUPABASE_URL_DEV && !envValues.SUPABASE_URL_PROD,
+        ),
+      message: 'Found legacy SUPABASE_URL. Use SUPABASE_URL_DEV or SUPABASE_URL_PROD instead.',
+    },
+    {
+      when: (envValues) =>
+        Boolean(
+          envValues.SUPABASE_SERVICE_ROLE_KEY &&
+          !envValues.SUPABASE_SERVICE_ROLE_KEY_DEV &&
+          !envValues.SUPABASE_SERVICE_ROLE_KEY_PROD,
+        ),
+      message: 'Found legacy SUPABASE_SERVICE_ROLE_KEY. Use environment-specific keys instead.',
+    },
+    {
+      when: (envValues) =>
+        envValues.NODE_ENV === ENV_DEVELOPMENT && Boolean(envValues.SUPABASE_URL_PROD),
+      message: 'NODE_ENV=development but SUPABASE_URL_PROD is set. Risk of accidental prod writes.',
+    },
+    {
+      when: (envValues) =>
+        envValues.NODE_ENV === ENV_PRODUCTION && Boolean(envValues.SUPABASE_URL_DEV),
+      message: 'NODE_ENV=production but SUPABASE_URL_DEV is set. Should only have prod vars.',
+    },
+  ],
 };
 
 module.exports = {

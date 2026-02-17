@@ -106,7 +106,7 @@ describe('Edit-as-rewrite: truncation and timeline management', () => {
 
     // Verify the query cache now only contains the canonical messages
     const cached = queryClient.getQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId));
-    if (!cached || cached.length === 0) throw new Error('Expected cached messages');
+    if (cached === undefined || cached.length === 0) throw new Error('Expected cached messages');
     expect(cached).toHaveLength(1);
     expect(cached[0]?.content).toBe('Hello EDITED');
     expect(cached[0]?.id).toBe('rev-1');
@@ -207,7 +207,7 @@ describe('Edit-as-rewrite: truncation and timeline management', () => {
     queryClient.setQueryData(chatMessagesKeys.byId(chatId), [...timeline, followUp]);
 
     const updated = queryClient.getQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId));
-    if (!updated || updated.length < 2) throw new Error('Expected updated messages');
+    if (updated === undefined || updated.length < 2) throw new Error('Expected updated messages');
     expect(updated).toHaveLength(2);
     expect(updated[0]?.content).toBe('Hello EDITED');
     expect(updated[1]?.content).toBe('New follow-up');

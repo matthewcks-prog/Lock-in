@@ -2,72 +2,92 @@ const { ValidationError, NotFoundError } = require('../../errors');
 const { TRANSCRIPT_MAX_CONCURRENT_JOBS } = require('../../config');
 const { JOB_STATUS } = require('./transcriptJobConstants');
 
-function createTranscriptJobsQueryService({ repo, cacheService, logger }) {
-  async function getJob({ userId, jobId } = {}) {
+function assertUserId(userId) {
+  if (!userId) {
+    throw new ValidationError('User context missing');
+  }
+}
+
+function createGetJobResponse(job, transcript) {
+  return {
+    success: true,
+    job: {
+      id: job.id,
+      status: job.status,
+      error: job.error || null,
+      transcript,
+    },
+  };
+}
+
+async function resolveDoneTranscript(repo, job, userId) {
+  if (job.status !== JOB_STATUS.DONE) {
+    return null;
+  }
+
+  const cached = await repo.getTranscriptByFingerprint({
+    fingerprint: job.fingerprint,
+    userId,
+  });
+  return cached?.transcript_json || null;
+}
+
+function mapActiveJob(job) {
+  return {
+    id: job.id,
+    status: job.status,
+    fingerprint: job.fingerprint,
+    mediaUrl: job.media_url,
+    createdAt: job.created_at,
+    updatedAt: job.updated_at,
+  };
+}
+
+function createGetJob(repo) {
+  return async function getJob({ userId, jobId } = {}) {
     const job = await repo.getTranscriptJob({ jobId, userId });
     if (!job) {
       throw new NotFoundError('Transcript job', jobId);
     }
 
-    let transcript = null;
-    if (job.status === JOB_STATUS.DONE) {
-      const cached = await repo.getTranscriptByFingerprint({
-        fingerprint: job.fingerprint,
-        userId,
-      });
-      transcript = cached?.transcript_json || null;
-    }
+    const transcript = await resolveDoneTranscript(repo, job, userId);
+    return createGetJobResponse(job, transcript);
+  };
+}
 
-    return {
-      success: true,
-      job: {
-        id: job.id,
-        status: job.status,
-        error: job.error || null,
-        transcript,
-      },
-    };
-  }
-
-  async function listActiveJobs({ userId } = {}) {
-    if (!userId) {
-      throw new ValidationError('User context missing');
-    }
-
+function createListActiveJobs(repo) {
+  return async function listActiveJobs({ userId } = {}) {
+    assertUserId(userId);
     const jobs = await repo.listActiveTranscriptJobs({ userId });
     return {
       success: true,
-      jobs: jobs.map((job) => ({
-        id: job.id,
-        status: job.status,
-        fingerprint: job.fingerprint,
-        mediaUrl: job.media_url,
-        createdAt: job.created_at,
-        updatedAt: job.updated_at,
-      })),
+      jobs: jobs.map(mapActiveJob),
       count: jobs.length,
       limit: TRANSCRIPT_MAX_CONCURRENT_JOBS,
     };
-  }
+  };
+}
 
-  async function cancelAllActiveJobs({ userId } = {}) {
-    if (!userId) {
-      throw new ValidationError('User context missing');
-    }
+async function cancelJob(repo, { jobId, userId }) {
+  await repo.updateTranscriptJob({
+    jobId,
+    userId,
+    updates: {
+      status: JOB_STATUS.CANCELED,
+      error: 'Canceled by user (bulk)',
+    },
+  });
+}
 
+function createCancelAllActiveJobs({ repo, logger }) {
+  return async function cancelAllActiveJobs({ userId } = {}) {
+    assertUserId(userId);
     const jobs = await repo.listActiveTranscriptJobs({ userId });
     const canceled = [];
 
     for (const job of jobs) {
       try {
-        await repo.updateTranscriptJob({
-          jobId: job.id,
-          userId,
-          updates: {
-            status: JOB_STATUS.CANCELED,
-            error: 'Canceled by user (bulk)',
-          },
-        });
+        await cancelJob(repo, { jobId: job.id, userId });
         canceled.push(job.id);
       } catch (error) {
         logger.warn({ err: error, jobId: job.id }, '[Transcripts] Failed to cancel job');
@@ -79,11 +99,12 @@ function createTranscriptJobsQueryService({ repo, cacheService, logger }) {
       canceledCount: canceled.length,
       canceledIds: canceled,
     };
-  }
+  };
+}
 
-  async function cacheTranscript({ userId, payload } = {}) {
+function createCacheTranscript(cacheService) {
+  return async function cacheTranscript({ userId, payload } = {}) {
     const { fingerprint, provider, transcript, meta } = payload || {};
-
     const cached = await cacheService.cacheExternalTranscript({
       userId,
       fingerprint,
@@ -97,13 +118,15 @@ function createTranscriptJobsQueryService({ repo, cacheService, logger }) {
       fingerprint: cached?.fingerprint || fingerprint,
       cachedAt: cached?.created_at || null,
     };
-  }
+  };
+}
 
+function createTranscriptJobsQueryService({ repo, cacheService, logger }) {
   return {
-    getJob,
-    listActiveJobs,
-    cancelAllActiveJobs,
-    cacheTranscript,
+    getJob: createGetJob(repo),
+    listActiveJobs: createListActiveJobs(repo),
+    cancelAllActiveJobs: createCancelAllActiveJobs({ repo, logger }),
+    cacheTranscript: createCacheTranscript(cacheService),
   };
 }
 

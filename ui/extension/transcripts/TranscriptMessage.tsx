@@ -22,34 +22,87 @@ interface TranscriptMessageProps {
   saveNote: (options: SaveNoteOptions) => Promise<Note | null>;
 }
 
-export function TranscriptMessage({
+const TRANSCRIPT_ICON = '\uD83D\uDCDD';
+const DOWNLOAD_ICON = '\uD83D\uDCE5';
+const SAVE_ICON = '\uD83D\uDCBE';
+
+function toSafeTitle(value: string): string {
+  return value.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+}
+
+function buildTranscriptNoteContent(videoTitle: string, plainText: string): string {
+  return `# Transcript: ${videoTitle}\n\n${plainText}`;
+}
+
+function TranscriptActions({
+  onDownloadTxt,
+  onDownloadVtt,
+  onSave,
+}: {
+  onDownloadTxt: () => void;
+  onDownloadVtt: () => void;
+  onSave: () => void;
+}): JSX.Element {
+  return (
+    <div className="lockin-transcript-actions">
+      <button
+        className="lockin-transcript-action-btn"
+        onClick={onDownloadTxt}
+        title="Download as plain text"
+        type="button"
+      >
+        {DOWNLOAD_ICON} Download .txt
+      </button>
+      <button
+        className="lockin-transcript-action-btn"
+        onClick={onDownloadVtt}
+        title="Download as VTT with timestamps"
+        type="button"
+      >
+        {DOWNLOAD_ICON} Download .vtt
+      </button>
+      <button
+        className="lockin-transcript-action-btn lockin-transcript-action-primary"
+        onClick={onSave}
+        title="Save transcript as note"
+        type="button"
+      >
+        {SAVE_ICON} Save note
+      </button>
+    </div>
+  );
+}
+
+function useTranscriptActions({
   transcript,
   video,
   videoTitle,
   saveNote,
-}: TranscriptMessageProps) {
+}: TranscriptMessageProps): {
+  handleDownloadTxt: () => void;
+  handleDownloadVtt: () => void;
+  handleSaveNote: () => Promise<void>;
+} {
   const { cacheTranscript } = useTranscriptCacheContext();
 
   const handleDownloadTxt = useCallback(() => {
     const content = formatAsPlainText(transcript, videoTitle);
-    const safeTitle = videoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    downloadFile(`transcript_${safeTitle}.txt`, content, 'text/plain');
+    downloadFile(`transcript_${toSafeTitle(videoTitle)}.txt`, content, 'text/plain');
   }, [transcript, videoTitle]);
 
   const handleDownloadVtt = useCallback(() => {
     const content = formatAsVtt(transcript.segments);
-    const safeTitle = videoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    downloadFile(`transcript_${safeTitle}.vtt`, content, 'text/vtt');
+    downloadFile(`transcript_${toSafeTitle(videoTitle)}.vtt`, content, 'text/vtt');
   }, [transcript.segments, videoTitle]);
 
   const handleSaveNote = useCallback(async () => {
     cacheTranscript({ transcript, video }).catch((error) => {
       console.error('Failed to cache transcript:', error);
     });
-    const noteContent = `# Transcript: ${videoTitle}\n\n${transcript.plainText}`;
+
     try {
       await saveNote({
-        content: noteContent,
+        content: buildTranscriptNoteContent(videoTitle, transcript.plainText),
         noteType: 'transcript',
         onSuccess: (note) => {
           console.log('Transcript saved as note:', note.id);
@@ -61,49 +114,38 @@ export function TranscriptMessage({
     } catch (error) {
       console.error('Failed to save note:', error);
     }
-  }, [cacheTranscript, transcript, video, videoTitle, saveNote]);
+  }, [cacheTranscript, saveNote, transcript, video, videoTitle]);
+
+  return { handleDownloadTxt, handleDownloadVtt, handleSaveNote };
+}
+
+export function TranscriptMessage(props: TranscriptMessageProps): JSX.Element {
+  const { transcript, videoTitle } = props;
+  const transcriptDurationMs = transcript.durationMs ?? 0;
+  const { handleDownloadTxt, handleDownloadVtt, handleSaveNote } = useTranscriptActions(props);
 
   return (
     <div className="lockin-transcript-message">
       <div className="lockin-transcript-header">
         <div className="lockin-transcript-title-row">
-          <span className="lockin-transcript-icon">📝</span>
+          <span className="lockin-transcript-icon">{TRANSCRIPT_ICON}</span>
           <span className="lockin-transcript-title">Transcript: {videoTitle}</span>
         </div>
         <div className="lockin-transcript-meta">
           Transcript found | {transcript.segments.length} segments |{' '}
-          {formatTime(transcript.durationMs || 0)}
+          {formatTime(transcriptDurationMs)}
         </div>
       </div>
 
       <div className="lockin-transcript-content">{transcript.plainText}</div>
 
-      <div className="lockin-transcript-actions">
-        <button
-          className="lockin-transcript-action-btn"
-          onClick={handleDownloadTxt}
-          title="Download as plain text"
-          type="button"
-        >
-          📥 Download .txt
-        </button>
-        <button
-          className="lockin-transcript-action-btn"
-          onClick={handleDownloadVtt}
-          title="Download as VTT with timestamps"
-          type="button"
-        >
-          📥 Download .vtt
-        </button>
-        <button
-          className="lockin-transcript-action-btn lockin-transcript-action-primary"
-          onClick={handleSaveNote}
-          title="Save transcript as note"
-          type="button"
-        >
-          💾 Save note
-        </button>
-      </div>
+      <TranscriptActions
+        onDownloadTxt={handleDownloadTxt}
+        onDownloadVtt={handleDownloadVtt}
+        onSave={() => {
+          void handleSaveNote();
+        }}
+      />
     </div>
   );
 }

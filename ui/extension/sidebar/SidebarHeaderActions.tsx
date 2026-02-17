@@ -4,7 +4,7 @@ interface SidebarHeaderActionsProps {
   onOpenFeedback: () => void;
 }
 
-export function SidebarHeaderActions({ onOpenFeedback }: SidebarHeaderActionsProps) {
+export function SidebarHeaderActions({ onOpenFeedback }: SidebarHeaderActionsProps): JSX.Element {
   return (
     <>
       <StudyToolsDropdown />

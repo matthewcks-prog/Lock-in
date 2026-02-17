@@ -69,6 +69,7 @@ const ILLEGAL_FILENAME_CHARS = /[<>:"/\\|?*\x00-\x1f]/g;
  */
 const EMOJI_AND_SYMBOLS =
   /[\u{1F000}-\u{1FFFF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{FE00}-\u{FE0F}]|[\u{1F900}-\u{1F9FF}]/gu;
+const MAX_FILENAME_TITLE_SLUG_LENGTH = 50;
 
 /**
  * Slugifies a string for use in filenames.
@@ -114,19 +115,23 @@ function slugify(text: string): string {
 export function generateFilename(metadata: ExportMetadata, extension: string): string {
   const parts: string[] = ['lock-in'];
 
-  if (metadata.courseCode) {
+  if (
+    metadata.courseCode !== undefined &&
+    metadata.courseCode !== null &&
+    metadata.courseCode.length > 0
+  ) {
     parts.push(slugify(metadata.courseCode));
   }
 
-  if (metadata.week) {
+  if (typeof metadata.week === 'number' && Number.isFinite(metadata.week) && metadata.week > 0) {
     parts.push(`week${metadata.week}`);
   }
 
-  if (metadata.title) {
+  if (metadata.title !== undefined && metadata.title.length > 0) {
     const titleSlug = slugify(metadata.title);
     // Limit title length in filename
-    const truncatedTitle = titleSlug.slice(0, 50);
-    if (truncatedTitle) {
+    const truncatedTitle = titleSlug.slice(0, MAX_FILENAME_TITLE_SLUG_LENGTH);
+    if (truncatedTitle.length > 0) {
       parts.push(truncatedTitle);
     }
   }
@@ -191,8 +196,8 @@ export interface ExportDocumentOptions {
 export async function exportDocument(options: ExportDocumentOptions): Promise<ExportResult> {
   const { document, format, metadata } = options;
 
-  const exporter = exporterRegistry[format];
-  if (!exporter) {
+  const exporter = exporterRegistry[format] as Exporter | undefined;
+  if (exporter === undefined) {
     throw ExportError.unsupportedFormat(format);
   }
 
@@ -244,8 +249,10 @@ export async function exportAndDownload(options: ExportNoteOptions): Promise<voi
  * This is a lightweight check used by the UI to enable/disable export buttons.
  */
 export function hasExportableContent(content: NoteContent | null | undefined): boolean {
-  if (!content?.editorState) return false;
+  if (content === null || content === undefined) return false;
+  const editorState = content.editorState;
+  if (editorState === undefined || editorState === null) return false;
 
-  const normalizedDocument = normalizeEditorState(content.editorState);
+  const normalizedDocument = normalizeEditorState(editorState);
   return documentHasContent(normalizedDocument);
 }

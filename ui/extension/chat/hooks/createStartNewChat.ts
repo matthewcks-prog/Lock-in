@@ -3,8 +3,12 @@ import { buildInitialChatTitle } from '../types';
 import type { SendChatOptionsInput } from './chatSendOptions';
 import { coerceSendOptions } from './chatSendOptions';
 import type { SendMessageMutationParams } from './sendMessageUtils';
-import type { TranscriptCacheInput } from '../../transcripts/hooks/useTranscriptCache';
 import type { Dispatch, SetStateAction } from 'react';
+import {
+  buildSendPayload,
+  buildUserMessage,
+  type SendPayloadOverrides,
+} from './chatSendPayloadBuilders';
 
 type SetMessages = (chatId: string, messages: ChatMessage[]) => void;
 type UpsertHistory = (
@@ -30,135 +34,106 @@ interface StartNewChatDeps {
   setError: SetError;
 }
 
-function buildUserMessage(
-  id: string,
-  content: string,
-  source: 'selection' | 'followup',
-  timestamp: string,
-  attachments?: ChatAttachment[],
-): ChatMessage {
-  const message: ChatMessage = {
-    id,
-    role: 'user',
-    content,
-    timestamp,
-    source,
-  };
-  if (attachments && attachments.length > 0) {
-    message.attachments = attachments;
-  }
-  return message;
+interface PreparedStartInput {
+  trimmed: string;
+  source: 'selection' | 'followup';
+  attachments?: ChatAttachment[];
+  overrides: SendPayloadOverrides;
 }
 
-function buildSendPayload(
-  deps: StartNewChatDeps,
-  message: string,
-  source: 'selection' | 'followup',
-  currentMessages: ChatMessage[],
-  activeChatId: string | null,
-  options: {
-    attachmentIds?: string[];
-    selectionOverride?: string;
-    userMessageOverride?: string;
-    transcriptContext?: TranscriptCacheInput;
-  },
-): SendMessageMutationParams {
-  const payload: SendMessageMutationParams = {
-    message,
-    source,
+function buildStartOverrides({
+  attachmentIds,
+  selectionOverride,
+  userMessageOverride,
+  transcriptContext,
+}: {
+  attachmentIds?: string[];
+  selectionOverride?: string;
+  userMessageOverride?: string;
+  transcriptContext?: SendPayloadOverrides['transcriptContext'] | null;
+}): SendPayloadOverrides {
+  return {
+    ...(Array.isArray(attachmentIds) && attachmentIds.length > 0 ? { attachmentIds } : {}),
+    ...(selectionOverride !== undefined ? { selectionOverride } : {}),
+    ...(userMessageOverride !== undefined ? { userMessageOverride } : {}),
+    ...(transcriptContext !== undefined && transcriptContext !== null ? { transcriptContext } : {}),
+  };
+}
+
+function prepareStartInput(
+  text: string,
+  options?: SendChatOptionsInput,
+): PreparedStartInput | null {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return null;
+  const resolvedOptions = coerceSendOptions(options);
+  const prepared: PreparedStartInput = {
+    trimmed,
+    source: resolvedOptions.source ?? 'selection',
+    overrides: buildStartOverrides(resolvedOptions),
+  };
+  if (resolvedOptions.attachments !== undefined) {
+    prepared.attachments = resolvedOptions.attachments;
+  }
+  return prepared;
+}
+
+function runStartNewChat({
+  deps,
+  input,
+}: {
+  deps: StartNewChatDeps;
+  input: PreparedStartInput;
+}): void {
+  const now = new Date().toISOString();
+  const provisionalChatId = `chat-${Date.now()}`;
+  const userMessageInput: Parameters<typeof buildUserMessage>[0] = {
+    id: `${provisionalChatId}-user`,
+    content: input.trimmed,
+    source: input.source,
+    timestamp: now,
+  };
+  if (input.attachments !== undefined) {
+    userMessageInput.attachments = input.attachments;
+  }
+  const userMessage = buildUserMessage(userMessageInput);
+
+  deps.setIsHistoryOpen(false);
+  deps.setError(null);
+  deps.setActiveChatId(null);
+  deps.setActiveHistoryId(provisionalChatId);
+  deps.setMessages(provisionalChatId, [userMessage]);
+  deps.upsertHistory(
+    {
+      id: provisionalChatId,
+      title: buildInitialChatTitle(input.trimmed),
+      updatedAt: now,
+      lastMessage: input.trimmed,
+    },
+    undefined,
+    'local',
+  );
+  deps.setActiveChatId(provisionalChatId);
+
+  const payload: SendMessageMutationParams = buildSendPayload({
+    message: input.trimmed,
+    source: input.source,
     pageUrl: deps.pageUrl,
     chatId: null,
-    currentMessages,
-    activeChatId,
-  };
-  if (deps.courseCode) {
-    payload.courseCode = deps.courseCode;
-  }
-  if (options.attachmentIds && options.attachmentIds.length > 0) {
-    payload.attachmentIds = options.attachmentIds;
-  }
-  if (options.selectionOverride !== undefined) {
-    payload.selectionOverride = options.selectionOverride;
-  }
-  if (options.userMessageOverride !== undefined) {
-    payload.userMessageOverride = options.userMessageOverride;
-  }
-  if (options.transcriptContext) {
-    payload.transcriptContext = options.transcriptContext;
-  }
-  return payload;
+    currentMessages: [userMessage],
+    activeChatId: provisionalChatId,
+    courseCode: deps.courseCode,
+    overrides: input.overrides,
+  });
+  deps.sendMessage(payload);
 }
 
 export function createStartNewChat(deps: StartNewChatDeps) {
   return (text: string, options?: SendChatOptionsInput) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const resolvedOptions = coerceSendOptions(options);
-    const source = resolvedOptions.source || 'selection';
-    const attachments = resolvedOptions.attachments;
-    const attachmentIds = resolvedOptions.attachmentIds;
-    const selectionOverride = resolvedOptions.selectionOverride;
-    const userMessageOverride = resolvedOptions.userMessageOverride;
-    const transcriptContext = resolvedOptions.transcriptContext;
-    const overrides: {
-      attachmentIds?: string[];
-      selectionOverride?: string;
-      userMessageOverride?: string;
-      transcriptContext?: TranscriptCacheInput;
-    } = {};
-    if (attachmentIds && attachmentIds.length > 0) {
-      overrides.attachmentIds = attachmentIds;
+    const input = prepareStartInput(text, options);
+    if (input === null) {
+      return;
     }
-    if (selectionOverride !== undefined) {
-      overrides.selectionOverride = selectionOverride;
-    }
-    if (userMessageOverride !== undefined) {
-      overrides.userMessageOverride = userMessageOverride;
-    }
-    if (transcriptContext) {
-      overrides.transcriptContext = transcriptContext;
-    }
-
-    const now = new Date().toISOString();
-    const provisionalChatId = `chat-${Date.now()}`;
-
-    const userMessage = buildUserMessage(
-      `${provisionalChatId}-user`,
-      trimmed,
-      source,
-      now,
-      attachments,
-    );
-
-    deps.setIsHistoryOpen(false);
-    deps.setError(null);
-    deps.setActiveChatId(null);
-    deps.setActiveHistoryId(provisionalChatId);
-
-    deps.setMessages(provisionalChatId, [userMessage]);
-
-    deps.upsertHistory(
-      {
-        id: provisionalChatId,
-        title: buildInitialChatTitle(trimmed),
-        updatedAt: now,
-        lastMessage: trimmed,
-      },
-      undefined,
-      'local',
-    );
-
-    deps.setActiveChatId(provisionalChatId);
-
-    const payload = buildSendPayload(
-      deps,
-      trimmed,
-      source,
-      [userMessage],
-      provisionalChatId,
-      overrides,
-    );
-
-    deps.sendMessage(payload);
+    runStartNewChat({ deps, input });
   };
 }

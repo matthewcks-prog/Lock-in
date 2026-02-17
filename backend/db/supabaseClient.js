@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { AppError } = require('../errors');
 const { CircuitBreaker } = require('../utils/circuitBreaker');
 const config = require('../config');
+const HTTP_STATUS = require('../constants/httpStatus');
 
 // Use environment-aware configuration from centralized config
 const SUPABASE_URL = config.SUPABASE_URL;
@@ -42,14 +43,14 @@ function isNetworkError(error) {
 
 function shouldRecordFailureFromStatus(status) {
   if (typeof status !== 'number') return false;
-  return status === 429 || status >= 500;
+  return status === HTTP_STATUS.TOO_MANY_REQUESTS || status >= HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 
 function createCircuitOpenError(retryAfterMs) {
   const error = new AppError(
     'Supabase temporarily unavailable (circuit open)',
     'SERVICE_UNAVAILABLE',
-    503,
+    HTTP_STATUS.SERVICE_UNAVAILABLE,
     { retryAfterMs },
   );
   error.name = 'CircuitOpenError';

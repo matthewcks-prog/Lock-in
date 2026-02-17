@@ -82,6 +82,11 @@ const parseAttachments = (value: unknown): ReadonlyArray<MessageAttachment> | un
   return value.map((item) => deserializeAttachment(item));
 };
 
+const hasAttachmentItems = (
+  attachments: Message['attachments'],
+): attachments is ReadonlyArray<MessageAttachment> =>
+  attachments !== undefined && attachments.length > 0;
+
 /**
  * Serialize message to JSON-safe object
  */
@@ -174,10 +179,10 @@ export function toProviderMessage(message: Message): {
   let content = message.content;
 
   // Include attachment text inline
-  if (message.attachments && message.attachments.length > 0) {
+  if (hasAttachmentItems(message.attachments)) {
     const attachmentTexts = message.attachments
       .map((a) => a.extractedText)
-      .filter((text): text is string => Boolean(text));
+      .filter((text): text is string => text !== undefined && text.length > 0);
 
     if (attachmentTexts.length > 0) {
       content += '\n\n[Attached content]\n' + attachmentTexts.join('\n\n');
@@ -207,7 +212,7 @@ export function extractConversationHistory(
   messages: ReadonlyArray<Message>,
   limit?: number,
 ): ReadonlyArray<Message> {
-  if (!limit || messages.length <= limit) {
+  if (limit === undefined || messages.length <= limit) {
     return messages;
   }
 
@@ -226,12 +231,13 @@ export function formatForDisplay(message: Message): {
   attachmentCount: number;
   timestamp: string;
 } {
+  const hasAttachments = hasAttachmentItems(message.attachments);
   return {
     id: message.id,
     role: message.role,
     content: message.content,
-    hasAttachments: Boolean(message.attachments && message.attachments.length > 0),
-    attachmentCount: message.attachments?.length || 0,
+    hasAttachments,
+    attachmentCount: message.attachments?.length ?? 0,
     timestamp: message.createdAt.toISOString(),
   };
 }

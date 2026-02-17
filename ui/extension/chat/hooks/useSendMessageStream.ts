@@ -1,421 +1,73 @@
-/**
- * useSendMessageStream Hook
- *
- * Streaming mutation hook for sending chat messages with:
- * - Real-time content streaming via SSE
- * - Request cancellation via AbortController
- * - Optimistic UI updates with progressive content
- * - Automatic rollback on error
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranscriptCache } from '../../transcripts/hooks/useTranscriptCache';
-import type { ChatApiResponse, UseSendMessageOptions } from '../types';
+import type { SendMessageMutationParams } from './sendMessageUtils';
 import {
-  buildIdempotencyKey,
-  type SendMessageMutationParams,
-  buildChatHistory,
-  cacheTranscriptIfNeeded,
-  resolveApiChatId,
-  resolveIdempotencyKey,
-  resolveSelectionPayload,
-  resolveUserMessagePayload,
-} from './sendMessageUtils';
+  abortAndClearPendingRefs,
+  createIdleStreamingState,
+  runSendMessageStream,
+} from './sendMessageStreamRuntime';
 import type {
-  ProcessTextStreamParams,
-  StreamMetaEvent,
-  StreamDeltaEvent,
-  StreamFinalEvent,
-  StreamErrorEvent,
-} from '@api/client';
-import { chatMessagesKeys } from './useChatMessages';
-import { chatHistoryKeys } from './useChatHistory';
-import { finalizeStreamMessage, updateOptimisticMessage } from './streamMessageCache';
+  StreamingSendResult,
+  StreamingState,
+  UseSendMessageStreamOptions,
+} from './sendMessageStreamTypes';
 
-/**
- * State for streaming message
- */
-export interface StreamingState {
-  /** Whether currently streaming */
-  isStreaming: boolean;
-  /** Current streamed content (accumulated) */
-  streamedContent: string;
-  /** Metadata from stream (chatId, messageId) */
-  meta: StreamMetaEvent | null;
-  /** Error if stream failed */
-  error: StreamErrorEvent | null;
-  /** Whether stream completed successfully */
-  isComplete: boolean;
+export type {
+  StreamingSendResult,
+  StreamingState,
+  UseSendMessageStreamOptions,
+} from './sendMessageStreamTypes';
+
+interface UseSendMessageStreamResult extends StreamingState {
+  sendMessageStream: (params: SendMessageMutationParams) => Promise<StreamingSendResult>;
+  cancelPending: () => void;
+  reset: () => void;
 }
 
-/**
- * Options for streaming send
- */
-export interface UseSendMessageStreamOptions extends UseSendMessageOptions {
-  /** Callback when streaming starts with meta info */
-  onStreamStart?: (meta: StreamMetaEvent) => void;
-  /** Callback for each content delta */
-  onStreamDelta?: (delta: StreamDeltaEvent, accumulated: string) => void;
-  /** Callback when stream completes */
-  onStreamComplete?: (final: StreamFinalEvent) => void;
-  /** Callback for stream errors */
-  onStreamError?: (error: StreamErrorEvent) => void;
-}
-
-/**
- * Result of streaming send operation
- */
-export interface StreamingSendResult {
-  success: boolean;
-  chatId?: string;
-  chatTitle?: string;
-  content?: string;
-  error?: StreamErrorEvent;
-}
-
-/**
- * Hook for sending messages with streaming response.
- *
- * Key features:
- * - Streams content progressively
- * - Cancels previous request if new one is sent
- * - Optimistic "Thinking..." message that updates with streamed content
- * - Rollback on error
- */
-export function useSendMessageStream(options: UseSendMessageStreamOptions) {
-  const {
-    apiClient,
-    pageUrl,
-    courseCode,
-    onSuccess,
-    onError,
-    onStreamStart,
-    onStreamDelta,
-    onStreamComplete,
-    onStreamError,
-  } = options;
-
+export function useSendMessageStream(
+  options: UseSendMessageStreamOptions,
+): UseSendMessageStreamResult {
   const queryClient = useQueryClient();
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingSendKeyRef = useRef<string | null>(null);
   const activeRequestIdRef = useRef<string | null>(null);
-  const { cacheTranscript } = useTranscriptCache(apiClient);
+  const { cacheTranscript } = useTranscriptCache(options.apiClient);
+  const [streamingState, setStreamingState] = useState<StreamingState>(createIdleStreamingState());
 
-  const [streamingState, setStreamingState] = useState<StreamingState>({
-    isStreaming: false,
-    streamedContent: '',
-    meta: null,
-    error: null,
-    isComplete: false,
-  });
+  useEffect(() => () => abortControllerRef.current?.abort(), []);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, []);
-
-  /**
-   * Reset streaming state
-   */
   const resetState = useCallback(() => {
-    setStreamingState({
-      isStreaming: false,
-      streamedContent: '',
-      meta: null,
-      error: null,
-      isComplete: false,
-    });
+    setStreamingState(createIdleStreamingState());
   }, []);
 
-  /**
-   * Cancel any pending streaming request
-   */
   const cancelPending = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    pendingSendKeyRef.current = null;
-    activeRequestIdRef.current = null;
+    abortAndClearPendingRefs({ abortControllerRef, pendingSendKeyRef, activeRequestIdRef });
     resetState();
   }, [resetState]);
 
-  /**
-   * Send message with streaming
-   */
   const sendMessageStream = useCallback(
-    async (params: SendMessageMutationParams): Promise<StreamingSendResult> => {
-      const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
-
-      // Prevent duplicate sends
-      if (pendingSendKeyRef.current === idempotencyKey) {
-        return { success: false };
-      }
-      pendingSendKeyRef.current = idempotencyKey;
-
-      // Cancel any previous request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
-
-      // Generate a unique requestId to guard against stale deltas
-      const requestId = crypto.randomUUID();
-      activeRequestIdRef.current = requestId;
-
-      if (!apiClient?.processTextStream) {
-        const error: StreamErrorEvent = {
-          code: 'API_NOT_AVAILABLE',
-          message: 'Streaming API client not available',
-          retryable: false,
-        };
-        onStreamError?.(error);
-        onError?.(new Error(error.message));
-        return { success: false, error };
-      }
-
-      // Reset and start streaming
-      setStreamingState({
-        isStreaming: true,
-        streamedContent: '',
-        meta: null,
-        error: null,
-        isComplete: false,
-      });
-
-      // Cache transcript if needed
-      await cacheTranscriptIfNeeded(cacheTranscript, params.transcriptContext);
-
-      // Build request payload
-      const baseHistory = buildChatHistory(params);
-      const apiChatId = resolveApiChatId(params);
-      const selectionPayload = resolveSelectionPayload(params);
-      const userMessagePayload = resolveUserMessagePayload(params);
-      const resolvedIdempotencyKey = resolveIdempotencyKey(params);
-
-      const requestPayload: ProcessTextStreamParams = {
-        selection: selectionPayload,
-        chatHistory: baseHistory,
-        signal: abortControllerRef.current.signal,
-      };
-
-      // Handle idempotency key conditionally (exactOptionalPropertyTypes)
-      if (resolvedIdempotencyKey) {
-        requestPayload.idempotencyKey = resolvedIdempotencyKey;
-      }
-
-      if (userMessagePayload !== undefined) {
-        requestPayload.newUserMessage = userMessagePayload;
-      }
-      if (apiChatId) {
-        requestPayload.chatId = apiChatId;
-      }
-      const resolvedPageUrl = params.pageUrl || pageUrl;
-      if (resolvedPageUrl) {
-        requestPayload.pageUrl = resolvedPageUrl;
-      }
-      const resolvedCourseCode = params.courseCode ?? courseCode ?? null;
-      if (resolvedCourseCode) {
-        requestPayload.courseCode = resolvedCourseCode;
-      }
-      if (params.attachmentIds && params.attachmentIds.length > 0) {
-        requestPayload.attachments = params.attachmentIds;
-      }
-      if (params.isRegeneration) {
-        requestPayload.regenerate = true;
-      }
-
-      let accumulated = '';
-      let streamMeta: StreamMetaEvent | null = null;
-      let finalContent: string | undefined;
-      let chatTitle: string | undefined;
-
-      // Setup callbacks
-      requestPayload.onMeta = (meta) => {
-        if (activeRequestIdRef.current !== requestId) return;
-        streamMeta = meta;
-        setStreamingState((prev) => ({ ...prev, meta }));
-        onStreamStart?.(meta);
-      };
-
-      requestPayload.onDelta = (delta) => {
-        // Guard against stale deltas from a previous request
-        if (activeRequestIdRef.current !== requestId) return;
-
-        accumulated += delta.content;
-        setStreamingState((prev) => ({
-          ...prev,
-          streamedContent: accumulated,
-        }));
-        onStreamDelta?.(delta, accumulated);
-
-        // Update optimistic message in cache if we have a chat ID
-        if (streamMeta?.chatId) {
-          updateOptimisticMessage(queryClient, streamMeta.chatId, accumulated);
-        }
-      };
-
-      requestPayload.onFinal = (final) => {
-        if (activeRequestIdRef.current !== requestId) return;
-        finalContent = final.content;
-        // Update with final content
-        setStreamingState((prev) => ({
-          ...prev,
-          streamedContent: final.content || accumulated,
-          isComplete: true,
-        }));
-        onStreamComplete?.(final);
-      };
-
-      requestPayload.onError = (error) => {
-        if (activeRequestIdRef.current !== requestId) return;
-        setStreamingState((prev) => ({
-          ...prev,
-          error,
-          isStreaming: false,
-        }));
-        onStreamError?.(error);
-      };
-
-      // REMOVED: Blocking fallback - streaming is the only code path
-      // If streaming fails, we retry with exponential backoff instead of falling back
-
-      try {
-        const result = await apiClient.processTextStream(requestPayload);
-
-        // Cleanup
-        abortControllerRef.current = null;
-        pendingSendKeyRef.current = null;
-
-        if (!result.success) {
-          setStreamingState((prev) => ({
-            ...prev,
-            isStreaming: false,
-            error: result.error || null,
-          }));
-          if (result.error) {
-            onError?.(new Error(result.error.message));
-          }
-
-          // No fallback - return error immediately
-          const failResult: StreamingSendResult = { success: false };
-          if (result.error) {
-            failResult.error = result.error;
-          }
-          return failResult;
-        }
-
-        // Success -- mark stream complete in hook state
-        setStreamingState((prev) => ({
-          ...prev,
-          isStreaming: false,
-          isComplete: true,
-        }));
-
-        // Clear isStreaming on the message in the query cache
-        const metaChatId = (streamMeta as StreamMetaEvent | null)?.chatId;
-        const finalChatId = metaChatId || params.chatId;
-        if (finalChatId) {
-          finalizeStreamMessage(
-            queryClient,
-            finalChatId,
-            finalContent || result.content || accumulated,
-          );
-        }
-
-        const resolvedChatId = result.chatId || params.chatId || `chat-${Date.now()}`;
-
-        // Call success callback
-        const contentValue = finalContent || result.content || accumulated;
-        const response: ChatApiResponse = {
-          content: contentValue,
-        };
-        if (result.chatId) {
-          response.chatId = result.chatId;
-        }
-        if (chatTitle) {
-          response.chatTitle = chatTitle;
-        }
-        onSuccess?.(response, resolvedChatId);
-
-        // Invalidate chat queries to refresh from server.
-        // For regeneration requests, skip message invalidation -- the cache
-        // already has the correct canonical timeline from the edit/regenerate
-        // hook + the finalized streamed assistant message. Invalidating would
-        // cause a refetch that races with the optimistic state.
-        if (result.chatId) {
-          if (!params.isRegeneration) {
-            queryClient.invalidateQueries({
-              queryKey: chatMessagesKeys.byId(result.chatId),
-            });
-          }
-          queryClient.invalidateQueries({
-            queryKey: chatHistoryKeys.all,
-          });
-        }
-
-        // Build success result conditionally for exactOptionalPropertyTypes
-        const successResult: StreamingSendResult = { success: true };
-        if (result.chatId) {
-          successResult.chatId = result.chatId;
-        }
-        if (chatTitle) {
-          successResult.chatTitle = chatTitle;
-        }
-        const finalContentValue = finalContent || result.content;
-        if (finalContentValue) {
-          successResult.content = finalContentValue;
-        }
-        return successResult;
-      } catch (error) {
-        // Cleanup
-        abortControllerRef.current = null;
-        pendingSendKeyRef.current = null;
-
-        const streamError: StreamErrorEvent = {
-          code: 'STREAM_ERROR',
-          message: error instanceof Error ? error.message : 'Unknown error',
-          retryable: false,
-        };
-
-        setStreamingState((prev) => ({
-          ...prev,
-          isStreaming: false,
-          error: streamError,
-        }));
-
-        onStreamError?.(streamError);
-        onError?.(error instanceof Error ? error : new Error('Unknown error'));
-
-        // No fallback - return error immediately
-        return {
-          success: false,
-          error: streamError,
-        };
-      }
-    },
-    [
-      apiClient,
-      pageUrl,
-      courseCode,
-      cacheTranscript,
-      queryClient,
-      onSuccess,
-      onError,
-      onStreamStart,
-      onStreamDelta,
-      onStreamComplete,
-      onStreamError,
-    ],
+    async (params: SendMessageMutationParams): Promise<StreamingSendResult> =>
+      runSendMessageStream({
+        params,
+        apiClient: options.apiClient,
+        pageUrl: options.pageUrl,
+        courseCode: options.courseCode,
+        cacheTranscript,
+        queryClient,
+        setStreamingState,
+        refs: { abortControllerRef, pendingSendKeyRef, activeRequestIdRef },
+        callbacks: {
+          onSuccess: options.onSuccess,
+          onError: options.onError,
+          onStreamStart: options.onStreamStart,
+          onStreamDelta: options.onStreamDelta,
+          onStreamComplete: options.onStreamComplete,
+          onStreamError: options.onStreamError,
+        },
+      }),
+    [cacheTranscript, options, queryClient],
   );
 
-  return {
-    sendMessageStream,
-    ...streamingState,
-    cancelPending,
-    reset: resetState,
-  };
+  return { sendMessageStream, ...streamingState, cancelPending, reset: resetState };
 }

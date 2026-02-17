@@ -41,6 +41,180 @@ export interface UseMessageEditReturn {
   submitEdit: () => Promise<boolean>;
 }
 
+function canSubmitEdit({
+  apiClient,
+  chatId,
+  editingMessageId,
+  draft,
+}: {
+  apiClient: ApiClient | null;
+  chatId: string | null;
+  editingMessageId: string | null;
+  draft: string;
+}): boolean {
+  return (
+    apiClient !== null &&
+    apiClient.editMessage !== undefined &&
+    chatId !== null &&
+    chatId.length > 0 &&
+    editingMessageId !== null &&
+    editingMessageId.length > 0 &&
+    draft.trim().length > 0
+  );
+}
+
+function normalizeCanonicalMessages(canonicalMessages: Record<string, unknown>[]): ChatMessage[] {
+  return canonicalMessages.map((message) => normalizeChatMessage(message));
+}
+
+function clearEditState(
+  setEditingMessageId: (value: string | null) => void,
+  setEditDraft: (value: string) => void,
+): void {
+  setEditingMessageId(null);
+  setEditDraft('');
+}
+
+function updateMessageCache(
+  queryClient: ReturnType<typeof useQueryClient>,
+  chatId: string,
+  messages: ChatMessage[],
+): void {
+  queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), messages);
+}
+
+interface EditSubmitContext {
+  apiClient: ApiClient;
+  chatId: string;
+  editingMessageId: string;
+  trimmed: string;
+}
+
+function resolveEditSubmitContext({
+  apiClient,
+  chatId,
+  editingMessageId,
+  draft,
+}: {
+  apiClient: ApiClient | null;
+  chatId: string | null;
+  editingMessageId: string | null;
+  draft: string;
+}): EditSubmitContext | null {
+  if (!canSubmitEdit({ apiClient, chatId, editingMessageId, draft })) {
+    return null;
+  }
+  if (
+    apiClient === null ||
+    apiClient.editMessage === undefined ||
+    chatId === null ||
+    editingMessageId === null
+  ) {
+    return null;
+  }
+  return {
+    apiClient,
+    chatId,
+    editingMessageId,
+    trimmed: draft.trim(),
+  };
+}
+
+async function submitEditRequest({
+  apiClient,
+  chatId,
+  editingMessageId,
+  editDraft,
+  queryClient,
+  onEditComplete,
+  setEditingMessageId,
+  setEditDraft,
+  setIsSubmittingEdit,
+}: {
+  apiClient: ApiClient | null;
+  chatId: string | null;
+  editingMessageId: string | null;
+  editDraft: string;
+  queryClient: ReturnType<typeof useQueryClient>;
+  onEditComplete: ((editedContent: string, canonicalMessages: ChatMessage[]) => void) | undefined;
+  setEditingMessageId: (value: string | null) => void;
+  setEditDraft: (value: string) => void;
+  setIsSubmittingEdit: (value: boolean) => void;
+}): Promise<boolean> {
+  const context = resolveEditSubmitContext({
+    apiClient,
+    chatId,
+    editingMessageId,
+    draft: editDraft,
+  });
+  if (context === null) return false;
+
+  setIsSubmittingEdit(true);
+  try {
+    const result = await context.apiClient.editMessage(
+      context.chatId,
+      context.editingMessageId,
+      context.trimmed,
+    );
+    const normalizedMessages = normalizeCanonicalMessages(result.canonicalMessages);
+    updateMessageCache(queryClient, context.chatId, normalizedMessages);
+    clearEditState(setEditingMessageId, setEditDraft);
+    onEditComplete?.(context.trimmed, normalizedMessages);
+    return true;
+  } catch (error) {
+    console.error('[useMessageEdit] Failed to submit edit:', error);
+    return false;
+  } finally {
+    setIsSubmittingEdit(false);
+  }
+}
+
+function useSubmitEdit({
+  apiClient,
+  chatId,
+  editingMessageId,
+  editDraft,
+  queryClient,
+  onEditComplete,
+  setEditingMessageId,
+  setEditDraft,
+  setIsSubmittingEdit,
+}: {
+  apiClient: ApiClient | null;
+  chatId: string | null;
+  editingMessageId: string | null;
+  editDraft: string;
+  queryClient: ReturnType<typeof useQueryClient>;
+  onEditComplete: ((editedContent: string, canonicalMessages: ChatMessage[]) => void) | undefined;
+  setEditingMessageId: (value: string | null) => void;
+  setEditDraft: (value: string) => void;
+  setIsSubmittingEdit: (value: boolean) => void;
+}): UseMessageEditReturn['submitEdit'] {
+  return useCallback(async (): Promise<boolean> => {
+    return submitEditRequest({
+      apiClient,
+      chatId,
+      editingMessageId,
+      editDraft,
+      queryClient,
+      onEditComplete,
+      setEditingMessageId,
+      setEditDraft,
+      setIsSubmittingEdit,
+    });
+  }, [
+    apiClient,
+    chatId,
+    editingMessageId,
+    editDraft,
+    onEditComplete,
+    queryClient,
+    setEditDraft,
+    setEditingMessageId,
+    setIsSubmittingEdit,
+  ]);
+}
+
 /**
  * Hook for editing user messages with truncate-on-edit semantics.
  */
@@ -54,7 +228,6 @@ export function useMessageEdit(options: UseMessageEditOptions): UseMessageEditRe
 
   const startEdit = useCallback(
     (messageId: string, currentContent: string) => {
-      // Auto-cancel any active stream
       cancelStream?.();
       setEditingMessageId(messageId);
       setEditDraft(currentContent);
@@ -62,48 +235,18 @@ export function useMessageEdit(options: UseMessageEditOptions): UseMessageEditRe
     [cancelStream],
   );
 
-  const cancelEdit = useCallback(() => {
-    setEditingMessageId(null);
-    setEditDraft('');
-  }, []);
-
-  const submitEdit = useCallback(async (): Promise<boolean> => {
-    if (!apiClient?.editMessage || !chatId || !editingMessageId) {
-      return false;
-    }
-
-    const trimmed = editDraft.trim();
-    if (!trimmed) {
-      return false;
-    }
-
-    setIsSubmittingEdit(true);
-
-    try {
-      const result = await apiClient.editMessage(chatId, editingMessageId, trimmed);
-
-      // Update the query cache with the new canonical timeline
-      const normalizedMessages = result.canonicalMessages.map((msg: Record<string, unknown>) =>
-        normalizeChatMessage(msg),
-      );
-
-      queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), normalizedMessages);
-
-      // Clear edit state
-      setEditingMessageId(null);
-      setEditDraft('');
-
-      // Notify caller to auto-regenerate with the edited content
-      onEditComplete?.(trimmed, normalizedMessages);
-
-      return true;
-    } catch (error) {
-      console.error('[useMessageEdit] Failed to submit edit:', error);
-      return false;
-    } finally {
-      setIsSubmittingEdit(false);
-    }
-  }, [apiClient, chatId, editingMessageId, editDraft, queryClient]);
+  const cancelEdit = useCallback(() => clearEditState(setEditingMessageId, setEditDraft), []);
+  const submitEdit = useSubmitEdit({
+    apiClient,
+    chatId,
+    editingMessageId,
+    editDraft,
+    queryClient,
+    onEditComplete,
+    setEditingMessageId,
+    setEditDraft,
+    setIsSubmittingEdit,
+  });
 
   return {
     editingMessageId,

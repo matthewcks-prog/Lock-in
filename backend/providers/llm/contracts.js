@@ -153,6 +153,7 @@ const NO_FALLBACK_ERROR_PATTERNS = [
 ];
 
 const { AppError } = require('../../errors');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 function getErrorStatus(error) {
   return (
@@ -175,12 +176,16 @@ function shouldFallback(error) {
   const status = getErrorStatus(error);
 
   // First check HTTP status codes - these are definitive
-  if (status === 400 || status === 401 || status === 403) {
+  if (
+    status === HTTP_STATUS.BAD_REQUEST ||
+    status === HTTP_STATUS.UNAUTHORIZED ||
+    status === HTTP_STATUS.FORBIDDEN
+  ) {
     // Bad request, auth errors - don't fallback
     return false;
   }
 
-  if (status === 429 || status >= 500) {
+  if (status === HTTP_STATUS.TOO_MANY_REQUESTS || status >= HTTP_STATUS.INTERNAL_SERVER_ERROR) {
     // Rate limit or server error - always fallback
     return true;
   }
@@ -204,11 +209,68 @@ function shouldFallback(error) {
 }
 
 function resolveErrorCode(status) {
-  if (status === 429) return 'RATE_LIMIT';
-  if (status === 400) return 'INVALID_INPUT';
-  if (status === 401 || status === 403) return 'AUTH_REQUIRED';
-  if (typeof status === 'number' && status >= 500) return 'BAD_GATEWAY';
+  if (status === HTTP_STATUS.TOO_MANY_REQUESTS) return 'RATE_LIMIT';
+  if (status === HTTP_STATUS.BAD_REQUEST) return 'INVALID_INPUT';
+  if (status === HTTP_STATUS.UNAUTHORIZED || status === HTTP_STATUS.FORBIDDEN)
+    return 'AUTH_REQUIRED';
+  if (typeof status === 'number' && status >= HTTP_STATUS.INTERNAL_SERVER_ERROR) {
+    return 'BAD_GATEWAY';
+  }
   return 'INTERNAL_ERROR';
+}
+
+function parsePositiveRetryAfter(value) {
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return Math.floor(value);
+}
+
+function getRetryAfterHeader(error) {
+  return (
+    error?.headers?.get?.('Retry-After') ||
+    error?.headers?.['retry-after'] ||
+    error?.response?.headers?.['retry-after'] ||
+    null
+  );
+}
+
+function parseRetryAfterHeader(header) {
+  if (!header) return null;
+  const normalizedHeader = String(header);
+  const seconds = Number.parseInt(normalizedHeader, 10);
+  if (!Number.isNaN(seconds) && seconds > 0) {
+    return seconds;
+  }
+
+  const date = Date.parse(normalizedHeader);
+  if (Number.isNaN(date)) {
+    return null;
+  }
+
+  const waitSeconds = Math.ceil((date - Date.now()) / 1000);
+  return waitSeconds > 0 ? waitSeconds : null;
+}
+
+function parseRetryAfterMessage(message) {
+  if (!message) return null;
+
+  const patterns = [
+    /retry\s+(?:after\s+|in\s+)?(\d+)\s*s(?:econds?)?/i,
+    /wait\s+(\d+)\s*s(?:econds?)?/i,
+    /Retry after (\d+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.match(pattern);
+    if (!match) continue;
+    const parsed = Number.parseInt(match[1], 10);
+    if (!Number.isNaN(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -256,52 +318,19 @@ function createProviderError(provider, operation, originalError) {
  * @returns {number|null} - Seconds to wait, or null if not found
  */
 function parseRetryAfter(error) {
-  if (Number.isFinite(error?.retryAfter) && error.retryAfter > 0) {
-    return Math.floor(error.retryAfter);
-  }
-  if (Number.isFinite(error?.retryAfterSeconds) && error.retryAfterSeconds > 0) {
-    return Math.floor(error.retryAfterSeconds);
-  }
-  // Check Retry-After header (HTTP standard)
-  const header =
-    error.headers?.get?.('Retry-After') ||
-    error.headers?.['retry-after'] ||
-    error.response?.headers?.['retry-after'];
-
-  if (header) {
-    const seconds = parseInt(header, 10);
-    if (!isNaN(seconds) && seconds > 0) return seconds;
-
-    // Handle HTTP-date format (RFC 7231)
-    const date = Date.parse(header);
-    if (!isNaN(date)) {
-      const waitSeconds = Math.ceil((date - Date.now()) / 1000);
-      return waitSeconds > 0 ? waitSeconds : null;
-    }
+  const explicitRetryAfter =
+    parsePositiveRetryAfter(error?.retryAfter) ?? parsePositiveRetryAfter(error?.retryAfterSeconds);
+  if (explicitRetryAfter !== null) {
+    return explicitRetryAfter;
   }
 
-  // Check error message for common patterns
-  const message = error?.message || '';
-
-  // Pattern: "retry after 30 seconds" or "retry in 30s"
-  const retryMatch = message.match(/retry\s+(?:after\s+|in\s+)?(\d+)\s*s(?:econds?)?/i);
-  if (retryMatch) {
-    return parseInt(retryMatch[1], 10);
+  const retryAfterHeader = getRetryAfterHeader(error);
+  const headerRetryAfter = parseRetryAfterHeader(retryAfterHeader);
+  if (headerRetryAfter !== null) {
+    return headerRetryAfter;
   }
 
-  // Pattern: "wait 30 seconds" or "wait 30s"
-  const waitMatch = message.match(/wait\s+(\d+)\s*s(?:econds?)?/i);
-  if (waitMatch) {
-    return parseInt(waitMatch[1], 10);
-  }
-
-  // Gemini pattern: "Retry after X"
-  const geminiMatch = message.match(/Retry after (\d+)/i);
-  if (geminiMatch) {
-    return parseInt(geminiMatch[1], 10);
-  }
-
-  return null;
+  return parseRetryAfterMessage(error?.message || '');
 }
 
 module.exports = {

@@ -1,12 +1,16 @@
-import type { ChatMessage, ChatHistoryItem, HistoryTitleSource } from '../types';
+import type { ChatAttachment, ChatMessage, ChatHistoryItem, HistoryTitleSource } from '../types';
 import { buildInitialChatTitle, isValidUUID } from '../types';
-import type { SendChatOptionsInput } from './chatSendOptions';
+import type { SendChatMessageOptions, SendChatOptionsInput } from './chatSendOptions';
 import { coerceSendOptions } from './chatSendOptions';
 import type { SendMessageMutationParams } from './sendMessageUtils';
 import { chatMessagesKeys } from './useChatMessages';
-import type { TranscriptCacheInput } from '../../transcripts/hooks/useTranscriptCache';
 import type { QueryClient } from '@tanstack/react-query';
 import type { Dispatch, SetStateAction } from 'react';
+import {
+  buildSendPayload,
+  buildUserMessage,
+  type SendPayloadOverrides,
+} from './chatSendPayloadBuilders';
 
 type UpsertHistory = (
   item: ChatHistoryItem,
@@ -37,144 +41,153 @@ interface SendMessageDeps {
   setError: SetError;
 }
 
-function buildUserMessage(
-  content: string,
-  source: 'selection' | 'followup',
-  timestamp: string,
-  attachments?: ChatMessage['attachments'],
-): ChatMessage {
-  const message: ChatMessage = {
-    id: `user-${Date.now()}`,
-    role: 'user',
-    content,
-    timestamp,
-    source,
-  };
-  if (attachments && attachments.length > 0) {
-    message.attachments = attachments;
-  }
-  return message;
+interface PreparedSendInput {
+  trimmed: string;
+  source: 'selection' | 'followup';
+  attachments?: ChatAttachment[];
+  options: SendChatMessageOptions;
+  overrides: SendPayloadOverrides;
 }
 
-function buildSendPayload(
-  deps: SendMessageDeps,
-  message: string,
-  source: 'selection' | 'followup',
-  currentMessages: ChatMessage[],
-  activeChatId: string,
-  options: {
-    attachmentIds?: string[];
-    selectionOverride?: string;
-    userMessageOverride?: string;
-    transcriptContext?: TranscriptCacheInput;
-  },
-): SendMessageMutationParams {
-  const payload: SendMessageMutationParams = {
-    message,
-    source,
-    pageUrl: deps.pageUrl,
-    chatId: deps.activeChatId,
-    currentMessages,
-    activeChatId,
-  };
-  if (deps.courseCode) {
-    payload.courseCode = deps.courseCode;
-  }
-  if (options.attachmentIds && options.attachmentIds.length > 0) {
-    payload.attachmentIds = options.attachmentIds;
+interface ChatIdentifiers {
+  provisionalChatId: string;
+  queryChatId: string;
+}
+
+function hasChatId(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function buildSendOverrides(options: SendChatMessageOptions): SendPayloadOverrides {
+  const overrides: SendPayloadOverrides = {};
+  if (Array.isArray(options.attachmentIds) && options.attachmentIds.length > 0) {
+    overrides.attachmentIds = options.attachmentIds;
   }
   if (options.selectionOverride !== undefined) {
-    payload.selectionOverride = options.selectionOverride;
+    overrides.selectionOverride = options.selectionOverride;
   }
   if (options.userMessageOverride !== undefined) {
-    payload.userMessageOverride = options.userMessageOverride;
+    overrides.userMessageOverride = options.userMessageOverride;
   }
-  if (options.transcriptContext) {
-    payload.transcriptContext = options.transcriptContext;
+  if (options.transcriptContext !== undefined && options.transcriptContext !== null) {
+    overrides.transcriptContext = options.transcriptContext;
   }
-  return payload;
+  return overrides;
+}
+
+function prepareSendInput(text: string, options?: SendChatOptionsInput): PreparedSendInput | null {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return null;
+  const resolvedOptions = coerceSendOptions(options);
+  const prepared: PreparedSendInput = {
+    trimmed,
+    source: resolvedOptions.source ?? 'followup',
+    options: resolvedOptions,
+    overrides: buildSendOverrides(resolvedOptions),
+  };
+  if (resolvedOptions.attachments !== undefined) {
+    prepared.attachments = resolvedOptions.attachments;
+  }
+  return prepared;
+}
+
+function hasChatContext(deps: SendMessageDeps): boolean {
+  return hasChatId(deps.activeChatId) || hasChatId(deps.activeHistoryId);
+}
+
+function resolveChatIdentifiers(deps: SendMessageDeps): ChatIdentifiers {
+  const provisionalChatId = isValidUUID(deps.activeChatId)
+    ? (deps.activeChatId as string)
+    : hasChatId(deps.activeHistoryId)
+      ? deps.activeHistoryId
+      : `chat-${Date.now()}`;
+  const queryChatId = hasChatId(deps.activeChatId) ? deps.activeChatId : provisionalChatId;
+  return { provisionalChatId, queryChatId };
+}
+
+function appendUserMessageToCache({
+  queryClient,
+  queryChatId,
+  fallbackMessages,
+  userMessage,
+}: {
+  queryClient: QueryClient;
+  queryChatId: string;
+  fallbackMessages: ChatMessage[];
+  userMessage: ChatMessage;
+}): ChatMessage[] {
+  const currentMessages =
+    queryClient.getQueryData<ChatMessage[]>(chatMessagesKeys.byId(queryChatId)) ?? fallbackMessages;
+  const nextMessages = [...currentMessages, userMessage];
+  queryClient.setQueryData(chatMessagesKeys.byId(queryChatId), nextMessages);
+  return nextMessages;
+}
+
+function sendToExistingChat({
+  deps,
+  input,
+}: {
+  deps: SendMessageDeps;
+  input: PreparedSendInput;
+}): void {
+  const now = new Date().toISOString();
+  const identifiers = resolveChatIdentifiers(deps);
+  const userMessage = buildUserMessage({
+    id: `user-${Date.now()}`,
+    content: input.trimmed,
+    source: input.source,
+    timestamp: now,
+    ...(input.attachments !== undefined ? { attachments: input.attachments } : {}),
+  });
+
+  deps.setIsHistoryOpen(false);
+  deps.setError(null);
+  deps.setActiveHistoryId(identifiers.provisionalChatId);
+
+  const nextMessages = appendUserMessageToCache({
+    queryClient: deps.queryClient,
+    queryChatId: identifiers.queryChatId,
+    fallbackMessages: deps.messages,
+    userMessage,
+  });
+
+  deps.upsertHistory(
+    {
+      id: identifiers.provisionalChatId,
+      title: buildInitialChatTitle(input.trimmed),
+      updatedAt: now,
+      lastMessage: input.trimmed,
+    },
+    undefined,
+    'local',
+  );
+
+  deps.sendMessage(
+    buildSendPayload({
+      message: input.trimmed,
+      source: input.source,
+      pageUrl: deps.pageUrl,
+      chatId: deps.activeChatId,
+      currentMessages: nextMessages,
+      activeChatId: identifiers.provisionalChatId,
+      courseCode: deps.courseCode,
+      overrides: input.overrides,
+    }),
+  );
 }
 
 export function createSendMessage(deps: SendMessageDeps) {
   return (text: string, options?: SendChatOptionsInput) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    const resolvedOptions = coerceSendOptions(options);
-    const source = resolvedOptions.source || 'followup';
-    const attachments = resolvedOptions.attachments;
-    const attachmentIds = resolvedOptions.attachmentIds;
-    const selectionOverride = resolvedOptions.selectionOverride;
-    const userMessageOverride = resolvedOptions.userMessageOverride;
-    const transcriptContext = resolvedOptions.transcriptContext;
-    const overrides: {
-      attachmentIds?: string[];
-      selectionOverride?: string;
-      userMessageOverride?: string;
-      transcriptContext?: TranscriptCacheInput;
-    } = {};
-    if (attachmentIds && attachmentIds.length > 0) {
-      overrides.attachmentIds = attachmentIds;
-    }
-    if (selectionOverride !== undefined) {
-      overrides.selectionOverride = selectionOverride;
-    }
-    if (userMessageOverride !== undefined) {
-      overrides.userMessageOverride = userMessageOverride;
-    }
-    if (transcriptContext) {
-      overrides.transcriptContext = transcriptContext;
-    }
-
-    const hasChatContext = Boolean(deps.activeChatId || deps.activeHistoryId);
-
-    if (deps.messages.length === 0 && !hasChatContext) {
-      deps.startNewChat(trimmed, resolvedOptions);
+    const input = prepareSendInput(text, options);
+    if (input === null) {
       return;
     }
 
-    const now = new Date().toISOString();
+    if (deps.messages.length === 0 && !hasChatContext(deps)) {
+      deps.startNewChat(input.trimmed, input.options);
+      return;
+    }
 
-    const provisionalChatId = isValidUUID(deps.activeChatId)
-      ? (deps.activeChatId as string)
-      : deps.activeHistoryId || `chat-${Date.now()}`;
-
-    const userMessage = buildUserMessage(trimmed, source, now, attachments);
-
-    deps.setIsHistoryOpen(false);
-    deps.setError(null);
-    deps.setActiveHistoryId(provisionalChatId);
-
-    const currentMessages =
-      deps.queryClient.getQueryData<ChatMessage[]>(
-        chatMessagesKeys.byId(deps.activeChatId || provisionalChatId),
-      ) || deps.messages;
-    const nextMessages = [...currentMessages, userMessage];
-
-    deps.queryClient.setQueryData(
-      chatMessagesKeys.byId(deps.activeChatId || provisionalChatId),
-      nextMessages,
-    );
-
-    deps.upsertHistory(
-      {
-        id: provisionalChatId,
-        title: buildInitialChatTitle(trimmed),
-        updatedAt: now,
-        lastMessage: trimmed,
-      },
-      undefined,
-      'local',
-    );
-
-    const payload = buildSendPayload(
-      deps,
-      trimmed,
-      source,
-      nextMessages,
-      provisionalChatId,
-      overrides,
-    );
-
-    deps.sendMessage(payload);
+    sendToExistingChat({ deps, input });
   };
 }

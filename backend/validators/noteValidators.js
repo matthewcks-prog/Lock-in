@@ -18,6 +18,10 @@ const lexicalJsonSchema = z.object({}).passthrough(); // Allow any object struct
 
 // Content limits
 const MAX_CONTENT_LENGTH = MAX_NOTE_CONTENT_LENGTH;
+const MAX_TAG_LENGTH = 50;
+const MAX_SEARCH_NOTES_K = 50;
+const MAX_LIST_NOTES_LIMIT = 100;
+const MAX_CHAT_NOTES_K = 20;
 
 /**
  * Schema for creating a note
@@ -35,7 +39,7 @@ const createNoteSchema = z
     sourceUrl: z.union([z.string().url(), z.literal(''), z.null()]).optional(),
     courseCode: z.string().optional().nullable(),
     noteType: z.string().optional().nullable(),
-    tags: z.union([z.array(z.string().max(50)), z.string(), z.null()]).optional(),
+    tags: z.union([z.array(z.string().max(MAX_TAG_LENGTH)), z.string(), z.null()]).optional(),
   })
   .refine(
     (data) => {
@@ -80,7 +84,7 @@ const noteIdParamSchema = z.object({
 const searchNotesSchema = z.object({
   q: z.string().min(1, 'Query parameter (q) is required'),
   courseCode: z.string().optional(),
-  k: z.coerce.number().int().min(1).max(50).optional(),
+  k: z.coerce.number().int().min(1).max(MAX_SEARCH_NOTES_K).optional(),
 });
 
 /**
@@ -90,7 +94,7 @@ const searchNotesSchema = z.object({
 const listNotesSchema = z.object({
   sourceUrl: z.string().optional(),
   courseCode: z.string().optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_LIST_NOTES_LIMIT).optional(),
 });
 
 /**
@@ -100,7 +104,7 @@ const listNotesSchema = z.object({
 const chatWithNotesSchema = z.object({
   query: z.string().min(1, 'Query is required and cannot be empty'),
   courseCode: z.string().optional(),
-  k: z.coerce.number().int().min(1).max(20).optional(),
+  k: z.coerce.number().int().min(1).max(MAX_CHAT_NOTES_K).optional(),
 });
 
 /**

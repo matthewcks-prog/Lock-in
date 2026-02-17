@@ -8,12 +8,15 @@ const { assembleUploadFromChunks } = require('./transcriptProcessingAssembly');
 const { convertToAudio, splitAudioIfNeeded } = require('./transcriptProcessingAudio');
 const { transcribeSegments } = require('./transcriptProcessingTranscription');
 const { ensureNotCanceled, normalizeProcessingOptions } = require('./transcriptProcessingUtils');
+const { SIXTY, THOUSAND } = require('../../constants/numbers');
+
+const MS_PER_MINUTE = SIXTY * THOUSAND;
 
 function enforceDurationLimit(job, options) {
   if (!options.maxMinutes || !job.duration_ms) {
     return;
   }
-  const maxMs = options.maxMinutes * 60 * 1000;
+  const maxMs = options.maxMinutes * MS_PER_MINUTE;
   if (job.duration_ms > maxMs) {
     throw new Error(`Video exceeds ${options.maxMinutes} minute limit`);
   }

@@ -20,6 +20,7 @@ const projectRoot = process.cwd();
 const entryPath = resolve(projectRoot, 'extension/contentScript/index.css');
 const outputPath = resolve(projectRoot, 'extension/contentScript.css');
 const noMinify = process.argv.includes('--no-minify');
+const BYTES_PER_KILOBYTE = 1024;
 
 // ── Step 1: Inline @import statements ──────────────────────────────
 
@@ -135,7 +136,7 @@ async function build() {
 
   writeFileSync(outputPath, `${header}${result.css}\n`, 'utf8');
 
-  const sizeKb = (Buffer.byteLength(result.css, 'utf8') / 1024).toFixed(1);
+  const sizeKb = (Buffer.byteLength(result.css, 'utf8') / BYTES_PER_KILOBYTE).toFixed(1);
   console.log(`✅ Built CSS bundle: ${outputPath} (${sizeKb} KB${noMinify ? ', unminified' : ''})`);
 }
 

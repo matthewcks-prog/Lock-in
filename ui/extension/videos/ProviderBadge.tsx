@@ -20,7 +20,7 @@ const BADGE_COLORS: Record<ProviderKey, { bg: string; text: string }> = {
   unknown: { bg: '#6b7280', text: '#ffffff' },
 };
 
-export function ProviderBadge({ provider }: ProviderBadgeProps) {
+export function ProviderBadge({ provider }: ProviderBadgeProps): JSX.Element {
   const key = Object.prototype.hasOwnProperty.call(BADGE_COLORS, provider)
     ? (provider as ProviderKey)
     : 'unknown';

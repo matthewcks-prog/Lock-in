@@ -1,4 +1,10 @@
-import { TimeoutError } from '../errors';
+import {
+  createAbortError,
+  createTimeoutError,
+  isAbortError,
+  shouldRetryError,
+} from './retryErrorUtils';
+import { applyRetryDelay } from './retryNotifications';
 
 // HTTP Status Constants
 const HTTP_TOO_MANY_REQUESTS = 429;
@@ -41,20 +47,12 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   retryOnTimeout: true,
 };
 
-function isNonEmptyString(value: string | undefined): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
 function normalizeConfig(overrides?: Partial<RetryConfig>): RetryConfig {
   if (overrides === undefined) return { ...DEFAULT_RETRY_CONFIG };
   const retryableStatuses = Array.isArray(overrides.retryableStatuses)
     ? overrides.retryableStatuses
     : DEFAULT_RETRY_CONFIG.retryableStatuses;
   return { ...DEFAULT_RETRY_CONFIG, ...overrides, retryableStatuses };
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function calculateBackoffDelay(
@@ -102,44 +100,6 @@ export function isRetryableStatus(status: number, config: RetryConfig): boolean 
   return false;
 }
 
-function isNetworkError(error: unknown): boolean {
-  if (error === null || error === undefined) return false;
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    message.includes('Failed to fetch') ||
-    message.includes('NetworkError') ||
-    message.includes('Network request failed') ||
-    message.includes('ERR_NETWORK') ||
-    message.includes('ECONNRESET') ||
-    message.includes('ETIMEDOUT') ||
-    message.includes('EAI_AGAIN')
-  );
-}
-
-function createTimeoutError(timeoutMs: number, context?: string): TimeoutError {
-  const operation = isNonEmptyString(context) ? context : 'network request';
-  return new TimeoutError(operation, timeoutMs);
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    (error.name === 'AbortError' ||
-      (error as Error & { code?: string }).code === 'ABORTED' ||
-      (error as Error & { code?: string }).code === 'ABORT_ERR' ||
-      (error as Error & { code?: string }).code === 'ERR_ABORTED')
-  );
-}
-
-function shouldRetryError(error: unknown, config: RetryConfig): boolean {
-  if (error === null || error === undefined) return false;
-  const code = (error as { code?: string }).code;
-  if (code === 'TIMEOUT') return config.retryOnTimeout;
-  if (code === 'ABORTED') return false;
-  if (isNetworkError(error)) return config.retryOnNetworkError;
-  return false;
-}
-
 type AbortState = {
   controller: AbortController | null;
   timedOut: { value: boolean };
@@ -157,12 +117,6 @@ type AttemptHandling = {
   error: unknown;
   shouldReturn: boolean;
 };
-
-function createAbortError(): Error {
-  const abortError = new Error('Request aborted');
-  abortError.name = 'AbortError';
-  return abortError;
-}
 
 function resolveFetcher(config: RetryConfig): typeof fetch {
   const fetcher = config.fetcher ?? globalThis.fetch;
@@ -287,13 +241,21 @@ function shouldRetryAttempt(
   return shouldRetryError(error, config);
 }
 
-function finalizeAttemptDecision(
-  attempt: number,
-  maxAttempts: number,
-  lastResponse: Response | null,
-  lastError: unknown,
-  shouldRetry: boolean,
-): Response | null {
+type AttemptDecisionInput = {
+  attempt: number;
+  maxAttempts: number;
+  lastResponse: Response | null;
+  lastError: unknown;
+  shouldRetry: boolean;
+};
+
+function finalizeAttemptDecision({
+  attempt,
+  maxAttempts,
+  lastResponse,
+  lastError,
+  shouldRetry,
+}: AttemptDecisionInput): Response | null {
   if (shouldRetry && attempt < maxAttempts - 1) {
     return null;
   }
@@ -311,35 +273,6 @@ function getRetryDelay(response: Response | null, attempt: number, config: Retry
     }
   }
   return calculateRetryDelay(attempt, config);
-}
-
-type RetryNotification = {
-  config: RetryConfig;
-  attempt: number;
-  delayMs: number;
-  response: Response | null;
-  error: unknown;
-};
-
-function notifyRetry({ config, attempt, delayMs, response, error }: RetryNotification): void {
-  if (typeof config.onRetry !== 'function') return;
-  const retryEvent: RetryEvent = {
-    attempt: attempt + 1,
-    maxRetries: config.maxRetries,
-    delayMs,
-  };
-  if (response !== null) {
-    retryEvent.status = response.status;
-  }
-  if (error !== null && error !== undefined) {
-    retryEvent.error = error;
-  }
-  config.onRetry(retryEvent);
-}
-
-async function applyRetryDelay(context: RetryNotification): Promise<void> {
-  notifyRetry(context);
-  await sleep(context.delayMs);
 }
 
 export async function fetchWithRetry(
@@ -365,13 +298,13 @@ export async function fetchWithRetry(
     lastError = handled.error;
 
     const shouldRetry = shouldRetryAttempt(lastResponse, lastError, config);
-    const terminalResponse = finalizeAttemptDecision(
+    const terminalResponse = finalizeAttemptDecision({
       attempt,
       maxAttempts,
       lastResponse,
       lastError,
       shouldRetry,
-    );
+    });
     if (terminalResponse !== null) {
       return terminalResponse;
     }

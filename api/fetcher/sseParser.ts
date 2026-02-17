@@ -77,7 +77,7 @@ function parseSSELines(lines: string[]): SSEEvent | null {
 
   try {
     const jsonData = dataLines.join('\n');
-    const data = JSON.parse(jsonData);
+    const data: unknown = JSON.parse(jsonData);
     return { event: eventType, data };
   } catch {
     return null;
@@ -117,7 +117,7 @@ function splitSSEBuffer(buffer: string): { events: StreamEvent[]; rest: string }
  */
 export async function* parseSSEStream(response: Response): AsyncGenerator<StreamEvent> {
   const reader = response.body?.getReader();
-  if (!reader) {
+  if (reader === null || reader === undefined) {
     throw new Error('Response body is not readable');
   }
 

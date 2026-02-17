@@ -8,6 +8,7 @@ export type ChatHistoryPage = {
     nextCursor?: string | null;
   };
 };
+const RANDOM_RADIX_HEX = 16;
 
 type RecordValue = Record<string, unknown>;
 
@@ -19,19 +20,32 @@ function getString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+function firstNonEmptyString(values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    if (value !== undefined && value.length > 0) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 function normalizeHistory(response: unknown): ChatHistoryItem[] {
   if (!Array.isArray(response)) return [];
 
   return response.map((item) => {
     const record = isRecord(item) ? item : {};
+    const id =
+      firstNonEmptyString([getString(record['id'])]) ??
+      `chat-${Math.random().toString(RANDOM_RADIX_HEX).slice(2)}`;
+    const updatedAt =
+      firstNonEmptyString([getString(record['updated_at']), getString(record['updatedAt'])]) ??
+      new Date().toISOString();
+    const lastMessage = firstNonEmptyString([getString(record['lastMessage'])]) ?? '';
     return {
-      id: getString(record['id']) || `chat-${Math.random().toString(16).slice(2)}`,
+      id,
       title: coerceChatTitle(getString(record['title']), FALLBACK_CHAT_TITLE),
-      updatedAt:
-        getString(record['updated_at']) ||
-        getString(record['updatedAt']) ||
-        new Date().toISOString(),
-      lastMessage: getString(record['lastMessage']) || '',
+      updatedAt,
+      lastMessage,
     };
   });
 }
@@ -66,7 +80,7 @@ export function buildPages(
   for (let index = 0; index < pageCount; index += 1) {
     const start = index * pageSize;
     const chats = items.slice(start, start + pageSize);
-    const existingPagination = existingPages[index]?.pagination || {
+    const existingPagination = existingPages[index]?.pagination ?? {
       hasMore: false,
       nextCursor: null,
     };

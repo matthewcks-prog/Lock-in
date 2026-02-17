@@ -2,16 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Note, NoteStatus } from '@core/domain/Note';
 import type { NotesService } from '@core/services/notesService';
-import { createClientNoteId, createContentFingerprint, createDraftNote } from './noteUtils';
-
-function getErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message) return err.message;
-  if (typeof err === 'object' && err !== null) {
-    const record = err as Record<string, unknown>;
-    if (typeof record['message'] === 'string') return record['message'];
-  }
-  return fallback;
-}
+import { createClientNoteId, createDraftNote } from './noteUtils';
+import { buildDraftDefaults } from './noteEditorStateDraft';
+import { useActiveNoteLoader } from './useNoteEditorStateLoader';
 
 export interface NoteEditorStateOptions {
   noteId?: string | null;
@@ -40,143 +33,29 @@ export interface NoteEditorStateInternal extends NoteEditorState {
   lastSavedFingerprintRef: MutableRefObject<string | null>;
 }
 
-export function useNoteEditorState({
-  noteId,
-  notesService,
-  defaultCourseCode,
-  defaultSourceUrl,
-  sourceSelection,
-}: NoteEditorStateOptions): NoteEditorStateInternal {
-  const [activeNoteId, setActiveNoteId] = useState<string | null>(noteId ?? null);
-  const [note, setNote] = useState<Note | null>(
-    (() => {
-      const draftDefaults: {
-        courseCode?: string | null;
-        sourceUrl?: string | null;
-        sourceSelection?: string | null;
-      } = {};
-      if (defaultCourseCode !== undefined) {
-        draftDefaults.courseCode = defaultCourseCode;
-      }
-      if (defaultSourceUrl !== undefined) {
-        draftDefaults.sourceUrl = defaultSourceUrl;
-      }
-      if (sourceSelection !== undefined) {
-        draftDefaults.sourceSelection = sourceSelection;
-      }
-      return createDraftNote(draftDefaults);
-    })(),
-  );
-  const [status, setStatus] = useState<NoteStatus>('idle');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+interface NoteEditorRefs {
+  noteRef: MutableRefObject<Note | null>;
+  clientNoteIdRef: MutableRefObject<string>;
+  lastSavedFingerprintRef: MutableRefObject<string | null>;
+  loadingNoteIdRef: MutableRefObject<string | null>;
+  lastLoadedNoteIdRef: MutableRefObject<string | null>;
+}
 
-  const noteRef = useRef(note);
-  noteRef.current = note;
-  const clientNoteIdRef = useRef<string>(noteId ?? createClientNoteId());
-  const lastSavedFingerprintRef = useRef<string | null>(null);
-  const loadingNoteIdRef = useRef<string | null>(null);
-  const lastLoadedNoteIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    setActiveNoteId(noteId ?? null);
-  }, [noteId]);
-
-  // Load note when activeNoteId changes
-  // Uses refs for dependencies to avoid re-running on every render
-  const notesServiceRef = useRef(notesService);
-  notesServiceRef.current = notesService;
-  const defaultCourseCodeRef = useRef(defaultCourseCode);
-  defaultCourseCodeRef.current = defaultCourseCode;
-  const defaultSourceUrlRef = useRef(defaultSourceUrl);
-  defaultSourceUrlRef.current = defaultSourceUrl;
-  const sourceSelectionRef = useRef(sourceSelection);
-  sourceSelectionRef.current = sourceSelection;
-
-  useEffect(() => {
-    const targetId = activeNoteId;
-    const service = notesServiceRef.current;
-    const currentNote = noteRef.current;
-
-    if (targetId) {
-      clientNoteIdRef.current = targetId;
-    }
-
-    // Skip if we're already loading this note or it's already loaded
-    if (targetId === loadingNoteIdRef.current) {
-      return;
-    }
-    if (targetId === lastLoadedNoteIdRef.current && targetId !== null) {
-      return;
-    }
-
-    if (!targetId) {
-      loadingNoteIdRef.current = null;
-      lastLoadedNoteIdRef.current = null;
-      if (!currentNote || currentNote.id !== null) {
-        clientNoteIdRef.current = createClientNoteId();
-        const draftDefaults: {
-          courseCode?: string | null;
-          sourceUrl?: string | null;
-          sourceSelection?: string | null;
-        } = {};
-        if (defaultCourseCodeRef.current !== undefined) {
-          draftDefaults.courseCode = defaultCourseCodeRef.current;
-        }
-        if (defaultSourceUrlRef.current !== undefined) {
-          draftDefaults.sourceUrl = defaultSourceUrlRef.current;
-        }
-        if (sourceSelectionRef.current !== undefined) {
-          draftDefaults.sourceSelection = sourceSelectionRef.current;
-        }
-        const draft = createDraftNote(draftDefaults);
-        setNote(draft);
-        // Set fingerprint for the initial draft to prevent unnecessary save on first change
-        lastSavedFingerprintRef.current = createContentFingerprint(draft.title, draft.content);
-      }
-      setStatus('idle');
-      setIsLoading(false);
-      return;
-    }
-
-    if (!service) {
-      loadingNoteIdRef.current = null;
-      setIsLoading(false);
-      return;
-    }
-
-    loadingNoteIdRef.current = targetId;
-    setIsLoading(true);
-    setError(null);
-
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        const loaded = await service.getNote(targetId);
-        if (cancelled) return;
-
-        setNote(loaded);
-        lastSavedFingerprintRef.current = createContentFingerprint(loaded.title, loaded.content);
-        lastLoadedNoteIdRef.current = targetId;
-        setStatus('idle');
-      } catch (err: unknown) {
-        if (cancelled) return;
-        setError(getErrorMessage(err, 'Failed to load note'));
-        setStatus('error');
-      } finally {
-        if (!cancelled) {
-          loadingNoteIdRef.current = null;
-          setIsLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeNoteId, notesService]);
-
+function buildNoteEditorStateInternal({
+  note,
+  status,
+  error,
+  isLoading,
+  activeNoteId,
+  setActiveNoteId,
+  setNote,
+  setStatus,
+  setError,
+  setIsLoading,
+  noteRef,
+  clientNoteIdRef,
+  lastSavedFingerprintRef,
+}: NoteEditorStateInternal): NoteEditorStateInternal {
   return {
     note,
     status,
@@ -192,4 +71,81 @@ export function useNoteEditorState({
     clientNoteIdRef,
     lastSavedFingerprintRef,
   };
+}
+
+function useSyncedActiveNoteId(
+  noteId: string | null | undefined,
+): [string | null, Dispatch<SetStateAction<string | null>>] {
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(noteId ?? null);
+  useEffect(() => {
+    setActiveNoteId(noteId ?? null);
+  }, [noteId]);
+  return [activeNoteId, setActiveNoteId];
+}
+
+function useNoteEditorRefs(note: Note | null, noteId: string | null | undefined): NoteEditorRefs {
+  const noteRef = useRef(note);
+  noteRef.current = note;
+  const clientNoteIdRef = useRef<string>(noteId ?? createClientNoteId());
+  const lastSavedFingerprintRef = useRef<string | null>(null);
+  const loadingNoteIdRef = useRef<string | null>(null);
+  const lastLoadedNoteIdRef = useRef<string | null>(null);
+  return {
+    noteRef,
+    clientNoteIdRef,
+    lastSavedFingerprintRef,
+    loadingNoteIdRef,
+    lastLoadedNoteIdRef,
+  };
+}
+
+export function useNoteEditorState(options: NoteEditorStateOptions): NoteEditorStateInternal {
+  const { noteId, notesService, defaultCourseCode, defaultSourceUrl, sourceSelection } = options;
+  const [activeNoteId, setActiveNoteId] = useSyncedActiveNoteId(noteId);
+  const [note, setNote] = useState<Note | null>(() =>
+    createDraftNote(buildDraftDefaults({ defaultCourseCode, defaultSourceUrl, sourceSelection })),
+  );
+  const [status, setStatus] = useState<NoteStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const {
+    noteRef,
+    clientNoteIdRef,
+    lastSavedFingerprintRef,
+    loadingNoteIdRef,
+    lastLoadedNoteIdRef,
+  } = useNoteEditorRefs(note, noteId);
+
+  useActiveNoteLoader({
+    activeNoteId,
+    noteRef,
+    notesService,
+    defaultCourseCode,
+    defaultSourceUrl,
+    sourceSelection,
+    clientNoteIdRef,
+    loadingNoteIdRef,
+    lastLoadedNoteIdRef,
+    lastSavedFingerprintRef,
+    setNote,
+    setStatus,
+    setError,
+    setIsLoading,
+  });
+
+  return buildNoteEditorStateInternal({
+    note,
+    status,
+    error,
+    isLoading,
+    activeNoteId,
+    setActiveNoteId,
+    setNote,
+    setStatus,
+    setError,
+    setIsLoading,
+    noteRef,
+    clientNoteIdRef,
+    lastSavedFingerprintRef,
+  });
 }

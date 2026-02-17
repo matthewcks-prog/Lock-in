@@ -12,84 +12,63 @@
     return {};
   }
 
-  function createFallbackValidators() {
+  function createSessionFallbackValidators() {
+    const saveSessionPayload = (message) => ({
+      sessionData: message?.sessionData ?? message?.payload?.sessionData,
+    });
     return {
       getTabId: () => ({ ok: true }),
       GET_TAB_ID: () => ({ ok: true }),
       getSession: () => ({ ok: true }),
       GET_SESSION: () => ({ ok: true }),
-      saveSession: (message) => ({
-        ok: true,
-        payload: {
-          sessionData: message?.sessionData ?? message?.payload?.sessionData,
-        },
-      }),
-      SAVE_SESSION: (message) => ({
-        ok: true,
-        payload: {
-          sessionData: message?.sessionData ?? message?.payload?.sessionData,
-        },
-      }),
+      saveSession: (message) => ({ ok: true, payload: saveSessionPayload(message) }),
+      SAVE_SESSION: (message) => ({ ok: true, payload: saveSessionPayload(message) }),
       clearSession: () => ({ ok: true }),
       CLEAR_SESSION: () => ({ ok: true }),
+    };
+  }
+
+  function createSettingsFallbackValidators() {
+    const settingsPayload = (message) => ({
+      settings: ensureObject(message?.settings ?? message?.payload?.settings),
+    });
+    return {
       getSettings: () => ({ ok: true }),
       GET_SETTINGS: () => ({ ok: true }),
-      saveSettings: (message) => ({
-        ok: true,
-        payload: {
-          settings: ensureObject(message?.settings ?? message?.payload?.settings),
-        },
-      }),
-      UPDATE_SETTINGS: (message) => ({
-        ok: true,
-        payload: {
-          settings: ensureObject(message?.settings ?? message?.payload?.settings),
-        },
-      }),
-      extractTranscript: (message) => ({
-        ok: true,
-        payload: {
-          video: message?.video ?? message?.payload?.video,
-        },
-      }),
-      EXTRACT_TRANSCRIPT: (message) => ({
-        ok: true,
-        payload: {
-          video: message?.video ?? message?.payload?.video,
-        },
-      }),
+      saveSettings: (message) => ({ ok: true, payload: settingsPayload(message) }),
+      UPDATE_SETTINGS: (message) => ({ ok: true, payload: settingsPayload(message) }),
+    };
+  }
+
+  function createTranscriptFallbackValidators() {
+    const videoPayload = (message) => ({ video: message?.video ?? message?.payload?.video });
+    const tokenPayload = (message) => ({ token: message?.token ?? message?.payload?.token });
+    return {
+      extractTranscript: (message) => ({ ok: true, payload: videoPayload(message) }),
+      EXTRACT_TRANSCRIPT: (message) => ({ ok: true, payload: videoPayload(message) }),
       DETECT_ECHO360_VIDEOS: (message) => ({
         ok: true,
-        payload: {
-          context: message?.context ?? message?.payload?.context,
-        },
+        payload: { context: message?.context ?? message?.payload?.context },
       }),
-      FETCH_PANOPTO_MEDIA_URL: (message) => ({
-        ok: true,
-        payload: {
-          video: message?.video ?? message?.payload?.video,
-        },
-      }),
+      FETCH_PANOPTO_MEDIA_URL: (message) => ({ ok: true, payload: videoPayload(message) }),
       TRANSCRIBE_MEDIA_AI: (message) => ({
         ok: true,
         payload: ensureObject(message?.payload ?? message),
       }),
-      MEDIA_CHUNK: (message) => ({
-        ok: true,
-        payload: ensureObject(message?.payload),
-      }),
-      LIST_ACTIVE_TRANSCRIPT_JOBS: (message) => ({
-        ok: true,
-        payload: {
-          token: message?.token ?? message?.payload?.token,
-        },
-      }),
+      MEDIA_CHUNK: (message) => ({ ok: true, payload: ensureObject(message?.payload) }),
+      LIST_ACTIVE_TRANSCRIPT_JOBS: (message) => ({ ok: true, payload: tokenPayload(message) }),
       CANCEL_ALL_ACTIVE_TRANSCRIPT_JOBS: (message) => ({
         ok: true,
-        payload: {
-          token: message?.token ?? message?.payload?.token,
-        },
+        payload: tokenPayload(message),
       }),
+    };
+  }
+
+  function createFallbackValidators() {
+    return {
+      ...createSessionFallbackValidators(),
+      ...createSettingsFallbackValidators(),
+      ...createTranscriptFallbackValidators(),
     };
   }
 

@@ -38,7 +38,7 @@ function resizeToContent(textarea: HTMLTextAreaElement): void {
   textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
-function useEditorAutoFocus(ref: React.RefObject<HTMLTextAreaElement | null>) {
+function useEditorAutoFocus(ref: React.RefObject<HTMLTextAreaElement | null>): void {
   useEffect(() => {
     const textarea = ref.current;
     if (textarea !== null) {
@@ -47,13 +47,79 @@ function useEditorAutoFocus(ref: React.RefObject<HTMLTextAreaElement | null>) {
   }, [ref]);
 }
 
-function useEditorAutoResize(ref: React.RefObject<HTMLTextAreaElement | null>, draft: string) {
+function useEditorAutoResize(
+  ref: React.RefObject<HTMLTextAreaElement | null>,
+  draft: string,
+): void {
   useEffect(() => {
     const textarea = ref.current;
     if (textarea !== null) {
       resizeToContent(textarea);
     }
   }, [draft, ref]);
+}
+
+function useEditorChangeHandler(
+  onDraftChange: (content: string) => void,
+): (event: ChangeEvent<HTMLTextAreaElement>) => void {
+  return useCallback(
+    (event: ChangeEvent<HTMLTextAreaElement>) => {
+      onDraftChange(event.target.value);
+    },
+    [onDraftChange],
+  );
+}
+
+function useEditorKeyDownHandler(
+  onSubmit: () => void,
+  onCancel: () => void,
+): (event: KeyboardEvent<HTMLTextAreaElement>) => void {
+  return useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        onSubmit();
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCancel();
+      }
+    },
+    [onSubmit, onCancel],
+  );
+}
+
+function MessageEditorActions({
+  isSubmitting,
+  canSubmit,
+  onCancel,
+  onSubmit,
+}: {
+  isSubmitting: boolean;
+  canSubmit: boolean;
+  onCancel: () => void;
+  onSubmit: () => void;
+}): JSX.Element {
+  return (
+    <div className="lockin-msg-editor-actions">
+      <button
+        type="button"
+        className="lockin-msg-editor-cancel"
+        onClick={onCancel}
+        disabled={isSubmitting}
+      >
+        Cancel
+      </button>
+      <button
+        type="button"
+        className="lockin-msg-editor-submit"
+        onClick={onSubmit}
+        disabled={!canSubmit}
+      >
+        {isSubmitting ? 'Saving...' : 'Send'}
+      </button>
+    </div>
+  );
 }
 
 export const MessageEditor = memo(function MessageEditor({
@@ -67,27 +133,8 @@ export const MessageEditor = memo(function MessageEditor({
 
   useEditorAutoFocus(textareaRef);
   useEditorAutoResize(textareaRef, draft);
-
-  const handleChange = useCallback(
-    (e: ChangeEvent<HTMLTextAreaElement>) => {
-      onDraftChange(e.target.value);
-    },
-    [onDraftChange],
-  );
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        onSubmit();
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onCancel();
-      }
-    },
-    [onSubmit, onCancel],
-  );
+  const handleChange = useEditorChangeHandler(onDraftChange);
+  const handleKeyDown = useEditorKeyDownHandler(onSubmit, onCancel);
 
   const canSubmit = draft.trim().length > 0 && !isSubmitting;
 
@@ -103,24 +150,12 @@ export const MessageEditor = memo(function MessageEditor({
         aria-label="Edit message"
         rows={1}
       />
-      <div className="lockin-msg-editor-actions">
-        <button
-          type="button"
-          className="lockin-msg-editor-cancel"
-          onClick={onCancel}
-          disabled={isSubmitting}
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          className="lockin-msg-editor-submit"
-          onClick={onSubmit}
-          disabled={!canSubmit}
-        >
-          {isSubmitting ? 'Saving...' : 'Send'}
-        </button>
-      </div>
+      <MessageEditorActions
+        isSubmitting={isSubmitting}
+        canSubmit={canSubmit}
+        onCancel={onCancel}
+        onSubmit={onSubmit}
+      />
     </div>
   );
 });

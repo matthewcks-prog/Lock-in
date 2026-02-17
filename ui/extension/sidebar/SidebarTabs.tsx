@@ -9,13 +9,57 @@ interface SidebarTabsProps {
   onCloseTool?: () => void;
 }
 
+interface ToolTabProps {
+  activeTab: SidebarTabId;
+  activeToolTitle: string | null | undefined;
+  onCloseTool: (() => void) | undefined;
+  onTabChange: (tabId: SidebarTabId) => void;
+}
+
+function hasActiveTool(activeToolId?: string | null): activeToolId is string {
+  return activeToolId !== undefined && activeToolId !== null && activeToolId.length > 0;
+}
+
+function ToolTab({
+  activeTab,
+  activeToolTitle,
+  onCloseTool,
+  onTabChange,
+}: ToolTabProps): JSX.Element {
+  const resolvedToolTitle = activeToolTitle ?? 'Tool';
+  return (
+    <button
+      className={`lockin-tab lockin-tab-closable ${activeTab === TOOL_TAB_ID ? 'lockin-tab-active' : ''}`}
+      onClick={() => onTabChange(TOOL_TAB_ID)}
+      role="tab"
+      aria-selected={activeTab === TOOL_TAB_ID}
+    >
+      <span>{resolvedToolTitle}</span>
+      <span
+        className="lockin-tab-close"
+        onClick={(event) => {
+          event.stopPropagation();
+          onCloseTool?.();
+          if (activeTab === TOOL_TAB_ID) {
+            onTabChange(CHAT_TAB_ID);
+          }
+        }}
+        role="button"
+        aria-label={`Close ${resolvedToolTitle}`}
+      >
+        A-
+      </span>
+    </button>
+  );
+}
+
 export function SidebarTabs({
   activeTab,
   onTabChange,
   activeToolId,
   activeToolTitle,
   onCloseTool,
-}: SidebarTabsProps) {
+}: SidebarTabsProps): JSX.Element {
   return (
     <div className="lockin-tabs-wrapper" role="tablist">
       {[CHAT_TAB_ID, NOTES_TAB_ID].map((tabId) => {
@@ -33,31 +77,13 @@ export function SidebarTabs({
           </button>
         );
       })}
-      {activeToolId && (
-        <button
-          className={`lockin-tab lockin-tab-closable ${
-            activeTab === TOOL_TAB_ID ? 'lockin-tab-active' : ''
-          }`}
-          onClick={() => onTabChange(TOOL_TAB_ID)}
-          role="tab"
-          aria-selected={activeTab === TOOL_TAB_ID}
-        >
-          <span>{activeToolTitle}</span>
-          <span
-            className="lockin-tab-close"
-            onClick={(event) => {
-              event.stopPropagation();
-              onCloseTool?.();
-              if (activeTab === TOOL_TAB_ID) {
-                onTabChange(CHAT_TAB_ID);
-              }
-            }}
-            role="button"
-            aria-label={`Close ${activeToolTitle}`}
-          >
-            A-
-          </span>
-        </button>
+      {hasActiveTool(activeToolId) && (
+        <ToolTab
+          activeTab={activeTab}
+          activeToolTitle={activeToolTitle}
+          onCloseTool={onCloseTool}
+          onTabChange={onTabChange}
+        />
       )}
     </div>
   );

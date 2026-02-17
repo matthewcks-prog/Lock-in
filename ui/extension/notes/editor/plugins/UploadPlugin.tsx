@@ -10,7 +10,7 @@ export function UploadPlugin({
 }: {
   onUploadFile?: (file: File) => Promise<NoteAsset | null>;
   onEditorReady?: (editor: LexicalEditor) => void;
-}) {
+}): null {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
@@ -19,32 +19,32 @@ export function UploadPlugin({
 
   const handleFiles = useCallback(
     async (files: FileList | null) => {
-      if (!onUploadFile || !files || files.length === 0) return;
+      if (onUploadFile === undefined || files === null || files.length === 0) return;
       const file = files.item(0);
-      if (!file) return;
+      if (file === null) return;
       const asset = await onUploadFile(file);
-      if (!asset) return;
+      if (asset === null) return;
       insertAssetIntoEditor(editor, asset);
     },
     [editor, onUploadFile],
   );
 
   useEffect(() => {
-    if (!onUploadFile) return;
-    const listener = (event: ClipboardEvent | DragEvent) => {
+    if (onUploadFile === undefined) return;
+    const listener = (event: ClipboardEvent | DragEvent): void => {
       const files =
         event instanceof ClipboardEvent
           ? event.clipboardData?.files
           : event instanceof DragEvent
             ? event.dataTransfer?.files
             : null;
-      if (!files || files.length === 0) return;
+      if (files === null || files === undefined || files.length === 0) return;
       event.preventDefault();
       void handleFiles(files);
     };
 
     const rootElement = editor.getRootElement();
-    if (!rootElement) return;
+    if (rootElement === null) return;
     rootElement.addEventListener('paste', listener);
     rootElement.addEventListener('drop', listener);
     return () => {

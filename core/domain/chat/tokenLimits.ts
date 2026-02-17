@@ -21,6 +21,8 @@ const DEFAULT_TOKEN_LIMITS: ModelTokenLimits = {
   reserveTokens: 500,
 };
 
+const RECOMMENDED_OUTPUT_BUFFER_RATIO = 0.75;
+
 export const MODEL_TOKEN_LIMITS: Record<string, ModelTokenLimits> = {
   // Gemini models
   'gemini-2.0-flash': {
@@ -97,7 +99,7 @@ export function calculateAvailablePromptTokens(
   desiredOutputTokens?: number,
 ): number {
   const limits = getModelTokenLimits(model);
-  const outputTokens = desiredOutputTokens || limits.maxOutput;
+  const outputTokens = desiredOutputTokens ?? limits.maxOutput;
 
   return limits.contextWindow - outputTokens - limits.reserveTokens;
 }
@@ -123,5 +125,5 @@ export function exceedsContextWindow(
 export function getRecommendedOutputTokens(model: string): number {
   const limits = getModelTokenLimits(model);
   // Use 75% of max output to leave buffer
-  return Math.floor(limits.maxOutput * 0.75);
+  return Math.floor(limits.maxOutput * RECOMMENDED_OUTPUT_BUFFER_RATIO);
 }

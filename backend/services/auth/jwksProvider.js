@@ -19,22 +19,38 @@
 
 const { logger } = require('../../observability');
 const { fetchWithRetry } = require('../../utils/networkRetry');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 /**
  * Default cache TTL in milliseconds (10 minutes)
  * Supabase Edge caches JWKS for 10 minutes, so we match that
  */
-const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+const MINUTES_PER_HOUR = 60;
+const DEFAULT_CACHE_TTL_MINUTES = 10;
+const DEFAULT_CACHE_TTL_MS = DEFAULT_CACHE_TTL_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
 
 /**
  * Minimum cache TTL (1 minute) - prevents excessive requests
  */
-const MIN_CACHE_TTL_MS = 60 * 1000;
+const MIN_CACHE_TTL_MINUTES = 1;
+const MIN_CACHE_TTL_MS = MIN_CACHE_TTL_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
 
 /**
  * Maximum cache TTL (1 hour) - ensures keys stay relatively fresh
  */
-const MAX_CACHE_TTL_MS = 60 * 60 * 1000;
+const MAX_CACHE_TTL_HOURS = 1;
+const MAX_CACHE_TTL_MS =
+  MAX_CACHE_TTL_HOURS * MINUTES_PER_HOUR * SECONDS_PER_MINUTE * MS_PER_SECOND;
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+const MAX_FETCH_RETRIES = 2;
+const RETRYABLE_JWKS_STATUSES = [
+  HTTP_STATUS.TOO_MANY_REQUESTS,
+  HTTP_STATUS.BAD_GATEWAY,
+  HTTP_STATUS.SERVICE_UNAVAILABLE,
+  HTTP_STATUS.GATEWAY_TIMEOUT,
+];
 
 /**
  * JWKS Provider
@@ -55,7 +71,7 @@ class JwksProvider {
     jwksUri,
     cacheTtlMs = DEFAULT_CACHE_TTL_MS,
     fetcher = null,
-    requestTimeoutMs = 10000,
+    requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
   } = {}) {
     if (!jwksUri || typeof jwksUri !== 'string') {
       throw new Error('JwksProvider requires a valid jwksUri');
@@ -92,9 +108,9 @@ class JwksProvider {
         },
       },
       {
-        maxRetries: 2,
+        maxRetries: MAX_FETCH_RETRIES,
         timeoutMs: this._requestTimeoutMs,
-        retryableStatuses: [429, 502, 503, 504],
+        retryableStatuses: RETRYABLE_JWKS_STATUSES,
         retryOnServerError: true,
         onRetry: (info) => {
           logger.warn('[JwksProvider] Retry JWKS fetch', {

@@ -6,7 +6,7 @@ type SyntaxHighlighterStubProps = {
   [key: string]: unknown;
 };
 
-export function Prism({ children, ...props }: SyntaxHighlighterStubProps) {
+export function Prism({ children, ...props }: SyntaxHighlighterStubProps): JSX.Element {
   return (
     <pre {...props}>
       <code>{children}</code>

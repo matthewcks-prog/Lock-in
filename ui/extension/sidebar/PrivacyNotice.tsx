@@ -11,6 +11,8 @@ import { useState, useEffect, useCallback } from 'react';
 
 const PRIVACY_DISMISSED_KEY = 'lockin_privacy_notice_dismissed';
 const PRIVACY_VERSION = '1'; // Increment to re-show notice after policy updates
+const LOCK_ICON = '\uD83D\uDD12';
+const CHECKMARK = '\u2713';
 
 interface PrivacyNoticeProps {
   /** Storage adapter for persisting dismissal state */
@@ -42,15 +44,19 @@ const defaultStorage = {
   },
 };
 
-export function PrivacyNotice({ storage = defaultStorage, compact = false }: PrivacyNoticeProps) {
-  const [isDismissed, setIsDismissed] = useState(true); // Start hidden, show after check
+function usePrivacyDismissState(storage: NonNullable<PrivacyNoticeProps['storage']>): {
+  isDismissed: boolean;
+  isLoading: boolean;
+  dismissNotice: () => Promise<void>;
+  showNotice: () => void;
+} {
+  const [isDismissed, setIsDismissed] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function checkDismissed() {
+    async function checkDismissed(): Promise<void> {
       try {
         const value = await storage.get(PRIVACY_DISMISSED_KEY);
-        // Show if not dismissed OR if version has changed
         setIsDismissed(value === PRIVACY_VERSION);
       } catch {
         setIsDismissed(false);
@@ -61,7 +67,7 @@ export function PrivacyNotice({ storage = defaultStorage, compact = false }: Pri
     void checkDismissed();
   }, [storage]);
 
-  const handleDismiss = useCallback(async () => {
+  const dismissNotice = useCallback(async () => {
     setIsDismissed(true);
     try {
       await storage.set(PRIVACY_DISMISSED_KEY, PRIVACY_VERSION);
@@ -70,37 +76,33 @@ export function PrivacyNotice({ storage = defaultStorage, compact = false }: Pri
     }
   }, [storage]);
 
-  // Don't render while loading to prevent flash
-  if (isLoading) return null;
+  const showNotice = useCallback(() => {
+    setIsDismissed(false);
+  }, []);
 
-  // If dismissed, show only the compact footer version when requested
-  if (isDismissed && !compact) return null;
+  return { isDismissed, isLoading, dismissNotice, showNotice };
+}
 
-  // Compact version for settings/footer
-  if (compact) {
-    return (
-      <div className="lockin-privacy-compact">
-        <span className="lockin-privacy-icon">🔒</span>
-        <span className="lockin-privacy-text">
-          Your data is stored securely.{' '}
-          <button
-            className="lockin-privacy-link"
-            onClick={() => setIsDismissed(false)}
-            type="button"
-          >
-            Learn more
-          </button>
-        </span>
-      </div>
-    );
-  }
+function CompactPrivacyNotice({ onLearnMore }: { onLearnMore: () => void }): JSX.Element {
+  return (
+    <div className="lockin-privacy-compact">
+      <span className="lockin-privacy-icon">{LOCK_ICON}</span>
+      <span className="lockin-privacy-text">
+        Your data is stored securely.{' '}
+        <button className="lockin-privacy-link" onClick={onLearnMore} type="button">
+          Learn more
+        </button>
+      </span>
+    </div>
+  );
+}
 
-  // Full notice banner
+function FullPrivacyNotice({ onDismiss }: { onDismiss: () => Promise<void> }): JSX.Element {
   return (
     <div className="lockin-privacy-notice" role="alert" aria-live="polite">
       <div className="lockin-privacy-content">
         <div className="lockin-privacy-header">
-          <span className="lockin-privacy-icon">🔒</span>
+          <span className="lockin-privacy-icon">{LOCK_ICON}</span>
           <strong>Privacy Notice</strong>
         </div>
         <p className="lockin-privacy-message">
@@ -109,15 +111,17 @@ export function PrivacyNotice({ storage = defaultStorage, compact = false }: Pri
           locally and only used for organizing your notes.
         </p>
         <ul className="lockin-privacy-list">
-          <li>✓ URLs are sanitized to remove session keys and tokens</li>
-          <li>✓ Your selections and notes are processed to provide AI assistance</li>
-          <li>✓ Error reports (if enabled) contain no personal study content</li>
-          <li>✓ No tracking across unrelated sites</li>
+          <li>{CHECKMARK} URLs are sanitized to remove session keys and tokens</li>
+          <li>{CHECKMARK} Your selections and notes are processed to provide AI assistance</li>
+          <li>{CHECKMARK} Error reports (if enabled) contain no personal study content</li>
+          <li>{CHECKMARK} No tracking across unrelated sites</li>
         </ul>
       </div>
       <button
         className="lockin-privacy-dismiss"
-        onClick={handleDismiss}
+        onClick={() => {
+          void onDismiss();
+        }}
         type="button"
         aria-label="Dismiss privacy notice"
       >
@@ -127,13 +131,28 @@ export function PrivacyNotice({ storage = defaultStorage, compact = false }: Pri
   );
 }
 
+export function PrivacyNotice({
+  storage = defaultStorage,
+  compact = false,
+}: PrivacyNoticeProps): JSX.Element | null {
+  const { isDismissed, isLoading, dismissNotice, showNotice } = usePrivacyDismissState(storage);
+
+  if (isLoading) return null;
+  if (isDismissed && !compact) return null;
+  if (compact) {
+    return <CompactPrivacyNotice onLearnMore={showNotice} />;
+  }
+
+  return <FullPrivacyNotice onDismiss={dismissNotice} />;
+}
+
 /**
  * Compact privacy footer for settings sections
  */
-export function PrivacyFooter() {
+export function PrivacyFooter(): JSX.Element {
   return (
     <div className="lockin-privacy-footer">
-      <span className="lockin-privacy-icon">🔒</span>
+      <span className="lockin-privacy-icon">{LOCK_ICON}</span>
       <span className="lockin-privacy-text">
         We store sanitized URLs and page titles to show where your content came from. Course codes
         are extracted locally for organization.

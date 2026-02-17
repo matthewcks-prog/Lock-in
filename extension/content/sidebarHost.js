@@ -3,169 +3,217 @@
  * Layout sync (body classes) is handled by the React component itself.
  */
 (function () {
-  function createSidebarHost({ Logger, Storage }) {
-    const log = Logger || {
-      debug: () => {},
-      warn: console.warn,
-      error: console.error,
-    };
-    const PAGE_WRAPPER_ID = 'lockin-page-wrapper';
-    const LOCKIN_ROOT_ID = 'lockin-root';
-    const WRAPPER_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'LINK', 'META']);
-    let sidebarInstance = null;
-    let pageObserver = null;
-    const runtimeStorage =
-      typeof window !== 'undefined' && window.LockInContent && window.LockInContent.storage
-        ? window.LockInContent.storage
-        : Storage;
+  const PAGE_WRAPPER_ID = 'lockin-page-wrapper';
+  const LOCKIN_ROOT_ID = 'lockin-root';
+  const WRAPPER_SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'LINK', 'META']);
 
-    function injectStyles() {
-      log.debug('Styles verification: CSS should be loaded from manifest');
-    }
-
-    function shouldMoveNode(node, wrapper, lockinRoot) {
-      if (!node) return false;
-      if (node === wrapper || node === lockinRoot) return false;
-      if (node.nodeType === Node.COMMENT_NODE) return false;
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const tag = node.tagName || '';
-        if (WRAPPER_SKIP_TAGS.has(tag)) return false;
-        // Don't move fixed/absolute positioned elements - they're likely modals/popups
-        // that need to stay as direct body children for correct stacking behavior
-        try {
-          const style = window.getComputedStyle(node);
-          const position = style.getPropertyValue('position');
-          if (position === 'fixed' || position === 'absolute') {
-            return false;
-          }
-          // Don't move elements with very high z-index (likely overlays)
-          const zIndex = parseInt(style.getPropertyValue('z-index'), 10);
-          if (!isNaN(zIndex) && zIndex > 1000) {
-            return false;
-          }
-        } catch (e) {
-          // getComputedStyle might fail on some elements, just skip the check
-        }
+  function createDefaultLogger(Logger) {
+    return (
+      Logger || {
+        debug: () => {},
+        warn: console.warn,
+        error: console.error,
       }
-      return true;
-    }
+    );
+  }
 
-    function moveNodeIntoWrapper(node, wrapper) {
-      if (!wrapper || !node) return;
-      if (node.nextSibling === wrapper && wrapper.firstChild) {
-        wrapper.insertBefore(node, wrapper.firstChild);
-        return;
-      }
-      wrapper.appendChild(node);
-    }
+  function resolveRuntimeStorage(Storage) {
+    const content = typeof window !== 'undefined' ? window.LockInContent : null;
+    return content && content.storage ? content.storage : Storage;
+  }
 
-    function startPageWrapperObserver(wrapper) {
-      if (!wrapper || pageObserver || typeof MutationObserver === 'undefined') {
-        return;
+  function injectStyles(log) {
+    log.debug('Styles verification: CSS should be loaded from manifest');
+  }
+
+  function isOverlayNode(node) {
+    try {
+      const style = window.getComputedStyle(node);
+      const position = style.getPropertyValue('position');
+      if (position === 'fixed' || position === 'absolute') {
+        return true;
       }
+      const zIndex = parseInt(style.getPropertyValue('z-index'), 10);
+      return !isNaN(zIndex) && zIndex > 1000;
+    } catch {
+      return false;
+    }
+  }
+
+  function shouldMoveNode(node, wrapper, lockinRoot) {
+    if (!node) return false;
+    if (node === wrapper || node === lockinRoot) return false;
+    if (node.nodeType === Node.COMMENT_NODE) return false;
+    if (node.nodeType !== Node.ELEMENT_NODE) return true;
+    if (WRAPPER_SKIP_TAGS.has(node.tagName || '')) return false;
+    return !isOverlayNode(node);
+  }
+
+  function moveNodeIntoWrapper(node, wrapper) {
+    if (!wrapper || !node) return;
+    if (node.nextSibling === wrapper && wrapper.firstChild) {
+      wrapper.insertBefore(node, wrapper.firstChild);
+      return;
+    }
+    wrapper.appendChild(node);
+  }
+
+  function withLockinRootOutsideWrapper(body, wrapper, lockinRoot) {
+    if (!lockinRoot) return;
+    if (lockinRoot.parentNode === wrapper) {
+      body.appendChild(lockinRoot);
+    }
+    if (lockinRoot.parentNode === body) {
+      body.insertBefore(wrapper, lockinRoot);
+    }
+  }
+
+  function placeWrapperInBody(body, wrapper, lockinRoot) {
+    if (lockinRoot && lockinRoot.parentNode === body) {
+      body.insertBefore(wrapper, lockinRoot);
+      return;
+    }
+    body.appendChild(wrapper);
+  }
+
+  function moveBodyChildrenIntoWrapper(body, wrapper, lockinRoot) {
+    const nodesToMove = [];
+    body.childNodes.forEach((node) => {
+      if (shouldMoveNode(node, wrapper, lockinRoot)) {
+        nodesToMove.push(node);
+      }
+    });
+    nodesToMove.forEach((node) => moveNodeIntoWrapper(node, wrapper));
+  }
+
+  function createBodyMutationHandler(observerState) {
+    return (mutations) => {
       const body = document.body;
       if (!body) return;
-
-      pageObserver = new MutationObserver((mutations) => {
-        const currentWrapper = document.getElementById(PAGE_WRAPPER_ID);
-        if (!currentWrapper) {
-          pageObserver.disconnect();
-          pageObserver = null;
-          ensurePageWrapper();
-          return;
-        }
-
-        const lockinRoot = document.getElementById(LOCKIN_ROOT_ID);
-        mutations.forEach((mutation) => {
-          mutation.addedNodes.forEach((node) => {
-            if (node.parentNode !== body) return;
-            if (!shouldMoveNode(node, currentWrapper, lockinRoot)) return;
-            moveNodeIntoWrapper(node, currentWrapper);
-          });
+      const wrapper = document.getElementById(PAGE_WRAPPER_ID);
+      if (!wrapper) {
+        observerState.pageObserver.disconnect();
+        observerState.pageObserver = null;
+        observerState.ensurePageWrapper();
+        return;
+      }
+      const lockinRoot = document.getElementById(LOCKIN_ROOT_ID);
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.parentNode !== body) return;
+          if (!shouldMoveNode(node, wrapper, lockinRoot)) return;
+          moveNodeIntoWrapper(node, wrapper);
         });
       });
+    };
+  }
 
-      pageObserver.observe(body, { childList: true });
+  function startPageWrapperObserver(wrapper, observerState) {
+    if (!wrapper || observerState.pageObserver || typeof MutationObserver === 'undefined') {
+      return;
     }
+    const body = document.body;
+    if (!body) return;
+    observerState.pageObserver = new MutationObserver(createBodyMutationHandler(observerState));
+    observerState.pageObserver.observe(body, { childList: true });
+  }
+
+  function createPageWrapperManager() {
+    const observerState = { pageObserver: null, ensurePageWrapper: () => null };
 
     function ensurePageWrapper() {
       if (typeof document === 'undefined') return null;
       const body = document.body;
       if (!body) return null;
 
-      let wrapper = document.getElementById(PAGE_WRAPPER_ID);
+      const existingWrapper = document.getElementById(PAGE_WRAPPER_ID);
       const lockinRoot = document.getElementById(LOCKIN_ROOT_ID);
-      if (wrapper) {
-        if (lockinRoot && lockinRoot.parentNode === wrapper) {
-          body.appendChild(lockinRoot);
-        }
-        if (lockinRoot && lockinRoot.parentNode === body) {
-          body.insertBefore(wrapper, lockinRoot);
-        }
-        startPageWrapperObserver(wrapper);
-        return wrapper;
+      if (existingWrapper) {
+        withLockinRootOutsideWrapper(body, existingWrapper, lockinRoot);
+        startPageWrapperObserver(existingWrapper, observerState);
+        return existingWrapper;
       }
 
-      wrapper = document.createElement('div');
+      const wrapper = document.createElement('div');
       wrapper.id = PAGE_WRAPPER_ID;
-
-      if (lockinRoot && lockinRoot.parentNode === body) {
-        body.insertBefore(wrapper, lockinRoot);
-      } else {
-        body.appendChild(wrapper);
-      }
-
-      const nodesToMove = [];
-      body.childNodes.forEach((node) => {
-        if (!shouldMoveNode(node, wrapper, lockinRoot)) return;
-        nodesToMove.push(node);
-      });
-
-      nodesToMove.forEach((node) => moveNodeIntoWrapper(node, wrapper));
-      startPageWrapperObserver(wrapper);
+      placeWrapperInBody(body, wrapper, lockinRoot);
+      moveBodyChildrenIntoWrapper(body, wrapper, lockinRoot);
+      startPageWrapperObserver(wrapper, observerState);
       return wrapper;
     }
 
-    function buildStorageAdapter() {
-      return {
-        get: async (key) => {
-          if (!runtimeStorage) return null;
-          try {
-            const data = await runtimeStorage.get(key);
-            return data[key];
-          } catch (error) {
-            log.warn('Storage get error:', error);
-            return null;
-          }
-        },
-        set: async (key, value) => {
-          if (!runtimeStorage) return;
-          try {
-            await runtimeStorage.set({ [key]: value });
-          } catch (error) {
-            log.warn('Storage set error:', error);
-          }
-        },
-        getLocal: async (key) => {
-          if (!runtimeStorage || !runtimeStorage.getLocal) return null;
-          try {
-            const data = await runtimeStorage.getLocal(key);
-            return data[key];
-          } catch (error) {
-            log.warn('Storage getLocal error:', error);
-            return null;
-          }
-        },
-        setLocal: async (key, value) => {
-          if (!runtimeStorage || !runtimeStorage.setLocal) return;
-          try {
-            await runtimeStorage.setLocal(key, value);
-          } catch (error) {
-            log.warn('Storage setLocal error:', error);
-          }
-        },
-      };
-    }
+    observerState.ensurePageWrapper = ensurePageWrapper;
+    return { ensurePageWrapper };
+  }
+
+  function createStorageAdapter(runtimeStorage, log) {
+    return {
+      get: async (key) => {
+        if (!runtimeStorage) return null;
+        try {
+          const data = await runtimeStorage.get(key);
+          return data[key];
+        } catch (error) {
+          log.warn('Storage get error:', error);
+          return null;
+        }
+      },
+      set: async (key, value) => {
+        if (!runtimeStorage) return;
+        try {
+          await runtimeStorage.set({ [key]: value });
+        } catch (error) {
+          log.warn('Storage set error:', error);
+        }
+      },
+      getLocal: async (key) => {
+        if (!runtimeStorage || !runtimeStorage.getLocal) return null;
+        try {
+          const data = await runtimeStorage.getLocal(key);
+          return data[key];
+        } catch (error) {
+          log.warn('Storage getLocal error:', error);
+          return null;
+        }
+      },
+      setLocal: async (key, value) => {
+        if (!runtimeStorage || !runtimeStorage.setLocal) return;
+        try {
+          await runtimeStorage.setLocal(key, value);
+        } catch (error) {
+          log.warn('Storage setLocal error:', error);
+        }
+      },
+    };
+  }
+
+  function buildSidebarProps({
+    apiClient,
+    pageContext,
+    state,
+    onToggle,
+    onClearPrefill,
+    runtimeStorage,
+    log,
+  }) {
+    const viewState = state || {};
+    return {
+      apiClient,
+      isOpen: !!viewState.isSidebarOpen,
+      onToggle,
+      pendingPrefill: viewState.pendingPrefill,
+      onClearPrefill,
+      pageContext,
+      storage: createStorageAdapter(runtimeStorage, log),
+      activeTabExternal: viewState.currentActiveTab,
+    };
+  }
+
+  function createSidebarHost({ Logger, Storage }) {
+    const log = createDefaultLogger(Logger);
+    const runtimeStorage = resolveRuntimeStorage(Storage);
+    const { ensurePageWrapper } = createPageWrapperManager();
+    let sidebarInstance = null;
 
     function renderSidebar({ apiClient, pageContext, state, onToggle, onClearPrefill }) {
       if (!window.LockInUI || !window.LockInUI.createLockInSidebar) {
@@ -173,20 +221,17 @@
         return;
       }
 
-      const viewState = state || {};
-      injectStyles();
+      injectStyles(log);
       ensurePageWrapper();
-
-      const sidebarProps = {
+      const sidebarProps = buildSidebarProps({
         apiClient,
-        isOpen: !!viewState.isSidebarOpen,
-        onToggle,
-        pendingPrefill: viewState.pendingPrefill,
-        onClearPrefill,
         pageContext,
-        storage: buildStorageAdapter(),
-        activeTabExternal: viewState.currentActiveTab,
-      };
+        state,
+        onToggle,
+        onClearPrefill,
+        runtimeStorage,
+        log,
+      });
 
       if (!sidebarInstance) {
         log.debug('Creating new sidebar instance (first time)');

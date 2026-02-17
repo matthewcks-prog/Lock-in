@@ -76,6 +76,48 @@ class JwksVerifierStrategy {
     return true;
   }
 
+  _decodeJwtHeader(token) {
+    const decoded = jwt.decode(token, { complete: true });
+    if (!decoded || !decoded.header) {
+      return null;
+    }
+    return decoded.header;
+  }
+
+  _isAlgorithmAllowed(algorithm) {
+    return this._allowedAlgorithms.includes(algorithm);
+  }
+
+  _unsupportedAlgorithmResult(algorithm) {
+    return {
+      valid: false,
+      error: `Unsupported algorithm: ${algorithm}. Allowed: ${this._allowedAlgorithms.join(', ')}`,
+    };
+  }
+
+  async _resolveJwk(kid) {
+    if (kid) {
+      return this._jwksProvider.getKeyById(kid);
+    }
+    return this._jwksProvider.getFirstKey();
+  }
+
+  _buildVerifyOptions(algorithm) {
+    const verifyOptions = { algorithms: [algorithm] };
+    if (this._issuer) {
+      verifyOptions.issuer = this._issuer;
+    }
+    if (this._audience) {
+      verifyOptions.audience = this._audience;
+    }
+    return verifyOptions;
+  }
+
+  _verifyToken(token, jwk, algorithm) {
+    const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
+    return jwt.verify(token, publicKey, this._buildVerifyOptions(algorithm));
+  }
+
   /**
    * Verify a JWT token using JWKS
    *
@@ -84,54 +126,22 @@ class JwksVerifierStrategy {
    */
   async verify(token) {
     try {
-      // Decode header to get kid and alg
-      const decoded = jwt.decode(token, { complete: true });
-
-      if (!decoded || !decoded.header) {
+      const header = this._decodeJwtHeader(token);
+      if (!header) {
         return { valid: false, error: 'Invalid JWT format' };
       }
 
-      const { kid, alg } = decoded.header;
-
-      // Validate algorithm
-      if (!this._allowedAlgorithms.includes(alg)) {
-        return {
-          valid: false,
-          error: `Unsupported algorithm: ${alg}. Allowed: ${this._allowedAlgorithms.join(', ')}`,
-        };
+      const { kid, alg } = header;
+      if (!this._isAlgorithmAllowed(alg)) {
+        return this._unsupportedAlgorithmResult(alg);
       }
 
-      // Get the appropriate key
-      let jwk;
-      if (kid) {
-        jwk = await this._jwksProvider.getKeyById(kid);
-      } else {
-        // Fallback to first key if no kid in token
-        jwk = await this._jwksProvider.getFirstKey();
-      }
-
+      const jwk = await this._resolveJwk(kid);
       if (!jwk) {
         return { valid: false, error: `No matching key found for kid: ${kid || '(none)'}` };
       }
 
-      // Convert JWK to Node.js crypto key
-      const publicKey = createPublicKey({ key: jwk, format: 'jwk' });
-
-      // Build verification options
-      const verifyOptions = {
-        algorithms: [alg],
-      };
-
-      if (this._issuer) {
-        verifyOptions.issuer = this._issuer;
-      }
-
-      if (this._audience) {
-        verifyOptions.audience = this._audience;
-      }
-
-      // Verify the token
-      const payload = jwt.verify(token, publicKey, verifyOptions);
+      const payload = this._verifyToken(token, jwk, alg);
 
       return {
         valid: true,

@@ -16,7 +16,7 @@ interface SelectChatDeps {
 
 export function createSelectChat(deps: SelectChatDeps) {
   return async (item: ChatHistoryItem) => {
-    if (!deps.apiClient?.getChatMessages) return;
+    if (deps.apiClient?.getChatMessages === undefined) return;
 
     deps.setError(null);
     deps.setActiveHistoryId(item.id);

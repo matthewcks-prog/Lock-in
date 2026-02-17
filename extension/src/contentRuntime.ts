@@ -34,6 +34,11 @@ export interface RuntimeSession {
   loadChatId: () => Promise<string | null>;
 }
 
+type TabIdApi = {
+  getCachedTabId: () => number | null;
+  getTabId: () => Promise<number | null>;
+};
+
 export type LockInContentRuntime = {
   __version: '1.0';
   logger: Logger;
@@ -56,14 +61,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function inferCourseCode(dom: Document, url: string): string | null {
   const urlMatch = url.match(/\b([A-Z]{3}\d{4})\b/i);
   const urlCode = urlMatch?.[1];
-  if (urlCode) {
+  if (urlCode !== undefined && urlCode.length > 0) {
     return urlCode.toUpperCase();
   }
 
-  const bodyText = dom.body?.innerText || '';
+  const bodyText = dom.body?.innerText ?? '';
   const codeMatch = bodyText.match(/\b([A-Z]{3}\d{4})\b/i);
   const bodyCode = codeMatch?.[1];
-  return bodyCode ? bodyCode.toUpperCase() : null;
+  return bodyCode !== undefined && bodyCode.length > 0 ? bodyCode.toUpperCase() : null;
 }
 
 export function resolveAdapterContext(loggerInstance?: LoggerInterface): {
@@ -85,17 +90,18 @@ export function resolveAdapterContext(loggerInstance?: LoggerInterface): {
   };
 
   try {
-    adapter = getAdapterForUrl(window.location.href) || adapter;
+    adapter = getAdapterForUrl(window.location.href) ?? adapter;
     pageContext = adapter.getPageContext(document, window.location.href);
 
-    const courseContext = pageContext.courseContext || {
-      courseCode: null,
-      sourceUrl: window.location.href,
-    };
+    const courseContext = pageContext.courseContext;
 
-    if (!courseContext.courseCode) {
+    if (
+      courseContext.courseCode === null ||
+      courseContext.courseCode === undefined ||
+      courseContext.courseCode.length === 0
+    ) {
       const inferred = inferCourseCode(document, window.location.href);
-      if (inferred) {
+      if (inferred !== null && inferred.length > 0) {
         pageContext = {
           ...pageContext,
           courseContext: {
@@ -162,36 +168,36 @@ function createMessagingApi(log: Logger): RuntimeMessaging {
   };
 }
 
-function createSessionApi(
-  log: Logger,
-  runtimeMessaging: RuntimeMessaging,
-  runtimeStorage: RuntimeStorage,
-): RuntimeSession {
+function createGetTabId(log: Logger, runtimeMessaging: RuntimeMessaging): TabIdApi {
   let cachedTabId: number | null = null;
-
-  async function getTabId(): Promise<number | null> {
-    try {
-      const response = await runtimeMessaging.send<unknown>(runtimeMessaging.types.GET_TAB_ID);
-      const responseRecord = isRecord(response) ? response : {};
-      const dataRecord = isRecord(responseRecord['data']) ? responseRecord['data'] : {};
-      const tabId =
-        typeof dataRecord['tabId'] === 'number'
-          ? dataRecord['tabId']
-          : typeof responseRecord['tabId'] === 'number'
-            ? responseRecord['tabId']
-            : null;
-      if (typeof tabId === 'number') {
-        cachedTabId = tabId;
-        return tabId;
+  return {
+    getCachedTabId: () => cachedTabId,
+    getTabId: async (): Promise<number | null> => {
+      try {
+        const response = await runtimeMessaging.send<unknown>(runtimeMessaging.types.GET_TAB_ID);
+        const responseRecord = isRecord(response) ? response : {};
+        const dataRecord = isRecord(responseRecord['data']) ? responseRecord['data'] : {};
+        const tabId =
+          typeof dataRecord['tabId'] === 'number'
+            ? dataRecord['tabId']
+            : typeof responseRecord['tabId'] === 'number'
+              ? responseRecord['tabId']
+              : null;
+        if (typeof tabId === 'number') {
+          cachedTabId = tabId;
+          return tabId;
+        }
+        return cachedTabId;
+      } catch (error) {
+        log.error('[Lock-in] Failed to get tab ID:', error);
+        return cachedTabId;
       }
-      return cachedTabId;
-    } catch (error) {
-      log.error('[Lock-in] Failed to get tab ID:', error);
-      return cachedTabId;
-    }
-  }
+    },
+  };
+}
 
-  async function getSession(): Promise<unknown> {
+function createGetSession(log: Logger, runtimeMessaging: RuntimeMessaging) {
+  return async (): Promise<unknown> => {
     try {
       const response = await runtimeMessaging.send<unknown>(runtimeMessaging.types.GET_SESSION);
       const responseRecord = isRecord(response) ? response : {};
@@ -201,17 +207,21 @@ function createSessionApi(
       log.error('[Lock-in] Failed to get session:', error);
       return null;
     }
-  }
+  };
+}
 
-  async function clearSession(): Promise<void> {
+function createClearSession(log: Logger, runtimeMessaging: RuntimeMessaging) {
+  return async (): Promise<void> => {
     try {
       await runtimeMessaging.send(runtimeMessaging.types.CLEAR_SESSION);
     } catch (error) {
       log.error('[Lock-in] Failed to clear session:', error);
     }
-  }
+  };
+}
 
-  async function loadChatId(): Promise<string | null> {
+function createLoadChatId(log: Logger, runtimeStorage: RuntimeStorage) {
+  return async (): Promise<string | null> => {
     try {
       const data = await runtimeStorage.getLocal<string>(STORAGE_KEYS.CURRENT_CHAT_ID);
       const chatId = data[STORAGE_KEYS.CURRENT_CHAT_ID];
@@ -220,10 +230,21 @@ function createSessionApi(
       log.warn('Failed to load chat ID:', error);
       return null;
     }
-  }
+  };
+}
+
+function createSessionApi(
+  log: Logger,
+  runtimeMessaging: RuntimeMessaging,
+  runtimeStorage: RuntimeStorage,
+): RuntimeSession {
+  const tabIdApi = createGetTabId(log, runtimeMessaging);
+  const getSession = createGetSession(log, runtimeMessaging);
+  const clearSession = createClearSession(log, runtimeMessaging);
+  const loadChatId = createLoadChatId(log, runtimeStorage);
 
   return {
-    getTabId,
+    getTabId: tabIdApi.getTabId,
     getSession,
     clearSession,
     loadChatId,

@@ -1,7 +1,12 @@
+const { THREE, THIRTY, THOUSAND } = require('../constants/numbers');
+
+const DEFAULT_FAILURE_THRESHOLD = THREE;
+const DEFAULT_OPEN_DURATION_MS = THIRTY * THOUSAND;
+
 class CircuitBreaker {
   constructor(options = {}) {
-    this.failureThreshold = options.failureThreshold ?? 3;
-    this.openDurationMs = options.openDurationMs ?? 30000;
+    this.failureThreshold = options.failureThreshold ?? DEFAULT_FAILURE_THRESHOLD;
+    this.openDurationMs = options.openDurationMs ?? DEFAULT_OPEN_DURATION_MS;
     this.halfOpenMaxAttempts = options.halfOpenMaxAttempts ?? 1;
     this._now = options.now ?? (() => Date.now());
     this._store = options.store ?? null;

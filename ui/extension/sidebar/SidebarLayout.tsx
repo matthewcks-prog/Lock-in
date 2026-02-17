@@ -16,7 +16,7 @@ export function SidebarLayout({
   headerLeft,
   headerRight,
   children,
-}: SidebarLayoutProps) {
+}: SidebarLayoutProps): JSX.Element {
   return (
     <>
       {!isOpen && (

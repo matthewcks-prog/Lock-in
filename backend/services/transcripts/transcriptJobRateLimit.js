@@ -1,5 +1,6 @@
 const { AppError } = require('../../errors');
 const { TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE } = require('../../config');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 async function enforceUploadRateLimit(repo, userId, bytes) {
   if (!userId || !Number.isFinite(TRANSCRIPT_UPLOAD_BYTES_PER_MINUTE)) return;
@@ -14,7 +15,7 @@ async function enforceUploadRateLimit(repo, userId, bytes) {
     throw new AppError(
       'Upload rate limit exceeded. Please wait before uploading more.',
       'TRANSCRIPT_RATE_LIMIT',
-      429,
+      HTTP_STATUS.TOO_MANY_REQUESTS,
       { retryAfterSeconds: result.retryAfterSeconds },
     );
   }

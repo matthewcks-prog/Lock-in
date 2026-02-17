@@ -2,10 +2,11 @@
  * AttachmentPreview Component
  *
  * Displays a preview of pending attachments before sending a message.
- * Shows thumbnails for images, icons for documents/code.
+ * Shows thumbnails for images and icons for documents/code.
  */
 
-import { useMemo } from 'react';
+const BYTES_PER_KILOBYTE = 1024;
+const BYTES_PER_MEGABYTE = BYTES_PER_KILOBYTE * BYTES_PER_KILOBYTE;
 
 export interface PendingAttachment {
   /** Unique identifier for the attachment */
@@ -31,6 +32,8 @@ export interface AttachmentPreviewProps {
   disabled?: boolean;
 }
 
+type AttachmentStatus = PendingAttachment['status'];
+
 /** Get file type category from MIME type */
 function getFileType(mimeType: string): 'image' | 'document' | 'code' | 'other' {
   if (mimeType.startsWith('image/')) return 'image';
@@ -50,14 +53,149 @@ function getExtension(filename: string): string {
   const parts = filename.split('.');
   if (parts.length <= 1) return '';
   const last = parts[parts.length - 1];
-  return last ? last.toUpperCase() : '';
+  return last !== undefined && last.length > 0 ? last.toUpperCase() : '';
 }
 
 /** Format file size for display */
 function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < BYTES_PER_KILOBYTE) return `${bytes} B`;
+  if (bytes < BYTES_PER_MEGABYTE) return `${(bytes / BYTES_PER_KILOBYTE).toFixed(1)} KB`;
+  return `${(bytes / BYTES_PER_MEGABYTE).toFixed(1)} MB`;
+}
+
+function isUploadInProgress(status: AttachmentStatus): boolean {
+  return status === 'uploading' || status === 'processing';
+}
+
+function getItemClassName(status: AttachmentStatus): string {
+  const classes = ['lockin-chat-attachment-item'];
+  if (status === 'error') {
+    classes.push('is-error');
+  }
+  if (isUploadInProgress(status)) {
+    classes.push('is-uploading');
+  }
+  return classes.join(' ');
+}
+
+function getStatusContent(attachment: PendingAttachment): string | JSX.Element {
+  if (attachment.status === 'uploading') return 'Uploading...';
+  if (attachment.status === 'processing') return 'Processing...';
+  if (attachment.status === 'error') {
+    const message =
+      attachment.error !== undefined && attachment.error.length > 0
+        ? attachment.error
+        : 'Upload failed';
+    return <span className="lockin-chat-attachment-error">{message}</span>;
+  }
+  return formatFileSize(attachment.file.size);
+}
+
+function DocumentIcon(): JSX.Element {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      className="lockin-chat-attachment-doc-icon"
+    >
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+      <polyline points="14,2 14,8 20,8" />
+    </svg>
+  );
+}
+
+function RemoveIcon(): JSX.Element {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function AttachmentThumb({ attachment }: { attachment: PendingAttachment }): JSX.Element {
+  const fileType = getFileType(attachment.file.type);
+
+  if (
+    fileType === 'image' &&
+    attachment.previewUrl !== undefined &&
+    attachment.previewUrl.length > 0
+  ) {
+    return (
+      <img
+        src={attachment.previewUrl}
+        alt={attachment.file.name}
+        className="lockin-chat-attachment-thumb-img"
+      />
+    );
+  }
+  if (fileType === 'document') {
+    return <DocumentIcon />;
+  }
+
+  const extension = getExtension(attachment.file.name);
+  return (
+    <span className="lockin-chat-attachment-extension">
+      {extension.length > 0 ? extension : '?'}
+    </span>
+  );
+}
+
+function AttachmentMeta({ attachment }: { attachment: PendingAttachment }): JSX.Element {
+  return (
+    <div className="lockin-chat-attachment-meta">
+      <p className="lockin-chat-attachment-name" title={attachment.file.name}>
+        {attachment.file.name}
+      </p>
+      <p className="lockin-chat-attachment-size">{getStatusContent(attachment)}</p>
+    </div>
+  );
+}
+
+function AttachmentRemoveButton({
+  attachment,
+  disabled,
+  onRemove,
+}: {
+  attachment: PendingAttachment;
+  disabled?: boolean | undefined;
+  onRemove: () => void;
+}): JSX.Element {
+  const isDisabled = disabled === true || isUploadInProgress(attachment.status);
+
+  return (
+    <button
+      type="button"
+      onClick={onRemove}
+      disabled={isDisabled}
+      className="lockin-chat-attachment-remove"
+      title="Remove attachment"
+      aria-label={`Remove ${attachment.file.name}`}
+    >
+      <RemoveIcon />
+    </button>
+  );
+}
+
+function UploadOverlay(): JSX.Element {
+  return (
+    <div className="lockin-chat-attachment-overlay">
+      <span className="lockin-inline-spinner" />
+    </div>
+  );
 }
 
 function AttachmentItem({
@@ -67,95 +205,18 @@ function AttachmentItem({
 }: {
   attachment: PendingAttachment;
   onRemove: () => void;
-  disabled?: boolean;
-}) {
-  const fileType = useMemo(() => getFileType(attachment.file.type), [attachment.file.type]);
-  const extension = useMemo(() => getExtension(attachment.file.name), [attachment.file.name]);
+  disabled?: boolean | undefined;
+}): JSX.Element {
+  const isUploading = isUploadInProgress(attachment.status);
 
   return (
-    <div
-      className={`lockin-chat-attachment-item ${
-        attachment.status === 'error' ? 'is-error' : ''
-      } ${attachment.status === 'uploading' || attachment.status === 'processing' ? 'is-uploading' : ''}`}
-    >
-      {/* Preview/Icon */}
+    <div className={getItemClassName(attachment.status)}>
       <div className="lockin-chat-attachment-thumb">
-        {fileType === 'image' && attachment.previewUrl ? (
-          <img
-            src={attachment.previewUrl}
-            alt={attachment.file.name}
-            className="lockin-chat-attachment-thumb-img"
-          />
-        ) : fileType === 'document' ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="lockin-chat-attachment-doc-icon"
-          >
-            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-            <polyline points="14,2 14,8 20,8" />
-          </svg>
-        ) : (
-          <span className="lockin-chat-attachment-extension">{extension || '?'}</span>
-        )}
+        <AttachmentThumb attachment={attachment} />
       </div>
-
-      {/* File info */}
-      <div className="lockin-chat-attachment-meta">
-        <p className="lockin-chat-attachment-name" title={attachment.file.name}>
-          {attachment.file.name}
-        </p>
-        <p className="lockin-chat-attachment-size">
-          {attachment.status === 'uploading' ? (
-            'Uploading...'
-          ) : attachment.status === 'processing' ? (
-            'Processing...'
-          ) : attachment.status === 'error' ? (
-            <span className="lockin-chat-attachment-error">
-              {attachment.error || 'Upload failed'}
-            </span>
-          ) : (
-            formatFileSize(attachment.file.size)
-          )}
-        </p>
-      </div>
-
-      {/* Remove button */}
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={
-          disabled || attachment.status === 'uploading' || attachment.status === 'processing'
-        }
-        className="lockin-chat-attachment-remove"
-        title="Remove attachment"
-        aria-label={`Remove ${attachment.file.name}`}
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-
-      {/* Upload spinner overlay */}
-      {(attachment.status === 'uploading' || attachment.status === 'processing') && (
-        <div className="lockin-chat-attachment-overlay">
-          <span className="lockin-inline-spinner" />
-        </div>
-      )}
+      <AttachmentMeta attachment={attachment} />
+      <AttachmentRemoveButton attachment={attachment} disabled={disabled} onRemove={onRemove} />
+      {isUploading ? <UploadOverlay /> : null}
     </div>
   );
 }
@@ -164,7 +225,7 @@ export function AttachmentPreview({
   attachments,
   onRemove,
   disabled = false,
-}: AttachmentPreviewProps) {
+}: AttachmentPreviewProps): JSX.Element | null {
   if (attachments.length === 0) {
     return null;
   }

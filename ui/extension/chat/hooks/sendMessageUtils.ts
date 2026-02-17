@@ -4,6 +4,8 @@ import { isValidUUID } from '../types';
 import type { TranscriptCacheInput } from '../../transcripts/hooks/useTranscriptCache';
 
 const IDEMPOTENCY_BUCKET_MS = 5000;
+const HASH_SHIFT_BITS = 5;
+const HASH_RADIX = 36;
 
 /** Extended params that include attachments */
 export interface SendMessageWithAttachmentsParams extends SendMessageParams {
@@ -31,16 +33,16 @@ export type ChatHistoryEntry = { role: ChatMessage['role']; content: string };
 function hashString(value: string): string {
   let hash = 0;
   for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
+    hash = (hash << HASH_SHIFT_BITS) - hash + value.charCodeAt(i);
     hash |= 0;
   }
-  return Math.abs(hash).toString(36);
+  return Math.abs(hash).toString(HASH_RADIX);
 }
 
 export function buildIdempotencyKey(params: SendMessageWithAttachmentsParams): string {
   const bucket = Math.floor(Date.now() / IDEMPOTENCY_BUCKET_MS);
-  const attachmentKey = (params.attachmentIds || []).join(',');
-  const chatKey = params.chatId || '';
+  const attachmentKey = (params.attachmentIds ?? []).join(',');
+  const chatKey = params.chatId ?? '';
   const payloadKey = params.selectionOverride ?? params.message;
   const seed = `${chatKey}|${payloadKey}|${attachmentKey}|${bucket}`;
   return `lockin-${hashString(seed)}`;
@@ -49,13 +51,15 @@ export function buildIdempotencyKey(params: SendMessageWithAttachmentsParams): s
 export function formatSendError(error: Error): string {
   if (error instanceof RateLimitError) {
     const retryAfterMs = error.retryAfterMs;
-    if (retryAfterMs && retryAfterMs > 0) {
+    if (retryAfterMs !== null && retryAfterMs !== undefined && retryAfterMs > 0) {
       const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
       return `You're sending too fast - try again in ${seconds}s.`;
     }
     return "You're sending too fast - try again in a moment.";
   }
-  return error?.message || 'We could not process this request. Try again in a moment.';
+  return error.message.length > 0
+    ? error.message
+    : 'We could not process this request. Try again in a moment.';
 }
 
 export function buildChatHistory(params: SendMessageMutationParams): ChatHistoryEntry[] {
@@ -86,14 +90,16 @@ export function resolveUserMessagePayload(params: SendMessageMutationParams): st
 }
 
 export function resolveIdempotencyKey(params: SendMessageMutationParams): string {
-  return params.idempotencyKey || buildIdempotencyKey(params);
+  return params.idempotencyKey !== undefined && params.idempotencyKey.length > 0
+    ? params.idempotencyKey
+    : buildIdempotencyKey(params);
 }
 
 export async function cacheTranscriptIfNeeded(
   cacheTranscript: (input: TranscriptCacheInput) => Promise<{ fingerprint: string } | null>,
   transcriptContext?: TranscriptCacheInput,
-) {
-  if (!transcriptContext) return;
+): Promise<void> {
+  if (transcriptContext === undefined) return;
   cacheTranscript(transcriptContext).catch((error) => {
     console.warn('[Lock-in] Failed to cache transcript for chat:', error);
   });

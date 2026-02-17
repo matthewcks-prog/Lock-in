@@ -10,7 +10,15 @@ import {
   documentHasContent,
 } from '../normalizer';
 import { AST_VERSION } from '../types';
-import type { NormalizedDocument, InlineContent, ParagraphBlock, HeadingBlock } from '../types';
+import type {
+  HeadingBlock,
+  InlineContent,
+  ListBlock,
+  NormalizedDocument,
+  ParagraphBlock,
+  QuoteBlock,
+  TextRun,
+} from '../types';
 
 describe('normalizeEditorState', () => {
   it('returns empty document with version for null/undefined input', () => {
@@ -117,7 +125,7 @@ describe('normalizeEditorState', () => {
 
     const result = normalizeEditorState(state);
     const paragraph = result.blocks[0] as ParagraphBlock;
-    const children = paragraph.children as import('../types').TextRun[];
+    const children = paragraph.children as TextRun[];
 
     expect(children[0]?.styles).toEqual({ color: '#ff0000' });
     expect(children[1]?.styles).toEqual({ backgroundColor: 'yellow' });
@@ -201,7 +209,7 @@ describe('normalizeEditorState', () => {
 
     const result = normalizeEditorState(state);
     const paragraph = result.blocks[0] as ParagraphBlock;
-    const children = paragraph.children as import('../types').TextRun[];
+    const children = paragraph.children as TextRun[];
 
     expect(children[0]?.styles).toBeUndefined();
     expect(children[1]?.styles).toBeUndefined();
@@ -256,7 +264,9 @@ describe('normalizeEditorState', () => {
     expect(result.blocks[0]).toMatchObject({ type: 'list', ordered: false });
     expect(result.blocks[1]).toMatchObject({ type: 'list', ordered: true });
   });
+});
 
+describe('normalizeEditorState with nested and mixed content', () => {
   it('normalizes list items with nested paragraph children (real Lexical structure)', () => {
     // This is the actual structure Lexical produces when list items contain
     // formatted text or were created in certain ways
@@ -302,7 +312,7 @@ describe('normalizeEditorState', () => {
     const result = normalizeEditorState(state);
 
     expect(result.blocks).toHaveLength(1);
-    const list = result.blocks[0] as import('../types').ListBlock;
+    const list = result.blocks[0] as ListBlock;
     expect(list.type).toBe('list');
     expect(list.children).toHaveLength(2);
     // Should extract text from nested paragraph
@@ -346,7 +356,7 @@ describe('normalizeEditorState', () => {
 
     const result = normalizeEditorState(state);
 
-    const list = result.blocks[0] as import('../types').ListBlock;
+    const list = result.blocks[0] as ListBlock;
     expect(list.children[0]?.children).toHaveLength(2);
     expect(list.children[0]?.children?.[0]).toMatchObject({
       type: 'text',
@@ -391,7 +401,7 @@ describe('normalizeEditorState', () => {
 
     const result = normalizeEditorState(state);
 
-    const list = result.blocks[0] as import('../types').ListBlock;
+    const list = result.blocks[0] as ListBlock;
     expect(list.children[0]?.children).toHaveLength(2);
     expect(list.children[0]?.children?.[0]).toMatchObject({
       type: 'text',
@@ -423,7 +433,7 @@ describe('normalizeEditorState', () => {
 
     const result = normalizeEditorState(state);
 
-    const quote = result.blocks[0] as import('../types').QuoteBlock;
+    const quote = result.blocks[0] as QuoteBlock;
     expect(quote.children).toHaveLength(1);
     expect(quote.children[0]).toMatchObject({
       type: 'text',
@@ -457,7 +467,7 @@ describe('normalizeEditorState', () => {
 
     const result = normalizeEditorState(state);
 
-    const list = result.blocks[0] as import('../types').ListBlock;
+    const list = result.blocks[0] as ListBlock;
     expect(list.children[0]?.children).toHaveLength(1);
     expect(list.children[0]?.children?.[0]).toMatchObject({
       type: 'text',

@@ -103,7 +103,10 @@ function safeParse<T>(
   };
 }
 
-export function createRuntimeValidators() {
+export function createRuntimeValidators(): Record<
+  string,
+  (value: unknown) => ValidationResult<unknown>
+> {
   return {
     validateSettings: (value: unknown) =>
       safeParse(SettingsSchema, value, 'Invalid settings payload', {}),

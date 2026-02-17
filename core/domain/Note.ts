@@ -36,7 +36,7 @@ const NoteContentSchema = z
 
 export type NoteContent = z.infer<typeof NoteContentSchema>;
 
-const NoteStatusSchema = z.enum(['idle', 'editing', 'saving', 'saved', 'error']);
+export const NoteStatusSchema = z.enum(['idle', 'editing', 'saving', 'saved', 'error']);
 export type NoteStatus = z.infer<typeof NoteStatusSchema>;
 
 const NoteTypeSchema = z.enum([

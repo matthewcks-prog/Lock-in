@@ -6,6 +6,6 @@ type ReactMarkdownStubProps = {
   [key: string]: unknown;
 };
 
-export default function ReactMarkdownStub({ children }: ReactMarkdownStubProps) {
+export default function ReactMarkdownStub({ children }: ReactMarkdownStubProps): JSX.Element {
   return <>{children}</>;
 }

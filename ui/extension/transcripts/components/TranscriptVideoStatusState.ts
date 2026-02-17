@@ -2,11 +2,28 @@ import type { DetectedVideo } from '@core/transcripts/types';
 import type { AiTranscriptionUiState, VideoExtractionResult } from './types';
 import { isAiTranscriptionBusy, getAiStatusLabel } from './types';
 
-function getAiState(video: DetectedVideo, aiTranscription: AiTranscriptionUiState) {
+function getAiState(
+  video: DetectedVideo,
+  aiTranscription: AiTranscriptionUiState,
+): {
+  aiForVideo: AiTranscriptionUiState | null;
+  aiStatus: AiTranscriptionUiState['status'];
+  aiIsActive: boolean;
+  aiIsFailed: boolean;
+  aiIsCanceled: boolean;
+  aiIsCompleted: boolean;
+  aiErrorMessage: string | null;
+} {
   const aiForVideo =
-    aiTranscription.video && aiTranscription.video.id === video.id ? aiTranscription : null;
+    aiTranscription.video !== null && aiTranscription.video.id === video.id
+      ? aiTranscription
+      : null;
   const aiStatus = aiForVideo?.status ?? 'idle';
-  const aiIsActive = aiForVideo ? isAiTranscriptionBusy(aiStatus) : false;
+  const aiIsActive = aiForVideo !== null ? isAiTranscriptionBusy(aiStatus) : false;
+  const aiErrorMessage =
+    aiForVideo?.error !== null && aiForVideo?.error !== undefined && aiForVideo.error.length > 0
+      ? aiForVideo.error
+      : null;
   return {
     aiForVideo,
     aiStatus,
@@ -14,19 +31,55 @@ function getAiState(video: DetectedVideo, aiTranscription: AiTranscriptionUiStat
     aiIsFailed: aiForVideo?.status === 'failed',
     aiIsCanceled: aiForVideo?.status === 'canceled',
     aiIsCompleted: aiForVideo?.status === 'completed',
-    aiErrorMessage: aiForVideo?.error || null,
+    aiErrorMessage,
   };
 }
 
-function getExtractionState(extractionResult?: VideoExtractionResult) {
+function getExtractionState(extractionResult?: VideoExtractionResult): {
+  noCaptions: boolean;
+  aiAvailable: boolean;
+  extractionError: string | null;
+} {
   const noCaptions =
-    extractionResult && !extractionResult.success && extractionResult.errorCode === 'NO_CAPTIONS';
-  const aiAvailable = Boolean(noCaptions && extractionResult?.aiTranscriptionAvailable);
+    extractionResult !== undefined &&
+    extractionResult.success === false &&
+    extractionResult.errorCode === 'NO_CAPTIONS';
+  const aiAvailable = noCaptions && extractionResult?.aiTranscriptionAvailable === true;
   const extractionError =
-    extractionResult && !extractionResult.success && !aiAvailable
-      ? extractionResult.error || 'Failed to extract transcript'
+    extractionResult !== undefined && extractionResult.success === false && !aiAvailable
+      ? extractionResult.error !== undefined &&
+        extractionResult.error !== null &&
+        extractionResult.error.length > 0
+        ? extractionResult.error
+        : 'Failed to extract transcript'
       : null;
   return { noCaptions, aiAvailable, extractionError };
+}
+
+function resolveProgressMessage(aiForVideo: AiTranscriptionUiState | null): string {
+  if (
+    aiForVideo?.progressMessage !== undefined &&
+    aiForVideo.progressMessage !== null &&
+    aiForVideo.progressMessage.length > 0
+  ) {
+    return aiForVideo.progressMessage;
+  }
+  return 'Working on your transcript. This can take a few minutes.';
+}
+
+function resolveAiActionSubtitle({
+  disableAiAction,
+  isAiBusy,
+  aiIsActive,
+}: {
+  disableAiAction: boolean;
+  isAiBusy: boolean;
+  aiIsActive: boolean;
+}): string {
+  if (disableAiAction && isAiBusy && !aiIsActive) {
+    return 'Another AI transcription is already running.';
+  }
+  return 'Generates captions when none are available.';
 }
 
 function getAiUiState({
@@ -51,29 +104,30 @@ function getAiUiState({
   aiAvailable: boolean;
   isExtracting: boolean;
   isAiBusy: boolean;
-}) {
+}): {
+  showAiProgress: boolean;
+  showAiError: boolean;
+  showAiAction: boolean;
+  disableAiAction: boolean;
+  progressLabel: string;
+  progressMessage: string;
+  progressPercent: number | null | undefined;
+  aiActionSubtitle: string;
+  aiErrorMessage: string | null;
+} {
   const showAiProgress = aiIsActive;
   const showAiError = aiAvailable && (aiIsFailed || aiIsCanceled);
   const showAiAction = aiAvailable && !aiIsActive && !aiIsCompleted;
   const disableAiAction = isExtracting || (isAiBusy && !aiIsActive);
-  const progressLabel = getAiStatusLabel(aiStatus);
-  const progressMessage =
-    aiForVideo?.progressMessage || 'Working on your transcript. This can take a few minutes.';
-  const progressPercent = aiForVideo?.progressPercent;
-  const aiActionSubtitle =
-    disableAiAction && isAiBusy && !aiIsActive
-      ? 'Another AI transcription is already running.'
-      : 'Generates captions when none are available.';
-
   return {
     showAiProgress,
     showAiError,
     showAiAction,
     disableAiAction,
-    progressLabel,
-    progressMessage,
-    progressPercent,
-    aiActionSubtitle,
+    progressLabel: getAiStatusLabel(aiStatus),
+    progressMessage: resolveProgressMessage(aiForVideo),
+    progressPercent: aiForVideo?.progressPercent,
+    aiActionSubtitle: resolveAiActionSubtitle({ disableAiAction, isAiBusy, aiIsActive }),
     aiErrorMessage,
   };
 }
@@ -90,7 +144,20 @@ export function resolveTranscriptVideoStatusState({
   aiTranscription: AiTranscriptionUiState;
   isExtracting: boolean;
   isAiBusy: boolean;
-}) {
+}): {
+  aiAvailable: boolean;
+  extractionError: string | null;
+  aiIsCanceled: boolean;
+  showAiProgress: boolean;
+  showAiError: boolean;
+  showAiAction: boolean;
+  disableAiAction: boolean;
+  progressLabel: string;
+  progressMessage: string;
+  progressPercent: number | null | undefined;
+  aiActionSubtitle: string;
+  aiErrorMessage: string | null;
+} {
   const aiState = getAiState(video, aiTranscription);
   const { aiAvailable, extractionError } = getExtractionState(extractionResult);
   const uiState = getAiUiState({

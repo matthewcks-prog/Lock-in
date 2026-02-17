@@ -42,7 +42,7 @@ export function useRegenerateMessage(
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   const regenerate = useCallback(async (): Promise<boolean> => {
-    if (!apiClient?.regenerateMessage || !chatId) {
+    if (apiClient?.regenerateMessage === undefined || chatId === null || chatId.length === 0) {
       return false;
     }
 

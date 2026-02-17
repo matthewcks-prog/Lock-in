@@ -12,6 +12,8 @@ import { createAuthClient, type AuthClient } from '../../api/auth';
 import { createApiClient, type ApiClient } from '../../api/client';
 import { chromeStorage } from './chromeStorage';
 
+const DEFAULT_TOKEN_EXPIRY_BUFFER_MS = 60000;
+
 /**
  * Extension configuration from window.LOCKIN_CONFIG (set by config.js)
  */
@@ -28,12 +30,22 @@ export interface LockInConfig {
  */
 export function getConfig(): LockInConfig {
   const config = typeof window !== 'undefined' ? (window.LOCKIN_CONFIG ?? {}) : {};
+  const tokenExpiryBufferMs = Number(config.TOKEN_EXPIRY_BUFFER_MS);
   return {
-    backendUrl: config.BACKEND_URL || 'http://localhost:3000',
-    supabaseUrl: config.SUPABASE_URL || '',
-    supabaseAnonKey: config.SUPABASE_ANON_KEY || '',
-    sessionStorageKey: config.SESSION_STORAGE_KEY || 'lockinSupabaseSession',
-    tokenExpiryBufferMs: Number(config.TOKEN_EXPIRY_BUFFER_MS) || 60000,
+    backendUrl:
+      config.BACKEND_URL !== undefined && config.BACKEND_URL.length > 0
+        ? config.BACKEND_URL
+        : 'http://localhost:3000',
+    supabaseUrl: config.SUPABASE_URL ?? '',
+    supabaseAnonKey: config.SUPABASE_ANON_KEY ?? '',
+    sessionStorageKey:
+      config.SESSION_STORAGE_KEY !== undefined && config.SESSION_STORAGE_KEY.length > 0
+        ? config.SESSION_STORAGE_KEY
+        : 'lockinSupabaseSession',
+    tokenExpiryBufferMs:
+      Number.isFinite(tokenExpiryBufferMs) && tokenExpiryBufferMs > 0
+        ? tokenExpiryBufferMs
+        : DEFAULT_TOKEN_EXPIRY_BUFFER_MS,
   };
 }
 
@@ -74,7 +86,7 @@ let cachedClients: { authClient: AuthClient; apiClient: ApiClient } | null = nul
  * Initialize both clients and expose globally for backward compatibility
  */
 export function initClients(): { authClient: AuthClient; apiClient: ApiClient } {
-  if (cachedClients) {
+  if (cachedClients !== null) {
     return cachedClients;
   }
 
@@ -100,7 +112,7 @@ export function initClients(): { authClient: AuthClient; apiClient: ApiClient } 
  * Get cached clients (or initialize if not cached)
  */
 export function getClients(): { authClient: AuthClient; apiClient: ApiClient } {
-  return cachedClients || initClients();
+  return cachedClients ?? initClients();
 }
 
 // Auto-initialize when loaded in browser context

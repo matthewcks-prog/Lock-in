@@ -91,7 +91,6 @@
     font-family: inherit;
     font-size: var(--lockin-text-md);
     line-height: 1.4;
-    word-break: break-word;
     border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
     border-radius: var(--lockin-radius-lg);
     resize: none;
@@ -119,12 +118,12 @@
     cursor: pointer;
   }
 
-  #lockin-root .lockin-send-btn:hover:not(:disabled) {
-    background: var(--lockin-color-text-strong);
-  }
-
   #lockin-root .lockin-send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-send-btn:hover:not(:disabled) {
+    background: var(--lockin-color-text-strong);
   }
 }

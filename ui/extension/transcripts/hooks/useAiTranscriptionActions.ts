@@ -9,9 +9,9 @@ import {
   type TranscriptResponseData,
 } from './types';
 import { ensureVideoHasMediaUrl, resolvePanoptoMediaUrl } from './aiTranscriptionHelpers';
+import { executeAiTranscription } from './aiTranscriptionRequest';
 import {
   cancelAiTranscriptionState,
-  handleAiTranscriptionError,
   handleAiTranscriptionFailure,
   handleAiTranscriptionSuccess,
   resetAiTranscriptionState,
@@ -25,44 +25,102 @@ interface UseAiTranscriptionActionsArgs {
   onTranscriptReady?: (video: DetectedVideo, transcript: TranscriptResult) => void;
   onExtractionResult?: (videoId: string, result: TranscriptResponseData) => void;
 }
-export function useAiTranscriptionActions({
-  state,
-  setState,
-  activeAiRequestIdRef,
-  onTranscriptReady,
-  onExtractionResult,
-}: UseAiTranscriptionActionsArgs) {
-  const isBusy = isAiTranscriptionBusy(state.status);
-  const resolveVideo = useCallback(
-    async (video: DetectedVideo) => {
+
+interface UseAiTranscriptionActionsResult {
+  isBusy: boolean;
+  transcribeWithAI: (
+    video: DetectedVideo,
+    options?: { languageHint?: string; maxMinutes?: number },
+  ) => Promise<TranscriptResult | null>;
+  cancelAiTranscription: () => Promise<void>;
+  resetAiTranscription: () => void;
+}
+
+type TranscriptionOptions = { languageHint?: string; maxMinutes?: number };
+
+type OptionalCallbacks = {
+  onTranscriptReady: ((video: DetectedVideo, transcript: TranscriptResult) => void) | undefined;
+  onExtractionResult: ((videoId: string, result: TranscriptResponseData) => void) | undefined;
+};
+type TranscribeWithAiFn = (
+  video: DetectedVideo,
+  options?: TranscriptionOptions,
+) => Promise<TranscriptResult | null>;
+
+interface UseTranscribeWithAiArgs {
+  state: AiTranscriptionState;
+  setState: Dispatch<SetStateAction<AiTranscriptionState>>;
+  activeAiRequestIdRef: MutableRefObject<string | null>;
+  resolveVideo: (video: DetectedVideo) => Promise<DetectedVideo | null>;
+  startRequest: (video: DetectedVideo) => string | null;
+  handleSuccess: (
+    video: DetectedVideo,
+    requestId: string,
+    response: AiTranscriptionResponse,
+  ) => void;
+  handleFailure: (
+    video: DetectedVideo,
+    requestId: string,
+    response: AiTranscriptionResponse,
+  ) => void;
+}
+
+function useResolvedVideo(
+  setState: Dispatch<SetStateAction<AiTranscriptionState>>,
+): (video: DetectedVideo) => Promise<DetectedVideo | null> {
+  return useCallback(
+    async (video: DetectedVideo): Promise<DetectedVideo | null> => {
       const resolvedVideo = await resolvePanoptoMediaUrl(video, setState);
-      if (!resolvedVideo) return null;
+      if (resolvedVideo === null) return null;
       return ensureVideoHasMediaUrl(resolvedVideo, setState) ? resolvedVideo : null;
     },
     [setState],
   );
-  const startRequest = useCallback(
-    (video: DetectedVideo) => {
+}
+
+function useRequestStart(
+  setState: Dispatch<SetStateAction<AiTranscriptionState>>,
+  activeAiRequestIdRef: MutableRefObject<string | null>,
+): (video: DetectedVideo) => string | null {
+  return useCallback(
+    (video: DetectedVideo): string | null => {
       return startAiTranscriptionRequest(video, setState, activeAiRequestIdRef);
     },
     [activeAiRequestIdRef, setState],
   );
-  const handleSuccess = useCallback(
-    (resolvedVideo: DetectedVideo, requestId: string, response: AiTranscriptionResponse) => {
+}
+
+function useRequestSuccess(
+  setState: Dispatch<SetStateAction<AiTranscriptionState>>,
+  activeAiRequestIdRef: MutableRefObject<string | null>,
+  callbacks: OptionalCallbacks,
+): (resolvedVideo: DetectedVideo, requestId: string, response: AiTranscriptionResponse) => void {
+  return useCallback(
+    (resolvedVideo: DetectedVideo, requestId: string, response: AiTranscriptionResponse): void => {
       handleAiTranscriptionSuccess({
         resolvedVideo,
         requestId,
         response,
         setState,
         activeAiRequestIdRef,
-        ...(onTranscriptReady ? { onTranscriptReady } : {}),
-        ...(onExtractionResult ? { onExtractionResult } : {}),
+        ...(callbacks.onTranscriptReady !== undefined
+          ? { onTranscriptReady: callbacks.onTranscriptReady }
+          : {}),
+        ...(callbacks.onExtractionResult !== undefined
+          ? { onExtractionResult: callbacks.onExtractionResult }
+          : {}),
       });
     },
-    [activeAiRequestIdRef, onExtractionResult, onTranscriptReady, setState],
+    [activeAiRequestIdRef, callbacks.onExtractionResult, callbacks.onTranscriptReady, setState],
   );
-  const handleFailure = useCallback(
-    (resolvedVideo: DetectedVideo, requestId: string, response: AiTranscriptionResponse) => {
+}
+
+function useRequestFailure(
+  setState: Dispatch<SetStateAction<AiTranscriptionState>>,
+  activeAiRequestIdRef: MutableRefObject<string | null>,
+): (resolvedVideo: DetectedVideo, requestId: string, response: AiTranscriptionResponse) => void {
+  return useCallback(
+    (resolvedVideo: DetectedVideo, requestId: string, response: AiTranscriptionResponse): void => {
       handleAiTranscriptionFailure({
         resolvedVideo,
         requestId,
@@ -73,62 +131,67 @@ export function useAiTranscriptionActions({
     },
     [activeAiRequestIdRef, setState],
   );
-  const transcribeWithAI = useCallback(
+}
+
+function useTranscribeWithAI({
+  state,
+  setState,
+  activeAiRequestIdRef,
+  resolveVideo,
+  startRequest,
+  handleSuccess,
+  handleFailure,
+}: UseTranscribeWithAiArgs): TranscribeWithAiFn {
+  return useCallback(
     async (
       video: DetectedVideo,
-      options?: { languageHint?: string; maxMinutes?: number },
+      options?: TranscriptionOptions,
     ): Promise<TranscriptResult | null> => {
-      if (isAiTranscriptionBusy(state.status)) return null;
-      const resolvedVideo = await resolveVideo(video);
-      if (!resolvedVideo) return null;
-      const requestId = startRequest(resolvedVideo);
-      if (!requestId) return null;
-      try {
-        const response = await sendToBackground<AiTranscriptionResponse>({
-          type: 'TRANSCRIBE_MEDIA_AI',
-          payload: { video: resolvedVideo, options, requestId },
-        });
-        if (activeAiRequestIdRef.current !== requestId) {
-          return null;
-        }
-        if (response.success && response.transcript) {
-          handleSuccess(resolvedVideo, requestId, response);
-          return response.transcript;
-        }
-        handleFailure(resolvedVideo, requestId, response);
-        return null;
-      } catch (error) {
-        if (activeAiRequestIdRef.current !== requestId) {
-          return null;
-        }
-        const message = error instanceof Error ? error.message : 'AI transcription failed';
-        handleAiTranscriptionError({
-          resolvedVideo,
-          requestId,
-          message,
-          setState,
-          activeAiRequestIdRef,
-        });
-        return null;
-      }
+      return executeAiTranscription({
+        state,
+        video,
+        options,
+        activeAiRequestIdRef,
+        resolveVideo,
+        startRequest,
+        handleSuccess,
+        handleFailure,
+        setState,
+      });
     },
     [
       activeAiRequestIdRef,
       handleFailure,
       handleSuccess,
       resolveVideo,
-      startRequest,
-      state.status,
       setState,
+      startRequest,
+      state,
     ],
   );
-  const cancelAiTranscription = useCallback(async (): Promise<void> => {
+}
+
+function useCancelAiTranscription({
+  state,
+  setState,
+  activeAiRequestIdRef,
+}: {
+  state: AiTranscriptionState;
+  setState: Dispatch<SetStateAction<AiTranscriptionState>>;
+  activeAiRequestIdRef: MutableRefObject<string | null>;
+}): () => Promise<void> {
+  return useCallback(async (): Promise<void> => {
     const requestId = state.requestId;
     const jobId = state.jobId;
-    if (!requestId && !jobId) {
+    const hasRequestId = requestId !== null && requestId.length > 0;
+    const hasJobId = jobId !== null && jobId.length > 0;
+
+    if (!hasRequestId && !hasJobId) {
       return;
     }
+
     cancelAiTranscriptionState(setState, activeAiRequestIdRef);
+
     try {
       await sendToBackground<AiTranscriptionResponse>({
         type: 'TRANSCRIBE_MEDIA_AI',
@@ -143,11 +206,45 @@ export function useAiTranscriptionActions({
       }));
     }
   }, [activeAiRequestIdRef, setState, state.jobId, state.requestId]);
+}
+
+export function useAiTranscriptionActions({
+  state,
+  setState,
+  activeAiRequestIdRef,
+  onTranscriptReady,
+  onExtractionResult,
+}: UseAiTranscriptionActionsArgs): UseAiTranscriptionActionsResult {
+  const resolveVideo = useResolvedVideo(setState);
+  const startRequest = useRequestStart(setState, activeAiRequestIdRef);
+  const handleSuccess = useRequestSuccess(setState, activeAiRequestIdRef, {
+    onTranscriptReady,
+    onExtractionResult,
+  });
+  const handleFailure = useRequestFailure(setState, activeAiRequestIdRef);
+
+  const transcribeWithAI = useTranscribeWithAI({
+    state,
+    setState,
+    activeAiRequestIdRef,
+    resolveVideo,
+    startRequest,
+    handleSuccess,
+    handleFailure,
+  });
+
+  const cancelAiTranscription = useCancelAiTranscription({
+    state,
+    setState,
+    activeAiRequestIdRef,
+  });
+
   const resetAiTranscription = useCallback(() => {
     resetAiTranscriptionState(setState, activeAiRequestIdRef);
   }, [activeAiRequestIdRef, setState]);
+
   return {
-    isBusy,
+    isBusy: isAiTranscriptionBusy(state.status),
     transcribeWithAI,
     cancelAiTranscription,
     resetAiTranscription,

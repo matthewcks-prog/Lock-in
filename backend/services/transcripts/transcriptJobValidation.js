@@ -2,6 +2,8 @@ const { AppError, ValidationError } = require('../../errors');
 const { TRANSCRIPT_CHUNK_MAX_BYTES } = require('../../config');
 const { coerceNumber } = require('./transcriptJobUtils');
 const { JOB_STATUS, UPLOADABLE_STATUSES } = require('./transcriptJobConstants');
+const HTTP_STATUS = require('../../constants/httpStatus');
+const HTTP_STATUS_PAYLOAD_TOO_LARGE = 413;
 
 function parseExpectedTotalChunks(rawValue) {
   const value = coerceNumber(rawValue);
@@ -33,9 +35,14 @@ function ensureValidUploadPayload(jobId, chunk, chunkIndex) {
     throw new ValidationError('Chunk payload is required', 'chunk');
   }
   if (Number.isFinite(TRANSCRIPT_CHUNK_MAX_BYTES) && chunk.length > TRANSCRIPT_CHUNK_MAX_BYTES) {
-    throw new AppError('Chunk exceeds maximum allowed size.', 'TRANSCRIPT_CHUNK_TOO_LARGE', 413, {
-      maxBytes: TRANSCRIPT_CHUNK_MAX_BYTES,
-    });
+    throw new AppError(
+      'Chunk exceeds maximum allowed size.',
+      'TRANSCRIPT_CHUNK_TOO_LARGE',
+      HTTP_STATUS_PAYLOAD_TOO_LARGE,
+      {
+        maxBytes: TRANSCRIPT_CHUNK_MAX_BYTES,
+      },
+    );
   }
   if (chunkIndex === null) {
     throw new ValidationError('Chunk index header is required', 'x-chunk-index');
@@ -45,10 +52,18 @@ function ensureValidUploadPayload(jobId, chunk, chunkIndex) {
 
 function ensureJobUploadable(job) {
   if (job.status === JOB_STATUS.CANCELED) {
-    throw new AppError('This transcription job has been canceled.', 'TRANSCRIPT_CANCELED', 409);
+    throw new AppError(
+      'This transcription job has been canceled.',
+      'TRANSCRIPT_CANCELED',
+      HTTP_STATUS.CONFLICT,
+    );
   }
   if (!UPLOADABLE_STATUSES.has(job.status)) {
-    throw new AppError('Job is no longer accepting chunks.', 'TRANSCRIPT_INVALID_STATE', 409);
+    throw new AppError(
+      'Job is no longer accepting chunks.',
+      'TRANSCRIPT_INVALID_STATE',
+      HTTP_STATUS.CONFLICT,
+    );
   }
 }
 
@@ -57,7 +72,7 @@ function ensureChunkIndexInRange(job, chunkIndex, expectedTotalChunks) {
     throw new AppError(
       'Chunk index exceeds expected total chunks.',
       'TRANSCRIPT_CHUNK_OUT_OF_RANGE',
-      400,
+      HTTP_STATUS.BAD_REQUEST,
     );
   }
   if (
@@ -68,7 +83,7 @@ function ensureChunkIndexInRange(job, chunkIndex, expectedTotalChunks) {
     throw new AppError(
       'Expected total chunks header does not match job configuration.',
       'TRANSCRIPT_TOTAL_CHUNKS_MISMATCH',
-      409,
+      HTTP_STATUS.CONFLICT,
     );
   }
 }

@@ -2,20 +2,18 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { Note, NoteStatus } from '@core/domain/Note';
 import type { CreateNoteInput, NotesService, UpdateNoteInput } from '@core/services/notesService';
 import { MAX_SAVE_RETRIES, SAVED_RESET_DELAY_MS } from './constants';
-import {
-  addToOfflineQueue,
-  getQueueKey,
-  loadOfflineQueue,
-  saveOfflineQueue,
-  type PendingSave,
-} from './offlineQueue';
+import { addToOfflineQueue, loadOfflineQueue, type PendingSave } from './offlineQueue';
 import { createContentFingerprint } from './noteUtils';
+import {
+  evaluateSaveResult,
+  isRetryableError,
+  shouldApplySyncedSave,
+  updateQueueAfterSyncFailure,
+  type ErrorMeta,
+} from './persistenceSyncDecisions';
 
-export type ErrorMeta = {
-  code?: string;
-  status?: number;
-  message?: string;
-};
+export { evaluateSaveResult, isRetryableError, shouldApplySyncedSave, updateQueueAfterSyncFailure };
+export type { ErrorMeta } from './persistenceSyncDecisions';
 
 export function getErrorMeta(err: unknown): ErrorMeta {
   const record = typeof err === 'object' && err !== null ? (err as Record<string, unknown>) : null;
@@ -26,17 +24,18 @@ export function getErrorMeta(err: unknown): ErrorMeta {
   if (typeof record?.['status'] === 'number') {
     meta.status = record['status'];
   }
+  const errorMessage = err instanceof Error ? err.message : undefined;
+  const recordMessage = typeof record?.['message'] === 'string' ? record['message'] : undefined;
   const message =
-    (err instanceof Error && err.message) ||
-    (typeof record?.['message'] === 'string' ? record['message'] : undefined);
-  if (message) {
+    errorMessage !== undefined && errorMessage.length > 0 ? errorMessage : recordMessage;
+  if (message !== undefined && message.length > 0) {
     meta.message = message;
   }
   return meta;
 }
 
-export function clearTimer(ref: MutableRefObject<number | null>) {
-  if (ref.current) {
+export function clearTimer(ref: MutableRefObject<number | null>): void {
+  if (ref.current !== null) {
     window.clearTimeout(ref.current);
     ref.current = null;
   }
@@ -45,7 +44,7 @@ export function clearTimer(ref: MutableRefObject<number | null>) {
 export function scheduleSavedReset(
   setStatus: Dispatch<SetStateAction<NoteStatus>>,
   savedResetRef: MutableRefObject<number | null>,
-) {
+): void {
   clearTimer(savedResetRef);
   savedResetRef.current = window.setTimeout(() => setStatus('idle'), SAVED_RESET_DELAY_MS);
 }
@@ -68,7 +67,7 @@ export function buildPendingSave({
   return {
     noteId: note.id,
     clientNoteId,
-    title: note.title || 'Untitled note',
+    title: note.title.length > 0 ? note.title : 'Untitled note',
     content: note.content,
     courseCode: note.courseCode ?? defaultCourseCode ?? null,
     sourceUrl: note.sourceUrl ?? defaultSourceUrl ?? null,
@@ -110,7 +109,7 @@ export function buildCreatePayload(
   },
 ): CreateNoteInput {
   return {
-    title: note.title || 'Untitled note',
+    title: note.title.length > 0 ? note.title : 'Untitled note',
     content: note.content,
     courseCode: note.courseCode ?? defaults.defaultCourseCode ?? null,
     sourceUrl: note.sourceUrl ?? defaults.defaultSourceUrl ?? null,
@@ -140,7 +139,7 @@ export async function saveNoteToService({
     sourceSelection?: string | null;
   };
 }): Promise<Note> {
-  if (note.id) {
+  if (note.id !== null && note.id !== undefined && note.id.length > 0) {
     const payload = buildUpdatePayload(note, defaults);
     return notesService.updateNote(note.id, payload, {
       signal: controller.signal,
@@ -152,43 +151,6 @@ export async function saveNoteToService({
   return notesService.createNote(payload, {
     signal: controller.signal,
   });
-}
-
-export function evaluateSaveResult({
-  saved,
-  latestNote,
-  fingerprint,
-  clientNoteIdRef,
-  clientNoteId,
-}: {
-  saved: Note;
-  latestNote: Note | null;
-  fingerprint: string;
-  clientNoteIdRef: MutableRefObject<string>;
-  clientNoteId: string;
-}): { ignore: boolean; markEditing: boolean } {
-  if (latestNote?.id && saved.id && latestNote.id !== saved.id) {
-    return { ignore: true, markEditing: false };
-  }
-  if (!latestNote?.id && clientNoteIdRef.current !== clientNoteId) {
-    return { ignore: true, markEditing: false };
-  }
-  const latestFingerprint = latestNote
-    ? createContentFingerprint(latestNote.title, latestNote.content)
-    : null;
-  if (latestFingerprint && latestFingerprint !== fingerprint) {
-    return { ignore: true, markEditing: true };
-  }
-  return { ignore: false, markEditing: false };
-}
-
-export function isRetryableError(meta: ErrorMeta): boolean {
-  return (
-    meta.code === 'NETWORK_ERROR' ||
-    meta.code === 'RATE_LIMIT' ||
-    meta.status === 429 ||
-    (meta.status ?? 0) >= 500
-  );
 }
 
 export function handlePersistFailure({
@@ -203,7 +165,7 @@ export function handlePersistFailure({
   setPendingSaveCount: Dispatch<SetStateAction<number>>;
   setError: Dispatch<SetStateAction<string | null>>;
   setStatus: Dispatch<SetStateAction<NoteStatus>>;
-}) {
+}): void {
   const networkError = meta.code === 'NETWORK_ERROR' || !navigator.onLine;
   const retryable = networkError || isRetryableError(meta);
 
@@ -215,7 +177,9 @@ export function handlePersistFailure({
     return;
   }
 
-  setError(meta.message || 'Failed to save note');
+  setError(
+    meta.message !== undefined && meta.message.length > 0 ? meta.message : 'Failed to save note',
+  );
   setStatus('error');
 }
 
@@ -235,10 +199,10 @@ export function applySavedNote({
   lastSavedFingerprintRef: MutableRefObject<string | null>;
   setStatus: Dispatch<SetStateAction<NoteStatus>>;
   savedResetRef: MutableRefObject<number | null>;
-}) {
+}): void {
   setNote(saved);
   setActiveNoteId(saved.id);
-  if (saved.id) {
+  if (saved.id !== null && saved.id !== undefined && saved.id.length > 0) {
     clientNoteIdRef.current = saved.id;
   }
   lastSavedFingerprintRef.current = createContentFingerprint(saved.title, saved.content);
@@ -269,39 +233,4 @@ export function buildPendingCreatePayload(pendingSave: PendingSave): CreateNoteI
     tags: pendingSave.tags,
     clientNoteId: pendingSave.clientNoteId,
   };
-}
-
-export function shouldApplySyncedSave({
-  saved,
-  pendingSave,
-  latestNote,
-  clientNoteIdRef,
-}: {
-  saved: Note;
-  pendingSave: PendingSave;
-  latestNote: Note | null;
-  clientNoteIdRef: MutableRefObject<string>;
-}): boolean {
-  const pendingFingerprint = createContentFingerprint(pendingSave.title, pendingSave.content);
-  const latestFingerprint = latestNote
-    ? createContentFingerprint(latestNote.title, latestNote.content)
-    : null;
-  const isSameDraft = !latestNote?.id && clientNoteIdRef.current === pendingSave.clientNoteId;
-  const isSameNote = latestNote?.id && latestNote.id === saved.id;
-
-  return Boolean((isSameDraft || isSameNote) && latestFingerprint === pendingFingerprint);
-}
-
-export function updateQueueAfterSyncFailure(queueKey: string, meta: ErrorMeta): PendingSave[] {
-  const isStale = meta.code === 'CONFLICT' || meta.code === 'NOT_FOUND';
-  const retryable = isRetryableError(meta);
-  const updated = loadOfflineQueue().map((save) =>
-    getQueueKey(save) === queueKey ? { ...save, retryCount: (save.retryCount ?? 0) + 1 } : save,
-  );
-  let filtered = updated.filter((save) => save.retryCount < MAX_SAVE_RETRIES);
-  if (!retryable || isStale) {
-    filtered = filtered.filter((save) => getQueueKey(save) !== queueKey);
-  }
-  saveOfflineQueue(filtered);
-  return filtered;
 }

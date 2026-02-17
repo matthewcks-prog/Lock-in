@@ -18,6 +18,7 @@ import {
   type StreamFinalEvent,
   type StreamErrorEvent,
 } from '../fetcher/sseParser';
+import { parseHttpStreamError } from './lockinStreamErrors';
 
 // Re-export stream event types for consumers
 export type { StreamEvent, StreamMetaEvent, StreamDeltaEvent, StreamFinalEvent, StreamErrorEvent };
@@ -137,26 +138,6 @@ function buildStreamRequestInit(
     fetchInit.signal = signal;
   }
   return fetchInit;
-}
-
-async function parseStreamError(response: Response): Promise<StreamErrorEvent> {
-  const errorText = await response.text();
-  try {
-    const parsed = JSON.parse(errorText);
-    return {
-      code: parsed.error?.code || `HTTP_${response.status}`,
-      message: parsed.error?.message || response.statusText,
-      retryable:
-        response.status === HTTP_STATUS.SERVICE_UNAVAILABLE ||
-        response.status === HTTP_STATUS.TOO_MANY_REQUESTS,
-    };
-  } catch {
-    return {
-      code: `HTTP_${response.status}`,
-      message: response.statusText,
-      retryable: false,
-    };
-  }
 }
 
 function applyStreamEvent(
@@ -292,7 +273,7 @@ async function processTextStreamRequest(
 
   // Check for HTTP errors
   if (!response.ok) {
-    const errorData = await parseStreamError(response);
+    const errorData = await parseHttpStreamError(response);
     callbacks.onError?.(errorData);
     return { success: false, error: errorData };
   }
@@ -319,7 +300,7 @@ export function createLockinClient(
   return {
     processText: async (params) => processTextRequest(apiRequest, params),
     processTextStream: async (params) => {
-      if (!streamingConfig) {
+      if (streamingConfig === undefined) {
         throw new Error(
           'Streaming not configured. Please provide streamingConfig to createLockinClient.',
         );

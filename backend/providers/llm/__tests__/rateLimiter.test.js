@@ -12,9 +12,7 @@ const { test, describe, beforeEach, afterEach, after } = require('node:test');
 const assert = require('node:assert');
 const {
   RateLimiterManager,
-  getRateLimiterManager,
   getTestRateLimiterManager,
-  resetRateLimiterManager,
   forceResetRateLimiterManager,
   drainEventLoop,
   DEFAULT_LIMITS,

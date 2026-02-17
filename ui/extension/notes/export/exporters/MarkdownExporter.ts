@@ -22,6 +22,14 @@ import type {
 } from '../types';
 import { buildMetadataFields } from '../metadata';
 
+const MAX_MARKDOWN_HEADING_LEVEL = 6;
+type DocumentBlock = NormalizedDocument['blocks'][number];
+type ParagraphBlock = Extract<DocumentBlock, { type: 'paragraph' }>;
+type HeadingBlock = Extract<DocumentBlock, { type: 'heading' }>;
+type ListBlock = Extract<DocumentBlock, { type: 'list' }>;
+type QuoteBlock = Extract<DocumentBlock, { type: 'quote' }>;
+type CodeBlock = Extract<DocumentBlock, { type: 'code' }>;
+
 /**
  * Escapes special Markdown characters in text.
  */
@@ -39,20 +47,20 @@ function textRunToMarkdown(run: TextRun, escapeText = true): string {
 
   // Apply formatting in order: code, then bold/italic
   // Code formatting takes precedence and shouldn't nest other formatting
-  if (format.code) {
+  if (format.code === true) {
     // Don't escape inside code spans
     return `\`${run.text}\``;
   }
 
-  if (format.bold && format.italic) {
+  if (format.bold === true && format.italic === true) {
     text = `***${text}***`;
-  } else if (format.bold) {
+  } else if (format.bold === true) {
     text = `**${text}**`;
-  } else if (format.italic) {
+  } else if (format.italic === true) {
     text = `*${text}*`;
   }
 
-  if (format.strikethrough) {
+  if (format.strikethrough === true) {
     text = `~~${text}~~`;
   }
 
@@ -79,84 +87,86 @@ function inlineToMarkdown(content: InlineContent[]): string {
     .join('');
 }
 
-/**
- * Generates Markdown from a normalized document.
- */
-function documentToMarkdown(document: NormalizedDocument, metadata: ExportMetadata): string {
-  const lines: string[] = [];
+function hasTextContent(value: string): boolean {
+  return value.trim().length > 0;
+}
 
-  // Add title as H1
-  if (metadata.title) {
+function appendTitle(lines: string[], metadata: ExportMetadata): void {
+  if (metadata.title.length > 0) {
     lines.push(`# ${metadata.title}`);
     lines.push('');
   }
+}
 
-  // Add metadata as blockquote
+function appendMetadata(lines: string[], metadata: ExportMetadata): void {
   const metadataFields = buildMetadataFields(metadata);
   if (metadataFields.length > 0) {
     const metaParts = metadataFields.map(({ label, value }) => `**${label}:** ${value}`);
     lines.push(`> ${metaParts.join(' | ')}`);
     lines.push('');
   }
+}
 
-  // Process blocks
+function paragraphToMarkdownLines(block: ParagraphBlock): string[] {
+  const text = inlineToMarkdown(block.children);
+  return hasTextContent(text) ? [text, ''] : [];
+}
+
+function headingToMarkdownLines(block: HeadingBlock): string[] {
+  const text = inlineToMarkdown(block.children);
+  if (!hasTextContent(text)) return [];
+  const level = Math.min(block.level + 1, MAX_MARKDOWN_HEADING_LEVEL);
+  const prefix = '#'.repeat(level);
+  return [`${prefix} ${text}`, ''];
+}
+
+function listToMarkdownLines(block: ListBlock): string[] {
+  const lines = block.children.map((item, index) => {
+    const prefix = block.ordered ? `${index + 1}. ` : '- ';
+    return prefix + inlineToMarkdown(item.children);
+  });
+  lines.push('');
+  return lines;
+}
+
+function quoteToMarkdownLines(block: QuoteBlock): string[] {
+  const text = inlineToMarkdown(block.children);
+  if (!hasTextContent(text)) return [];
+  const quotedLines = text.split('\n').map((line) => `> ${line}`);
+  return [...quotedLines, ''];
+}
+
+function codeToMarkdownLines(block: CodeBlock): string[] {
+  const lang = block.language ?? '';
+  return ['```' + lang, block.code, '```', ''];
+}
+
+function blockToMarkdownLines(block: DocumentBlock): string[] {
+  switch (block.type) {
+    case 'paragraph':
+      return paragraphToMarkdownLines(block);
+    case 'heading':
+      return headingToMarkdownLines(block);
+    case 'list':
+      return listToMarkdownLines(block);
+    case 'quote':
+      return quoteToMarkdownLines(block);
+    case 'code':
+      return codeToMarkdownLines(block);
+    case 'linebreak':
+      return [''];
+  }
+}
+
+/**
+ * Generates Markdown from a normalized document.
+ */
+function documentToMarkdown(document: NormalizedDocument, metadata: ExportMetadata): string {
+  const lines: string[] = [];
+  appendTitle(lines, metadata);
+  appendMetadata(lines, metadata);
   for (const block of document.blocks) {
-    switch (block.type) {
-      case 'paragraph': {
-        const text = inlineToMarkdown(block.children);
-        if (text.trim()) {
-          lines.push(text);
-          lines.push('');
-        }
-        break;
-      }
-
-      case 'heading': {
-        const text = inlineToMarkdown(block.children);
-        if (text.trim()) {
-          // Offset by 1 since title uses H1
-          const level = Math.min(block.level + 1, 6);
-          const prefix = '#'.repeat(level);
-          lines.push(`${prefix} ${text}`);
-          lines.push('');
-        }
-        break;
-      }
-
-      case 'list': {
-        block.children.forEach((item, index) => {
-          const prefix = block.ordered ? `${index + 1}. ` : '- ';
-          lines.push(prefix + inlineToMarkdown(item.children));
-        });
-        lines.push('');
-        break;
-      }
-
-      case 'quote': {
-        const text = inlineToMarkdown(block.children);
-        if (text.trim()) {
-          // Split into lines and prefix each with >
-          const quotedLines = text.split('\n').map((line) => `> ${line}`);
-          lines.push(...quotedLines);
-          lines.push('');
-        }
-        break;
-      }
-
-      case 'code': {
-        const lang = block.language || '';
-        lines.push('```' + lang);
-        lines.push(block.code);
-        lines.push('```');
-        lines.push('');
-        break;
-      }
-
-      case 'linebreak': {
-        lines.push('');
-        break;
-      }
-    }
+    lines.push(...blockToMarkdownLines(block));
   }
 
   return lines.join('\n').trim() + '\n';

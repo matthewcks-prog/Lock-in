@@ -3,6 +3,7 @@ const {
   MIN_REMAINING_MS,
   resolveTimeoutMs,
 } = require('./requestBudget');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 function getErrorStatus(error) {
   if (!error) return null;
@@ -17,9 +18,9 @@ function getErrorStatus(error) {
 }
 
 const STATUS_CATEGORY_RULES = [
-  { category: 'rate_limit', statuses: new Set([429]) },
-  { category: 'auth_error', statuses: new Set([401, 403]) },
-  { category: 'bad_request', statuses: new Set([400]) },
+  { category: 'rate_limit', statuses: new Set([HTTP_STATUS.TOO_MANY_REQUESTS]) },
+  { category: 'auth_error', statuses: new Set([HTTP_STATUS.UNAUTHORIZED, HTTP_STATUS.FORBIDDEN]) },
+  { category: 'bad_request', statuses: new Set([HTTP_STATUS.BAD_REQUEST]) },
 ];
 
 const MESSAGE_CATEGORY_RULES = [
@@ -74,7 +75,7 @@ function categorizeError(error) {
     return statusCategory;
   }
 
-  if (typeof status === 'number' && status >= 500) {
+  if (typeof status === 'number' && status >= HTTP_STATUS.INTERNAL_SERVER_ERROR) {
     return 'server_error';
   }
 

@@ -2,16 +2,24 @@ import { describe, expect, it } from 'vitest';
 
 import manifestJson from '../../manifest.json';
 
+interface ManifestContentScript {
+  js?: string[];
+}
+
+interface ExtensionManifest {
+  content_scripts?: ManifestContentScript[];
+}
+
 describe('manifest content_scripts order', () => {
-  const manifest = JSON.parse(JSON.stringify(manifestJson));
+  const manifest = manifestJson as ExtensionManifest;
 
   it('keeps the content_scripts js list stable and ordered', () => {
-    const contentScripts = manifest.content_scripts;
+    const contentScripts = manifest.content_scripts ?? [];
 
     expect(Array.isArray(contentScripts)).toBe(true);
     expect(contentScripts.length).toBeGreaterThan(0);
 
-    const scripts = contentScripts[0]?.js;
+    const scripts = contentScripts[0]?.js ?? [];
 
     expect(Array.isArray(scripts)).toBe(true);
     expect(scripts.length).toBeGreaterThan(0);

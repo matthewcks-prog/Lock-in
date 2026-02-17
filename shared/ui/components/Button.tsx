@@ -22,7 +22,7 @@ export function Button({
   className = '',
   children,
   ...props
-}: ButtonProps) {
+}: ButtonProps): JSX.Element {
   const baseClasses =
     'inline-flex items-center justify-center gap-2 font-medium transition-colors duration-lockin-base rounded-lockin-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed';
 
@@ -46,7 +46,7 @@ export function Button({
   return (
     <button
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
-      disabled={disabled || isLoading}
+      disabled={disabled === true || isLoading}
       aria-busy={isLoading}
       {...props}
     >

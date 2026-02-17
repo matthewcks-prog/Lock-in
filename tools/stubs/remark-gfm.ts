@@ -1,3 +1,3 @@
-export default function remarkGfmStub() {
+export default function remarkGfmStub(): null {
   return null;
 }

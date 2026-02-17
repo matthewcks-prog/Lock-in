@@ -19,19 +19,19 @@ export function NoteContentLoader({
 }: {
   note: Note | null;
   onHydrationChange?: (hydrating: boolean) => void;
-}) {
+}): null {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {
     onHydrationChange?.(true);
 
-    const finish = () => {
+    const finish = (): void => {
       window.setTimeout(() => onHydrationChange?.(false), 0);
     };
 
     // If we have Lexical state in initialConfig, it's already loaded by LexicalComposer
     // We only need to handle legacy HTML migration here
-    if (!note || !note.content) {
+    if (note === null) {
       finish();
       return;
     }
@@ -39,16 +39,21 @@ export function NoteContentLoader({
     const { content } = note;
 
     // Already loaded via initialConfig.editorState
-    if (content.version === 'lexical_v1' && content.editorState) {
+    if (
+      content.version === 'lexical_v1' &&
+      content.editorState !== undefined &&
+      content.editorState !== null
+    ) {
       finish();
       return;
     }
 
     // Legacy HTML migration: convert old HTML-only notes to Lexical
-    if (content.legacyHtml) {
+    const legacyHtml = content.legacyHtml;
+    if (legacyHtml !== undefined && legacyHtml !== null && legacyHtml.length > 0) {
       try {
         const parser = new DOMParser();
-        const dom = parser.parseFromString(content.legacyHtml, 'text/html');
+        const dom = parser.parseFromString(legacyHtml, 'text/html');
         const nodes = $generateNodesFromDOM(editor, dom);
         editor.update(() => {
           const root = $getRoot();

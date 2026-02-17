@@ -6,6 +6,7 @@ const {
   listTranscriptJobsByStatusBefore,
   updateTranscriptJob,
 } = require('../../repositories/transcriptsRepository');
+const { SIXTY, THOUSAND } = require('../../constants/numbers');
 const {
   TRANSCRIPT_CHUNK_RETENTION_HOURS,
   TRANSCRIPT_CHUNK_HARD_TTL_DAYS,
@@ -17,6 +18,11 @@ const { logger } = require('../../observability');
 const { removeTranscriptChunks } = require('./transcriptStorage');
 const { cleanupJobFiles } = require('./transcriptFs');
 const { startTranscriptProcessing } = require('./transcriptProcessing');
+
+const HOURS_PER_DAY = 24;
+const MS_PER_MINUTE = SIXTY * THOUSAND;
+const MS_PER_HOUR = SIXTY * MS_PER_MINUTE;
+const MS_PER_DAY = HOURS_PER_DAY * MS_PER_HOUR;
 
 async function cleanupTranscriptChunksForJob(job, reason) {
   if (!job?.id || !job?.user_id) return { removed: 0 };
@@ -39,7 +45,7 @@ async function cleanupTranscriptChunksForJob(job, reason) {
 }
 
 async function cleanupCompletedTranscriptChunks() {
-  const retentionMs = Math.max(1, TRANSCRIPT_CHUNK_RETENTION_HOURS) * 60 * 60 * 1000;
+  const retentionMs = Math.max(1, TRANSCRIPT_CHUNK_RETENTION_HOURS) * MS_PER_HOUR;
   const cutoff = new Date(Date.now() - retentionMs).toISOString();
   const jobs = await listTranscriptJobsByStatusBefore({
     statuses: ['done', 'error', 'canceled'],
@@ -58,7 +64,7 @@ async function cleanupCompletedTranscriptChunks() {
 }
 
 async function cleanupExpiredTranscriptChunks() {
-  const ttlMs = Math.max(1, TRANSCRIPT_CHUNK_HARD_TTL_DAYS) * 24 * 60 * 60 * 1000;
+  const ttlMs = Math.max(1, TRANSCRIPT_CHUNK_HARD_TTL_DAYS) * MS_PER_DAY;
   const cutoff = new Date(Date.now() - ttlMs).toISOString();
   const jobs = await listTranscriptJobsCreatedBefore({ createdBefore: cutoff });
 
@@ -85,7 +91,7 @@ async function cleanupExpiredTranscriptChunks() {
 
 async function resumeStaleTranscriptJobs() {
   const staleMinutes = Math.max(1, TRANSCRIPT_PROCESSING_STALE_MINUTES);
-  const staleBefore = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
+  const staleBefore = new Date(Date.now() - staleMinutes * MS_PER_MINUTE).toISOString();
   const staleJobs = await listTranscriptJobsByHeartbeatBefore({
     statuses: ['processing'],
     heartbeatBefore: staleBefore,
@@ -104,7 +110,7 @@ async function resumeStaleTranscriptJobs() {
 
 async function reapStaleTranscriptJobs() {
   const resumed = await resumeStaleTranscriptJobs();
-  const ttlMs = Math.max(1, TRANSCRIPT_JOB_TTL_MINUTES) * 60 * 1000;
+  const ttlMs = Math.max(1, TRANSCRIPT_JOB_TTL_MINUTES) * MS_PER_MINUTE;
   const cutoff = new Date(Date.now() - ttlMs).toISOString();
   const staleJobs = await listTranscriptJobsByStatusBefore({
     statuses: ['created', 'uploading', 'uploaded', 'processing'],
@@ -141,7 +147,7 @@ async function reapStaleTranscriptJobs() {
 let reaperInterval = null;
 
 function startTranscriptJobReaper() {
-  const intervalMs = Math.max(1, TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES) * 60 * 1000;
+  const intervalMs = Math.max(1, TRANSCRIPT_JOB_REAPER_INTERVAL_MINUTES) * MS_PER_MINUTE;
 
   reapStaleTranscriptJobs().catch((error) => {
     logger.warn({ err: error }, '[Transcripts] Initial job reaper run failed');

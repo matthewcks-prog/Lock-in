@@ -2,76 +2,121 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchWithRetry } from '../retry';
 
 const originalFetch = globalThis.fetch;
+const HTTP_STATUS_OK = 200;
+const HTTP_STATUS_REDIRECT = 300;
+const HTTP_STATUS_NOT_FOUND = 404;
+const HTTP_STATUS_SERVER_ERROR = 500;
+const NO_DELAY_MS = 0;
+const SHORT_TIMEOUT_MS = 5;
+const RETRY_ONCE = 1;
+const DEFAULT_MAX_RETRIES = 3;
+const RETRY_SUCCESS_CALL_COUNT = 2;
 
 function createResponse(status: number): Response {
+  const isSuccessStatus = status >= HTTP_STATUS_OK && status < HTTP_STATUS_REDIRECT;
   return {
-    ok: status >= 200 && status < 300,
+    ok: isSuccessStatus,
     status,
-    statusText: status >= 200 && status < 300 ? 'OK' : 'Error',
+    statusText: isSuccessStatus ? 'OK' : 'Error',
     headers: {
       get: () => null,
     },
   } as unknown as Response;
 }
 
-describe('fetchWithRetry', () => {
-  afterEach(() => {
-    if (globalThis.fetch && 'mockRestore' in globalThis.fetch) {
-      (globalThis.fetch as unknown as { mockRestore: () => void }).mockRestore();
+type MockedFetch = typeof fetch & { mockRestore?: () => void };
+
+function setGlobalFetch(fetchMock: ReturnType<typeof vi.fn>): void {
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+}
+
+function restoreGlobalFetch(): void {
+  const currentFetch = globalThis.fetch as MockedFetch | undefined;
+  if (typeof currentFetch?.mockRestore === 'function') {
+    currentFetch.mockRestore();
+  }
+  globalThis.fetch = originalFetch;
+}
+
+function createAbortError(): Error {
+  const error = new Error('Aborted');
+  error.name = 'AbortError';
+  return error;
+}
+
+async function createAbortablePendingResponse(options?: RequestInit): Promise<Response> {
+  return await new Promise((_resolve, reject) => {
+    const signal = options?.signal;
+    if (signal !== undefined && signal !== null) {
+      signal.addEventListener('abort', () => reject(createAbortError()), { once: true });
     }
-    globalThis.fetch = originalFetch;
   });
+}
 
-  it('retries retryable responses and succeeds', async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(createResponse(500))
-      .mockResolvedValueOnce(createResponse(200));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+async function retriesRetryableResponsesAndSucceeds(): Promise<void> {
+  const fetchMock = vi
+    .fn()
+    .mockResolvedValueOnce(createResponse(HTTP_STATUS_SERVER_ERROR))
+    .mockResolvedValueOnce(createResponse(HTTP_STATUS_OK));
+  setGlobalFetch(fetchMock);
 
-    const response = await fetchWithRetry(
+  const response = await fetchWithRetry(
+    'https://example.com',
+    {},
+    {
+      maxRetries: RETRY_ONCE,
+      baseDelayMs: NO_DELAY_MS,
+      maxDelayMs: NO_DELAY_MS,
+    },
+  );
+
+  expect(response.ok).toBe(true);
+  expect(fetchMock).toHaveBeenCalledTimes(RETRY_SUCCESS_CALL_COUNT);
+}
+
+async function doesNotRetryNonRetryableResponses(): Promise<void> {
+  const fetchMock = vi.fn().mockResolvedValue(createResponse(HTTP_STATUS_NOT_FOUND));
+  setGlobalFetch(fetchMock);
+
+  const response = await fetchWithRetry(
+    'https://example.com',
+    {},
+    {
+      maxRetries: DEFAULT_MAX_RETRIES,
+      baseDelayMs: NO_DELAY_MS,
+      maxDelayMs: NO_DELAY_MS,
+    },
+  );
+
+  expect(response.status).toBe(HTTP_STATUS_NOT_FOUND);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+}
+
+async function throwsTimeoutErrorWhenRequestExceedsTimeout(): Promise<void> {
+  const fetchMock = vi.fn(async (_url: string, options?: RequestInit) => {
+    return createAbortablePendingResponse(options);
+  });
+  setGlobalFetch(fetchMock);
+
+  await expect(
+    fetchWithRetry(
       'https://example.com',
       {},
-      { maxRetries: 1, baseDelayMs: 0, maxDelayMs: 0 },
-    );
-
-    expect(response.ok).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+      { maxRetries: NO_DELAY_MS, timeoutMs: SHORT_TIMEOUT_MS },
+    ),
+  ).rejects.toMatchObject({
+    code: 'TIMEOUT',
   });
 
-  it('does not retry non-retryable responses', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(createResponse(404));
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+}
 
-    const response = await fetchWithRetry(
-      'https://example.com',
-      {},
-      { maxRetries: 3, baseDelayMs: 0, maxDelayMs: 0 },
-    );
-
-    expect(response.status).toBe(404);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws timeout error when request exceeds timeout', async () => {
-    const fetchMock = vi.fn(async (_url: string, options?: RequestInit) => {
-      return new Promise((_resolve, reject) => {
-        if (options?.signal) {
-          options.signal.addEventListener('abort', () => {
-            const error = new Error('Aborted');
-            error.name = 'AbortError';
-            reject(error);
-          });
-        }
-      });
-    });
-    globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-    await expect(
-      fetchWithRetry('https://example.com', {}, { maxRetries: 0, timeoutMs: 5 }),
-    ).rejects.toMatchObject({
-      code: 'TIMEOUT',
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+describe('fetchWithRetry', () => {
+  afterEach(restoreGlobalFetch);
+  it('retries retryable responses and succeeds', retriesRetryableResponsesAndSucceeds);
+  it('does not retry non-retryable responses', doesNotRetryNonRetryableResponses);
+  it(
+    'throws timeout error when request exceeds timeout',
+    throwsTimeoutErrorWhenRequestExceedsTimeout,
+  );
 });

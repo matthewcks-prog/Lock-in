@@ -8,11 +8,36 @@ import {
   type PanoptoMediaUrlResponse,
 } from './types';
 
+function setAiFailedState(
+  setState: Dispatch<SetStateAction<AiTranscriptionState>>,
+  video: DetectedVideo,
+  error: string,
+): void {
+  setState({
+    status: 'failed',
+    requestId: null,
+    jobId: null,
+    video,
+    progressMessage: null,
+    progressPercent: null,
+    error,
+  });
+}
+
+function resolveMediaUrlError(response: PanoptoMediaUrlResponse): string {
+  if (response.error !== undefined && response.error.length > 0) {
+    return response.error;
+  }
+  return 'Could not find video URL. The video may be restricted or require authentication.';
+}
+
 export async function resolvePanoptoMediaUrl(
   video: DetectedVideo,
   setState: Dispatch<SetStateAction<AiTranscriptionState>>,
 ): Promise<DetectedVideo | null> {
-  if (video.provider !== 'panopto' || video.mediaUrl) {
+  const hasMediaUrl =
+    video.mediaUrl !== null && video.mediaUrl !== undefined && video.mediaUrl.length > 0;
+  if (video.provider !== 'panopto' || hasMediaUrl) {
     return video;
   }
 
@@ -32,35 +57,17 @@ export async function resolvePanoptoMediaUrl(
       payload: { video },
     });
 
-    if (!mediaUrlResponse.success || !mediaUrlResponse.mediaUrl) {
-      const errorMsg =
-        mediaUrlResponse.error ||
-        'Could not find video URL. The video may be restricted or require authentication.';
-      setState({
-        status: 'failed',
-        requestId: null,
-        jobId: null,
-        video,
-        progressMessage: null,
-        progressPercent: null,
-        error: errorMsg,
-      });
+    const mediaUrl = mediaUrlResponse.mediaUrl;
+    if (!mediaUrlResponse.success || mediaUrl === undefined || mediaUrl.length === 0) {
+      setAiFailedState(setState, video, resolveMediaUrlError(mediaUrlResponse));
       return null;
     }
 
-    return { ...video, mediaUrl: mediaUrlResponse.mediaUrl };
+    return { ...video, mediaUrl };
   } catch (error) {
-    const errorMsg =
+    const message =
       error instanceof Error ? error.message : 'Failed to prepare video for AI transcription';
-    setState({
-      status: 'failed',
-      requestId: null,
-      jobId: null,
-      video,
-      progressMessage: null,
-      progressPercent: null,
-      error: errorMsg,
-    });
+    setAiFailedState(setState, video, message);
     return null;
   }
 }
@@ -69,7 +76,9 @@ export function ensureVideoHasMediaUrl(
   video: DetectedVideo,
   setState: Dispatch<SetStateAction<AiTranscriptionState>>,
 ): boolean {
-  if (video.mediaUrl) return true;
+  if (video.mediaUrl !== null && video.mediaUrl !== undefined && video.mediaUrl.length > 0) {
+    return true;
+  }
   setState({
     status: 'failed',
     requestId: null,
@@ -87,7 +96,8 @@ export function buildConfirmMessage(video: DetectedVideo): string {
   const isLong =
     typeof video.durationMs === 'number' && video.durationMs >= LONG_DURATION_CONFIRM_MS;
 
+  const prefix = durationLabel !== null && durationLabel.length > 0 ? `${durationLabel} ` : '';
   return isLong
-    ? `This ${durationLabel ? `${durationLabel} ` : ''}video will be uploaded to Lock-in for AI transcription. This may take several minutes. Continue?`
+    ? `This ${prefix}video will be uploaded to Lock-in for AI transcription. This may take several minutes. Continue?`
     : 'This video will be uploaded to Lock-in for AI transcription. Continue?';
 }

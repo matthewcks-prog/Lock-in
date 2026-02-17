@@ -79,9 +79,7 @@ describe('MoodleAdapter', () => {
       // Polyfill innerText if not available (jsdom doesn't always support it)
       if (!('innerText' in doc.body)) {
         Object.defineProperty(doc.body, 'innerText', {
-          get() {
-            return this.textContent || '';
-          },
+          get: () => doc.body.textContent ?? '',
           configurable: true,
         });
       }

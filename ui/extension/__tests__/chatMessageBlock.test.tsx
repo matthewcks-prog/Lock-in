@@ -31,7 +31,7 @@ function makeMessage(
   };
 }
 
-function renderBlock(props: Partial<MessageBlockProps> = {}) {
+function renderBlock(props: Partial<MessageBlockProps> = {}): ReturnType<typeof render> {
   const defaultProps: MessageBlockProps = {
     message: makeMessage(),
     ...props,

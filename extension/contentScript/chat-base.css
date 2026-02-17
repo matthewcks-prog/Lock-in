@@ -25,7 +25,6 @@
   #lockin-root .lockin-msg-body {
     font-size: var(--lockin-text-md);
     line-height: 1.7;
-    word-break: break-word;
     color: var(--lockin-color-text-strong);
     overflow-wrap: anywhere;
     /* NO max-height, NO overflow hidden, NO line-clamp — content expands fully */

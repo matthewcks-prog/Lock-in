@@ -1,6 +1,8 @@
 const { ValidationError } = require('../../errors');
 const { upsertTranscriptCache } = require('../../repositories/transcriptsRepository');
 
+const MAX_MEDIA_PATH_SEGMENT_LENGTH = 32;
+
 function coerceNumber(value) {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
@@ -14,7 +16,7 @@ function sanitizeMediaUrlForStorage(mediaUrl) {
     url.search = '';
     const segments = url.pathname.split('/').map((segment) => {
       if (!segment) return segment;
-      if (segment.length > 32) return '[redacted]';
+      if (segment.length > MAX_MEDIA_PATH_SEGMENT_LENGTH) return '[redacted]';
       return segment;
     });
     url.pathname = segments.join('/');

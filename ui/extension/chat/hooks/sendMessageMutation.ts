@@ -12,77 +12,125 @@ import {
   type SendMessageMutationParams,
 } from './sendMessageUtils';
 
-export async function sendMessageMutation(
-  params: SendMessageMutationParams,
-  deps: {
-    apiClient: UseSendMessageOptions['apiClient'];
-    pageUrl?: string;
-    courseCode?: string | null;
-    cacheTranscript: (input: TranscriptCacheInput) => Promise<{ fingerprint: string } | null>;
-    abortControllerRef: MutableRefObject<AbortController | null>;
-  },
-): Promise<ChatApiResponse & { resolvedChatId: string }> {
-  const { apiClient, pageUrl, courseCode, cacheTranscript, abortControllerRef } = deps;
+interface SendMessageMutationDeps {
+  apiClient: UseSendMessageOptions['apiClient'];
+  pageUrl?: string;
+  courseCode?: string | null;
+  cacheTranscript: (input: TranscriptCacheInput) => Promise<{ fingerprint: string } | null>;
+  abortControllerRef: MutableRefObject<AbortController | null>;
+}
 
-  if (abortControllerRef.current) {
+type ProcessTextResponse = Awaited<
+  ReturnType<NonNullable<UseSendMessageOptions['apiClient']>['processText']>
+>;
+
+function resetAbortController(abortControllerRef: MutableRefObject<AbortController | null>): void {
+  if (abortControllerRef.current !== null) {
     abortControllerRef.current.abort();
   }
   abortControllerRef.current = new AbortController();
+}
 
-  if (!apiClient?.processText) {
+function assertApiClient(
+  apiClient: UseSendMessageOptions['apiClient'],
+): NonNullable<UseSendMessageOptions['apiClient']> {
+  if (apiClient === null || apiClient.processText === undefined) {
     throw new Error('API client not available');
   }
+  return apiClient;
+}
 
-  await cacheTranscriptIfNeeded(cacheTranscript, params.transcriptContext);
+function assignNonEmptyString<T extends ProcessTextParams>(
+  target: T,
+  key: keyof T,
+  value: string | null | undefined,
+): void {
+  if (value !== null && value !== undefined && value.length > 0) {
+    target[key] = value as T[keyof T];
+  }
+}
 
-  const baseHistory = buildChatHistory(params);
-  const apiChatId = resolveApiChatId(params);
-  const selectionPayload = resolveSelectionPayload(params);
+function buildRequestPayload(
+  params: SendMessageMutationParams,
+  deps: Pick<SendMessageMutationDeps, 'pageUrl' | 'courseCode'>,
+): ProcessTextParams {
+  const payload: ProcessTextParams = {
+    selection: resolveSelectionPayload(params),
+    chatHistory: buildChatHistory(params),
+  };
+
   const userMessagePayload = resolveUserMessagePayload(params);
-  const idempotencyKey = resolveIdempotencyKey(params);
-
-  const requestPayload: ProcessTextParams = {
-    selection: selectionPayload,
-    chatHistory: baseHistory,
-  };
   if (userMessagePayload !== undefined) {
-    requestPayload.newUserMessage = userMessagePayload;
-  }
-  if (apiChatId) {
-    requestPayload.chatId = apiChatId;
-  }
-  const resolvedPageUrl = params.pageUrl || pageUrl;
-  if (resolvedPageUrl) {
-    requestPayload.pageUrl = resolvedPageUrl;
-  }
-  const resolvedCourseCode = params.courseCode ?? courseCode ?? null;
-  if (resolvedCourseCode) {
-    requestPayload.courseCode = resolvedCourseCode;
-  }
-  if (params.attachmentIds && params.attachmentIds.length > 0) {
-    requestPayload.attachments = params.attachmentIds;
-  }
-  if (idempotencyKey) {
-    requestPayload.idempotencyKey = idempotencyKey;
-  }
-  if (params.isRegeneration) {
-    requestPayload.regenerate = true;
+    payload.newUserMessage = userMessagePayload;
   }
 
-  const response = await apiClient.processText(requestPayload);
+  assignNonEmptyString(payload, 'chatId', resolveApiChatId(params));
+  assignNonEmptyString(payload, 'pageUrl', params.pageUrl ?? deps.pageUrl ?? '');
+  assignNonEmptyString(payload, 'courseCode', params.courseCode ?? deps.courseCode ?? null);
 
-  const content = response?.data?.content || params.message;
-  const resolvedChatId = response?.chatId || params.chatId || `chat-${Date.now()}`;
+  if (params.attachmentIds !== undefined && params.attachmentIds.length > 0) {
+    payload.attachments = params.attachmentIds;
+  }
 
-  const result: ChatApiResponse & { resolvedChatId: string } = {
-    content,
-    resolvedChatId,
-  };
-  if (response?.chatId) {
+  const idempotencyKey = resolveIdempotencyKey(params);
+  assignNonEmptyString(payload, 'idempotencyKey', idempotencyKey);
+  if (params.isRegeneration === true) {
+    payload.regenerate = true;
+  }
+  return payload;
+}
+
+function resolveFallbackChatId(params: SendMessageMutationParams): string {
+  if (params.chatId !== null && params.chatId !== undefined && params.chatId.length > 0) {
+    return params.chatId;
+  }
+  return `chat-${Date.now()}`;
+}
+
+function resolveResponseContent(
+  response: ProcessTextResponse | undefined,
+  fallback: string,
+): string {
+  const content = response?.data?.content;
+  return typeof content === 'string' ? content : fallback;
+}
+
+function applyResponseMetadata(
+  result: ChatApiResponse & { resolvedChatId: string },
+  response: ProcessTextResponse | undefined,
+): void {
+  if (response?.chatId !== undefined && response.chatId.length > 0) {
     result.chatId = response.chatId;
   }
-  if (response?.chatTitle) {
+  if (response?.chatTitle !== undefined && response.chatTitle.length > 0) {
     result.chatTitle = response.chatTitle;
   }
+}
+
+function resolveResult(
+  response: ProcessTextResponse | undefined,
+  params: SendMessageMutationParams,
+): ChatApiResponse & { resolvedChatId: string } {
+  const resolvedChatId =
+    response?.chatId !== undefined && response.chatId.length > 0
+      ? response.chatId
+      : resolveFallbackChatId(params);
+
+  const result: ChatApiResponse & { resolvedChatId: string } = {
+    content: resolveResponseContent(response, params.message),
+    resolvedChatId,
+  };
+  applyResponseMetadata(result, response);
   return result;
+}
+
+export async function sendMessageMutation(
+  params: SendMessageMutationParams,
+  deps: SendMessageMutationDeps,
+): Promise<ChatApiResponse & { resolvedChatId: string }> {
+  const apiClient = assertApiClient(deps.apiClient);
+  resetAbortController(deps.abortControllerRef);
+  await cacheTranscriptIfNeeded(deps.cacheTranscript, params.transcriptContext);
+  const response = await apiClient.processText(buildRequestPayload(params, deps));
+  return resolveResult(response, params);
 }

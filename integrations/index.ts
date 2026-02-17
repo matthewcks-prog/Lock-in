@@ -33,7 +33,7 @@ export function getAdapterForUrl(url: string): BaseAdapter {
  * Get adapter for current page
  */
 export function getCurrentAdapter(): BaseAdapter {
-  if (typeof window === 'undefined' || !window.location) {
+  if (typeof window === 'undefined') {
     return new GenericAdapter();
   }
   return getAdapterForUrl(window.location.href);

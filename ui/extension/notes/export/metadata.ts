@@ -14,11 +14,15 @@ export interface MetadataField {
 export function buildMetadataFields(metadata: ExportMetadata): MetadataField[] {
   const fields: MetadataField[] = [];
 
-  if (metadata.courseCode) {
+  if (
+    metadata.courseCode !== undefined &&
+    metadata.courseCode !== null &&
+    metadata.courseCode.length > 0
+  ) {
     fields.push({ label: 'Course', value: metadata.courseCode });
   }
 
-  if (metadata.week) {
+  if (metadata.week !== undefined && metadata.week !== null) {
     fields.push({ label: 'Week', value: String(metadata.week) });
   }
 

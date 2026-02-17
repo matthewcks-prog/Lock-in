@@ -24,10 +24,16 @@ export class EdstemAdapter implements BaseAdapter {
     const title = dom.title;
     const heading = dom.querySelector('h1')?.textContent?.trim();
 
-    const candidates = [title, heading].filter(Boolean);
+    const candidates: string[] = [];
+    if (title.length > 0) {
+      candidates.push(title);
+    }
+    if (heading !== undefined && heading.length > 0) {
+      candidates.push(heading);
+    }
     for (const text of candidates) {
-      const code = extractCourseCodeFromText(text || '');
-      if (code) return code;
+      const code = extractCourseCodeFromText(text);
+      if (code !== null && code.length > 0) return code;
     }
 
     return null;
@@ -40,7 +46,10 @@ export class EdstemAdapter implements BaseAdapter {
 
   getTopic(dom: Document): string | null {
     const heading = dom.querySelector('h1, h2')?.textContent?.trim();
-    return heading || null;
+    if (heading === undefined || heading.length === 0) {
+      return null;
+    }
+    return heading;
   }
 
   getCourseContext(dom: Document, url: string): CourseContext {
@@ -51,18 +60,24 @@ export class EdstemAdapter implements BaseAdapter {
       courseCode,
       sourceUrl: url,
     };
-    if (topic) {
+    if (topic !== null && topic.length > 0) {
       context.topic = topic;
     }
-    const sourceLabel = topic || courseCode || '';
-    if (sourceLabel) {
+    const sourceLabel =
+      topic !== null && topic.length > 0
+        ? topic
+        : courseCode !== null && courseCode.length > 0
+          ? courseCode
+          : '';
+    if (sourceLabel.length > 0) {
       context.sourceLabel = sourceLabel;
     }
     return context;
   }
 
   getPageContext(dom: Document, url: string): PageContext {
-    const heading = dom.querySelector('h1, h2')?.textContent?.trim() || dom.title;
+    const headingText = dom.querySelector('h1, h2')?.textContent?.trim();
+    const heading = headingText !== undefined && headingText.length > 0 ? headingText : dom.title;
     const courseContext = this.getCourseContext(dom, url);
 
     return {

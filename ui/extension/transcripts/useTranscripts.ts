@@ -121,13 +121,14 @@ export function useTranscripts(): UseTranscriptsResult {
     isDetecting: detection.state.isDetecting,
     isExtracting: extraction.state.isExtracting,
     extractingVideoId: extraction.state.extractingVideoId,
-    error: error || detection.state.error,
+    error: error !== null && error.length > 0 ? error : detection.state.error,
     detectionHint: detection.state.detectionHint,
     extractionsByVideoId: extraction.state.extractionsByVideoId,
     lastTranscript: extraction.state.lastTranscript,
     aiTranscription: aiTranscription.state,
   };
-  const state: TranscriptState = authRequired ? { ...stateBase, authRequired } : stateBase;
+  const state: TranscriptState =
+    authRequired !== undefined ? { ...stateBase, authRequired } : stateBase;
 
   return {
     state,

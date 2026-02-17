@@ -22,10 +22,14 @@
 
   /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
   html {
-    /* Sidebar width uses design tokens with viewport constraints. */
-    --lockin-sidebar-min: var(--lockin-size-360);
-    --lockin-sidebar-max: min(var(--lockin-size-1500), 75vw);
-    --lockin-sidebar-ideal: 35vw;
+    /*
+     * Sidebar width uses CSS math functions with viewport constraints.
+     * --lockin-sidebar-ideal uses max() to guarantee a usable minimum
+     * even on narrower screens (max(480px, 35vw) ensures >= 480px).
+     */
+    --lockin-sidebar-min: 420px;
+    --lockin-sidebar-max: min(1500px, 75vw);
+    --lockin-sidebar-ideal: max(560px, 35vw);
     --lockin-sidebar-width: clamp(
       var(--lockin-sidebar-min),
       var(--lockin-sidebar-ideal),
@@ -47,6 +51,20 @@
     max-width: 100%;
     min-height: 100vh;
     margin: 0;
+    /*
+     * NO transition by default. We only animate width/margin during
+     * sidebar open/close (via .lockin-sidebar-transitioning). This
+     * prevents visual "jumps" when switching tabs or resizing, because
+     * content-reflows can briefly change scrollbar visibility and
+     * trigger unwanted animated width recalculations.
+     */
+  }
+
+  /*
+   * Animate page wrapper ONLY during sidebar open/close.
+   * The class is added by applySplitLayout() and removed after 320 ms.
+   */
+  html.lockin-sidebar-transitioning #lockin-page-wrapper {
     transition:
       width var(--lockin-duration-300) var(--lockin-ease-standard),
       max-width var(--lockin-duration-300) var(--lockin-ease-standard),
@@ -99,8 +117,8 @@
     display: flex;
     flex-direction: column;
     width: var(--lockin-sidebar-width);
-    min-width: var(--lockin-sidebar-min);
-    max-width: var(--lockin-sidebar-max);
+    min-width: var(--lockin-sidebar-min, 420px);
+    max-width: var(--lockin-sidebar-max, min(1500px, 75vw));
     height: 100vh;
     overflow: hidden;
     background: var(--lockin-color-surface);
@@ -152,7 +170,7 @@
   }
 
   /* === TOGGLE PILL (COLLAPSED STATE) === */
-  #lockin-toggle-pill {
+  #lockin-root > #lockin-toggle-pill {
     /* Host styles frequently target generic buttons; pin all critical presentation values. */
     position: fixed !important;
     top: var(--lockin-size-16) !important;
@@ -185,12 +203,12 @@
     pointer-events: auto !important;
   }
 
-  #lockin-toggle-pill:hover {
+  #lockin-root > #lockin-toggle-pill:hover {
     box-shadow: var(--lockin-shadow-21) !important;
     transform: scale(1.05) !important;
   }
 
-  #lockin-toggle-pill:active {
+  #lockin-root > #lockin-toggle-pill:active {
     transform: scale(0.95) !important;
   }
 

@@ -1,4 +1,8 @@
 (() => {
+  const MAX_RUNTIME_PERFORMANCE_CANDIDATES = 20;
+
+  // Must remain self-contained because chrome.scripting.executeScript serializes only this function body.
+  // eslint-disable-next-line max-lines-per-function, max-statements
   function panoptoRuntimeProbe() {
     const candidates = [];
     const seen = new Set();
@@ -17,7 +21,8 @@
     const normalizeUrl = (rawUrl) => {
       if (!rawUrl) return null;
       const decoded = decodeEscaped(rawUrl);
-      if (!decoded || decoded.startsWith('javascript:')) return null;
+      const hasScriptProtocol = /^[\s]*javascript\s*:/i.test(decoded);
+      if (!decoded || hasScriptProtocol) return null;
       try {
         return new URL(decoded, window.location.href).toString();
       } catch {
@@ -144,7 +149,11 @@
 
     if (typeof performance !== 'undefined' && performance.getEntriesByType) {
       const entries = performance.getEntriesByType('resource');
-      for (let i = 0; i < entries.length && candidates.length < 20; i += 1) {
+      for (
+        let i = 0;
+        i < entries.length && candidates.length < MAX_RUNTIME_PERFORMANCE_CANDIDATES;
+        i += 1
+      ) {
         const entry = entries[i];
         if (entry && typeof entry.name === 'string' && looksLikeMediaUrl(entry.name)) {
           addCandidate(entry.name, 'runtime:perf');
@@ -159,6 +168,14 @@
       downloadEnabled,
       disabledReason,
     };
+  }
+
+  function createProbeSkipResult(logger) {
+    logger.debug('runtime-probe', {
+      status: 'skipped',
+      meta: { reason: 'no-tab-id' },
+    });
+    return { candidates: [], podcastDisabled: false, downloadEnabled: false };
   }
 
   function executeScriptInTab(tabId, func) {
@@ -188,72 +205,94 @@
     });
   }
 
+  function mergeRuntimeProbeEntry(summary, entry) {
+    const data = entry && entry.result ? entry.result : null;
+    if (!data || !Array.isArray(data.candidates)) return;
+
+    const pageUrl = typeof data.pageUrl === 'string' ? data.pageUrl : '';
+    if (pageUrl && !pageUrl.includes('panopto')) return;
+
+    summary.frameCount += 1;
+    data.candidates.forEach((candidate) => {
+      if (!candidate || !candidate.url) return;
+      summary.candidates.push({
+        url: candidate.url,
+        source: candidate.source || 'runtime',
+        frameUrl: pageUrl,
+      });
+    });
+
+    if (data.podcastDisabled) {
+      summary.podcastDisabled = true;
+      summary.disabledReason = data.disabledReason || summary.disabledReason;
+    }
+    if (data.downloadEnabled) {
+      summary.downloadEnabled = true;
+    }
+  }
+
+  function collectRuntimeProbeSummary(results) {
+    const summary = {
+      candidates: [],
+      podcastDisabled: false,
+      downloadEnabled: false,
+      disabledReason: null,
+      frameCount: 0,
+    };
+    results.forEach((entry) => mergeRuntimeProbeEntry(summary, entry));
+    return summary;
+  }
+
+  function logRuntimeProbeSuccess(logger, started, summary) {
+    logger.debug('runtime-probe', {
+      status: 'ok',
+      elapsedMs: Date.now() - started,
+      meta: {
+        frameCount: summary.frameCount,
+        candidateCount: summary.candidates.length,
+        podcastDisabled: summary.podcastDisabled,
+        downloadEnabled: summary.downloadEnabled,
+      },
+    });
+  }
+
+  function createRuntimeProbeErrorResult(message) {
+    return {
+      candidates: [],
+      podcastDisabled: false,
+      downloadEnabled: false,
+      error: message,
+    };
+  }
+
+  function normalizeRuntimeProbeError(error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+
   async function runPanoptoRuntimeProbe(tabId, logger) {
     if (!tabId) {
-      logger.debug('runtime-probe', {
-        status: 'skipped',
-        meta: { reason: 'no-tab-id' },
-      });
-      return { candidates: [], podcastDisabled: false, downloadEnabled: false };
+      return createProbeSkipResult(logger);
     }
 
     const started = Date.now();
     try {
       const results = await executeScriptInTab(tabId, panoptoRuntimeProbe);
-      const candidates = [];
-      let podcastDisabled = false;
-      let downloadEnabled = false;
-      let disabledReason = null;
-      let frameCount = 0;
-
-      results.forEach((entry) => {
-        const data = entry && entry.result ? entry.result : null;
-        if (!data || !data.candidates) return;
-        const pageUrl = typeof data.pageUrl === 'string' ? data.pageUrl : '';
-        if (pageUrl && !pageUrl.includes('panopto')) return;
-        frameCount += 1;
-        data.candidates.forEach((candidate) => {
-          if (!candidate || !candidate.url) return;
-          candidates.push({
-            url: candidate.url,
-            source: candidate.source || 'runtime',
-            frameUrl: pageUrl,
-          });
-        });
-        if (data.podcastDisabled) {
-          podcastDisabled = true;
-          disabledReason = data.disabledReason || disabledReason;
-        }
-        if (data.downloadEnabled) {
-          downloadEnabled = true;
-        }
-      });
-
-      logger.debug('runtime-probe', {
-        status: 'ok',
-        elapsedMs: Date.now() - started,
-        meta: {
-          frameCount,
-          candidateCount: candidates.length,
-          podcastDisabled,
-          downloadEnabled,
-        },
-      });
-
-      return { candidates, podcastDisabled, downloadEnabled, disabledReason };
+      const summary = collectRuntimeProbeSummary(results);
+      logRuntimeProbeSuccess(logger, started, summary);
+      return {
+        candidates: summary.candidates,
+        podcastDisabled: summary.podcastDisabled,
+        downloadEnabled: summary.downloadEnabled,
+        disabledReason: summary.disabledReason,
+      };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = normalizeRuntimeProbeError(error);
       logger.warn('runtime-probe', {
         status: 'error',
         elapsedMs: Date.now() - started,
         meta: { error: message },
       });
-      return {
-        candidates: [],
-        podcastDisabled: false,
-        downloadEnabled: false,
-        error: message,
-      };
+      return createRuntimeProbeErrorResult(message);
     }
   }
 

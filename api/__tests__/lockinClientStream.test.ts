@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createLockinClient,
   type ProcessTextStreamParams,
+  type ProcessTextStreamResult,
   type StreamingConfig,
 } from '../resources/lockinClient';
 import type { ApiRequest } from '../fetcher';
@@ -44,7 +45,7 @@ const runStream = async (
   ctx: StreamTestContext,
   events: string,
   overrides?: Partial<ProcessTextStreamParams>,
-) => {
+): Promise<ProcessTextStreamResult> => {
   ctx.getFetch().mockResolvedValue(createSSEResponse(events));
   return ctx.createClient().processTextStream(buildStreamParams(overrides));
 };
@@ -53,10 +54,41 @@ const runStreamWithResponse = async (
   ctx: StreamTestContext,
   response: Response,
   overrides?: Partial<ProcessTextStreamParams>,
-) => {
+): Promise<ProcessTextStreamResult> => {
   ctx.getFetch().mockResolvedValue(response);
   return ctx.createClient().processTextStream(buildStreamParams(overrides));
 };
+
+function isFetchCallTuple(value: unknown): value is [unknown, unknown] {
+  return Array.isArray(value) && value.length >= 2;
+}
+
+function getFirstFetchRequest(ctx: StreamTestContext): { url: string; init: RequestInit } {
+  const firstCall = ctx.getFetch().mock.calls[0] as unknown;
+  if (!isFetchCallTuple(firstCall)) {
+    throw new Error('Expected fetch to be called with URL and RequestInit');
+  }
+
+  const rawUrl = firstCall[0];
+  const rawInit = firstCall[1];
+
+  let url: string;
+  if (typeof rawUrl === 'string') {
+    url = rawUrl;
+  } else if (rawUrl instanceof URL) {
+    url = rawUrl.toString();
+  } else if (rawUrl instanceof Request) {
+    url = rawUrl.url;
+  } else {
+    throw new Error('Unexpected fetch URL input');
+  }
+
+  if (rawInit === null || rawInit === undefined || typeof rawInit !== 'object') {
+    throw new Error('Expected RequestInit object');
+  }
+
+  return { url, init: rawInit as RequestInit };
+}
 
 function registerProcessTextStreamConfigTests(ctx: StreamTestContext): void {
   describe('processTextStream config', () => {
@@ -77,17 +109,14 @@ function registerProcessTextStreamHeaderTests(ctx: StreamTestContext): void {
         selection: 'test selection',
       });
 
-      expect(ctx.getFetch()).toHaveBeenCalledWith(
-        'https://api.test.com/api/lockin/stream',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer test-token',
-            Accept: 'text/event-stream',
-          }),
-        }),
-      );
+      const request = getFirstFetchRequest(ctx);
+      expect(request.url).toBe('https://api.test.com/api/lockin/stream');
+      expect(request.init.method).toBe('POST');
+
+      const headers = new Headers(request.init.headers);
+      expect(headers.get('Content-Type')).toBe('application/json');
+      expect(headers.get('Authorization')).toBe('Bearer test-token');
+      expect(headers.get('Accept')).toBe('text/event-stream');
     });
 
     it('includes idempotency key in headers', async () => {
@@ -95,14 +124,9 @@ function registerProcessTextStreamHeaderTests(ctx: StreamTestContext): void {
         idempotencyKey: 'idem-123',
       });
 
-      expect(ctx.getFetch()).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'Idempotency-Key': 'idem-123',
-          }),
-        }),
-      );
+      const request = getFirstFetchRequest(ctx);
+      const headers = new Headers(request.init.headers);
+      expect(headers.get('Idempotency-Key')).toBe('idem-123');
     });
   });
 }
@@ -285,7 +309,8 @@ describe('createLockinClient streaming', () => {
   let streamingConfig: StreamingConfig;
   let mockFetch: ReturnType<typeof vi.fn<typeof fetch>>;
 
-  const createClient = () => createLockinClient(mockApiRequest, streamingConfig);
+  const createClient = (): ReturnType<typeof createLockinClient> =>
+    createLockinClient(mockApiRequest, streamingConfig);
 
   beforeEach(() => {
     vi.clearAllMocks();

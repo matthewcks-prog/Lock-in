@@ -52,8 +52,8 @@ export function useAiTranscription(
     state,
     setState,
     activeAiRequestIdRef,
-    ...(onTranscriptReady ? { onTranscriptReady } : {}),
-    ...(onExtractionResult ? { onExtractionResult } : {}),
+    ...(onTranscriptReady !== undefined ? { onTranscriptReady } : {}),
+    ...(onExtractionResult !== undefined ? { onExtractionResult } : {}),
   });
 
   return {

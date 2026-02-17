@@ -55,14 +55,14 @@
     cursor: pointer;
   }
 
-  #lockin-root .lockin-feedback-close:hover:not(:disabled) {
-    color: var(--lockin-color-text-body);
-    background: var(--lockin-color-surface-muted);
-  }
-
   #lockin-root .lockin-feedback-close:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-feedback-close:hover:not(:disabled) {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
   }
 
   #lockin-root .lockin-feedback-body {
@@ -133,8 +133,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--lockin-size-32);
-    height: var(--lockin-size-32);
+    width: var(--lockin-size-24);
+    height: var(--lockin-size-24);
     color: var(--lockin-color-text-secondary);
     background: var(--lockin-color-surface);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
@@ -155,5 +155,7 @@
 
   #lockin-root .lockin-feedback-trigger-btn svg {
     flex-shrink: 0;
+    width: 14px;
+    height: 14px;
   }
 }

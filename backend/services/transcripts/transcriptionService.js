@@ -18,6 +18,15 @@ const {
   OPENAI_API_KEY,
 } = require('../../config');
 
+const DEFAULT_TRANSCRIPTION_LANGUAGE = 'en-US';
+const DEFAULT_MAX_RETRIES = 3;
+const TWO = 2;
+const TEN = 10;
+const BYTES_PER_MEGABYTE = (TWO ** TEN) ** TWO;
+const MAX_FILE_SIZE_MB = 25;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * BYTES_PER_MEGABYTE;
+const TIMING_PRECISION = 1;
+
 let transcriptionClientInstance = null;
 
 /**
@@ -29,10 +38,90 @@ function getTranscriptionClient() {
       azureSpeechApiKey: AZURE_SPEECH_API_KEY,
       azureSpeechRegion: AZURE_SPEECH_REGION,
       openaiApiKey: OPENAI_API_KEY,
-      preferredLanguage: AZURE_SPEECH_LANGUAGE || 'en-US',
+      preferredLanguage: AZURE_SPEECH_LANGUAGE || DEFAULT_TRANSCRIPTION_LANGUAGE,
     });
   }
   return transcriptionClientInstance;
+}
+
+function ensureFilePath(filePath) {
+  if (!filePath) {
+    throw new Error('Audio file path is required');
+  }
+}
+
+function ensureFileExists(filePath) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Audio file not found: ${filePath}`);
+  }
+}
+
+function getFileSizeStats(filePath) {
+  const stats = fs.statSync(filePath);
+  const fileSizeMB = stats.size / BYTES_PER_MEGABYTE;
+  return { stats, fileSizeMB };
+}
+
+function ensureFileSizeAllowed(stats, fileSizeMB) {
+  if (stats.size <= MAX_FILE_SIZE_BYTES) {
+    return;
+  }
+  throw new Error(
+    `Audio file too large: ${fileSizeMB.toFixed(
+      TIMING_PRECISION,
+    )}MB (max ${MAX_FILE_SIZE_MB}MB). File should be split into smaller segments.`,
+  );
+}
+
+function getFileMetadata(filePath) {
+  const filename = path.basename(filePath);
+  const format = path.extname(filename).slice(1) || 'wav';
+  return { filename, format };
+}
+
+function readAudioData(filePath) {
+  const audioData = fs.readFileSync(filePath);
+  return audioData;
+}
+
+function logTranscriptionStart(fileSizeMB, filename) {
+  console.log(
+    `[Transcription] Processing ${fileSizeMB.toFixed(TIMING_PRECISION)}MB audio file: ${filename}`,
+  );
+}
+
+function logTranscriptionSuccess({ startTime, result }) {
+  const duration = ((Date.now() - startTime) / 1000).toFixed(TIMING_PRECISION);
+  const provider = result.provider || 'unknown';
+  const fallbackNote = result.fallbackUsed ? ' (fallback used)' : '';
+  console.log(`[Transcription] Completed in ${duration}s using ${provider}${fallbackNote}`);
+}
+
+function buildTranscriptionError(error) {
+  let message = error?.message || 'Transcription failed';
+  if (error?.message?.includes('Connection error') || error?.code === 'ECONNREFUSED') {
+    message += '. This may be a temporary network issue - please try again.';
+  }
+
+  console.error('[Transcription] Failed:', message);
+  const wrappedError = new Error(message);
+  wrappedError.originalError = error;
+  return wrappedError;
+}
+
+async function transcribeWithClient({ filePath, language }) {
+  const client = getTranscriptionClient();
+  const startTime = Date.now();
+  const { filename, format } = getFileMetadata(filePath);
+  const audioData = readAudioData(filePath);
+
+  const result = await client.transcribe(audioData, {
+    language,
+    format,
+    filename,
+  });
+  logTranscriptionSuccess({ startTime, result });
+  return result;
 }
 
 /**
@@ -44,73 +133,28 @@ function getTranscriptionClient() {
  * @param {Object} options - Transcription options
  * @param {string} options.filePath - Path to audio file
  * @param {string} options.language - Language code (ISO 639-1)
- * @param {number} options.maxRetries - Max retries (default: 3)
+ * @param {number} options.maxRetries - Max retries (default: DEFAULT_MAX_RETRIES)
  * @returns {Promise<Object>} Transcription response
  */
-async function transcribeAudioFile({ filePath, language, maxRetries: _maxRetries = 3 }) {
-  if (!filePath) {
-    throw new Error('Audio file path is required');
-  }
+async function transcribeAudioFile({
+  filePath,
+  language,
+  maxRetries: _maxRetries = DEFAULT_MAX_RETRIES,
+}) {
+  ensureFilePath(filePath);
+  ensureFileExists(filePath);
 
-  // Check file exists
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Audio file not found: ${filePath}`);
-  }
+  const { stats, fileSizeMB } = getFileSizeStats(filePath);
+  ensureFileSizeAllowed(stats, fileSizeMB);
 
-  // Check file size
-  const stats = fs.statSync(filePath);
-  const fileSizeMB = stats.size / (1024 * 1024);
-
-  // Both Azure Speech and Whisper have size limits (25MB for Whisper, 200MB for Azure Speech)
-  if (stats.size > 25 * 1024 * 1024) {
-    throw new Error(
-      `Audio file too large: ${fileSizeMB.toFixed(
-        1,
-      )}MB (max 25MB). File should be split into smaller segments.`,
-    );
-  }
-
-  const filename = path.basename(filePath);
-  const format = path.extname(filename).slice(1) || 'wav';
-
-  console.log(`[Transcription] Processing ${fileSizeMB.toFixed(1)}MB audio file: ${filename}`);
+  const { filename } = getFileMetadata(filePath);
+  logTranscriptionStart(fileSizeMB, filename);
 
   try {
-    const startTime = Date.now();
-    const client = getTranscriptionClient();
-
-    // Read audio file
-    const audioData = fs.readFileSync(filePath);
-
-    // Transcribe with automatic fallback
-    const result = await client.transcribe(audioData, {
-      language,
-      format,
-      filename,
-    });
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(1);
-    const provider = result.provider || 'unknown';
-    const fallbackNote = result.fallbackUsed ? ' (fallback used)' : '';
-
-    console.log(`[Transcription] Completed in ${duration}s using ${provider}${fallbackNote}`);
-
-    // Normalize response format to match existing interface
+    const result = await transcribeWithClient({ filePath, language });
     return normalizeTranscriptionResponse(result);
   } catch (error) {
-    let message = 'Transcription failed';
-    if (error?.message) {
-      message = error.message;
-    }
-
-    if (error?.message?.includes('Connection error') || error?.code === 'ECONNREFUSED') {
-      message += '. This may be a temporary network issue - please try again.';
-    }
-
-    console.error('[Transcription] Failed:', message);
-    const wrappedError = new Error(message);
-    wrappedError.originalError = error;
-    throw wrappedError;
+    throw buildTranscriptionError(error);
   }
 }
 
@@ -120,17 +164,15 @@ async function transcribeAudioFile({ filePath, language, maxRetries: _maxRetries
  * Ensures response matches the format expected by transcriptsService.js
  */
 function normalizeTranscriptionResponse(result) {
-  // Check if it's a Whisper response (has segments array)
   if (Array.isArray(result.segments)) {
-    return result; // Already in correct format
+    return result;
   }
 
-  // Azure Speech response - create compatible format
   return {
     text: result.text || '',
     language: result.language || 'unknown',
     duration: result.duration || 0,
-    segments: [], // Azure Speech doesn't provide segments by default
+    segments: [],
   };
 }
 

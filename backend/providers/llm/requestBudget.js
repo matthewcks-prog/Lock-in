@@ -33,6 +33,52 @@ function isDeadlineExceededError(error) {
   return error?.code === 'DEADLINE_EXCEEDED' || error?.name === 'DeadlineExceededError';
 }
 
+function attachAbortSignal(signal, controller) {
+  const onAbort = () => {
+    if (!controller.signal.aborted) {
+      controller.abort(signal?.reason);
+    }
+  };
+
+  if (!signal) {
+    return { onAbort, detach: () => {} };
+  }
+
+  if (signal.aborted) {
+    onAbort();
+  } else {
+    signal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  return {
+    onAbort,
+    detach: () => signal.removeEventListener('abort', onAbort),
+  };
+}
+
+function startBudgetTimer(resolvedTimeoutMs, controller) {
+  if (!Number.isFinite(resolvedTimeoutMs) || resolvedTimeoutMs <= 0) {
+    return null;
+  }
+
+  const timeoutId = setTimeout(() => {
+    controller.abort(createDeadlineExceededError(resolvedTimeoutMs));
+  }, resolvedTimeoutMs);
+
+  if (timeoutId.unref) {
+    timeoutId.unref();
+  }
+
+  return timeoutId;
+}
+
+function createRemainingMsGetter(resolvedTimeoutMs, startTime) {
+  return () => {
+    if (!Number.isFinite(resolvedTimeoutMs)) return Number.POSITIVE_INFINITY;
+    return Math.max(0, resolvedTimeoutMs - (Date.now() - startTime));
+  };
+}
+
 function createRequestBudget({
   timeoutMs,
   signal,
@@ -41,35 +87,9 @@ function createRequestBudget({
   const resolvedTimeoutMs = resolveTimeoutMs(timeoutMs, defaultTimeoutMs);
   const startTime = Date.now();
   const controller = new AbortController();
-  let timeoutId;
-
-  const onAbort = () => {
-    if (!controller.signal.aborted) {
-      controller.abort(signal?.reason);
-    }
-  };
-
-  if (signal) {
-    if (signal.aborted) {
-      onAbort();
-    } else {
-      signal.addEventListener('abort', onAbort, { once: true });
-    }
-  }
-
-  if (Number.isFinite(resolvedTimeoutMs) && resolvedTimeoutMs > 0) {
-    timeoutId = setTimeout(() => {
-      controller.abort(createDeadlineExceededError(resolvedTimeoutMs));
-    }, resolvedTimeoutMs);
-    if (timeoutId.unref) {
-      timeoutId.unref();
-    }
-  }
-
-  const remainingMs = () => {
-    if (!Number.isFinite(resolvedTimeoutMs)) return Number.POSITIVE_INFINITY;
-    return Math.max(0, resolvedTimeoutMs - (Date.now() - startTime));
-  };
+  const { detach } = attachAbortSignal(signal, controller);
+  const timeoutId = startBudgetTimer(resolvedTimeoutMs, controller);
+  const remainingMs = createRemainingMsGetter(resolvedTimeoutMs, startTime);
 
   const isExpired = () => controller.signal.aborted || remainingMs() <= 0;
 
@@ -77,9 +97,7 @@ function createRequestBudget({
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
-    if (signal) {
-      signal.removeEventListener('abort', onAbort);
-    }
+    detach();
   };
 
   return {

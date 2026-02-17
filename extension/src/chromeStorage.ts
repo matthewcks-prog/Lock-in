@@ -7,6 +7,35 @@
 
 import type { StorageInterface } from '../../core/storage/storageInterface';
 
+type NormalizedStorageChanges<T> = Record<string, { oldValue?: T; newValue?: T }>;
+
+function getChromeRuntimeErrorMessage(): string | null {
+  const runtimeErrorMessage = chrome.runtime.lastError?.message;
+  if (typeof runtimeErrorMessage === 'string' && runtimeErrorMessage.length > 0) {
+    return runtimeErrorMessage;
+  }
+  return null;
+}
+
+function normalizeStorageChanges<T>(changes: {
+  [key: string]: chrome.storage.StorageChange;
+}): NormalizedStorageChanges<T> {
+  const normalizedChanges: NormalizedStorageChanges<T> = {};
+
+  for (const [key, change] of Object.entries(changes)) {
+    const normalizedChange: { oldValue?: T; newValue?: T } = {};
+    if (change.oldValue !== undefined) {
+      normalizedChange.oldValue = change.oldValue as unknown as T;
+    }
+    if (change.newValue !== undefined) {
+      normalizedChange.newValue = change.newValue as unknown as T;
+    }
+    normalizedChanges[key] = normalizedChange;
+  }
+
+  return normalizedChanges;
+}
+
 /**
  * Chrome storage implementation of StorageInterface
  * Uses chrome.storage.sync for cross-device persistence
@@ -16,11 +45,12 @@ export const chromeStorage: StorageInterface = {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.sync.get(key, (result) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
+          const errorMessage = getChromeRuntimeErrorMessage();
+          if (errorMessage === null) {
             resolve(result as Record<string, T>);
+            return;
           }
+          reject(new Error(errorMessage));
         });
       } catch (err) {
         reject(err);
@@ -32,11 +62,12 @@ export const chromeStorage: StorageInterface = {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.sync.set(data, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
+          const errorMessage = getChromeRuntimeErrorMessage();
+          if (errorMessage === null) {
             resolve();
+            return;
           }
+          reject(new Error(errorMessage));
         });
       } catch (err) {
         reject(err);
@@ -48,11 +79,12 @@ export const chromeStorage: StorageInterface = {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.sync.remove(keys, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
+          const errorMessage = getChromeRuntimeErrorMessage();
+          if (errorMessage === null) {
             resolve();
+            return;
           }
+          reject(new Error(errorMessage));
         });
       } catch (err) {
         reject(err);
@@ -66,17 +98,8 @@ export const chromeStorage: StorageInterface = {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
       areaName: string,
-    ) => {
-      // Convert Chrome's StorageChange format to our interface format
-      const normalizedChanges: Record<string, { oldValue?: T; newValue?: T }> = {};
-      for (const key in changes) {
-        const change = changes[key];
-        if (!change) continue;
-        normalizedChanges[key] = {
-          oldValue: change.oldValue,
-          newValue: change.newValue,
-        };
-      }
+    ): void => {
+      const normalizedChanges = normalizeStorageChanges<T>(changes);
       callback(normalizedChanges, areaName);
     };
 
@@ -98,11 +121,12 @@ export const chromeLocalStorage: StorageInterface = {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.local.get(key, (result) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
+          const errorMessage = getChromeRuntimeErrorMessage();
+          if (errorMessage === null) {
             resolve(result as Record<string, T>);
+            return;
           }
+          reject(new Error(errorMessage));
         });
       } catch (err) {
         reject(err);
@@ -114,11 +138,12 @@ export const chromeLocalStorage: StorageInterface = {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.local.set(data, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
+          const errorMessage = getChromeRuntimeErrorMessage();
+          if (errorMessage === null) {
             resolve();
+            return;
           }
+          reject(new Error(errorMessage));
         });
       } catch (err) {
         reject(err);
@@ -130,11 +155,12 @@ export const chromeLocalStorage: StorageInterface = {
     return new Promise((resolve, reject) => {
       try {
         chrome.storage.local.remove(keys, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
+          const errorMessage = getChromeRuntimeErrorMessage();
+          if (errorMessage === null) {
             resolve();
+            return;
           }
+          reject(new Error(errorMessage));
         });
       } catch (err) {
         reject(err);
@@ -148,19 +174,11 @@ export const chromeLocalStorage: StorageInterface = {
     const listener = (
       changes: { [key: string]: chrome.storage.StorageChange },
       areaName: string,
-    ) => {
+    ): void => {
       // Only fire for local storage changes
       if (areaName !== 'local') return;
 
-      const normalizedChanges: Record<string, { oldValue?: T; newValue?: T }> = {};
-      for (const key in changes) {
-        const change = changes[key];
-        if (!change) continue;
-        normalizedChanges[key] = {
-          oldValue: change.oldValue,
-          newValue: change.newValue,
-        };
-      }
+      const normalizedChanges = normalizeStorageChanges<T>(changes);
       callback(normalizedChanges, areaName);
     };
 

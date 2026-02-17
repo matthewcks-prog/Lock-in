@@ -2,141 +2,142 @@
   const root = typeof globalThis !== 'undefined' ? globalThis : self;
   const registry = root.LockInBackground || (root.LockInBackground = {});
   const transcripts = registry.transcripts || (registry.transcripts = {});
+  const HEX_RADIX = 16;
+  const LOCKIN_AUTH_REQUIRED_MESSAGE =
+    'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.';
 
-  function createAiTranscriptionHelpers({ aiUtils, auth, errors, log, chromeClient, chunkBytes }) {
-    function createProgressEmitter(tabId, requestId) {
-      let lastStage = null;
-      let lastPercentBucket = null;
+  function createProgressEmitter({ chromeClient, log, tabId, requestId }) {
+    let lastStage = null;
+    let lastPercentBucket = null;
 
-      return (stage, info = {}) => {
-        if (!tabId) return;
+    return (stage, info = {}) => {
+      if (!tabId) return;
 
-        const percent =
-          typeof info.percent === 'number' ? Math.max(0, Math.min(100, info.percent)) : undefined;
-        const percentBucket = typeof percent === 'number' ? Math.floor(percent) : null;
-        const shouldSkip =
-          stage === lastStage &&
-          percentBucket !== null &&
-          percentBucket === lastPercentBucket &&
-          !info.message;
+      const percent =
+        typeof info.percent === 'number' ? Math.max(0, Math.min(100, info.percent)) : undefined;
+      const percentBucket = typeof percent === 'number' ? Math.floor(percent) : null;
+      const shouldSkip =
+        stage === lastStage &&
+        percentBucket !== null &&
+        percentBucket === lastPercentBucket &&
+        !info.message;
 
-        if (shouldSkip) return;
+      if (shouldSkip) return;
 
-        lastStage = stage;
-        if (percentBucket !== null) {
-          lastPercentBucket = percentBucket;
-        }
+      lastStage = stage;
+      if (percentBucket !== null) {
+        lastPercentBucket = percentBucket;
+      }
 
-        try {
-          Promise.resolve(
-            chromeClient.sendTabMessage(tabId, {
-              type: 'TRANSCRIBE_MEDIA_AI_PROGRESS',
-              payload: {
-                requestId,
-                jobId: info.jobId || null,
-                stage,
-                message: info.message || null,
-                percent,
-              },
-            }),
-          ).catch((error) => {
-            log.warn('Failed to send progress update:', error);
-          });
-        } catch (error) {
+      try {
+        Promise.resolve(
+          chromeClient.sendTabMessage(tabId, {
+            type: 'TRANSCRIBE_MEDIA_AI_PROGRESS',
+            payload: {
+              requestId,
+              jobId: info.jobId || null,
+              stage,
+              message: info.message || null,
+              percent,
+            },
+          }),
+        ).catch((error) => {
           log.warn('Failed to send progress update:', error);
-        }
-      };
-    }
-
-    function buildRequestContext(payload, sender) {
-      return {
-        video: payload?.video || null,
-        options: payload?.options || {},
-        requestId: payload?.requestId || `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        tabId: sender?.tab?.id || null,
-      };
-    }
-
-    function ensureVideoEligible(video) {
-      if (aiUtils.isBlobUrl?.(video.mediaUrl)) {
-        throw errors.createErrorWithCode(
-          'This video uses a blob URL and cannot be accessed for AI transcription.',
-          'NOT_AVAILABLE',
-        );
+        });
+      } catch (error) {
+        log.warn('Failed to send progress update:', error);
       }
+    };
+  }
 
-      if (video.drmDetected) {
-        const reason = video.drmReason ? ` (${video.drmReason})` : '';
-        throw errors.createErrorWithCode(
-          `This video appears to be DRM-protected${reason}. AI transcription is not available.`,
-          'NOT_AVAILABLE',
-        );
-      }
+  function buildRequestContext(payload, sender) {
+    return {
+      video: payload?.video || null,
+      options: payload?.options || {},
+      requestId:
+        payload?.requestId || `ai-${Date.now()}-${Math.random().toString(HEX_RADIX).slice(2)}`,
+      tabId: sender?.tab?.id || null,
+    };
+  }
+
+  function ensureVideoEligible({ aiUtils, errors, video }) {
+    if (aiUtils.isBlobUrl?.(video.mediaUrl)) {
+      throw errors.createErrorWithCode(
+        'This video uses a blob URL and cannot be accessed for AI transcription.',
+        'NOT_AVAILABLE',
+      );
     }
 
-    async function requireAuthToken() {
-      const token = await auth.getAuthToken();
-      if (!token) {
-        throw errors.createErrorWithCode(
-          'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
-          'LOCKIN_AUTH_REQUIRED',
-        );
-      }
-      return token;
+    if (video.drmDetected) {
+      const reason = video.drmReason ? ` (${video.drmReason})` : '';
+      throw errors.createErrorWithCode(
+        `This video appears to be DRM-protected${reason}. AI transcription is not available.`,
+        'NOT_AVAILABLE',
+      );
     }
+  }
 
-    function resolveExpectedTotalChunks(headInfo) {
-      const headContentLength = headInfo?.contentLength ? Number(headInfo.contentLength) : null;
-      return Number.isFinite(headContentLength) && headContentLength > 0
-        ? Math.ceil(headContentLength / chunkBytes)
-        : null;
+  async function requireAuthToken({ auth, errors }) {
+    const token = await auth.getAuthToken();
+    if (!token) {
+      throw errors.createErrorWithCode(LOCKIN_AUTH_REQUIRED_MESSAGE, 'LOCKIN_AUTH_REQUIRED');
     }
+    return token;
+  }
 
-    function buildFingerprintSource({ mediaUrlNormalized, headInfo, durationMs }) {
-      return [
-        mediaUrlNormalized,
-        headInfo?.etag || '',
-        headInfo?.lastModified || '',
-        headInfo?.contentLength || '',
-        durationMs || '',
-      ].join('|');
+  function resolveExpectedTotalChunks({ headInfo, chunkBytes }) {
+    const headContentLength = headInfo?.contentLength ? Number(headInfo.contentLength) : null;
+    return Number.isFinite(headContentLength) && headContentLength > 0
+      ? Math.ceil(headContentLength / chunkBytes)
+      : null;
+  }
+
+  function buildFingerprintSource({ mediaUrlNormalized, headInfo, durationMs }) {
+    return [
+      mediaUrlNormalized,
+      headInfo?.etag || '',
+      headInfo?.lastModified || '',
+      headInfo?.contentLength || '',
+      durationMs || '',
+    ].join('|');
+  }
+
+  async function buildFingerprint({ aiUtils, mediaUrlNormalized, headInfo, durationMs }) {
+    const source = buildFingerprintSource({ mediaUrlNormalized, headInfo, durationMs });
+    if (typeof aiUtils.hashStringSha256 !== 'function') {
+      return source;
     }
+    return aiUtils.hashStringSha256(source);
+  }
 
-    async function buildFingerprint({ mediaUrlNormalized, headInfo, durationMs }) {
-      const source = buildFingerprintSource({ mediaUrlNormalized, headInfo, durationMs });
-      if (typeof aiUtils.hashStringSha256 !== 'function') {
-        return source;
-      }
-      return aiUtils.hashStringSha256(source);
-    }
+  function resolveFinalizeChunkCount(uploadStats, expectedTotalChunks) {
+    return uploadStats?.totalChunks || expectedTotalChunks || uploadStats?.chunkCount || null;
+  }
 
-    function resolveFinalizeChunkCount(uploadStats, expectedTotalChunks) {
-      return uploadStats?.totalChunks || expectedTotalChunks || uploadStats?.chunkCount || null;
-    }
+  function buildFailureResponse({ requestId, jobId, error, errorCode, status }) {
+    return {
+      success: false,
+      error: error || 'Failed to transcribe media.',
+      errorCode: errorCode || 'NOT_AVAILABLE',
+      jobId,
+      status: status || 'failed',
+      requestId,
+    };
+  }
 
-    function buildFailureResponse({ requestId, jobId, error, errorCode, status }) {
-      return {
-        success: false,
-        error: error || 'Failed to transcribe media.',
-        errorCode: errorCode || 'NOT_AVAILABLE',
-        jobId,
-        status: status || 'failed',
-        requestId,
-      };
-    }
+  function buildSuccessResponse({ requestId, jobId, transcript, cached }) {
+    return {
+      success: true,
+      transcript,
+      jobId,
+      status: 'completed',
+      cached: Boolean(cached),
+      requestId,
+    };
+  }
 
-    function buildSuccessResponse({ requestId, jobId, transcript, cached }) {
-      return {
-        success: true,
-        transcript,
-        jobId,
-        status: 'completed',
-        cached: Boolean(cached),
-        requestId,
-      };
-    }
-
-    function resolveCanceledFailure({ jobState, requestId }) {
+  const failureResolvers = {
+    canceled({ jobState, requestId }) {
       return {
         progress: { stage: 'canceled', message: 'Canceled.' },
         response: buildFailureResponse({
@@ -147,23 +148,20 @@
           status: 'canceled',
         }),
       };
-    }
-
-    function resolveLockInAuthFailure({ jobState, requestId }) {
+    },
+    lockInAuth({ jobState, requestId }) {
       return {
         progress: { stage: 'failed', message: 'Lock-in sign-in required.' },
         response: buildFailureResponse({
           requestId,
           jobId: jobState.jobId,
-          error:
-            'Please sign in to Lock-in to use AI transcription. Click the extension icon to sign in.',
+          error: LOCKIN_AUTH_REQUIRED_MESSAGE,
           errorCode: 'LOCKIN_AUTH_REQUIRED',
           status: 'failed',
         }),
       };
-    }
-
-    function resolveMediaAuthFailure({ jobState, requestId }) {
+    },
+    mediaAuth({ jobState, requestId }) {
       return {
         progress: { stage: 'failed', message: 'Media authentication required.' },
         response: buildFailureResponse({
@@ -175,9 +173,8 @@
           status: 'failed',
         }),
       };
-    }
-
-    function resolveGenericFailure({ jobState, requestId, message, errorCode }) {
+    },
+    generic({ jobState, requestId, message, errorCode }) {
       return {
         progress: { stage: 'failed', message },
         response: buildFailureResponse({
@@ -188,43 +185,46 @@
           status: 'failed',
         }),
       };
+    },
+  };
+
+  function resolveFailureResponse({ aiUtils, errors, error, jobState, requestId }) {
+    const message = error instanceof Error ? error.message : String(error);
+    const errorCode = errors.getErrorCode(error);
+    const status = error?.status;
+
+    if (jobState.abortController.signal.aborted || message === 'CANCELED') {
+      return failureResolvers.canceled({ jobState, requestId });
     }
-
-    function resolveFailureResponse({ error, jobState, requestId }) {
-      const message = error instanceof Error ? error.message : String(error);
-      const errorCode = errors.getErrorCode(error);
-      const status = error?.status;
-
-      if (jobState.abortController.signal.aborted || message === 'CANCELED') {
-        return resolveCanceledFailure({ jobState, requestId });
-      }
-
-      if (errorCode === 'LOCKIN_AUTH_REQUIRED') {
-        return resolveLockInAuthFailure({ jobState, requestId });
-      }
-
-      if (
-        errorCode === 'AUTH_REQUIRED' ||
-        message === 'AUTH_REQUIRED' ||
-        aiUtils.isAuthStatus?.(status)
-      ) {
-        return resolveMediaAuthFailure({ jobState, requestId });
-      }
-
-      return resolveGenericFailure({ jobState, requestId, message, errorCode });
+    if (errorCode === 'LOCKIN_AUTH_REQUIRED') {
+      return failureResolvers.lockInAuth({ jobState, requestId });
     }
+    if (
+      errorCode === 'AUTH_REQUIRED' ||
+      message === 'AUTH_REQUIRED' ||
+      aiUtils.isAuthStatus?.(status)
+    ) {
+      return failureResolvers.mediaAuth({ jobState, requestId });
+    }
+    return failureResolvers.generic({ jobState, requestId, message, errorCode });
+  }
 
+  function createAiTranscriptionHelpers({ aiUtils, auth, errors, log, chromeClient, chunkBytes }) {
     return {
-      createProgressEmitter,
+      createProgressEmitter: (tabId, requestId) =>
+        createProgressEmitter({ chromeClient, log, tabId, requestId }),
       buildRequestContext,
-      ensureVideoEligible,
-      requireAuthToken,
-      resolveExpectedTotalChunks,
-      buildFingerprint,
+      ensureVideoEligible: (video) => ensureVideoEligible({ aiUtils, errors, video }),
+      requireAuthToken: () => requireAuthToken({ auth, errors }),
+      resolveExpectedTotalChunks: (headInfo) =>
+        resolveExpectedTotalChunks({ headInfo, chunkBytes }),
+      buildFingerprint: ({ mediaUrlNormalized, headInfo, durationMs }) =>
+        buildFingerprint({ aiUtils, mediaUrlNormalized, headInfo, durationMs }),
       resolveFinalizeChunkCount,
       buildFailureResponse,
       buildSuccessResponse,
-      resolveFailureResponse,
+      resolveFailureResponse: ({ error, jobState, requestId }) =>
+        resolveFailureResponse({ aiUtils, errors, error, jobState, requestId }),
     };
   }
 

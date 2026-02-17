@@ -1,28 +1,47 @@
 import type { Note, NoteContent } from '@core/domain/Note';
 
+const UUID_BYTE_LENGTH = 16;
+const RANDOM_BYTE_RANGE = 256;
+const UUID_VERSION_BYTE_INDEX = 6;
+const UUID_VARIANT_BYTE_INDEX = 8;
+const UUID_VERSION_MASK = 0x0f;
+const UUID_VERSION_4_FLAG = 0x40;
+const UUID_VARIANT_MASK = 0x3f;
+const UUID_VARIANT_RFC4122_FLAG = 0x80;
+const HEX_RADIX = 16;
+const HEX_PAD_LENGTH = 2;
+const UUID_SEGMENT_1_END = 4;
+const UUID_SEGMENT_2_END = 6;
+const UUID_SEGMENT_3_END = 8;
+const UUID_SEGMENT_4_END = 10;
+
 export function createClientNoteId(): string {
   const globalCrypto =
     typeof globalThis !== 'undefined' ? (globalThis.crypto as Crypto | undefined) : undefined;
 
-  if (globalCrypto?.randomUUID) {
+  if (globalCrypto !== undefined && typeof globalCrypto.randomUUID === 'function') {
     return globalCrypto.randomUUID();
   }
 
-  const bytes = new Uint8Array(16);
-  if (globalCrypto?.getRandomValues) {
+  const bytes = new Uint8Array(UUID_BYTE_LENGTH);
+  if (globalCrypto !== undefined && typeof globalCrypto.getRandomValues === 'function') {
     globalCrypto.getRandomValues(bytes);
   } else {
     for (let i = 0; i < bytes.length; i += 1) {
-      bytes[i] = Math.floor(Math.random() * 256);
+      bytes[i] = Math.floor(Math.random() * RANDOM_BYTE_RANGE);
     }
   }
 
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0'));
-  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex
-    .slice(6, 8)
-    .join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+  bytes[UUID_VERSION_BYTE_INDEX] =
+    ((bytes[UUID_VERSION_BYTE_INDEX] ?? 0) & UUID_VERSION_MASK) | UUID_VERSION_4_FLAG;
+  bytes[UUID_VARIANT_BYTE_INDEX] =
+    ((bytes[UUID_VARIANT_BYTE_INDEX] ?? 0) & UUID_VARIANT_MASK) | UUID_VARIANT_RFC4122_FLAG;
+  const hex = Array.from(bytes, (byte) => byte.toString(HEX_RADIX).padStart(HEX_PAD_LENGTH, '0'));
+  return `${hex.slice(0, UUID_SEGMENT_1_END).join('')}-${hex
+    .slice(UUID_SEGMENT_1_END, UUID_SEGMENT_2_END)
+    .join('')}-${hex.slice(UUID_SEGMENT_2_END, UUID_SEGMENT_3_END).join('')}-${hex
+    .slice(UUID_SEGMENT_3_END, UUID_SEGMENT_4_END)
+    .join('')}-${hex.slice(UUID_SEGMENT_4_END, UUID_BYTE_LENGTH).join('')}`;
 }
 
 export function createDraftNote(opts: {
@@ -49,7 +68,7 @@ export function createDraftNote(opts: {
     isStarred: false,
     previewText: '',
   };
-  if (opts.courseCode) {
+  if (opts.courseCode !== null && opts.courseCode !== undefined && opts.courseCode.length > 0) {
     note.linkedLabel = opts.courseCode;
   }
   return note;

@@ -1,209 +1,15 @@
-/**
- * Rate Limiter Module
- *
- * Token-bucket rate limiting for LLM providers using bottleneck.
- * Provides per-provider rate limits, queue smoothing, and usage tracking.
- *
- * Features:
- * - Per-provider rate limits with reservoir auto-refill
- * - Concurrency limits to prevent overwhelming APIs
- * - Queue overflow protection (rejects when queue is full)
- * - Usage tracking (requests, tokens, cost estimates)
- * - Retry-After header integration
- *
- * @module providers/llm/rateLimiter
- */
-
 const Bottleneck = require('bottleneck');
 const { RateLimitError } = require('../../errors');
 const { logger } = require('../../observability');
+const { UsageTracker } = require('./rateLimiterUsageTracker');
+const {
+  RATE_LIMITER_CONSTANTS,
+  DEFAULT_LIMITS,
+  TEST_LIMITS,
+  TOKEN_COSTS,
+} = require('./rateLimiterConfig');
 
-/**
- * Per-provider rate limit configurations
- * Conservative limits for reliability
- */
-const DEFAULT_LIMITS = {
-  gemini: {
-    reservoir: 200, // Requests per minute (paid tier, conservative)
-    reservoirRefreshAmount: 200,
-    reservoirRefreshInterval: 60000, // 60 seconds
-    maxConcurrent: 10, // Max concurrent requests
-    minTime: 50, // Minimum 50ms between requests
-    highWater: 30, // Max queued jobs before rejecting
-    strategy: Bottleneck.strategy.OVERFLOW,
-  },
-  groq: {
-    reservoir: 30, // Free tier: 30 RPM
-    reservoirRefreshAmount: 30,
-    reservoirRefreshInterval: 60000,
-    maxConcurrent: 3,
-    minTime: 200,
-    highWater: 10,
-    strategy: Bottleneck.strategy.OVERFLOW,
-  },
-  openai: {
-    reservoir: 50, // Conservative (last resort fallback)
-    reservoirRefreshAmount: 50,
-    reservoirRefreshInterval: 60000,
-    maxConcurrent: 5,
-    minTime: 150,
-    highWater: 15,
-    strategy: Bottleneck.strategy.OVERFLOW,
-  },
-};
-
-/**
- * Test-friendly rate limit configurations
- * No delays, high concurrency, NO timers for fast unit tests
- *
- * CRITICAL: reservoirRefreshInterval MUST be null to prevent
- * Bottleneck from creating internal timers that keep the event loop alive.
- */
-const TEST_LIMITS = {
-  gemini: {
-    reservoir: 1000,
-    reservoirRefreshAmount: null, // No auto-refresh in tests
-    reservoirRefreshInterval: null, // CRITICAL: Prevents timer creation
-    maxConcurrent: 100,
-    minTime: 0, // No delay between requests
-    highWater: 100,
-    strategy: Bottleneck.strategy.OVERFLOW,
-  },
-  groq: {
-    reservoir: 1000,
-    reservoirRefreshAmount: null,
-    reservoirRefreshInterval: null, // CRITICAL: Prevents timer creation
-    maxConcurrent: 100,
-    minTime: 0,
-    highWater: 100,
-    strategy: Bottleneck.strategy.OVERFLOW,
-  },
-  openai: {
-    reservoir: 1000,
-    reservoirRefreshAmount: null,
-    reservoirRefreshInterval: null, // CRITICAL: Prevents timer creation
-    maxConcurrent: 100,
-    minTime: 0,
-    highWater: 100,
-    strategy: Bottleneck.strategy.OVERFLOW,
-  },
-};
-
-/**
- * Approximate per-token costs (USD) for cost estimation
- * Updated: 2026-01
- */
-const TOKEN_COSTS = {
-  gemini: {
-    'gemini-2.0-flash': { input: 0.0000001, output: 0.0000004 },
-    'gemini-2.5-flash': { input: 0.00000015, output: 0.0000006 },
-    'gemini-2.5-pro': { input: 0.00000125, output: 0.000005 },
-    default: { input: 0.0000001, output: 0.0000004 },
-  },
-  groq: {
-    'llama-3.3-70b-versatile': { input: 0.00000059, output: 0.00000079 },
-    'llama-3.1-8b-instant': { input: 0.00000005, output: 0.00000008 },
-    default: { input: 0.00000059, output: 0.00000079 },
-  },
-  openai: {
-    'gpt-4o-mini': { input: 0.00000015, output: 0.0000006 },
-    'gpt-4o': { input: 0.0000025, output: 0.00001 },
-    default: { input: 0.00000015, output: 0.0000006 },
-  },
-};
-
-/**
- * Usage statistics tracker
- */
-class UsageTracker {
-  constructor() {
-    this.stats = new Map(); // Map<provider:model, { requests, inputTokens, outputTokens, estimatedCost }>
-    this.startTime = Date.now();
-  }
-
-  /**
-   * Record usage for a request
-   * @param {string} provider - Provider name
-   * @param {string} model - Model name
-   * @param {Object} usage - Token usage from response
-   */
-  record(provider, model, usage) {
-    const key = `${provider}:${model}`;
-    const current = this.stats.get(key) || {
-      provider,
-      model,
-      requests: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      estimatedCost: 0,
-    };
-
-    current.requests++;
-
-    if (usage) {
-      const inputTokens = usage.prompt_tokens || 0;
-      const outputTokens = usage.completion_tokens || 0;
-
-      current.inputTokens += inputTokens;
-      current.outputTokens += outputTokens;
-
-      // Calculate cost estimate
-      const costs = TOKEN_COSTS[provider]?.[model] ||
-        TOKEN_COSTS[provider]?.default || { input: 0, output: 0 };
-      current.estimatedCost += inputTokens * costs.input + outputTokens * costs.output;
-    }
-
-    this.stats.set(key, current);
-  }
-
-  /**
-   * Get all usage statistics
-   * @returns {Object}
-   */
-  getStats() {
-    const models = Array.from(this.stats.values());
-    const totalRequests = models.reduce((sum, m) => sum + m.requests, 0);
-    const totalTokens = models.reduce((sum, m) => sum + m.inputTokens + m.outputTokens, 0);
-    const totalCost = models.reduce((sum, m) => sum + m.estimatedCost, 0);
-
-    return {
-      uptimeMs: Date.now() - this.startTime,
-      totalRequests,
-      totalTokens,
-      totalCostUsd: Math.round(totalCost * 1000000) / 1000000, // Round to 6 decimals
-      models: models.map((m) => ({
-        ...m,
-        estimatedCost: Math.round(m.estimatedCost * 1000000) / 1000000,
-      })),
-    };
-  }
-
-  /**
-   * Reset statistics
-   */
-  reset() {
-    this.stats.clear();
-    this.startTime = Date.now();
-  }
-}
-
-/**
- * Rate Limiter Manager
- *
- * Manages per-provider bottleneck instances and usage tracking.
- *
- * Lifecycle:
- * - Create instance with `new RateLimiterManager(limits)`
- * - Use via `schedule()`, `recordUsage()`, etc.
- * - Call `stop()` for graceful shutdown
- *
- * For testing:
- * - Use TEST_LIMITS which disable internal timers
- * - Always call `stop()` in afterEach hooks
- * - Use `forceCleanup()` for guaranteed resource release
- */
 class RateLimiterManager {
-  /** @type {boolean} Whether the manager has been stopped */
   #stopped = false;
 
   constructor(customLimits = {}) {
@@ -211,21 +17,14 @@ class RateLimiterManager {
     this.limits = { ...DEFAULT_LIMITS, ...customLimits };
     this.usageTracker = new UsageTracker();
     this._loggingInterval = null;
-    this._pauseTimers = new Map(); // Track pause timers for cleanup
+    this._pauseTimers = new Map();
     this.#stopped = false;
 
-    // Initialize limiters for each provider
     for (const [provider, config] of Object.entries(this.limits)) {
       this.limiters.set(provider, this._createLimiter(provider, config));
     }
 
-    // Only start logging interval if we have refresh intervals (production mode)
-    // TEST_LIMITS have null refreshInterval, so no timers are created for tests
-    const hasProductionLimits = Object.values(this.limits).some(
-      (limit) =>
-        limit.reservoirRefreshInterval !== null && limit.reservoirRefreshInterval !== undefined,
-    );
-    if (hasProductionLimits) {
+    if (this._hasRefreshIntervals()) {
       this._startUsageLogging();
     }
 
@@ -234,25 +33,23 @@ class RateLimiterManager {
     });
   }
 
-  /**
-   * Check if manager has been stopped
-   * @returns {boolean}
-   */
   isStopped() {
     return this.#stopped;
   }
 
-  /**
-   * Create a bottleneck limiter with event handlers
-   * @private
-   */
+  _hasRefreshIntervals() {
+    return Object.values(this.limits).some(
+      (limit) =>
+        limit.reservoirRefreshInterval !== null && limit.reservoirRefreshInterval !== undefined,
+    );
+  }
+
   _createLimiter(provider, config) {
     const limiter = new Bottleneck(config);
 
-    // Log when requests are queued
     limiter.on('queued', () => {
       const counts = limiter.counts();
-      if (counts.QUEUED > 5) {
+      if (counts.QUEUED > RATE_LIMITER_CONSTANTS.queueWarningThreshold) {
         logger.warn(`Rate limiter queue growing for ${provider}`, {
           provider,
           queued: counts.QUEUED,
@@ -261,15 +58,13 @@ class RateLimiterManager {
       }
     });
 
-    // Log when requests are dropped (queue overflow)
     limiter.on('dropped', (dropped) => {
       logger.error(`Rate limiter dropped request for ${provider}`, {
         provider,
-        dropped: dropped?.options?.id || 'unknown',
+        dropped: dropped?.options?.id || RATE_LIMITER_CONSTANTS.unknownDroppedJobId,
       });
     });
 
-    // Handle errors to prevent unhandled events
     limiter.on('error', (error) => {
       logger.error(`Rate limiter error for ${provider}`, {
         provider,
@@ -280,113 +75,104 @@ class RateLimiterManager {
     return limiter;
   }
 
-  /**
-   * Start periodic usage logging
-   * @private
-   */
   _startUsageLogging() {
-    const FIVE_MINUTES = 5 * 60 * 1000;
     this._loggingInterval = setInterval(() => {
       const stats = this.usageTracker.getStats();
       if (stats.totalRequests > 0) {
         logger.info('LLM usage stats', {
-          uptimeMinutes: Math.round(stats.uptimeMs / 60000),
+          uptimeMinutes: Math.round(stats.uptimeMs / RATE_LIMITER_CONSTANTS.uptimeMinuteMs),
           totalRequests: stats.totalRequests,
           totalTokens: stats.totalTokens,
           totalCostUsd: stats.totalCostUsd,
           models: stats.models,
         });
       }
-    }, FIVE_MINUTES);
+    }, RATE_LIMITER_CONSTANTS.usageLogIntervalMs);
 
-    // Don't prevent process exit
     if (this._loggingInterval.unref) {
       this._loggingInterval.unref();
     }
   }
 
-  /**
-   * Schedule a request through the rate limiter
-   * @param {string} provider - Provider name
-   * @param {Function} fn - Async function to execute
-   * @param {Object} [options] - Options
-   * @param {number} [options.priority=5] - Job priority (0-9, lower = higher priority)
-   * @param {number} [options.timeout=30000] - Max time to wait in queue (ms)
-   * @returns {Promise<any>} - Result from fn
-   */
-  async schedule(provider, fn, options = {}) {
-    const limiter = this.limiters.get(provider);
+  _createQueueFullError(provider) {
+    const error = new RateLimitError(
+      `Rate limit queue full for ${provider}. Try again in a few seconds.`,
+      RATE_LIMITER_CONSTANTS.queueFullRetryAfterSeconds,
+    );
+    error.shouldFallback = true;
+    return error;
+  }
 
-    if (!limiter) {
-      // No limiter for this provider - execute directly
-      logger.warn(`No rate limiter configured for ${provider}, executing directly`);
-      return fn();
+  _createQueueTimeoutError(provider) {
+    const error = new RateLimitError(
+      `Request queued too long for ${provider}. Try again later.`,
+      RATE_LIMITER_CONSTANTS.queueTimeoutRetryAfterSeconds,
+    );
+    error.shouldFallback = true;
+    return error;
+  }
+
+  _normalizeScheduleError(provider, error) {
+    if (error?.message?.includes(RATE_LIMITER_CONSTANTS.droppedJobMessage)) {
+      return this._createQueueFullError(provider);
     }
 
-    const priority = options.priority ?? 5;
-    const timeout = options.timeout ?? 30000;
+    if (error?.message?.includes(RATE_LIMITER_CONSTANTS.timedOutJobMessage)) {
+      return this._createQueueTimeoutError(provider);
+    }
+
+    return error;
+  }
+
+  _assertQueueHasCapacity(provider, limiter) {
+    const counts = limiter.counts();
+    const config = this.limits[provider];
+
+    if (counts.QUEUED >= config.highWater) {
+      throw this._createQueueFullError(provider);
+    }
+  }
+
+  _buildScheduleRequest(provider, options) {
+    return {
+      priority: options.priority ?? RATE_LIMITER_CONSTANTS.defaultPriority,
+      timeout: options.timeout ?? RATE_LIMITER_CONSTANTS.defaultQueueTimeoutMs,
+      id: `${provider}-${Date.now()}`,
+    };
+  }
+
+  _scheduleWithoutLimiter(provider, fn) {
+    logger.warn(`No rate limiter configured for ${provider}, executing directly`);
+    return fn();
+  }
+
+  async schedule(provider, fn, options = {}) {
+    const limiter = this.limiters.get(provider);
+    if (!limiter) {
+      return this._scheduleWithoutLimiter(provider, fn);
+    }
+
+    const request = this._buildScheduleRequest(provider, options);
+    this._assertQueueHasCapacity(provider, limiter);
 
     try {
-      // Check if queue is already at capacity
-      const counts = limiter.counts();
-      const config = this.limits[provider];
-
-      if (counts.QUEUED >= config.highWater) {
-        const error = new RateLimitError(
-          `Rate limit queue full for ${provider}. Try again in a few seconds.`,
-          5,
-        );
-        error.shouldFallback = true;
-        throw error;
-      }
-
-      // Schedule through bottleneck
       return await limiter.schedule(
         {
-          priority,
-          expiration: timeout,
-          id: `${provider}-${Date.now()}`,
+          priority: request.priority,
+          expiration: request.timeout,
+          id: request.id,
         },
         fn,
       );
     } catch (error) {
-      // Handle bottleneck-specific errors
-      if (error.message?.includes('This job has been dropped')) {
-        const queueError = new RateLimitError(
-          `Rate limit queue full for ${provider}. Try again in a few seconds.`,
-          5,
-        );
-        queueError.shouldFallback = true;
-        throw queueError;
-      }
-
-      if (error.message?.includes('This job timed out')) {
-        const timeoutError = new RateLimitError(
-          `Request queued too long for ${provider}. Try again later.`,
-          10,
-        );
-        timeoutError.shouldFallback = true;
-        throw timeoutError;
-      }
-
-      throw error;
+      throw this._normalizeScheduleError(provider, error);
     }
   }
 
-  /**
-   * Record usage after successful request
-   * @param {string} provider - Provider name
-   * @param {string} model - Model name
-   * @param {Object} usage - Token usage
-   */
   recordUsage(provider, model, usage) {
     this.usageTracker.record(provider, model, usage);
   }
 
-  /**
-   * Get current queue statistics for all providers
-   * @returns {Object}
-   */
   getQueueStats() {
     const stats = {};
     for (const [provider, limiter] of this.limiters) {
@@ -400,37 +186,27 @@ class RateLimiterManager {
     return stats;
   }
 
-  /**
-   * Get usage statistics
-   * @returns {Object}
-   */
   getUsageStats() {
     return this.usageTracker.getStats();
   }
 
-  /**
-   * Pause requests for a provider (e.g., when receiving Retry-After)
-   * @param {string} provider - Provider name
-   * @param {number} durationMs - Duration to pause (ms)
-   */
   async pauseProvider(provider, durationMs) {
     const limiter = this.limiters.get(provider);
-    if (!limiter) return;
+    if (!limiter) {
+      return;
+    }
 
     logger.info(`Pausing ${provider} for ${durationMs}ms due to rate limit`, {
       provider,
       durationMs,
     });
 
-    // Temporarily set reservoir to 0
-    await limiter.updateSettings({ reservoir: 0 });
+    await limiter.updateSettings({ reservoir: RATE_LIMITER_CONSTANTS.pausedReservoir });
 
-    // Clear any existing pause timer for this provider
     if (this._pauseTimers.has(provider)) {
       clearTimeout(this._pauseTimers.get(provider));
     }
 
-    // Restore after duration (track timer for cleanup)
     const timer = setTimeout(async () => {
       const config = this.limits[provider];
       await limiter.updateSettings({ reservoir: config.reservoir });
@@ -438,7 +214,6 @@ class RateLimiterManager {
       this._pauseTimers.delete(provider);
     }, durationMs);
 
-    // Unref so it doesn't prevent process exit
     if (timer.unref) {
       timer.unref();
     }
@@ -446,85 +221,73 @@ class RateLimiterManager {
     this._pauseTimers.set(provider, timer);
   }
 
-  /**
-   * Stop the rate limiter manager
-   * @returns {Promise<void>}
-   */
-  async stop() {
-    if (this._loggingInterval) {
-      clearInterval(this._loggingInterval);
-      this._loggingInterval = null;
+  _clearLoggingInterval() {
+    if (!this._loggingInterval) {
+      return;
     }
 
-    // Clear all pause timers
+    clearInterval(this._loggingInterval);
+    this._loggingInterval = null;
+  }
+
+  _clearPauseTimers() {
     for (const timer of this._pauseTimers.values()) {
       clearTimeout(timer);
     }
     this._pauseTimers.clear();
+  }
 
-    // Stop all Bottleneck limiters and await their cleanup
-    // Bottleneck.stop() returns a Promise that resolves when all jobs are complete
+  async stop() {
+    if (this.#stopped) {
+      return;
+    }
+
+    this._clearLoggingInterval();
+    this._clearPauseTimers();
+
     const stopPromises = [];
     for (const limiter of this.limiters.values()) {
       stopPromises.push(limiter.stop({ dropWaitingJobs: true }));
     }
     await Promise.all(stopPromises);
 
-    // Disconnect to release any internal resources after stop completes
     for (const limiter of this.limiters.values()) {
       if (limiter.disconnect) {
         limiter.disconnect();
       }
     }
+
     this.limiters.clear();
     this.#stopped = true;
-
     logger.info('RateLimiterManager stopped');
   }
 
-  /**
-   * Force cleanup all resources synchronously
-   * Use only in test teardown when async cleanup isn't sufficient
-   * @returns {void}
-   */
   forceCleanup() {
-    // Clear interval
-    if (this._loggingInterval) {
-      clearInterval(this._loggingInterval);
-      this._loggingInterval = null;
+    if (this.#stopped) {
+      return;
     }
 
-    // Clear all pause timers
-    for (const timer of this._pauseTimers.values()) {
-      clearTimeout(timer);
-    }
-    this._pauseTimers.clear();
+    this._clearLoggingInterval();
+    this._clearPauseTimers();
 
-    // Force disconnect all limiters without waiting
     for (const limiter of this.limiters.values()) {
       try {
-        // Stop with dropWaitingJobs but don't await
         limiter.stop({ dropWaitingJobs: true }).catch(() => {});
         if (limiter.disconnect) {
           limiter.disconnect();
         }
       } catch {
-        // Ignore errors during force cleanup
+        // Ignore errors during force cleanup.
       }
     }
+
     this.limiters.clear();
     this.#stopped = true;
   }
 }
 
-// Singleton instance
 let instance = null;
 
-/**
- * Get or create the singleton RateLimiterManager
- * @param {Object} [customLimits] - Custom limit overrides (only used on first call)
- * @returns {RateLimiterManager}
- */
 function getRateLimiterManager(customLimits) {
   if (!instance) {
     instance = new RateLimiterManager(customLimits);
@@ -532,11 +295,6 @@ function getRateLimiterManager(customLimits) {
   return instance;
 }
 
-/**
- * Get or create a test-friendly RateLimiterManager singleton
- * Uses TEST_LIMITS which have no delays for fast unit tests
- * @returns {RateLimiterManager}
- */
 function getTestRateLimiterManager() {
   if (!instance) {
     instance = new RateLimiterManager(TEST_LIMITS);
@@ -544,10 +302,6 @@ function getTestRateLimiterManager() {
   return instance;
 }
 
-/**
- * Reset the singleton (for testing)
- * @returns {Promise<void>}
- */
 async function resetRateLimiterManager() {
   if (instance) {
     await instance.stop();
@@ -555,10 +309,6 @@ async function resetRateLimiterManager() {
   }
 }
 
-/**
- * Force reset the singleton synchronously (for test teardown)
- * Use when async reset isn't completing properly
- */
 function forceResetRateLimiterManager() {
   if (instance) {
     instance.forceCleanup();
@@ -566,18 +316,11 @@ function forceResetRateLimiterManager() {
   }
 }
 
-/**
- * Drain the event loop to allow Bottleneck internal cleanup
- * Call this after tests to ensure all async work completes
- * @param {number} [iterations=5] - Number of event loop iterations
- * @returns {Promise<void>}
- */
-async function drainEventLoop(iterations = 5) {
+async function drainEventLoop(iterations = RATE_LIMITER_CONSTANTS.eventLoopDrainIterations) {
   for (let i = 0; i < iterations; i++) {
     // eslint-disable-next-line no-undef -- setImmediate is a Node.js global
     await new Promise((resolve) => setImmediate(resolve));
   }
-  // Additional microtask flush
   await Promise.resolve();
 }
 

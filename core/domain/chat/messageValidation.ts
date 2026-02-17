@@ -6,6 +6,13 @@
 import { ValidationError } from '../../errors/index.js';
 import type { Message, MessageRole, CreateMessageParams } from './Message.js';
 
+const DEFAULT_MAX_ATTACHMENTS = 10;
+const BYTES_PER_KIB = 1024;
+const DEFAULT_MAX_ATTACHMENT_SIZE_MB = 10;
+const DEFAULT_MAX_ATTACHMENT_SIZE_BYTES =
+  DEFAULT_MAX_ATTACHMENT_SIZE_MB * BYTES_PER_KIB * BYTES_PER_KIB;
+const APPROX_CHARS_PER_TOKEN = 4;
+
 /**
  * Configuration for message validation
  */
@@ -21,8 +28,8 @@ export interface MessageValidationConfig {
  */
 export const DEFAULT_MESSAGE_VALIDATION: MessageValidationConfig = {
   maxContentLength: 32000, // ~8k tokens for most models
-  maxAttachments: 10,
-  maxAttachmentSize: 10 * 1024 * 1024, // 10MB
+  maxAttachments: DEFAULT_MAX_ATTACHMENTS,
+  maxAttachmentSize: DEFAULT_MAX_ATTACHMENT_SIZE_BYTES, // 10MB
   allowedMimeTypes: [
     'image/jpeg',
     'image/png',
@@ -56,7 +63,7 @@ export function validateContentLength(
   content: string,
   config: MessageValidationConfig = DEFAULT_MESSAGE_VALIDATION,
 ): void {
-  if (!content || content.trim().length === 0) {
+  if (content.trim().length === 0) {
     throw new ValidationError('Message content cannot be empty', 'content');
   }
 
@@ -109,12 +116,12 @@ export function validateCreateMessageParams(
   validateContentLength(params.content, config);
 
   // Validate attachments if present
-  if (params.attachments && params.attachments.length > 0) {
+  if (params.attachments !== undefined && params.attachments.length > 0) {
     validateAttachmentCount(params.attachments, config);
   }
 
   // Validate chatId is not empty
-  if (!params.chatId || params.chatId.trim().length === 0) {
+  if (params.chatId.trim().length === 0) {
     throw new ValidationError('Chat ID is required', 'chatId');
   }
 }
@@ -137,7 +144,7 @@ export function isAssistantMessage(message: Message): boolean {
  * Check if message has attachments
  */
 export function hasAttachments(message: Message): boolean {
-  return Boolean(message.attachments && message.attachments.length > 0);
+  return message.attachments !== undefined && message.attachments.length > 0;
 }
 
 /**
@@ -146,10 +153,10 @@ export function hasAttachments(message: Message): boolean {
 export function getFullTextContent(message: Message): string {
   let fullText = message.content;
 
-  if (message.attachments) {
+  if (message.attachments !== undefined) {
     const attachmentTexts = message.attachments
       .map((a) => a.extractedText)
-      .filter((text): text is string => Boolean(text));
+      .filter((text): text is string => text !== undefined && text.length > 0);
 
     if (attachmentTexts.length > 0) {
       fullText += '\n\n' + attachmentTexts.join('\n\n');
@@ -163,7 +170,7 @@ export function getFullTextContent(message: Message): string {
  * Count tokens (rough estimate: 1 token ≈ 4 characters for English)
  */
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  return Math.ceil(text.length / APPROX_CHARS_PER_TOKEN);
 }
 
 /**

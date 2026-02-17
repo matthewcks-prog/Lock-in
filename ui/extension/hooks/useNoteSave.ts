@@ -4,6 +4,8 @@ import type { NotesService } from '@core/services/notesService';
 import { createNoteContentFromPlainText } from '../notes/content';
 import type { SidebarTabId } from '../sidebar/types';
 
+const AUTO_TITLE_MAX_LENGTH = 50;
+
 /**
  * Options for saving a note
  */
@@ -40,6 +42,84 @@ export interface UseNoteSaveOptions {
   setActiveTab: (tab: SidebarTabId) => void;
 }
 
+interface UseNoteSaveReturn {
+  saveNote: (options: SaveNoteOptions) => Promise<Note | null>;
+}
+
+function resolveNoteContent(content: SaveNoteOptions['content']): NoteContent {
+  return typeof content === 'string' ? createNoteContentFromPlainText(content.trim()) : content;
+}
+
+function resolveSourceText(content: SaveNoteOptions['content']): string {
+  return typeof content === 'string' ? content : (content.plainText ?? '');
+}
+
+function resolveNoteTitle(options: SaveNoteOptions): string {
+  if (options.title !== undefined && options.title.length > 0) {
+    return options.title;
+  }
+  const firstLine = resolveSourceText(options.content).split('\n')[0]?.trim() ?? '';
+  const titleFromContent = firstLine.slice(0, AUTO_TITLE_MAX_LENGTH);
+  return titleFromContent.length > 0 ? titleFromContent : 'Untitled note';
+}
+
+function buildCreateNoteInput({
+  options,
+  noteContent,
+  noteTitle,
+  pageUrl,
+  courseCode,
+}: {
+  options: SaveNoteOptions;
+  noteContent: NoteContent;
+  noteTitle: string;
+  pageUrl: string | null;
+  courseCode: string | null;
+}): Parameters<NotesService['createNote']>[0] {
+  return {
+    title: noteTitle,
+    content: noteContent,
+    sourceUrl: options.sourceUrl ?? pageUrl,
+    sourceSelection: options.sourceSelection ?? null,
+    courseCode: options.courseCode ?? courseCode ?? null,
+    noteType: options.noteType ?? 'manual',
+    tags: options.tags ?? [],
+  };
+}
+
+function handleCreatedNote({
+  note,
+  upsertNote,
+  setSelectedNoteId,
+  setActiveTab,
+  onSuccess,
+}: {
+  note: Note;
+  upsertNote: (note: Note) => void;
+  setSelectedNoteId: (id: string | null) => void;
+  setActiveTab: (tab: SidebarTabId) => void;
+  onSuccess: ((note: Note) => void) | undefined;
+}): void {
+  upsertNote(note);
+  setSelectedNoteId(note.id);
+  setActiveTab('notes');
+  onSuccess?.(note);
+}
+
+function normalizeSaveError(error: unknown): Error {
+  return error instanceof Error ? error : new Error('Failed to save note');
+}
+
+function handleSaveError(
+  error: Error,
+  setActiveTab: (tab: SidebarTabId) => void,
+  onError: ((error: Error) => void) | undefined,
+): void {
+  console.error('Failed to save note:', error);
+  onError?.(error);
+  setActiveTab('notes');
+}
+
 /**
  * Custom hook for note saving logic
  *
@@ -53,68 +133,31 @@ export function useNoteSave({
   upsertNote,
   setSelectedNoteId,
   setActiveTab,
-}: UseNoteSaveOptions) {
+}: UseNoteSaveOptions): UseNoteSaveReturn {
   const saveNote = useCallback(
     async (options: SaveNoteOptions): Promise<Note | null> => {
-      // Early return if notes service is not available
-      if (!notesService) {
+      if (notesService === null) {
         console.warn('NotesService not available, switching to Notes tab');
         setActiveTab('notes');
         return null;
       }
 
       try {
-        // Convert content to NoteContent if it's a string
-        const noteContent: NoteContent =
-          typeof options.content === 'string'
-            ? createNoteContentFromPlainText(options.content.trim())
-            : options.content;
-
-        // Generate title from content if not provided
-        let noteTitle = options.title;
-        if (!noteTitle) {
-          const contentText =
-            typeof options.content === 'string' ? options.content : options.content.plainText || '';
-          const firstLine = contentText.split('\n')[0]?.trim() ?? '';
-          noteTitle = firstLine.slice(0, 50) || 'Untitled note';
-        }
-
-        // Create the note
-        const createdNote = await notesService.createNote({
-          title: noteTitle,
-          content: noteContent,
-          sourceUrl: options.sourceUrl ?? pageUrl,
-          sourceSelection: options.sourceSelection ?? null,
-          courseCode: options.courseCode ?? courseCode ?? null,
-          noteType: options.noteType ?? 'manual',
-          tags: options.tags ?? [],
+        const noteContent = resolveNoteContent(options.content);
+        const noteTitle = resolveNoteTitle(options);
+        const createdNote = await notesService.createNote(
+          buildCreateNoteInput({ options, noteContent, noteTitle, pageUrl, courseCode }),
+        );
+        handleCreatedNote({
+          note: createdNote,
+          upsertNote,
+          setSelectedNoteId,
+          setActiveTab,
+          onSuccess: options.onSuccess,
         });
-
-        // Update note list and select the new note
-        upsertNote(createdNote);
-        setSelectedNoteId(createdNote.id);
-
-        // Navigate to Notes tab
-        setActiveTab('notes');
-
-        // Call success callback if provided
-        if (options.onSuccess) {
-          options.onSuccess(createdNote);
-        }
-
         return createdNote;
       } catch (error: unknown) {
-        const err = error instanceof Error ? error : new Error('Failed to save note');
-        console.error('Failed to save note:', err);
-
-        // Call error callback if provided
-        if (options.onError) {
-          options.onError(err);
-        }
-
-        // Still navigate to Notes tab on error
-        setActiveTab('notes');
-
+        handleSaveError(normalizeSaveError(error), setActiveTab, options.onError);
         return null;
       }
     },

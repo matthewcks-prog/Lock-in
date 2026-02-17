@@ -83,12 +83,13 @@ function normalizeTarget(rawTarget) {
   }
 
   const lower = firstToken.toLowerCase();
+  const hasScriptProtocol = /^[\s]*javascript\s*:/i.test(firstToken);
   if (
     lower.startsWith('http://') ||
     lower.startsWith('https://') ||
     lower.startsWith('mailto:') ||
     lower.startsWith('tel:') ||
-    lower.startsWith('javascript:') ||
+    hasScriptProtocol ||
     lower.startsWith('data:')
   ) {
     return null;

@@ -113,17 +113,17 @@
     cursor: ns-resize;
   }
 
-  #lockin-root .lockin-resize-handle.edge.n:hover,
-  #lockin-root .lockin-resize-handle.edge.s:hover {
-    transform: translateX(-50%) scaleY(1.3);
-  }
-
   #lockin-root .lockin-resize-handle.edge.n {
     top: var(--lockin-size-neg-3);
   }
 
   #lockin-root .lockin-resize-handle.edge.s {
     bottom: var(--lockin-size-neg-3);
+  }
+
+  #lockin-root .lockin-resize-handle.edge.n:hover,
+  #lockin-root .lockin-resize-handle.edge.s:hover {
+    transform: translateX(-50%) scaleY(1.3);
   }
 
   /* Vertical edge handles (left/right) */
@@ -136,16 +136,16 @@
     cursor: ew-resize;
   }
 
-  #lockin-root .lockin-resize-handle.edge.e:hover,
-  #lockin-root .lockin-resize-handle.edge.w:hover {
-    transform: translateY(-50%) scaleX(1.3);
-  }
-
   #lockin-root .lockin-resize-handle.edge.e {
     right: var(--lockin-size-neg-3);
   }
 
   #lockin-root .lockin-resize-handle.edge.w {
     left: var(--lockin-size-neg-3);
+  }
+
+  #lockin-root .lockin-resize-handle.edge.e:hover,
+  #lockin-root .lockin-resize-handle.edge.w:hover {
+    transform: translateY(-50%) scaleX(1.3);
   }
 }

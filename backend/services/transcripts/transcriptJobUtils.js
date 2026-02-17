@@ -1,3 +1,5 @@
+const MAX_MEDIA_PATH_SEGMENT_LENGTH = 32;
+
 function sanitizeMediaUrlForStorage(mediaUrl) {
   if (!mediaUrl) return '';
   try {
@@ -6,7 +8,7 @@ function sanitizeMediaUrlForStorage(mediaUrl) {
     url.search = '';
     const segments = url.pathname.split('/').map((segment) => {
       if (!segment) return segment;
-      if (segment.length > 32) return '[redacted]';
+      if (segment.length > MAX_MEDIA_PATH_SEGMENT_LENGTH) return '[redacted]';
       return segment;
     });
     url.pathname = segments.join('/');

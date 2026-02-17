@@ -16,6 +16,13 @@ const uuidSchema = z.string().uuid({ message: 'Must be a valid UUID' });
 
 // Valid feedback types (matches service layer and client)
 const VALID_FEEDBACK_TYPES = ['bug', 'feature', 'question', 'other'];
+const MAX_URL_LENGTH = 2000;
+const MAX_COURSE_CODE_LENGTH = 50;
+const MAX_EXTENSION_VERSION_LENGTH = 20;
+const MAX_BROWSER_LENGTH = 200;
+const MAX_PAGE_LENGTH = 200;
+const MAX_MESSAGE_LENGTH = 5000;
+const MAX_FEEDBACK_LIST_LIMIT = 100;
 
 /**
  * Context schema for feedback metadata
@@ -23,11 +30,11 @@ const VALID_FEEDBACK_TYPES = ['bug', 'feature', 'question', 'other'];
  */
 const feedbackContextSchema = z
   .object({
-    url: z.string().url().max(2000).optional(),
-    courseCode: z.string().max(50).optional(),
-    extensionVersion: z.string().max(20).optional(),
-    browser: z.string().max(200).optional(),
-    page: z.string().max(200).optional(),
+    url: z.string().url().max(MAX_URL_LENGTH).optional(),
+    courseCode: z.string().max(MAX_COURSE_CODE_LENGTH).optional(),
+    extensionVersion: z.string().max(MAX_EXTENSION_VERSION_LENGTH).optional(),
+    browser: z.string().max(MAX_BROWSER_LENGTH).optional(),
+    page: z.string().max(MAX_PAGE_LENGTH).optional(),
   })
   .passthrough()
   .optional()
@@ -44,7 +51,7 @@ const createFeedbackSchema = z.object({
   message: z
     .string()
     .min(1, 'Feedback message is required')
-    .max(5000, 'Message too long (max 5,000 chars)'),
+    .max(MAX_MESSAGE_LENGTH, 'Message too long (max 5,000 chars)'),
   context: feedbackContextSchema,
 });
 
@@ -53,7 +60,7 @@ const createFeedbackSchema = z.object({
  * GET /api/feedback
  */
 const listFeedbackQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(MAX_FEEDBACK_LIST_LIMIT).optional(),
 });
 
 /**

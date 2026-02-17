@@ -3,6 +3,18 @@ import { Star, Check, X, AlertCircle } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'star';
 
+interface ToastState {
+  message: string;
+  type: ToastType;
+  isVisible: boolean;
+}
+
+export interface UseToastResult {
+  toast: ToastState | null;
+  showToast: (message: string, type?: ToastType) => void;
+  hideToast: () => void;
+}
+
 export interface ToastProps {
   /** Toast message */
   message: string;
@@ -22,6 +34,8 @@ const ICON_MAP = {
   info: AlertCircle,
   star: Star,
 };
+const DEFAULT_TOAST_DURATION_MS = 3000;
+const TOAST_EXIT_ANIMATION_MS = 200;
 
 /**
  * A toast notification component following industry best practices:
@@ -33,10 +47,10 @@ const ICON_MAP = {
 export function Toast({
   message,
   type = 'info',
-  duration = 3000,
+  duration = DEFAULT_TOAST_DURATION_MS,
   onDismiss,
   isVisible,
-}: ToastProps) {
+}: ToastProps): JSX.Element | null {
   const [isLeaving, setIsLeaving] = useState(false);
 
   useEffect(() => {
@@ -45,15 +59,15 @@ export function Toast({
     const timer = setTimeout(() => {
       setIsLeaving(true);
       // Wait for exit animation before actually dismissing
-      setTimeout(onDismiss, 200);
+      setTimeout(onDismiss, TOAST_EXIT_ANIMATION_MS);
     }, duration);
 
     return () => clearTimeout(timer);
   }, [isVisible, duration, onDismiss]);
 
-  const handleDismiss = () => {
+  const handleDismiss = (): void => {
     setIsLeaving(true);
-    setTimeout(onDismiss, 200);
+    setTimeout(onDismiss, TOAST_EXIT_ANIMATION_MS);
   };
 
   if (!isVisible) return null;
@@ -85,18 +99,14 @@ export function Toast({
 /**
  * Hook for managing toast state
  */
-export function useToast() {
-  const [toast, setToast] = useState<{
-    message: string;
-    type: ToastType;
-    isVisible: boolean;
-  } | null>(null);
+export function useToast(): UseToastResult {
+  const [toast, setToast] = useState<ToastState | null>(null);
 
-  const showToast = (message: string, type: ToastType = 'info') => {
+  const showToast = (message: string, type: ToastType = 'info'): void => {
     setToast({ message, type, isVisible: true });
   };
 
-  const hideToast = () => {
+  const hideToast = (): void => {
     setToast(null);
   };
 

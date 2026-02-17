@@ -2,15 +2,7 @@
  * JWT Verifier Factory
  *
  * Creates a properly configured JwtVerificationService based on environment
- * and configuration. This factory encapsulates the complexity of choosing
- * the right verification strategy for different deployment scenarios.
- *
- * Deployment Scenarios:
- * 1. Local Supabase (ES256): Uses JWKS endpoint for asymmetric key verification
- * 2. Local Supabase (Legacy HS256): Falls back to symmetric key verification
- * 3. Cloud Supabase: Uses Supabase SDK for most reliable verification
- *
- * @module services/auth/jwtVerifierFactory
+ * and configuration.
  */
 
 const { JwtVerificationService } = require('./jwtVerificationService');
@@ -22,6 +14,122 @@ const {
 } = require('./strategies');
 const { logger } = require('../../observability');
 
+const LOCAL_JWT_ALGORITHMS = ['ES256', 'RS256'];
+const CLOUD_JWT_ALGORITHMS = ['ES256', 'RS256'];
+const SYMMETRIC_ALGORITHMS = ['HS256', 'HS384', 'HS512'];
+const JWKS_PATH = '/auth/v1/.well-known/jwks.json';
+
+function buildJwksUri(supabaseUrl) {
+  return `${supabaseUrl}${JWKS_PATH}`;
+}
+
+function createJwksStrategy({ jwksUri, allowedAlgorithms, issuer }) {
+  const jwksProvider = new JwksProvider({ jwksUri });
+  return new JwksVerifierStrategy({
+    jwksProvider,
+    allowedAlgorithms,
+    issuer: issuer ?? null,
+  });
+}
+
+function createSymmetricStrategy(jwtSecret) {
+  return new SymmetricVerifierStrategy({
+    secret: jwtSecret,
+    allowedAlgorithms: SYMMETRIC_ALGORITHMS,
+  });
+}
+
+function createSdkStrategy(supabaseClient) {
+  return new SupabaseSdkVerifierStrategy({ supabaseClient });
+}
+
+function addLocalJwksStrategy(strategies, supabaseUrl) {
+  const jwksUri = buildJwksUri(supabaseUrl);
+  const localIssuer = `${supabaseUrl}/auth/v1`;
+
+  try {
+    const strategy = createJwksStrategy({
+      jwksUri,
+      allowedAlgorithms: LOCAL_JWT_ALGORITHMS,
+      issuer: localIssuer,
+    });
+    strategies.push(strategy);
+    logger.debug('[JwtVerifierFactory] Added JWKS strategy for local Supabase', {
+      issuer: localIssuer,
+    });
+  } catch (error) {
+    logger.warn('[JwtVerifierFactory] Failed to create JWKS strategy:', {
+      error: error.message,
+    });
+  }
+}
+
+function addCloudJwksStrategy(strategies, supabaseUrl) {
+  if (!supabaseUrl) {
+    return;
+  }
+
+  try {
+    const strategy = createJwksStrategy({
+      jwksUri: buildJwksUri(supabaseUrl),
+      allowedAlgorithms: CLOUD_JWT_ALGORITHMS,
+    });
+    strategies.push(strategy);
+    logger.debug('[JwtVerifierFactory] Added JWKS strategy for cloud');
+  } catch (error) {
+    logger.warn('[JwtVerifierFactory] Failed to create JWKS strategy:', {
+      error: error.message,
+    });
+  }
+}
+
+function addLocalStrategies(strategies, { supabaseUrl, jwtSecret, supabaseClient }) {
+  addLocalJwksStrategy(strategies, supabaseUrl);
+
+  if (jwtSecret) {
+    strategies.push(createSymmetricStrategy(jwtSecret));
+    logger.debug('[JwtVerifierFactory] Added symmetric strategy for legacy tokens');
+  }
+
+  if (supabaseClient) {
+    strategies.push(createSdkStrategy(supabaseClient));
+    logger.debug('[JwtVerifierFactory] Added Supabase SDK strategy');
+  }
+}
+
+function addCloudStrategies(strategies, { supabaseUrl, jwtSecret, supabaseClient }) {
+  if (supabaseClient) {
+    strategies.push(createSdkStrategy(supabaseClient));
+    logger.debug('[JwtVerifierFactory] Added Supabase SDK strategy for cloud');
+  }
+
+  addCloudJwksStrategy(strategies, supabaseUrl);
+
+  if (jwtSecret) {
+    strategies.push(createSymmetricStrategy(jwtSecret));
+    logger.warn(
+      '[JwtVerifierFactory] Using symmetric key verification - consider migrating to asymmetric keys',
+    );
+  }
+}
+
+function logVerifierConfiguration({ isLocal, jwtSecret, supabaseClient }) {
+  logger.info('[JwtVerifierFactory] Creating verifier', {
+    isLocal,
+    hasJwtSecret: Boolean(jwtSecret),
+    hasSupabaseClient: Boolean(supabaseClient),
+  });
+}
+
+function assertStrategiesAvailable(strategies) {
+  if (strategies.length === 0) {
+    throw new Error(
+      'No JWT verification strategies available. ' +
+        'Configure SUPABASE_JWT_SECRET or ensure Supabase client is available.',
+    );
+  }
+}
+
 /**
  * Create a JWT verifier service configured for the current environment
  *
@@ -31,110 +139,20 @@ const { logger } = require('../../observability');
  * @returns {JwtVerificationService} Configured verification service
  */
 function createJwtVerifierForConfig({ config, supabaseClient = null }) {
-  const strategies = [];
-
   const isLocal = config.SUPABASE_IS_LOCAL;
   const supabaseUrl = config.SUPABASE_URL;
   const jwtSecret = config.SUPABASE_JWT_SECRET;
+  const strategies = [];
 
-  logger.info('[JwtVerifierFactory] Creating verifier', {
-    isLocal,
-    hasJwtSecret: Boolean(jwtSecret),
-    hasSupabaseClient: Boolean(supabaseClient),
-  });
+  logVerifierConfiguration({ isLocal, jwtSecret, supabaseClient });
 
   if (isLocal) {
-    // Local Supabase: Try JWKS first (ES256), then symmetric (HS256) as fallback
-
-    // Strategy 1: JWKS verification for ES256 tokens (Supabase CLI v1.x+)
-    const jwksUri = `${supabaseUrl}/auth/v1/.well-known/jwks.json`;
-
-    try {
-      const jwksProvider = new JwksProvider({ jwksUri });
-      // Local Supabase uses the auth endpoint as the issuer
-      const localIssuer = `${supabaseUrl}/auth/v1`;
-      const jwksStrategy = new JwksVerifierStrategy({
-        jwksProvider,
-        allowedAlgorithms: ['ES256', 'RS256'],
-        issuer: localIssuer,
-      });
-      strategies.push(jwksStrategy);
-      logger.debug('[JwtVerifierFactory] Added JWKS strategy for local Supabase', {
-        issuer: localIssuer,
-      });
-    } catch (error) {
-      logger.warn('[JwtVerifierFactory] Failed to create JWKS strategy:', { error: error.message });
-    }
-
-    // Strategy 2: Symmetric key verification (legacy HS256 tokens)
-    if (jwtSecret) {
-      const symmetricStrategy = new SymmetricVerifierStrategy({
-        secret: jwtSecret,
-        allowedAlgorithms: ['HS256', 'HS384', 'HS512'],
-      });
-      strategies.push(symmetricStrategy);
-      logger.debug('[JwtVerifierFactory] Added symmetric strategy for legacy tokens');
-    }
-
-    // Strategy 3: Supabase SDK as last resort for local (user tokens)
-    if (supabaseClient) {
-      const sdkStrategy = new SupabaseSdkVerifierStrategy({
-        supabaseClient,
-      });
-      strategies.push(sdkStrategy);
-      logger.debug('[JwtVerifierFactory] Added Supabase SDK strategy');
-    }
+    addLocalStrategies(strategies, { supabaseUrl, jwtSecret, supabaseClient });
   } else {
-    // Cloud Supabase: SDK first (most reliable), then JWKS, then symmetric
-
-    // Strategy 1: Supabase SDK (recommended for cloud)
-    if (supabaseClient) {
-      const sdkStrategy = new SupabaseSdkVerifierStrategy({
-        supabaseClient,
-      });
-      strategies.push(sdkStrategy);
-      logger.debug('[JwtVerifierFactory] Added Supabase SDK strategy for cloud');
-    }
-
-    // Strategy 2: JWKS verification (for third-party tokens or custom signing keys)
-    if (supabaseUrl) {
-      const jwksUri = `${supabaseUrl}/auth/v1/.well-known/jwks.json`;
-
-      try {
-        const jwksProvider = new JwksProvider({ jwksUri });
-        const jwksStrategy = new JwksVerifierStrategy({
-          jwksProvider,
-          allowedAlgorithms: ['ES256', 'RS256'],
-        });
-        strategies.push(jwksStrategy);
-        logger.debug('[JwtVerifierFactory] Added JWKS strategy for cloud');
-      } catch (error) {
-        logger.warn('[JwtVerifierFactory] Failed to create JWKS strategy:', {
-          error: error.message,
-        });
-      }
-    }
-
-    // Strategy 3: Symmetric key (legacy, discouraged)
-    if (jwtSecret) {
-      const symmetricStrategy = new SymmetricVerifierStrategy({
-        secret: jwtSecret,
-        allowedAlgorithms: ['HS256', 'HS384', 'HS512'],
-      });
-      strategies.push(symmetricStrategy);
-      logger.warn(
-        '[JwtVerifierFactory] Using symmetric key verification - consider migrating to asymmetric keys',
-      );
-    }
+    addCloudStrategies(strategies, { supabaseUrl, jwtSecret, supabaseClient });
   }
 
-  if (strategies.length === 0) {
-    throw new Error(
-      'No JWT verification strategies available. ' +
-        'Configure SUPABASE_JWT_SECRET or ensure Supabase client is available.',
-    );
-  }
-
+  assertStrategiesAvailable(strategies);
   return new JwtVerificationService({ strategies });
 }
 

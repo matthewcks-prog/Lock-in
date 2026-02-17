@@ -2,6 +2,13 @@
 
 const { supabase } = require('../db/supabaseClient');
 
+const DEFAULT_EDITOR_VERSION = 'lexical_v1';
+const DEFAULT_LIST_LIMIT = 50;
+const DEFAULT_MATCH_COUNT = 10;
+const STATUS_NOT_FOUND = 404;
+const SUPABASE_NO_ROWS_CODE = 'PGRST116';
+const SUPABASE_UNIQUE_VIOLATION_CODE = '23505';
+
 /**
  * Repository for notes CRUD operations.
  *
@@ -23,28 +30,42 @@ class ConflictError extends Error {
   }
 }
 
-async function createNote({
-  userId,
-  clientNoteId,
-  title,
-  contentJson,
-  editorVersion,
-  contentPlain,
-  legacyContent,
-  sourceSelection,
-  sourceUrl,
-  courseCode,
-  noteType,
-  tags,
-  embedding,
-}) {
-  const insertData = {
+function createNotFoundError(message = 'Note not found') {
+  const error = new Error(message);
+  error.status = STATUS_NOT_FOUND;
+  return error;
+}
+
+function isNoRowsFoundError(error) {
+  return error?.code === SUPABASE_NO_ROWS_CODE;
+}
+
+function buildContentPayload({ contentJson, editorVersion, contentPlain, legacyContent }) {
+  return {
+    content_json: contentJson || {},
+    editor_version: editorVersion || DEFAULT_EDITOR_VERSION,
+    content_plain: contentPlain || legacyContent || null,
+  };
+}
+
+function buildCreateInsertData(params) {
+  const {
+    userId,
+    clientNoteId,
+    title,
+    sourceSelection,
+    sourceUrl,
+    courseCode,
+    noteType,
+    tags,
+    embedding,
+  } = params;
+
+  return {
     ...(clientNoteId ? { id: clientNoteId } : {}),
     user_id: userId,
     title,
-    content_json: contentJson || {}, // Ensure we always provide content_json (defaults to {} in DB but safer to be explicit)
-    editor_version: editorVersion || 'lexical_v1',
-    content_plain: contentPlain || legacyContent || null, // Plain text content for search/display
+    ...buildContentPayload(params),
     source_selection: sourceSelection,
     source_url: sourceUrl,
     course_code: courseCode,
@@ -52,41 +73,83 @@ async function createNote({
     tags,
     embedding,
   };
-
-  const { data, error } = await supabase.from('notes').insert(insertData).select().single();
-
-  if (error) {
-    if (clientNoteId && error.code === '23505') {
-      const existing = await getNoteForUser({
-        userId,
-        noteId: clientNoteId,
-      });
-      if (existing) {
-        return updateNote({
-          userId,
-          noteId: clientNoteId,
-          title,
-          contentJson,
-          editorVersion,
-          contentPlain,
-          legacyContent,
-          sourceSelection,
-          sourceUrl,
-          courseCode,
-          noteType,
-          tags,
-          embedding,
-          ifUnmodifiedSince: null,
-        });
-      }
-    }
-    console.error('Error creating note:', error);
-    throw error;
-  }
-  return data;
 }
 
-async function listNotes({ userId, sourceUrl, courseCode, limit = 50 }) {
+function buildUpdateData(params) {
+  const { title, sourceSelection, sourceUrl, courseCode, noteType, tags, embedding } = params;
+
+  return {
+    title,
+    ...buildContentPayload(params),
+    source_selection: sourceSelection,
+    source_url: sourceUrl,
+    course_code: courseCode,
+    note_type: noteType,
+    tags,
+    embedding,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function fetchCurrentUpdatedAt(userId, noteId) {
+  const { data: currentNote, error } = await supabase
+    .from('notes')
+    .select('updated_at')
+    .eq('id', noteId)
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    if (isNoRowsFoundError(error)) {
+      throw createNotFoundError();
+    }
+    throw error;
+  }
+
+  return currentNote.updated_at;
+}
+
+async function handleDuplicateClientNote(params) {
+  const { clientNoteId, userId } = params;
+  if (!clientNoteId) {
+    return null;
+  }
+
+  const existing = await getNoteForUser({
+    userId,
+    noteId: clientNoteId,
+  });
+  if (!existing) {
+    return null;
+  }
+
+  return updateNote({
+    ...params,
+    noteId: clientNoteId,
+    ifUnmodifiedSince: null,
+  });
+}
+
+async function createNote(params) {
+  const insertData = buildCreateInsertData(params);
+  const { data, error } = await supabase.from('notes').insert(insertData).select().single();
+
+  if (!error) {
+    return data;
+  }
+
+  if (params.clientNoteId && error.code === SUPABASE_UNIQUE_VIOLATION_CODE) {
+    const duplicateResult = await handleDuplicateClientNote(params);
+    if (duplicateResult) {
+      return duplicateResult;
+    }
+  }
+
+  console.error('Error creating note:', error);
+  throw error;
+}
+
+async function listNotes({ userId, sourceUrl, courseCode, limit = DEFAULT_LIST_LIMIT }) {
   let query = supabase
     .from('notes')
     .select('*')
@@ -94,12 +157,30 @@ async function listNotes({ userId, sourceUrl, courseCode, limit = 50 }) {
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  if (sourceUrl) query = query.eq('source_url', sourceUrl);
-  if (courseCode) query = query.eq('course_code', courseCode);
+  if (sourceUrl) {
+    query = query.eq('source_url', sourceUrl);
+  }
+  if (courseCode) {
+    query = query.eq('course_code', courseCode);
+  }
 
   const { data, error } = await query;
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   return data;
+}
+
+async function resolveUpdateNoRows(userId, noteId, ifUnmodifiedSince) {
+  if (!ifUnmodifiedSince) {
+    throw createNotFoundError();
+  }
+
+  const currentUpdatedAt = await fetchCurrentUpdatedAt(userId, noteId);
+  throw new ConflictError(
+    'Note was modified by another session. Please refresh and try again.',
+    currentUpdatedAt,
+  );
 }
 
 /**
@@ -112,93 +193,49 @@ async function listNotes({ userId, sourceUrl, courseCode, limit = 50 }) {
  * @returns {Promise<Object>} Updated note
  * @throws {ConflictError} If note was modified since ifUnmodifiedSince
  */
-async function updateNote({
-  userId,
-  noteId,
-  title,
-  contentJson,
-  editorVersion,
-  contentPlain,
-  legacyContent,
-  sourceSelection,
-  sourceUrl,
-  courseCode,
-  noteType,
-  tags,
-  embedding,
-  ifUnmodifiedSince,
-}) {
-  const updateData = {
-    title,
-    content_json: contentJson || {}, // Ensure we always provide content_json
-    editor_version: editorVersion || 'lexical_v1',
-    content_plain: contentPlain || legacyContent || null, // Plain text content for search/display
-    source_selection: sourceSelection,
-    source_url: sourceUrl,
-    course_code: courseCode,
-    note_type: noteType,
-    tags,
-    embedding,
-    updated_at: new Date().toISOString(), // Explicitly set updated_at for optimistic locking
-  };
+async function updateNote(params) {
+  const { userId, noteId, ifUnmodifiedSince } = params;
+  const updateData = buildUpdateData(params);
 
   let query = supabase.from('notes').update(updateData).eq('id', noteId).eq('user_id', userId);
-
   if (ifUnmodifiedSince) {
     query = query.eq('updated_at', ifUnmodifiedSince);
   }
 
   const { data, error } = await query.select().single();
-
-  if (error) {
-    console.error('Error updating note:', error);
-    if (error.code === 'PGRST116') {
-      if (ifUnmodifiedSince) {
-        const { data: currentNote, error: fetchError } = await supabase
-          .from('notes')
-          .select('updated_at')
-          .eq('id', noteId)
-          .eq('user_id', userId)
-          .single();
-
-        if (fetchError) {
-          if (fetchError.code === 'PGRST116') {
-            const notFoundError = new Error('Note not found');
-            notFoundError.status = 404;
-            throw notFoundError;
-          }
-          throw fetchError;
-        }
-
-        throw new ConflictError(
-          'Note was modified by another session. Please refresh and try again.',
-          currentNote.updated_at,
-        );
-      }
-
-      const notFoundError = new Error('Note not found');
-      notFoundError.status = 404;
-      throw notFoundError;
-    }
-    throw error;
+  if (!error) {
+    return data;
   }
-  return data;
+
+  console.error('Error updating note:', error);
+  if (isNoRowsFoundError(error)) {
+    await resolveUpdateNoRows(userId, noteId, ifUnmodifiedSince);
+  }
+
+  throw error;
 }
 
 async function deleteNote({ userId, noteId }) {
   const { error } = await supabase.from('notes').delete().eq('id', noteId).eq('user_id', userId);
-
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
 }
 
-async function searchNotesByEmbedding({ userId, queryEmbedding, matchCount = 10 }) {
+async function searchNotesByEmbedding({
+  userId,
+  queryEmbedding,
+  matchCount = DEFAULT_MATCH_COUNT,
+}) {
   const { data, error } = await supabase.rpc('match_notes', {
     query_embedding: queryEmbedding,
     match_count: matchCount,
     in_user_id: userId,
   });
 
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   return data;
 }
 
@@ -211,58 +248,16 @@ async function getNoteForUser({ userId, noteId }) {
     .single();
 
   if (error) {
-    // PGRST116 = no rows found
-    if (error.code === 'PGRST116') return null;
-    throw error;
-  }
-  return data;
-}
-
-/**
- * Toggle the starred status of a note.
- * Returns the updated note with the new is_starred value.
- */
-async function toggleStarred({ userId, noteId }) {
-  // First, get the current starred status
-  const { data: currentNote, error: fetchError } = await supabase
-    .from('notes')
-    .select('is_starred')
-    .eq('id', noteId)
-    .eq('user_id', userId)
-    .single();
-
-  if (fetchError) {
-    if (fetchError.code === 'PGRST116') {
-      const error = new Error('Note not found');
-      error.status = 404;
-      throw error;
+    if (isNoRowsFoundError(error)) {
+      return null;
     }
-    throw fetchError;
-  }
-
-  // Toggle the value
-  const newValue = !currentNote.is_starred;
-
-  const { data, error } = await supabase
-    .from('notes')
-    .update({ is_starred: newValue, updated_at: new Date().toISOString() })
-    .eq('id', noteId)
-    .eq('user_id', userId)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error toggling starred:', error);
     throw error;
   }
 
   return data;
 }
 
-/**
- * Set the starred status of a note to a specific value.
- */
-async function setStarred({ userId, noteId, isStarred }) {
+async function updateStarredValue({ userId, noteId, isStarred }) {
   const { data, error } = await supabase
     .from('notes')
     .update({ is_starred: isStarred, updated_at: new Date().toISOString() })
@@ -272,16 +267,56 @@ async function setStarred({ userId, noteId, isStarred }) {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      const notFoundError = new Error('Note not found');
-      notFoundError.status = 404;
-      throw notFoundError;
+    if (isNoRowsFoundError(error)) {
+      throw createNotFoundError();
     }
-    console.error('Error setting starred:', error);
     throw error;
   }
 
   return data;
+}
+
+/**
+ * Toggle the starred status of a note.
+ * Returns the updated note with the new is_starred value.
+ */
+async function toggleStarred({ userId, noteId }) {
+  const { data: currentNote, error: fetchError } = await supabase
+    .from('notes')
+    .select('is_starred')
+    .eq('id', noteId)
+    .eq('user_id', userId)
+    .single();
+
+  if (fetchError) {
+    if (isNoRowsFoundError(fetchError)) {
+      throw createNotFoundError();
+    }
+    throw fetchError;
+  }
+
+  const newValue = !currentNote.is_starred;
+  try {
+    return await updateStarredValue({ userId, noteId, isStarred: newValue });
+  } catch (error) {
+    console.error('Error toggling starred:', error);
+    throw error;
+  }
+}
+
+/**
+ * Set the starred status of a note to a specific value.
+ */
+async function setStarred({ userId, noteId, isStarred }) {
+  try {
+    return await updateStarredValue({ userId, noteId, isStarred });
+  } catch (error) {
+    if (error.status === STATUS_NOT_FOUND) {
+      throw error;
+    }
+    console.error('Error setting starred:', error);
+    throw error;
+  }
 }
 
 module.exports = {

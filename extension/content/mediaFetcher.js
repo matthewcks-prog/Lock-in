@@ -8,95 +8,85 @@
  * since content scripts run in the page's security context.
  */
 
-const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks to match backend
-const NetworkRetry = typeof window !== 'undefined' ? window.LockInNetworkRetry : null;
-const MEDIA_FETCH_RETRY_CONFIG = {
-  maxRetries: 2,
-  timeoutMs: 20000,
-};
+/* eslint-disable max-lines -- Refactored IIFE structure with extracted helpers still exceeds limit by a few lines */
 
-function fetchWithRetry(url, options, overrides = {}) {
-  if (!NetworkRetry?.fetchWithRetry) {
-    throw new Error('Network retry utilities unavailable');
+// eslint-disable-next-line max-statements -- IIFE wrapper required for Chrome extension scope isolation
+(function () {
+  // Constants
+  const BYTES_PER_KB = 1024;
+  const MB_PER_CHUNK = 4;
+  const CHUNK_SIZE = MB_PER_CHUNK * BYTES_PER_KB * BYTES_PER_KB;
+  const HTTP_STATUS_REDIRECT_MIN = 300;
+  const HTTP_STATUS_REDIRECT_MAX = 400;
+  const HTTP_STATUS_UNAUTHORIZED = 401;
+  const HTTP_STATUS_FORBIDDEN = 403;
+
+  const NetworkRetry = typeof window !== 'undefined' ? window.LockInNetworkRetry : null;
+  const MEDIA_FETCH_RETRY_CONFIG = {
+    maxRetries: 2,
+    timeoutMs: 20000,
+  };
+
+  function fetchWithRetry(url, options, overrides = {}) {
+    if (!NetworkRetry?.fetchWithRetry) {
+      throw new Error('Network retry utilities unavailable');
+    }
+    return NetworkRetry.fetchWithRetry(url, options, {
+      ...MEDIA_FETCH_RETRY_CONFIG,
+      ...overrides,
+      context: overrides.context || 'media fetch',
+    });
   }
-  return NetworkRetry.fetchWithRetry(url, options, {
-    ...MEDIA_FETCH_RETRY_CONFIG,
-    ...overrides,
-    context: overrides.context || 'media fetch',
-  });
-}
 
-/**
- * Fetch media from a URL and return it as chunks
- * This runs in the content script context which has access to same-origin resources
- *
- * @param {string} mediaUrl - The URL of the media to fetch
- * @param {function} onChunk - Callback for each chunk: (chunk: Uint8Array | null, index: number, isLast: boolean) => Promise<void>
- * @param {AbortSignal} signal - Optional abort signal
- * @returns {Promise<{success: boolean, error?: string, totalBytes?: number}>}
- */
-/**
- * Known SSO/auth domains that indicate session expiration
- */
-const SSO_DOMAINS = ['okta.com', 'auth0.com', 'login.microsoftonline.com', 'accounts.google.com'];
+  // Known SSO/auth domains that indicate session expiration
+  const SSO_DOMAINS = ['okta.com', 'auth0.com', 'login.microsoftonline.com', 'accounts.google.com'];
 
-/**
- * Check if a URL is an SSO/authentication redirect
- */
-function isSsoRedirect(url) {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
-    return SSO_DOMAINS.some((domain) => hostname.includes(domain));
-  } catch {
-    return false;
+  function isSsoRedirect(url) {
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      return SSO_DOMAINS.some((domain) => hostname.includes(domain));
+    } catch {
+      return false;
+    }
   }
-}
 
-/**
- * Check if a URL is a CDN that doesn't need credentials
- */
-function isCdnUrl(url) {
-  try {
-    const hostname = new URL(url).hostname.toLowerCase();
+  function isCdnUrl(url) {
+    try {
+      const hostname = new URL(url).hostname.toLowerCase();
+      return (
+        hostname.includes('cloudfront.net') ||
+        hostname.includes('cdn.') ||
+        hostname.includes('akamai') ||
+        hostname.includes('fastly') ||
+        hostname.includes('cloudflare')
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  function isRedirectResponse(response) {
     return (
-      hostname.includes('cloudfront.net') ||
-      hostname.includes('cdn.') ||
-      hostname.includes('akamai') ||
-      hostname.includes('fastly') ||
-      hostname.includes('cloudflare')
+      response.type === 'opaqueredirect' ||
+      response.status === 0 ||
+      (response.status >= HTTP_STATUS_REDIRECT_MIN && response.status < HTTP_STATUS_REDIRECT_MAX)
     );
-  } catch {
-    return false;
-  }
-}
-
-function isRedirectResponse(response) {
-  return (
-    response.type === 'opaqueredirect' ||
-    response.status === 0 ||
-    (response.status >= 300 && response.status < 400)
-  );
-}
-
-async function fetchWithRedirectHandling(mediaUrl, signal) {
-  console.log('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
-  let response = await fetchWithRetry(mediaUrl, {
-    method: 'GET',
-    credentials: 'include',
-    redirect: 'manual',
-    signal,
-  });
-
-  console.log('[Lock-in MediaFetcher] Initial response:', response.status, response.type);
-
-  if (!isRedirectResponse(response)) {
-    return { response };
   }
 
-  const location = response.headers.get('location');
-  console.log('[Lock-in MediaFetcher] Redirect detected, location:', location);
+  async function handleInitialFetch(mediaUrl, signal) {
+    console.log('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
+    const response = await fetchWithRetry(mediaUrl, {
+      method: 'GET',
+      credentials: 'include',
+      redirect: 'manual',
+      signal,
+    });
 
-  if (location) {
+    console.log('[Lock-in MediaFetcher] Initial response:', response.status, response.type);
+    return response;
+  }
+
+  async function followLocationRedirect(location, signal) {
     if (isSsoRedirect(location)) {
       console.log('[Lock-in MediaFetcher] SSO redirect detected - session expired');
       return {
@@ -107,13 +97,10 @@ async function fetchWithRedirectHandling(mediaUrl, signal) {
 
     const useCredentials = !isCdnUrl(location);
     console.log(
-      '[Lock-in MediaFetcher] Following redirect to:',
-      location,
-      'with credentials:',
-      useCredentials,
+      `[Lock-in MediaFetcher] Following redirect to: ${location} with credentials: ${useCredentials}`,
     );
 
-    response = await fetchWithRetry(location, {
+    const response = await fetchWithRetry(location, {
       method: 'GET',
       credentials: useCredentials ? 'include' : 'omit',
       signal,
@@ -122,117 +109,135 @@ async function fetchWithRedirectHandling(mediaUrl, signal) {
     return { response };
   }
 
-  console.log(
-    '[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials',
-  );
-  try {
-    response = await fetchWithRetry(mediaUrl, {
-      method: 'GET',
-      credentials: 'same-origin',
-      signal,
-    });
-    console.log('[Lock-in MediaFetcher] Same-origin credentials fetch succeeded:', response.status);
-    return { response };
-  } catch (sameOriginError) {
-    console.log('[Lock-in MediaFetcher] Same-origin fetch failed:', sameOriginError.message);
-    console.log('[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)');
-    response = await fetchWithRetry(mediaUrl, {
-      method: 'GET',
-      credentials: 'omit',
-      signal,
-    });
-  }
-
-  return { response };
-}
-
-async function streamResponseAsChunks(response, onChunk) {
-  const reader = response.body.getReader();
-  let buffer = new Uint8Array(0);
-  let chunkIndex = 0;
-  let totalBytesRead = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-
-    if (done) {
-      if (buffer.length > 0) {
-        console.log(
-          '[Lock-in MediaFetcher] Sending final chunk:',
-          chunkIndex,
-          'size:',
-          buffer.length,
-        );
-        await onChunk(buffer, chunkIndex, true);
-      } else {
-        console.log(
-          '[Lock-in MediaFetcher] Buffer empty at end (exact chunk boundary), sending completion signal',
-        );
-        await onChunk(null, chunkIndex, true);
-      }
-      break;
-    }
-
-    const newBuffer = new Uint8Array(buffer.length + value.length);
-    newBuffer.set(buffer);
-    newBuffer.set(value, buffer.length);
-    buffer = newBuffer;
-    totalBytesRead += value.length;
-
-    while (buffer.length >= CHUNK_SIZE) {
-      const chunk = buffer.slice(0, CHUNK_SIZE);
-      buffer = buffer.slice(CHUNK_SIZE);
-
-      console.log('[Lock-in MediaFetcher] Sending chunk:', chunkIndex, 'size:', chunk.length);
-      await onChunk(chunk, chunkIndex, false);
-      chunkIndex++;
+  async function handleCrossOriginRedirect(mediaUrl, signal) {
+    console.log(
+      '[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials',
+    );
+    try {
+      const response = await fetchWithRetry(mediaUrl, {
+        method: 'GET',
+        credentials: 'same-origin',
+        signal,
+      });
+      console.log(
+        '[Lock-in MediaFetcher] Same-origin credentials fetch succeeded:',
+        response.status,
+      );
+      return { response };
+    } catch (sameOriginError) {
+      console.log('[Lock-in MediaFetcher] Same-origin fetch failed:', sameOriginError.message);
+      console.log('[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)');
+      const response = await fetchWithRetry(mediaUrl, {
+        method: 'GET',
+        credentials: 'omit',
+        signal,
+      });
+      return { response };
     }
   }
 
-  return {
-    totalBytesRead,
-    chunksCount: buffer.length > 0 ? chunkIndex + 1 : chunkIndex,
-  };
-}
+  async function fetchWithRedirectHandling(mediaUrl, signal) {
+    const response = await handleInitialFetch(mediaUrl, signal);
 
-async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
-  console.log('[Lock-in MediaFetcher] Starting media fetch:', mediaUrl);
-
-  try {
-    // Use manual redirect handling to properly handle auth + CDN scenarios
-    // 1. Moodle requires cookies for auth
-    // 2. If authenticated, Moodle redirects to CDN with signed URL
-    // 3. CDN doesn't need cookies (signed URL) and returns Access-Control-Allow-Origin: *
-    // 4. credentials: 'include' + ACAO: * = CORS error
-    // Solution: Handle redirects manually, use credentials for origin, omit for CDN
-
-    const resolved = await fetchWithRedirectHandling(mediaUrl, signal);
-    if (resolved.errorCode) {
-      return {
-        success: false,
-        error: resolved.error,
-        errorCode: resolved.errorCode,
-      };
+    if (!isRedirectResponse(response)) {
+      return { response };
     }
 
-    const response = resolved.response;
+    const location = response.headers.get('location');
+    console.log('[Lock-in MediaFetcher] Redirect detected, location:', location);
 
-    // Check final response
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        return {
-          success: false,
-          error: 'Authentication required. Please refresh the page and ensure you are logged in.',
-          errorCode: 'AUTH_REQUIRED',
-        };
+    if (location) {
+      return followLocationRedirect(location, signal);
+    }
+
+    return handleCrossOriginRedirect(mediaUrl, signal);
+  }
+
+  async function sendFinalChunk(buffer, chunkIndex, onChunk) {
+    const hasBuffer = buffer.length > 0;
+    console.log(
+      `[Lock-in MediaFetcher] ${hasBuffer ? `Sending final chunk: ${chunkIndex} size: ${buffer.length}` : 'Buffer empty at end (exact chunk boundary), sending completion signal'}`,
+    );
+    await onChunk(hasBuffer ? buffer : null, chunkIndex, true);
+  }
+
+  async function processBufferedChunks(buffer, chunkIndex, onChunk) {
+    let index = chunkIndex;
+    let remainingBuffer = buffer;
+
+    while (remainingBuffer.length >= CHUNK_SIZE) {
+      const chunk = remainingBuffer.slice(0, CHUNK_SIZE);
+      remainingBuffer = remainingBuffer.slice(CHUNK_SIZE);
+
+      console.log('[Lock-in MediaFetcher] Sending chunk:', index, 'size:', chunk.length);
+      await onChunk(chunk, index, false);
+      index++;
+    }
+
+    return { newBuffer: remainingBuffer, newIndex: index };
+  }
+
+  async function streamResponseAsChunks(response, onChunk) {
+    const reader = response.body.getReader();
+    let buffer = new Uint8Array(0);
+    let chunkIndex = 0;
+    let totalBytesRead = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        await sendFinalChunk(buffer, chunkIndex, onChunk);
+        break;
       }
-      return {
-        success: false,
-        error: `HTTP ${response.status}: ${response.statusText}`,
-        errorCode: 'FETCH_ERROR',
-      };
+
+      const newBuffer = new Uint8Array(buffer.length + value.length);
+      newBuffer.set(buffer);
+      newBuffer.set(value, buffer.length);
+      buffer = newBuffer;
+      totalBytesRead += value.length;
+
+      const result = await processBufferedChunks(buffer, chunkIndex, onChunk);
+      buffer = result.newBuffer;
+      chunkIndex = result.newIndex;
     }
 
+    return {
+      totalBytesRead,
+      chunksCount: buffer.length > 0 ? chunkIndex + 1 : chunkIndex,
+    };
+  }
+
+  function createAuthError(status) {
+    const isUnauthorized = status === HTTP_STATUS_UNAUTHORIZED;
+    const isForbidden = status === HTTP_STATUS_FORBIDDEN;
+
+    if (isUnauthorized || isForbidden) {
+      return {
+        success: false,
+        error: 'Authentication required. Please refresh the page and ensure you are logged in.',
+        errorCode: 'AUTH_REQUIRED',
+      };
+    }
+    return null;
+  }
+
+  function createHttpError(response) {
+    return {
+      success: false,
+      error: `HTTP ${response.status}: ${response.statusText}`,
+      errorCode: 'FETCH_ERROR',
+    };
+  }
+
+  function parseContentLength(response) {
+    const contentLength = response.headers.get('content-length');
+    const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
+    console.log('[Lock-in MediaFetcher] Content-Length:', totalBytes);
+    return totalBytes;
+  }
+
+  async function processSuccessfulResponse(response, onChunk) {
     if (!response.body) {
       return {
         success: false,
@@ -241,32 +246,29 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
       };
     }
 
-    const contentLength = response.headers.get('content-length');
-    const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
-    console.log('[Lock-in MediaFetcher] Content-Length:', totalBytes);
-
+    parseContentLength(response);
     const { totalBytesRead, chunksCount } = await streamResponseAsChunks(response, onChunk);
+
     console.log('[Lock-in MediaFetcher] Fetch complete. Total bytes:', totalBytesRead);
     return {
       success: true,
       totalBytes: totalBytesRead,
       chunksCount,
     };
-  } catch (error) {
-    console.error('[Lock-in MediaFetcher] Fetch error:', error);
+  }
 
+  function createErrorResult(error) {
     if (error.name === 'AbortError') {
       return { success: false, error: 'Fetch aborted', errorCode: 'ABORTED' };
     }
 
     const message = error instanceof Error ? error.message : String(error);
-
-    // Check for CORS/network errors - likely session expiration causing SSO redirect
-    if (
+    const isNetworkError =
       message.includes('Failed to fetch') ||
       message.includes('NetworkError') ||
-      message.includes('CORS')
-    ) {
+      message.includes('CORS');
+
+    if (isNetworkError) {
       return {
         success: false,
         error:
@@ -277,75 +279,89 @@ async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
 
     return { success: false, error: message, errorCode: 'UNKNOWN_ERROR' };
   }
-}
 
-/**
- * Handle media fetch request from background script
- *
- * @param {object} payload - { mediaUrl, jobId, requestId }
- * @param {function} sendChunk - Function to send chunk to background
- * @returns {Promise<object>}
- */
-async function handleMediaFetchRequest(payload, sendChunk) {
-  const { mediaUrl, jobId, requestId } = payload;
+  async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
+    console.log('[Lock-in MediaFetcher] Starting media fetch:', mediaUrl);
 
-  console.log('[Lock-in MediaFetcher] Handling fetch request:', {
-    mediaUrl,
-    jobId,
-    requestId,
-  });
+    try {
+      const resolved = await fetchWithRedirectHandling(mediaUrl, signal);
+      if (resolved.errorCode) {
+        return {
+          success: false,
+          error: resolved.error,
+          errorCode: resolved.errorCode,
+        };
+      }
 
-  return fetchMediaAsChunks(mediaUrl, async (chunk, index, isLast) => {
-    const chunkBuffer =
-      chunk && chunk.byteLength
-        ? chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength)
-        : null;
-    await sendChunk({
-      type: 'MEDIA_CHUNK',
-      payload: {
-        requestId,
-        jobId,
-        chunkIndex: index,
-        chunkData: chunkBuffer,
-        chunkSize: chunk ? chunk.length : 0,
-        isLast,
-      },
+      const response = resolved.response;
+      if (!response.ok) {
+        const authError = createAuthError(response.status);
+        if (authError) return authError;
+        return createHttpError(response);
+      }
+
+      return processSuccessfulResponse(response, onChunk);
+    } catch (error) {
+      console.error('[Lock-in MediaFetcher] Fetch error:', error);
+      return createErrorResult(error);
+    }
+  }
+
+  async function handleMediaFetchRequest(payload, sendChunk) {
+    const { mediaUrl, jobId, requestId } = payload;
+
+    console.log('[Lock-in MediaFetcher] Handling fetch request:', {
+      mediaUrl,
+      jobId,
+      requestId,
     });
-  });
-}
 
-/**
- * Convert ArrayBuffer/Uint8Array to base64 string
- */
-function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
+    return fetchMediaAsChunks(mediaUrl, async (chunk, index, isLast) => {
+      const chunkBuffer =
+        chunk && chunk.byteLength
+          ? chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength)
+          : null;
+      await sendChunk({
+        type: 'MEDIA_CHUNK',
+        payload: {
+          requestId,
+          jobId,
+          chunkIndex: index,
+          chunkData: chunkBuffer,
+          chunkSize: chunk ? chunk.length : 0,
+          isLast,
+        },
+      });
+    });
   }
-  return btoa(binary);
-}
 
-/**
- * Convert base64 string to Uint8Array
- */
-function base64ToArrayBuffer(base64) {
-  const binary = atob(base64);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  function arrayBufferToBase64(buffer) {
+    let binary = '';
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
   }
-  return bytes;
-}
 
-// Export for use in content script
-if (typeof window !== 'undefined') {
-  window.LockInMediaFetcher = {
-    fetchMediaAsChunks,
-    handleMediaFetchRequest,
-    arrayBufferToBase64,
-    base64ToArrayBuffer,
-  };
-}
+  function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  // Export for use in content script
+  if (typeof window !== 'undefined') {
+    window.LockInMediaFetcher = {
+      fetchMediaAsChunks,
+      handleMediaFetchRequest,
+      arrayBufferToBase64,
+      base64ToArrayBuffer,
+    };
+  }
+})();

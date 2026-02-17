@@ -1,22 +1,45 @@
 const { TimeoutError, AbortError } = require('../errors');
 
+const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
+const HTTP_STATUS_UNAUTHORIZED = 401;
+const HTTP_STATUS_FORBIDDEN = 403;
+const HTTP_STATUS_NOT_FOUND = 404;
+const HTTP_STATUS_SERVER_ERROR_MIN = 500;
+const RETRY_AFTER_HEADER = 'retry-after';
+const RETRY_JITTER_RATIO = 0.3;
+const REQUEST_ABORTED_MESSAGE = 'Request aborted';
+const REQUEST_FAILED_MESSAGE = 'Request failed';
+const REQUEST_FAILED_AFTER_RETRIES_MESSAGE = 'Request failed after retries';
+const TIMEOUT_ERROR_CODE = 'TIMEOUT';
+const ABORTED_ERROR_CODE = 'ABORTED';
+
 const DEFAULT_RETRY_CONFIG = {
   maxRetries: 3,
   baseDelayMs: 500,
   maxDelayMs: 5000,
   timeoutMs: 30000,
-  retryableStatuses: [429],
+  retryableStatuses: [HTTP_STATUS_TOO_MANY_REQUESTS],
   retryOnServerError: true,
   retryOnNetworkError: true,
   retryOnTimeout: true,
 };
 
 function normalizeConfig(overrides) {
-  if (!overrides) return { ...DEFAULT_RETRY_CONFIG };
+  if (!overrides) {
+    return { ...DEFAULT_RETRY_CONFIG };
+  }
   const retryableStatuses = Array.isArray(overrides.retryableStatuses)
     ? overrides.retryableStatuses
     : DEFAULT_RETRY_CONFIG.retryableStatuses;
   return { ...DEFAULT_RETRY_CONFIG, ...overrides, retryableStatuses };
+}
+
+function resolveFetcher(config) {
+  const fetcher = config.fetcher || global.fetch;
+  if (typeof fetcher !== 'function') {
+    throw new Error('Fetch implementation is required.');
+  }
+  return fetcher;
 }
 
 function sleep(ms) {
@@ -26,13 +49,15 @@ function sleep(ms) {
 function calculateRetryDelay(attempt, config) {
   const exponentialDelay = config.baseDelayMs * Math.pow(2, attempt);
   const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
-  const jitter = cappedDelay * (Math.random() * 0.3);
+  const jitter = cappedDelay * (Math.random() * RETRY_JITTER_RATIO);
   return Math.floor(cappedDelay + jitter);
 }
 
 function parseRetryAfterMs(response) {
-  const value = response.headers?.get?.('retry-after');
-  if (!value) return undefined;
+  const value = response.headers?.get?.(RETRY_AFTER_HEADER);
+  if (!value) {
+    return undefined;
+  }
 
   const seconds = Number(value);
   if (!Number.isNaN(seconds)) {
@@ -48,15 +73,24 @@ function parseRetryAfterMs(response) {
 }
 
 function isRetryableStatus(status, config) {
-  if (status === 0) return false;
-  if (status === 401 || status === 403 || status === 404) return false;
-  if (config.retryableStatuses.includes(status)) return true;
-  if (config.retryOnServerError && status >= 500) return true;
-  return false;
+  if (
+    status === HTTP_STATUS_UNAUTHORIZED ||
+    status === HTTP_STATUS_FORBIDDEN ||
+    status === HTTP_STATUS_NOT_FOUND
+  ) {
+    return false;
+  }
+  if (config.retryableStatuses.includes(status)) {
+    return true;
+  }
+  return config.retryOnServerError && status >= HTTP_STATUS_SERVER_ERROR_MIN;
 }
 
 function isNetworkError(error) {
-  if (!error) return false;
+  if (!error) {
+    return false;
+  }
+
   const message = error instanceof Error ? error.message : String(error);
   return (
     message.includes('Failed to fetch') ||
@@ -81,115 +115,186 @@ function isAbortError(error) {
   return (
     error instanceof Error &&
     (error.name === 'AbortError' ||
-      error.code === 'ABORTED' ||
+      error.code === ABORTED_ERROR_CODE ||
       error.code === 'ABORT_ERR' ||
       error.code === 'ERR_ABORTED')
   );
 }
 
 function shouldRetryError(error, config) {
-  if (!error) return false;
-  if (error.code === 'TIMEOUT') return config.retryOnTimeout;
-  if (error.code === 'ABORTED') return false;
-  if (isNetworkError(error)) return config.retryOnNetworkError;
-  return false;
+  if (!error) {
+    return false;
+  }
+  if (error.code === TIMEOUT_ERROR_CODE) {
+    return config.retryOnTimeout;
+  }
+  if (error.code === ABORTED_ERROR_CODE) {
+    return false;
+  }
+  return isNetworkError(error) && config.retryOnNetworkError;
+}
+
+function createAttemptController(optionsSignal, timeoutMs) {
+  let timeoutId;
+  let timedOut = false;
+  const controller = new AbortController();
+  const abortFromSignal = () => controller.abort();
+
+  if (optionsSignal) {
+    if (optionsSignal.aborted) {
+      controller.abort();
+    } else {
+      optionsSignal.addEventListener('abort', abortFromSignal, { once: true });
+    }
+  }
+
+  if (timeoutMs && timeoutMs > 0) {
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+  }
+
+  return {
+    signal: controller.signal,
+    isTimedOut: () => timedOut,
+    cleanup: () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      if (optionsSignal) {
+        optionsSignal.removeEventListener('abort', abortFromSignal);
+      }
+    },
+  };
+}
+
+function normalizeAttemptError(error, { timedOut, timeoutMs, context }) {
+  if (isAbortError(error) && timedOut) {
+    return createTimeoutError(timeoutMs, context);
+  }
+  if (isAbortError(error)) {
+    return new AbortError(REQUEST_ABORTED_MESSAGE);
+  }
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function createHttpStatusError(response) {
+  return new Error(`HTTP ${response.status}: ${response.statusText}`);
+}
+
+async function performAttempt({ url, options, config, fetcher }) {
+  const attemptController = createAttemptController(options.signal, config.timeoutMs);
+  let response = null;
+  let error = null;
+
+  try {
+    response = await fetcher(url, { ...options, signal: attemptController.signal });
+    if (response.ok || !isRetryableStatus(response.status, config)) {
+      return { response, error };
+    }
+    error = createHttpStatusError(response);
+  } catch (caughtError) {
+    error = normalizeAttemptError(caughtError, {
+      timedOut: attemptController.isTimedOut(),
+      timeoutMs: config.timeoutMs,
+      context: config.context,
+    });
+    if (options.signal?.aborted && !attemptController.isTimedOut()) {
+      throw error;
+    }
+  } finally {
+    attemptController.cleanup();
+  }
+
+  return { response, error };
+}
+
+function shouldRetryAttempt({ attempt, maxAttempts, response, error, config }) {
+  if (attempt >= maxAttempts - 1) {
+    return false;
+  }
+  if (response && isRetryableStatus(response.status, config)) {
+    return true;
+  }
+  return shouldRetryError(error, config);
+}
+
+function calculateDelayForAttempt(attempt, response, config) {
+  const retryAfterMs = response ? parseRetryAfterMs(response) : undefined;
+  if (typeof retryAfterMs === 'number') {
+    return retryAfterMs;
+  }
+  return calculateRetryDelay(attempt, config);
+}
+
+function notifyRetry(config, { attempt, delayMs, status, error }) {
+  if (typeof config.onRetry !== 'function') {
+    return;
+  }
+  config.onRetry({
+    attempt: attempt + 1,
+    maxRetries: config.maxRetries,
+    delayMs,
+    status,
+    error,
+  });
+}
+
+function finalizeFailure(response, error, fallbackMessage = REQUEST_FAILED_MESSAGE) {
+  if (response) {
+    return response;
+  }
+  throw error || new Error(fallbackMessage);
 }
 
 async function fetchWithRetry(url, options = {}, configOverrides = {}) {
   const config = normalizeConfig(configOverrides);
-  const fetcher = config.fetcher || global.fetch;
-  if (typeof fetcher !== 'function') {
-    throw new Error('Fetch implementation is required.');
-  }
-
+  const fetcher = resolveFetcher(config);
   const maxAttempts = Math.max(0, config.maxRetries) + 1;
   let lastError = null;
   let lastResponse = null;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (options.signal?.aborted) {
-      throw new AbortError('Request aborted');
+      throw new AbortError(REQUEST_ABORTED_MESSAGE);
     }
 
-    let timeoutId;
-    let timedOut = false;
-    const controller = new AbortController();
-    const abortFromSignal = () => controller.abort();
+    const attemptResult = await performAttempt({
+      url,
+      options,
+      config,
+      fetcher,
+    });
+    lastResponse = attemptResult.response;
+    lastError = attemptResult.error;
 
-    if (options.signal) {
-      if (options.signal.aborted) {
-        controller.abort();
-      } else {
-        options.signal.addEventListener('abort', abortFromSignal, { once: true });
-      }
+    if (lastResponse?.ok || (lastResponse && !isRetryableStatus(lastResponse.status, config))) {
+      return lastResponse;
     }
 
-    if (config.timeoutMs && config.timeoutMs > 0) {
-      timeoutId = setTimeout(() => {
-        timedOut = true;
-        controller.abort();
-      }, config.timeoutMs);
+    const shouldRetry = shouldRetryAttempt({
+      attempt,
+      maxAttempts,
+      response: lastResponse,
+      error: lastError,
+      config,
+    });
+    if (!shouldRetry) {
+      return finalizeFailure(lastResponse, lastError);
     }
 
-    try {
-      const response = await fetcher(url, { ...options, signal: controller.signal });
-      lastResponse = response;
-
-      if (response.ok || !isRetryableStatus(response.status, config)) {
-        return response;
-      }
-
-      lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-    } catch (error) {
-      if (isAbortError(error) && timedOut) {
-        lastError = createTimeoutError(config.timeoutMs, config.context);
-      } else if (isAbortError(error)) {
-        lastError = new AbortError('Request aborted');
-      } else {
-        lastError = error instanceof Error ? error : new Error(String(error));
-      }
-
-      if (options.signal?.aborted && !timedOut) {
-        throw lastError;
-      }
-    } finally {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (options.signal) {
-        options.signal.removeEventListener('abort', abortFromSignal);
-      }
-    }
-
-    const shouldRetry =
-      lastResponse && isRetryableStatus(lastResponse.status, config)
-        ? true
-        : shouldRetryError(lastError, config);
-
-    if (!shouldRetry || attempt >= maxAttempts - 1) {
-      if (lastResponse) {
-        return lastResponse;
-      }
-      throw lastError || new Error('Request failed');
-    }
-
-    const retryAfterMs = lastResponse ? parseRetryAfterMs(lastResponse) : undefined;
-    const delayMs =
-      typeof retryAfterMs === 'number' ? retryAfterMs : calculateRetryDelay(attempt, config);
-
-    if (typeof config.onRetry === 'function') {
-      config.onRetry({
-        attempt: attempt + 1,
-        maxRetries: config.maxRetries,
-        delayMs,
-        status: lastResponse?.status,
-        error: lastError,
-      });
-    }
-
+    const delayMs = calculateDelayForAttempt(attempt, lastResponse, config);
+    notifyRetry(config, {
+      attempt,
+      delayMs,
+      status: lastResponse?.status,
+      error: lastError,
+    });
     await sleep(delayMs);
   }
 
-  if (lastResponse) return lastResponse;
-  throw lastError || new Error('Request failed after retries');
+  return finalizeFailure(lastResponse, lastError, REQUEST_FAILED_AFTER_RETRIES_MESSAGE);
 }
 
 module.exports = {

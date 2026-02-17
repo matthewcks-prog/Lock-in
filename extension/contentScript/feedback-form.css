@@ -35,11 +35,6 @@
     cursor: pointer;
   }
 
-  #lockin-root .lockin-feedback-type-btn:hover:not(:disabled) {
-    background: var(--lockin-color-surface-subtle);
-    border-color: var(--lockin-color-border-strong);
-  }
-
   #lockin-root .lockin-feedback-type-btn.is-selected {
     background: var(--lockin-color-info-surface);
     border-color: var(--lockin-color-info);
@@ -48,6 +43,11 @@
   #lockin-root .lockin-feedback-type-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-feedback-type-btn:hover:not(:disabled) {
+    background: var(--lockin-color-surface-subtle);
+    border-color: var(--lockin-color-border-strong);
   }
 
   #lockin-root .lockin-feedback-type-label {

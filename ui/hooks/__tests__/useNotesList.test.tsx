@@ -10,18 +10,18 @@ import {
   renderWithProviders,
 } from '@shared/test';
 
-function NotesListHarness({ notesService }: { notesService: NotesService }) {
+function NotesListHarness({ notesService }: { notesService: NotesService }): JSX.Element {
   const { notes, error, toggleStar } = useNotesList({ notesService, limit: 50 });
 
   return (
     <div>
-      {error && <div role="alert">{error}</div>}
+      {error !== null && error.length > 0 && <div role="alert">{error}</div>}
       <ul aria-label="Notes list">
         {notes.map((note) => (
           <li key={note.id ?? ''}>
             <span>{note.title}</span>
             <span aria-label={`Star status for ${note.title}`}>
-              {note.isStarred ? 'starred' : 'unstarred'}
+              {note.isStarred === true ? 'starred' : 'unstarred'}
             </span>
             <button
               type="button"

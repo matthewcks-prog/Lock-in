@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Express application bootstrap for the Lock-in backend.
  *
  * This module wires middleware and routes together but does not start the
@@ -12,28 +12,19 @@ const assistantRoutes = require('./routes/assistantRoutes');
 const noteRoutes = require('./routes/noteRoutes');
 const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
-// const healthRoutes = require('./routes/healthRoutes'); // TODO: Fix and re-enable
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { setupSentryErrorHandler } = require('./observability/sentry');
 const { createRequestLogger, sentryRequestIdMiddleware } = require('./observability/requestLogger');
 const { createHealthRoutes } = require('./observability/healthCheck');
 const { supabase } = require('./db/supabaseClient');
 const config = require('./config');
+const {
+  getCircuitBreakerStatus,
+  resetCircuitBreaker,
+} = require('./controllers/health/circuitBreaker');
+const { requireSupabaseUser } = require('./middleware/authMiddleware');
 
-function createApp() {
-  const app = express();
-
-  // Note: Sentry is initialized in index.js before any imports
-  // Only the error handler setup is needed here (after routes are defined)
-
-  // Core middleware
-  app.use(express.json());
-
-  // Request ID and structured logging (must be early in middleware chain)
-  app.use(sentryRequestIdMiddleware);
-  app.use(createRequestLogger());
-
-  // CORS configuration – allow Chrome extensions and localhost by default.
+function configureCors(app) {
   app.use(
     cors({
       origin(origin, callback) {
@@ -47,8 +38,48 @@ function createApp() {
       credentials: true,
     }),
   );
+}
 
-  // Health check endpoints (before auth middleware)
+function registerHealthRoutes(app, healthRoutes) {
+  app.get('/health', healthRoutes.liveness);
+  app.get('/health/ready', healthRoutes.readiness);
+  app.get('/health/deep', healthRoutes.deep);
+}
+
+function registerCircuitBreakerRoutes(app) {
+  app.get('/health/circuit-breaker', getCircuitBreakerStatus);
+  app.post('/health/circuit-breaker/reset', requireSupabaseUser, resetCircuitBreaker);
+}
+
+function registerDebugSentryRoute(app) {
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/debug-sentry', (_req, _res, _next) => {
+      throw new Error('Sentry test error from Lock-in backend!');
+    });
+  }
+}
+
+function registerApiRoutes(app) {
+  app.use('/api', assistantRoutes);
+  app.use('/api', noteRoutes);
+  app.use('/api', transcriptsRoutes);
+  app.use('/api', feedbackRoutes);
+}
+
+function registerErrorHandlers(app) {
+  app.use(notFoundHandler);
+  setupSentryErrorHandler(app);
+  app.use(errorHandler);
+}
+
+function createApp() {
+  const app = express();
+
+  app.use(express.json());
+  app.use(sentryRequestIdMiddleware);
+  app.use(createRequestLogger());
+  configureCors(app);
+
   const healthRoutes = createHealthRoutes({
     supabase,
     config,
@@ -58,45 +89,11 @@ function createApp() {
     },
   });
 
-  app.get('/health', healthRoutes.liveness);
-  app.get('/health/ready', healthRoutes.readiness);
-  app.get('/health/deep', healthRoutes.deep);
-
-  // Circuit breaker status endpoint (public, no auth required for observability)
-  const {
-    getCircuitBreakerStatus,
-    resetCircuitBreaker,
-  } = require('./controllers/health/circuitBreaker');
-  const { requireSupabaseUser } = require('./middleware/authMiddleware');
-
-  app.get('/health/circuit-breaker', getCircuitBreakerStatus);
-  // Reset requires authentication (admin operation)
-  app.post('/health/circuit-breaker/reset', requireSupabaseUser, resetCircuitBreaker);
-
-  // Sentry test endpoint (only in development)
-  if (process.env.NODE_ENV !== 'production') {
-    app.get('/debug-sentry', (_req, _res, _next) => {
-      // This will throw an error that Sentry should capture
-      throw new Error('Sentry test error from Lock-in backend!');
-    });
-  }
-
-  // API routes
-  app.use('/api', assistantRoutes);
-  app.use('/api', noteRoutes);
-  app.use('/api', transcriptsRoutes);
-  app.use('/api', feedbackRoutes);
-  // app.use('/api/health/embeddings', healthRoutes); // TODO: Fix and re-enable
-
-  // 404 handler for unmatched routes
-  app.use(notFoundHandler);
-
-  // Sentry error handler (captures errors to Sentry before your handler)
-  // Must be after routes but before custom error handler
-  setupSentryErrorHandler(app);
-
-  // Centralized error handler middleware (must be last)
-  app.use(errorHandler);
+  registerHealthRoutes(app, healthRoutes);
+  registerCircuitBreakerRoutes(app);
+  registerDebugSentryRoute(app);
+  registerApiRoutes(app);
+  registerErrorHandlers(app);
 
   return app;
 }

@@ -14,23 +14,32 @@ export interface CardProps {
   isActive?: boolean;
 }
 
-export function Card({ children, className = '', onClick, isActive = false }: CardProps) {
+export function Card({
+  children,
+  className = '',
+  onClick,
+  isActive = false,
+}: CardProps): React.ReactElement {
+  const isInteractive = onClick !== undefined;
+
   return (
     <div
       className={`p-lockin-3 border rounded-lockin-lg bg-surface transition-colors duration-lockin-base ${
         isActive
           ? 'border-accent bg-accent-surface shadow-lockin-focus-accent'
           : 'border-line hover:border-line-strong'
-      } ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      } ${isInteractive ? 'cursor-pointer' : ''} ${className}`}
       onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
+      role={isInteractive ? 'button' : undefined}
+      tabIndex={isInteractive ? 0 : undefined}
       onKeyDown={
-        onClick
+        isInteractive
           ? (e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
-                onClick();
+                if (onClick !== undefined) {
+                  onClick();
+                }
               }
             }
           : undefined

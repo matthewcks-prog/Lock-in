@@ -21,6 +21,13 @@ const { chatAssetsService: defaultChatAssetsService } = require('./chatAssetsSer
 const { chatTitleService: defaultChatTitleService } = require('./chatTitleService');
 
 const defaultIdempotencyStore = createIdempotencyStore();
+const HTTP_STATUS_INTERNAL_SERVER_ERROR = 500;
+const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
+const HTTP_STATUS_NOT_FOUND = 404;
+const HTTP_STATUS_CONFLICT = 409;
+const COMPLETION_TEMPERATURE = 0.4;
+const COMPLETION_MAX_TOKENS = 1500;
+const COMPLETION_OPERATION = 'chat.completions.create';
 
 function createRequestError(status, message) {
   const error = new Error(message);
@@ -32,8 +39,8 @@ function createRequestError(status, message) {
   return error;
 }
 
-function createAssistantService(deps = {}) {
-  const services = {
+function createServices(deps = {}) {
+  return {
     logger: deps.logger ?? baseLogger,
     chatRepository: deps.chatRepository ?? chatRepository,
     llmClient: deps.llmClient ?? { createChatCompletion },
@@ -42,164 +49,204 @@ function createAssistantService(deps = {}) {
     chatTitleService: deps.chatTitleService ?? defaultChatTitleService,
     idempotencyStore: deps.idempotencyStore ?? defaultIdempotencyStore,
   };
+}
 
-  async function handleLockinRequest({ userId, payload, idempotencyKey } = {}) {
-    // Payload is ALREADY validated by Zod middleware - no duplicate validation needed
-    const {
-      selection,
-      chatHistory,
-      newUserMessage,
-      incomingChatId,
-      pageContext,
-      pageUrl,
-      courseCode,
-      language,
-      attachments,
-      effectiveMode,
-      trimmedSelection,
-      trimmedUserMessage,
-      userInputText,
-      initialTitle,
-      firstUserMessage,
-      initialTitleFromHistory,
-      regenerate,
-    } = buildRequestContext(payload);
+function ensureUserContext(userId) {
+  if (!userId) {
+    throw createRequestError(
+      HTTP_STATUS_INTERNAL_SERVER_ERROR,
+      'User context missing for authenticated request.',
+    );
+  }
+}
 
-    if (!userId) {
-      throw createRequestError(500, 'User context missing for authenticated request.');
-    }
+async function ensureDailyLimitAllowed(services, userId) {
+  const limitCheck = await services.rateLimitService.checkDailyLimit(userId, DAILY_REQUEST_LIMIT);
+  if (!limitCheck.allowed) {
+    throw createRequestError(HTTP_STATUS_TOO_MANY_REQUESTS, 'Daily limit reached');
+  }
+}
 
-    const limitCheck = await services.rateLimitService.checkDailyLimit(userId, DAILY_REQUEST_LIMIT);
+async function getOrCreateChatRecord(services, { userId, incomingChatId, initialTitle }) {
+  if (!incomingChatId) {
+    return services.chatRepository.createChat(userId, initialTitle);
+  }
+  const chatRecord = await services.chatRepository.getChatById(userId, incomingChatId);
+  if (!chatRecord) {
+    throw createRequestError(
+      HTTP_STATUS_NOT_FOUND,
+      'The requested chat does not exist for this user.',
+    );
+  }
+  return chatRecord;
+}
 
-    if (!limitCheck.allowed) {
-      throw createRequestError(429, 'Daily limit reached');
-    }
+async function resolveAttachmentsForRequest(services, { userId, attachments }) {
+  const attachmentResult = await services.chatAssetsService.resolveAttachmentsForMessage({
+    userId,
+    assetIds: attachments,
+  });
 
-    const runLockinFlow = async () => {
-      let chatRecord;
-      if (incomingChatId) {
-        chatRecord = await services.chatRepository.getChatById(userId, incomingChatId);
-        if (!chatRecord) {
-          throw createRequestError(404, 'The requested chat does not exist for this user.');
-        }
-      } else {
-        chatRecord = await services.chatRepository.createChat(userId, initialTitle);
-      }
+  if (attachmentResult.pendingAssetIds.length > 0) {
+    throw createRequestError(
+      HTTP_STATUS_CONFLICT,
+      'Attachments are still processing. Please try again in a moment.',
+    );
+  }
+  return attachmentResult;
+}
 
-      const chatId = chatRecord.id;
-
-      const { processedAttachments, linkedAssetIds, pendingAssetIds } =
-        await services.chatAssetsService.resolveAttachmentsForMessage({
-          userId,
-          assetIds: attachments,
-        });
-
-      if (pendingAssetIds.length > 0) {
-        throw createRequestError(
-          409,
-          'Attachments are still processing. Please try again in a moment.',
-        );
-      }
-
-      let userMessage;
-      if (!regenerate) {
-        userMessage = await services.chatRepository.insertChatMessage({
-          chat_id: chatId,
-          user_id: userId,
-          role: 'user',
-          mode: effectiveMode,
-          source: 'highlight',
-          input_text: userInputText,
-          output_text: null,
-        });
-      }
-
-      // Generate natural markdown response (industry standard - no forced JSON)
-      let responseContent;
-      try {
-        const { messages } = buildStructuredStudyMessages({
-          selection: trimmedSelection,
-          pageContext,
-          pageUrl,
-          courseCode,
-          language,
-          chatHistory,
-          newUserMessage: trimmedUserMessage || undefined,
-          attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
-        });
-
-        const finalMessages = clampHistory(messages);
-
-        const completion = await services.llmClient.createChatCompletion({
-          messages: finalMessages,
-          temperature: 0.4,
-          maxTokens: 1500,
-          // No responseFormat - returns natural markdown
-          operation: 'chat.completions.create',
-        });
-
-        responseContent = completion.choices[0]?.message?.content;
-        if (!responseContent) {
-          throw new Error('No response content from LLM');
-        }
-      } catch (error) {
-        services.logger.error({ err: error }, 'Error generating AI response');
-        throw createRequestError(
-          500,
-          error.message || 'Failed to generate study response. Please try again.',
-        );
-      }
-
-      if (!regenerate && linkedAssetIds.length > 0 && userMessage?.id) {
-        await services.chatAssetsService.linkAssetsToMessage(
-          linkedAssetIds,
-          userMessage.id,
-          userId,
-        );
-      }
-
-      await services.chatRepository.insertChatMessage({
-        chat_id: chatId,
-        user_id: userId,
-        role: 'assistant',
-        mode: effectiveMode,
-        source: 'highlight',
-        input_text: null,
-        output_text: responseContent,
-      });
-
-      await services.chatRepository.touchChat(chatId);
-
-      const existingTitle = typeof chatRecord.title === 'string' ? chatRecord.title.trim() : '';
-      if (shouldGenerateTitle(existingTitle, initialTitleFromHistory)) {
-        services.chatTitleService
-          .generateChatTitleAsync(userId, chatId, firstUserMessage || userInputText)
-          .catch((error) => {
-            services.logger.warn({ err: error }, 'Failed to auto-generate chat title');
-          });
-      }
-
-      // Return markdown content in consistent format
-      // For backwards compatibility, wrap in data object with content field
-      return {
-        success: true,
-        data: {
-          content: responseContent,
-        },
-        chatId,
-        chatTitle: existingTitle || initialTitle,
-      };
-    };
-
-    if (idempotencyKey) {
-      return services.idempotencyStore.run(idempotencyKey, userId, runLockinFlow);
-    }
-
-    return runLockinFlow();
+async function insertUserMessageIfNeeded(services, context, { userId, chatId }) {
+  if (context.regenerate) {
+    return null;
   }
 
+  return services.chatRepository.insertChatMessage({
+    chat_id: chatId,
+    user_id: userId,
+    role: 'user',
+    mode: context.effectiveMode,
+    source: 'highlight',
+    input_text: context.userInputText,
+    output_text: null,
+  });
+}
+
+function buildCompletionMessages(context, processedAttachments) {
+  const { messages } = buildStructuredStudyMessages({
+    selection: context.trimmedSelection,
+    pageContext: context.pageContext,
+    pageUrl: context.pageUrl,
+    courseCode: context.courseCode,
+    language: context.language,
+    chatHistory: context.chatHistory,
+    newUserMessage: context.trimmedUserMessage || undefined,
+    attachments: processedAttachments.length > 0 ? processedAttachments : undefined,
+  });
+  return clampHistory(messages);
+}
+
+async function generateResponseContent(services, context, processedAttachments) {
+  try {
+    const finalMessages = buildCompletionMessages(context, processedAttachments);
+    const completion = await services.llmClient.createChatCompletion({
+      messages: finalMessages,
+      temperature: COMPLETION_TEMPERATURE,
+      maxTokens: COMPLETION_MAX_TOKENS,
+      operation: COMPLETION_OPERATION,
+    });
+
+    const responseContent = completion.choices[0]?.message?.content;
+    if (!responseContent) {
+      throw new Error('No response content from LLM');
+    }
+    return responseContent;
+  } catch (error) {
+    services.logger.error({ err: error }, 'Error generating AI response');
+    throw createRequestError(
+      HTTP_STATUS_INTERNAL_SERVER_ERROR,
+      error.message || 'Failed to generate study response. Please try again.',
+    );
+  }
+}
+
+async function linkAssetsToUserMessage(services, { context, linkedAssetIds, userMessage, userId }) {
+  if (!context.regenerate && linkedAssetIds.length > 0 && userMessage?.id) {
+    await services.chatAssetsService.linkAssetsToMessage(linkedAssetIds, userMessage.id, userId);
+  }
+}
+
+async function saveAssistantMessage(services, { chatId, userId, effectiveMode, responseContent }) {
+  await services.chatRepository.insertChatMessage({
+    chat_id: chatId,
+    user_id: userId,
+    role: 'assistant',
+    mode: effectiveMode,
+    source: 'highlight',
+    input_text: null,
+    output_text: responseContent,
+  });
+}
+
+function createSuccessResponse({ responseContent, chatId, existingTitle, initialTitle }) {
   return {
-    handleLockinRequest,
+    success: true,
+    data: { content: responseContent },
+    chatId,
+    chatTitle: existingTitle || initialTitle,
+  };
+}
+
+function maybeGenerateChatTitle(services, { userId, chatId, context, existingTitle }) {
+  if (!shouldGenerateTitle(existingTitle, context.initialTitleFromHistory)) {
+    return;
+  }
+
+  services.chatTitleService
+    .generateChatTitleAsync(userId, chatId, context.firstUserMessage || context.userInputText)
+    .catch((error) => {
+      services.logger.warn({ err: error }, 'Failed to auto-generate chat title');
+    });
+}
+
+async function runLockinFlow(services, { userId, context }) {
+  const chatRecord = await getOrCreateChatRecord(services, {
+    userId,
+    incomingChatId: context.incomingChatId,
+    initialTitle: context.initialTitle,
+  });
+  const chatId = chatRecord.id;
+
+  const { processedAttachments, linkedAssetIds } = await resolveAttachmentsForRequest(services, {
+    userId,
+    attachments: context.attachments,
+  });
+
+  const userMessage = await insertUserMessageIfNeeded(services, context, { userId, chatId });
+  const responseContent = await generateResponseContent(services, context, processedAttachments);
+
+  await linkAssetsToUserMessage(services, {
+    context,
+    linkedAssetIds,
+    userMessage,
+    userId,
+  });
+  await saveAssistantMessage(services, {
+    chatId,
+    userId,
+    effectiveMode: context.effectiveMode,
+    responseContent,
+  });
+  await services.chatRepository.touchChat(chatId);
+
+  const existingTitle = typeof chatRecord.title === 'string' ? chatRecord.title.trim() : '';
+  maybeGenerateChatTitle(services, { userId, chatId, context, existingTitle });
+
+  return createSuccessResponse({
+    responseContent,
+    chatId,
+    existingTitle,
+    initialTitle: context.initialTitle,
+  });
+}
+
+async function handleLockinRequest(services, { userId, payload, idempotencyKey } = {}) {
+  const context = buildRequestContext(payload);
+  ensureUserContext(userId);
+  await ensureDailyLimitAllowed(services, userId);
+
+  const executeRequest = () => runLockinFlow(services, { userId, context });
+  if (idempotencyKey) {
+    return services.idempotencyStore.run(idempotencyKey, userId, executeRequest);
+  }
+  return executeRequest();
+}
+
+function createAssistantService(deps = {}) {
+  const services = createServices(deps);
+
+  return {
+    handleLockinRequest: (params) => handleLockinRequest(services, params),
   };
 }
 

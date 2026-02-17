@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import tseslint from '@typescript-eslint/eslint-plugin';
@@ -6,10 +7,15 @@ import importPlugin from 'eslint-plugin-import';
 import prettierConfig from 'eslint-config-prettier';
 
 const tsconfigRootDir = path.dirname(fileURLToPath(import.meta.url));
+const MAX_FUNCTION_COMPLEXITY = 15;
+const MAX_NESTING_DEPTH = 4;
+const MAX_NESTED_CALLBACKS = 3;
+const MAX_FUNCTION_PARAMS = 4;
+const MAX_FUNCTION_STATEMENTS = 20;
 
 const qualityRules = {
   'max-lines': [
-    'warn',
+    'error',
     {
       max: 300,
       skipBlankLines: true,
@@ -17,31 +23,31 @@ const qualityRules = {
     },
   ],
   'max-lines-per-function': [
-    'warn',
+    'error',
     {
       max: 50,
       skipBlankLines: true,
       skipComments: true,
     },
   ],
-  complexity: ['warn', 15],
-  'max-depth': ['warn', 4],
-  'max-nested-callbacks': ['warn', 3],
-  'max-params': ['warn', 4],
-  'max-statements': ['warn', 20],
+  complexity: ['error', MAX_FUNCTION_COMPLEXITY],
+  'max-depth': ['error', MAX_NESTING_DEPTH],
+  'max-nested-callbacks': ['error', MAX_NESTED_CALLBACKS],
+  'max-params': ['error', MAX_FUNCTION_PARAMS],
+  'max-statements': ['error', MAX_FUNCTION_STATEMENTS],
   'no-magic-numbers': [
-    'warn',
+    'error',
     {
       ignore: [0, 1, -1, 2, 100, 1000],
       ignoreArrayIndexes: true,
       enforceConst: true,
     },
   ],
-  'prefer-const': 'warn',
-  'no-var': 'warn',
-  eqeqeq: ['warn', 'always'],
-  curly: ['warn', 'all'],
-  'no-else-return': 'warn',
+  'prefer-const': 'error',
+  'no-var': 'error',
+  eqeqeq: ['error', 'always'],
+  curly: ['error', 'all'],
+  'no-else-return': 'error',
   'no-lonely-if': 'warn',
   'no-unneeded-ternary': 'warn',
   'no-eval': 'warn',
@@ -191,14 +197,14 @@ export default [
       '@typescript-eslint/promise-function-async': 'error',
       '@typescript-eslint/await-thenable': 'error',
       '@typescript-eslint/explicit-function-return-type': [
-        'warn',
+        'error',
         {
           allowExpressions: true,
           allowTypedFunctionExpressions: true,
         },
       ],
       '@typescript-eslint/strict-boolean-expressions': [
-        'warn',
+        'error',
         {
           allowString: false,
           allowNumber: false,
@@ -266,23 +272,6 @@ export default [
           ],
         },
       ],
-    },
-  },
-  {
-    files: ['**/*.{ts,tsx}'],
-    ignores: ['core/**/*.{ts,tsx}'],
-    rules: {
-      '@typescript-eslint/no-unsafe-assignment': 'warn',
-      '@typescript-eslint/no-unsafe-call': 'warn',
-      '@typescript-eslint/no-unsafe-member-access': 'warn',
-      '@typescript-eslint/no-unsafe-return': 'warn',
-      '@typescript-eslint/no-unsafe-argument': 'warn',
-      '@typescript-eslint/no-floating-promises': 'warn',
-      '@typescript-eslint/no-misused-promises': 'warn',
-      '@typescript-eslint/promise-function-async': 'warn',
-      '@typescript-eslint/consistent-type-imports': 'warn',
-      '@typescript-eslint/consistent-type-exports': 'warn',
-      '@typescript-eslint/switch-exhaustiveness-check': 'warn',
     },
   },
   // - /api must remain Chrome-free and extension-independent (ERROR)
@@ -570,6 +559,9 @@ export default [
     rules: {
       'max-lines': 'off',
       complexity: 'off',
+      'max-lines-per-function': 'off',
+      'max-nested-callbacks': 'off',
+      'no-magic-numbers': 'off',
     },
   },
   prettierConfig,

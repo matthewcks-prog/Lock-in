@@ -217,9 +217,8 @@ describe('GeminiAdapter Streaming', () => {
     });
 
     test('selects upgraded model for long input', async () => {
-      let requestBody;
       globalThis.fetch = mock.fn(async (url, options) => {
-        requestBody = JSON.parse(options.body);
+        JSON.parse(options.body);
         return createMockResponse([
           { candidates: [{ content: { parts: [{ text: 'Response' }] } }] },
         ]);

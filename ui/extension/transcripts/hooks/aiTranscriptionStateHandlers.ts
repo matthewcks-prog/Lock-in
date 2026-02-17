@@ -9,8 +9,10 @@ import {
 } from './types';
 import { buildConfirmMessage } from './aiTranscriptionHelpers';
 
-function createRequestId() {
-  return `ai-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const RANDOM_RADIX_HEX = 16;
+
+function createRequestId(): string {
+  return `ai-${Date.now()}-${Math.random().toString(RANDOM_RADIX_HEX).slice(2)}`;
 }
 
 export function startAiTranscriptionRequest(
@@ -51,12 +53,12 @@ export function handleAiTranscriptionSuccess({
   activeAiRequestIdRef: MutableRefObject<string | null>;
   onTranscriptReady?: (video: DetectedVideo, transcript: TranscriptResult) => void;
   onExtractionResult?: (videoId: string, result: TranscriptResponseData) => void;
-}) {
-  if (!response.transcript) return;
+}): void {
+  if (response.transcript === undefined) return;
   setState({
     status: 'completed',
     requestId,
-    jobId: response.jobId || null,
+    jobId: response.jobId ?? null,
     video: resolvedVideo,
     progressMessage: 'Transcript ready',
     progressPercent: 100,
@@ -80,15 +82,18 @@ export function handleAiTranscriptionFailure({
   response: AiTranscriptionResponse;
   setState: Dispatch<SetStateAction<AiTranscriptionState>>;
   activeAiRequestIdRef: MutableRefObject<string | null>;
-}) {
-  const errorMessage = response.error || 'AI transcription failed';
+}): void {
+  const errorMessage =
+    response.error !== undefined && response.error.length > 0
+      ? response.error
+      : 'AI transcription failed';
   const fallbackStatus = response.status === 'canceled' ? 'canceled' : 'failed';
   const nextStatus = mapStageToStatus(response.status, fallbackStatus);
 
   setState((prev) => ({
     status: nextStatus,
     requestId,
-    jobId: response.jobId || prev.jobId,
+    jobId: response.jobId ?? prev.jobId,
     video: resolvedVideo,
     progressMessage: null,
     progressPercent: null,
@@ -110,7 +115,7 @@ export function handleAiTranscriptionError({
   message: string;
   setState: Dispatch<SetStateAction<AiTranscriptionState>>;
   activeAiRequestIdRef: MutableRefObject<string | null>;
-}) {
+}): void {
   setState((prev) => ({
     status: 'failed',
     requestId,
@@ -126,7 +131,7 @@ export function handleAiTranscriptionError({
 export function cancelAiTranscriptionState(
   setState: Dispatch<SetStateAction<AiTranscriptionState>>,
   activeAiRequestIdRef: MutableRefObject<string | null>,
-) {
+): void {
   activeAiRequestIdRef.current = null;
   setState((prev) => ({
     ...prev,
@@ -140,7 +145,7 @@ export function cancelAiTranscriptionState(
 export function resetAiTranscriptionState(
   setState: Dispatch<SetStateAction<AiTranscriptionState>>,
   activeAiRequestIdRef: MutableRefObject<string | null>,
-) {
+): void {
   activeAiRequestIdRef.current = null;
   setState(INITIAL_AI_TRANSCRIPTION_STATE);
 }

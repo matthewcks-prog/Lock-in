@@ -27,9 +27,9 @@ export function filterNotes({
       matchesFilter = item.isStarred === true;
     }
 
-    const preview = item.previewText || item.content?.plainText || '';
+    const preview = item.previewText ?? item.content?.plainText ?? '';
     const matchesSearch =
-      !searchTerm ||
+      searchTerm.length === 0 ||
       item.title.toLowerCase().includes(searchTerm) ||
       preview.toLowerCase().includes(searchTerm);
 

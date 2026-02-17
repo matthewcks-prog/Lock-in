@@ -1,6 +1,7 @@
 (() => {
   const root = typeof globalThis !== 'undefined' ? globalThis : self;
   const registry = root.LockInBackground || (root.LockInBackground = {});
+  const DEFAULT_TOKEN_EXPIRY_BUFFER_MS = 60000;
 
   function createConfig(lockinConfig) {
     const configSource = lockinConfig || (root ? root.LOCKIN_CONFIG : null);
@@ -28,9 +29,9 @@
     }
 
     function getTokenExpiryBufferMs() {
-      const raw = getValue('TOKEN_EXPIRY_BUFFER_MS', 60000);
+      const raw = getValue('TOKEN_EXPIRY_BUFFER_MS', DEFAULT_TOKEN_EXPIRY_BUFFER_MS);
       const parsed = Number(raw);
-      return Number.isFinite(parsed) ? parsed : 60000;
+      return Number.isFinite(parsed) ? parsed : DEFAULT_TOKEN_EXPIRY_BUFFER_MS;
     }
 
     return {

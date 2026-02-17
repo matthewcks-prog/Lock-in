@@ -36,7 +36,7 @@ declare global {
 
 export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance {
   let container = document.getElementById('lockin-root');
-  if (!container) {
+  if (container === null) {
     container = document.createElement('div');
     container.id = 'lockin-root';
     document.body.appendChild(container);
@@ -45,8 +45,8 @@ export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance 
   let currentProps: LockInSidebarProps | null = { ...props };
   const root = createRoot(container);
 
-  const render = () => {
-    if (currentProps) {
+  const render = (): void => {
+    if (currentProps !== null) {
       root.render(<LockInSidebar {...currentProps} />);
     }
   };
@@ -61,7 +61,7 @@ export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance 
       currentProps = null;
     },
     updateProps: (newProps: Partial<LockInSidebarProps>) => {
-      if (currentProps) {
+      if (currentProps !== null) {
         currentProps = { ...currentProps, ...newProps };
         render();
       }

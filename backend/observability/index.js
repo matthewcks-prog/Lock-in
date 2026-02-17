@@ -15,6 +15,7 @@ const appInsights = process.env.APPLICATIONINSIGHTS_CONNECTION_STRING
   ? require('applicationinsights')
   : null;
 const { FIVE, THOUSAND } = require('../constants/numbers');
+const { createConsoleLogger } = require('./consoleLoggerFallback');
 
 const APP_INSIGHTS_FLUSH_TIMEOUT_MS = FIVE * THOUSAND;
 
@@ -250,29 +251,6 @@ function trackEvent(name, properties = {}, measurements = {}) {
  * Create the base pino logger instance.
  * Configures JSON output for production, pretty output for development.
  */
-const DEFAULT_PINO_LEVELS = {
-  fatal: 60,
-  error: 50,
-  warn: 40,
-  info: 30,
-  debug: 20,
-  trace: 10,
-};
-
-function createConsoleLogger() {
-  return {
-    level: LOG_LEVEL,
-    levels: { values: DEFAULT_PINO_LEVELS },
-    info: console.log.bind(console),
-    warn: console.warn.bind(console),
-    error: console.error.bind(console),
-    debug: console.debug.bind(console),
-    trace: console.debug.bind(console),
-    fatal: console.error.bind(console),
-    child: () => createConsoleLogger(),
-  };
-}
-
 const logger = pino
   ? pino({
       level: LOG_LEVEL,
@@ -299,7 +277,7 @@ const logger = pino
             options: { destination: 1 }, // stdout
           },
     })
-  : createConsoleLogger();
+  : createConsoleLogger(LOG_LEVEL);
 
 /**
  * Create a child logger with additional context (e.g., request ID, user ID).

@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Streaming Assistant Controller
  *
  * Handles SSE streaming endpoint for assistant chat completion.
- * Thin HTTP layer - delegates to streamingAssistantService.
+ * Thin HTTP layer that delegates to streamingAssistantService.
  *
  * @module controllers/assistant/stream
  */
@@ -12,83 +12,105 @@ const { createSSEWriter } = require('../../utils/sseWriter');
 const { streamingAssistantService } = require('../../services/assistant/streamingAssistantService');
 const HTTP_STATUS = require('../../constants/httpStatus');
 
-/**
- * Create the streaming controller with dependencies
- * @param {Object} [deps] - Injected dependencies (for testing)
- * @param {Object} [deps.streamingAssistantService] - Service for streaming chat
- * @param {Object} [deps.logger=console] - Logger instance
- * @returns {Object} - Controller methods
- */
+const RETRYABLE_STREAM_STATUSES = new Set([
+  HTTP_STATUS.SERVICE_UNAVAILABLE,
+  HTTP_STATUS.TOO_MANY_REQUESTS,
+]);
+
+function buildStreamRequestContext(req) {
+  return {
+    userId: req.user?.id,
+    payload: req.body,
+    idempotencyKey: req.headers['x-idempotency-key'] || null,
+    requestId: req.id || randomUUID(),
+  };
+}
+
+function createAbortState(req) {
+  const abortController = new AbortController();
+  const cleanup = () => {
+    abortController.abort();
+  };
+
+  req.on('close', cleanup);
+  req.on('aborted', cleanup);
+
+  return {
+    signal: abortController.signal,
+    teardown() {
+      req.off('close', cleanup);
+      req.off('aborted', cleanup);
+    },
+  };
+}
+
+function writePreStreamErrorResponse({ error, res, logger, requestId, userId }) {
+  const statusCode = error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+  logger.error('[StreamController] Pre-stream error:', {
+    error: error.message,
+    requestId,
+    userId,
+  });
+
+  res.status(statusCode).json({
+    success: false,
+    error: {
+      code: error.code || 'INTERNAL_ERROR',
+      message: error.message,
+    },
+  });
+}
+
+function writeStreamError({ error, res, sseWriter, logger, requestId, userId }) {
+  if (res.headersSent) {
+    const errorCode = error.code || 'STREAM_ERROR';
+    const retryable = RETRYABLE_STREAM_STATUSES.has(error.statusCode);
+    sseWriter.writeError(errorCode, error.message, retryable);
+    sseWriter.end();
+    return;
+  }
+
+  writePreStreamErrorResponse({
+    error,
+    res,
+    logger,
+    requestId,
+    userId,
+  });
+}
+
 function createStreamController(deps = {}) {
   const service = deps.streamingAssistantService ?? streamingAssistantService;
   const logger = deps.logger ?? console;
-  /**
-   * Handle streaming chat request via SSE
-   *
-   * @param {import('express').Request} req - Express request
-   * @param {import('express').Response} res - Express response
-   * @returns {Promise<void>}
-   */
+
   async function handleLockinStreamRequest(req, res) {
-    const userId = req.user?.id;
-    const payload = req.body;
-    const idempotencyKey = req.headers['x-idempotency-key'] || null;
-    const requestId = req.id || randomUUID();
-
-    // Create SSE writer and configure response
+    const context = buildStreamRequestContext(req);
     const sseWriter = createSSEWriter(res);
-
-    // Setup abort handling for client disconnect
-    const abortController = new AbortController();
-    const cleanup = () => {
-      abortController.abort();
-    };
-
-    req.on('close', cleanup);
-    req.on('aborted', cleanup);
+    const abortState = createAbortState(req);
 
     try {
-      // Delegate to streaming service - it yields SSE events
       await service.handleLockinStreamRequest({
-        userId,
-        payload,
-        idempotencyKey,
-        requestId,
-        signal: abortController.signal,
+        userId: context.userId,
+        payload: context.payload,
+        idempotencyKey: context.idempotencyKey,
+        requestId: context.requestId,
+        signal: abortState.signal,
         sseWriter,
       });
     } catch (error) {
-      // If headers already sent, try to write error event
-      if (res.headersSent) {
-        const errorCode = error.code || 'STREAM_ERROR';
-        const retryable = error.statusCode === 503 || error.statusCode === 429;
-
-        sseWriter.writeError(errorCode, error.message, retryable);
-        sseWriter.end();
-      } else {
-        // Headers not sent yet - can send regular HTTP error
-        const statusCode = error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
-        logger.error('[StreamController] Pre-stream error:', {
-          error: error.message,
-          requestId,
-          userId,
-        });
-
-        res.status(statusCode).json({
-          success: false,
-          error: {
-            code: error.code || 'INTERNAL_ERROR',
-            message: error.message,
-          },
-        });
-      }
+      writeStreamError({
+        error,
+        res,
+        sseWriter,
+        logger,
+        requestId: context.requestId,
+        userId: context.userId,
+      });
       return;
     } finally {
-      req.off('close', cleanup);
-      req.off('aborted', cleanup);
+      abortState.teardown();
     }
 
-    // Stream completed successfully - end the response
     if (!res.writableEnded) {
       sseWriter.end();
     }
@@ -99,7 +121,6 @@ function createStreamController(deps = {}) {
   };
 }
 
-// Default instance for route integration
 const defaultController = createStreamController();
 
 module.exports = {

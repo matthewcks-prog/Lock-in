@@ -19,6 +19,9 @@
  */
 
 const { logger } = require('../../observability');
+const CIRCUIT_OPEN_ERROR_NAME = 'CircuitOpenError';
+const SERVICE_UNAVAILABLE_CODE = 'SERVICE_UNAVAILABLE';
+const CIRCUIT_OPEN_MESSAGE_SNIPPET = 'circuit open';
 
 /**
  * @typedef {Object} VerificationResult
@@ -83,6 +86,111 @@ class JwtVerificationService {
     }
   }
 
+  _isStrategyAvailable(strategy) {
+    if (!strategy.isAvailable) {
+      return true;
+    }
+    return strategy.isAvailable();
+  }
+
+  _isCircuitBreakerError(errorLike) {
+    return (
+      errorLike?.name === CIRCUIT_OPEN_ERROR_NAME ||
+      errorLike?.code === SERVICE_UNAVAILABLE_CODE ||
+      (typeof errorLike?.message === 'string' &&
+        errorLike.message.includes(CIRCUIT_OPEN_MESSAGE_SNIPPET))
+    );
+  }
+
+  _pushError(errors, { strategy, error, isTransient }) {
+    errors.push({ strategy, error, isTransient });
+  }
+
+  _logUnavailableStrategy(strategy) {
+    logger.debug(`[JwtVerificationService] Strategy "${strategy.name}" not available, skipping`);
+  }
+
+  _logCircuitBreakerFallback(strategyName) {
+    logger.debug(
+      `[JwtVerificationService] Strategy "${strategyName}" circuit breaker open, trying fallback`,
+    );
+  }
+
+  _logStrategyThrow(strategyName, errorMessage, isCircuitError) {
+    logger.debug(`[JwtVerificationService] Strategy "${strategyName}" threw error:`, {
+      error: errorMessage,
+      isCircuitError,
+    });
+  }
+
+  _buildFailureResult(errors, hasCircuitBreakerError) {
+    const errorSummary = errors.map((entry) => `${entry.strategy}: ${entry.error}`).join('; ');
+    logger.warn('[JwtVerificationService] All strategies failed:', { errors });
+
+    return {
+      valid: false,
+      error: `Token verification failed: ${errorSummary}`,
+      isServiceUnavailable: hasCircuitBreakerError && errors.every((entry) => entry.isTransient),
+    };
+  }
+
+  _shouldStopAfterFailure(isCircuitBreakerError) {
+    return this._failFast && !isCircuitBreakerError;
+  }
+
+  _handleInvalidStrategyResult(strategy, result, state) {
+    const isCircuitError = Boolean(result.isCircuitBreakerError);
+    if (isCircuitError) {
+      state.hasCircuitBreakerError = true;
+      this._logCircuitBreakerFallback(strategy.name);
+    }
+
+    this._pushError(state.errors, {
+      strategy: strategy.name,
+      error: result.error || 'Verification failed',
+      isTransient: result.isTransient || false,
+    });
+
+    return this._shouldStopAfterFailure(isCircuitError);
+  }
+
+  _handleStrategyException(strategy, error, state) {
+    const isCircuitError = this._isCircuitBreakerError(error);
+    if (isCircuitError) {
+      state.hasCircuitBreakerError = true;
+      this._logCircuitBreakerFallback(strategy.name);
+    }
+
+    this._pushError(state.errors, {
+      strategy: strategy.name,
+      error: error.message,
+      isTransient: isCircuitError,
+    });
+
+    this._logStrategyThrow(strategy.name, error.message, isCircuitError);
+    return this._shouldStopAfterFailure(isCircuitError);
+  }
+
+  async _verifyWithStrategy(strategy, token, state) {
+    try {
+      const result = await strategy.verify(token);
+      if (result.valid) {
+        logger.debug(`[JwtVerificationService] Token verified by "${strategy.name}"`);
+        return {
+          stop: true,
+          success: {
+            ...result,
+            strategy: strategy.name,
+          },
+        };
+      }
+
+      return { stop: this._handleInvalidStrategyResult(strategy, result, state), success: null };
+    } catch (error) {
+      return { stop: this._handleStrategyException(strategy, error, state), success: null };
+    }
+  }
+
   /**
    * Verify a JWT token using available strategies
    *
@@ -105,92 +213,27 @@ class JwtVerificationService {
       };
     }
 
-    const errors = [];
-    let hasCircuitBreakerError = false;
+    const state = {
+      errors: [],
+      hasCircuitBreakerError: false,
+    };
 
     for (const strategy of this._strategies) {
-      // Check if strategy is available (e.g., has required config)
-      if (strategy.isAvailable && !strategy.isAvailable()) {
-        logger.debug(
-          `[JwtVerificationService] Strategy "${strategy.name}" not available, skipping`,
-        );
+      if (!this._isStrategyAvailable(strategy)) {
+        this._logUnavailableStrategy(strategy);
         continue;
       }
 
-      try {
-        const result = await strategy.verify(token);
-
-        if (result.valid) {
-          logger.debug(`[JwtVerificationService] Token verified by "${strategy.name}"`);
-          return {
-            ...result,
-            strategy: strategy.name,
-          };
-        }
-
-        // Track circuit breaker errors separately - always try fallback for these
-        if (result.isCircuitBreakerError) {
-          hasCircuitBreakerError = true;
-          logger.debug(
-            `[JwtVerificationService] Strategy "${strategy.name}" circuit breaker open, trying fallback`,
-          );
-        }
-
-        // Strategy returned invalid but no error
-        errors.push({
-          strategy: strategy.name,
-          error: result.error || 'Verification failed',
-          isTransient: result.isTransient || false,
-        });
-
-        // If failFast is enabled and NOT a circuit breaker error, don't try other strategies
-        // Circuit breaker errors should always allow fallback to ensure availability
-        if (this._failFast && !result.isCircuitBreakerError) {
-          break;
-        }
-      } catch (err) {
-        // Check if this is a circuit breaker error thrown as an exception
-        const isCircuitError =
-          err.name === 'CircuitOpenError' ||
-          err.code === 'SERVICE_UNAVAILABLE' ||
-          (err.message && err.message.includes('circuit open'));
-
-        if (isCircuitError) {
-          hasCircuitBreakerError = true;
-          logger.debug(
-            `[JwtVerificationService] Strategy "${strategy.name}" circuit breaker open, trying fallback`,
-          );
-        }
-
-        errors.push({
-          strategy: strategy.name,
-          error: err.message,
-          isTransient: isCircuitError,
-        });
-
-        logger.debug(`[JwtVerificationService] Strategy "${strategy.name}" threw error:`, {
-          error: err.message,
-          isCircuitError,
-        });
-
-        // If failFast is enabled and NOT a circuit breaker error, propagate the error
-        if (this._failFast && !isCircuitError) {
-          break;
-        }
+      const strategyOutcome = await this._verifyWithStrategy(strategy, token, state);
+      if (strategyOutcome.success) {
+        return strategyOutcome.success;
+      }
+      if (strategyOutcome.stop) {
+        break;
       }
     }
 
-    // All strategies failed
-    const errorSummary = errors.map((e) => `${e.strategy}: ${e.error}`).join('; ');
-    logger.warn('[JwtVerificationService] All strategies failed:', { errors });
-
-    return {
-      valid: false,
-      error: `Token verification failed: ${errorSummary}`,
-      // Signal that this failure was due to transient issues (circuit breaker)
-      // The auth middleware can use this to return 503 instead of 401
-      isServiceUnavailable: hasCircuitBreakerError && errors.every((e) => e.isTransient),
-    };
+    return this._buildFailureResult(state.errors, state.hasCircuitBreakerError);
   }
 
   /**

@@ -91,14 +91,14 @@
   /* === NOTES HEADER ACTIONS === */
   #lockin-root .lockin-notes-header-actions {
     display: flex;
+    flex-shrink: 0;
     align-items: center;
-    gap: var(--lockin-size-4);
-    margin-right: var(--lockin-size-8);
+    gap: var(--lockin-size-2);
   }
 
   #lockin-root .lockin-notes-header-actions .lockin-note-action-btn {
-    padding: var(--lockin-size-6) var(--lockin-size-8);
-    font-size: var(--lockin-text-lg);
+    padding: var(--lockin-size-4) var(--lockin-size-6);
+    font-size: var(--lockin-text-sm);
   }
 
   /* Spinner inside action buttons */

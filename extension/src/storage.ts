@@ -47,7 +47,7 @@ function sanitizeStorageValues(
   const sanitized: Record<string, unknown> = { ...values };
   Object.entries(values).forEach(([key, value]) => {
     const schema = schemaMap[key];
-    if (!schema) return;
+    if (schema === undefined) return;
     const parsed = schema.safeParse(value);
     if (parsed.success) {
       sanitized[key] = parsed.data;
@@ -68,7 +68,7 @@ function validateStorageWrite(
   const invalidKeys: string[] = [];
   Object.entries(data).forEach(([key, value]) => {
     const schema = schemaMap[key];
-    if (!schema) {
+    if (schema === undefined) {
       sanitized[key] = value;
       return;
     }
@@ -109,137 +109,88 @@ export interface Storage {
   ) => () => void;
 }
 
-/**
- * Create storage wrapper using chrome.storage.sync
- * (sync storage syncs across user's Chrome instances)
- */
+async function withChromeCallback<T>(executor: (done: (result: T) => void) => void): Promise<T> {
+  return await new Promise((resolve, reject) => {
+    try {
+      executor((result) => {
+        if (chrome.runtime.lastError !== null && chrome.runtime.lastError !== undefined) {
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
+        }
+        resolve(result);
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+async function getFromStorageArea<T = unknown>(
+  area: 'sync' | 'local',
+  keys: string | string[],
+  schemaMap: Record<string, z.ZodTypeAny>,
+  areaLabel: string,
+): Promise<Record<string, T>> {
+  const result = await withChromeCallback<Record<string, unknown>>((done) => {
+    chrome.storage[area].get(keys, (result) => done(result ?? {}));
+  });
+  return sanitizeStorageValues(result, schemaMap, areaLabel) as Record<string, T>;
+}
+
+async function setInStorageArea(
+  area: 'sync' | 'local',
+  data: Record<string, unknown>,
+  schemaMap: Record<string, z.ZodTypeAny>,
+  areaLabel: string,
+): Promise<void> {
+  const sanitized = validateStorageWrite(data, schemaMap, areaLabel);
+  return await withChromeCallback<void>((done) => {
+    chrome.storage[area].set(sanitized, () => done(undefined));
+  });
+}
+
+async function removeFromStorageArea(
+  area: 'sync' | 'local',
+  keys: string | string[],
+): Promise<void> {
+  return await withChromeCallback<void>((done) => {
+    chrome.storage[area].remove(keys, () => done(undefined));
+  });
+}
+
+function createStorageChangeListener(
+  callback: (changes: Record<string, StorageChange>, areaName: string) => void,
+) {
+  return (changes: { [key: string]: chrome.storage.StorageChange }, areaName: string): void => {
+    const normalizedChanges: Record<string, StorageChange> = {};
+    for (const key in changes) {
+      const change = changes[key];
+      if (change === undefined) continue;
+      normalizedChanges[key] = {
+        oldValue: change.oldValue,
+        newValue: change.newValue,
+      };
+    }
+    callback(normalizedChanges, areaName);
+  };
+}
+
 function createStorage(): Storage {
   return {
     STORAGE_KEYS,
-
-    async get<T = unknown>(keys: string | string[]): Promise<Record<string, T>> {
-      return new Promise((resolve, reject) => {
-        try {
-          chrome.storage.sync.get(keys, (result) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              const sanitized = sanitizeStorageValues(result || {}, SYNC_SCHEMA_MAP, 'sync');
-              resolve(sanitized as Record<string, T>);
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-    },
-
-    async set(data: Record<string, unknown>): Promise<void> {
-      return new Promise((resolve, reject) => {
-        try {
-          const sanitized = validateStorageWrite(data, SYNC_SCHEMA_MAP, 'sync');
-          chrome.storage.sync.set(sanitized, () => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve();
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-    },
-
-    async remove(keys: string | string[]): Promise<void> {
-      return new Promise((resolve, reject) => {
-        try {
-          chrome.storage.sync.remove(keys, () => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve();
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-    },
-
-    async getLocal<T = unknown>(keys: string | string[]): Promise<Record<string, T>> {
-      return new Promise((resolve, reject) => {
-        try {
-          chrome.storage.local.get(keys, (result) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              const sanitized = sanitizeStorageValues(result || {}, LOCAL_SCHEMA_MAP, 'local');
-              resolve(sanitized as Record<string, T>);
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-    },
-
-    async setLocal(key: string, value: unknown): Promise<void> {
-      return new Promise((resolve, reject) => {
-        try {
-          const sanitized = validateStorageWrite({ [key]: value }, LOCAL_SCHEMA_MAP, 'local');
-          chrome.storage.local.set(sanitized, () => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve();
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-    },
-
-    async removeLocal(keys: string | string[]): Promise<void> {
-      return new Promise((resolve, reject) => {
-        try {
-          chrome.storage.local.remove(keys, () => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve();
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-    },
-
-    onChanged(
-      callback: (changes: Record<string, StorageChange>, areaName: string) => void,
-    ): () => void {
-      const listener = (
-        changes: { [key: string]: chrome.storage.StorageChange },
-        areaName: string,
-      ) => {
-        // Convert Chrome's StorageChange format to our interface format
-        const normalizedChanges: Record<string, StorageChange> = {};
-        for (const key in changes) {
-          const change = changes[key];
-          if (!change) continue;
-          normalizedChanges[key] = {
-            oldValue: change.oldValue,
-            newValue: change.newValue,
-          };
-        }
-        callback(normalizedChanges, areaName);
-      };
-
+    get: async <T = unknown>(keys: string | string[]) =>
+      getFromStorageArea<T>('sync', keys, SYNC_SCHEMA_MAP, 'sync'),
+    set: async (data: Record<string, unknown>) =>
+      setInStorageArea('sync', data, SYNC_SCHEMA_MAP, 'sync'),
+    remove: async (keys: string | string[]) => removeFromStorageArea('sync', keys),
+    getLocal: async <T = unknown>(keys: string | string[]) =>
+      getFromStorageArea<T>('local', keys, LOCAL_SCHEMA_MAP, 'local'),
+    setLocal: async (key: string, value: unknown) =>
+      setInStorageArea('local', { [key]: value }, LOCAL_SCHEMA_MAP, 'local'),
+    removeLocal: async (keys: string | string[]) => removeFromStorageArea('local', keys),
+    onChanged: (callback: (changes: Record<string, StorageChange>, areaName: string) => void) => {
+      const listener = createStorageChangeListener(callback);
       chrome.storage.onChanged.addListener(listener);
-
-      // Return unsubscribe function
       return () => {
         chrome.storage.onChanged.removeListener(listener);
       };

@@ -5,10 +5,14 @@
  * Provides automatic caching, refetching, and loading states.
  */
 
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import type { ChatMessage, UseChatMessagesOptions } from '../types';
 import { isValidUUID, normalizeChatMessage } from '../types';
+
+const SECONDS_PER_MINUTE = 60;
+const MS_PER_SECOND = 1000;
+const MESSAGE_STALE_TIME_MINUTES = 5;
 
 /**
  * Normalizes API response to ChatMessage array.
@@ -26,40 +30,55 @@ export const chatMessagesKeys = {
   byId: (chatId: string | null) => ['chatMessages', chatId] as const,
 };
 
-/**
- * Hook for fetching chat messages with TanStack Query.
- *
- * Features:
- * - Automatic caching and deduplication
- * - Loading/error states managed by query
- * - Stale-while-revalidate pattern
- * - Suspense-ready if needed
- */
-export function useChatMessages(options: UseChatMessagesOptions) {
-  const { apiClient, chatId } = options;
-  const queryClient = useQueryClient();
+interface UseChatMessagesResult {
+  messages: ChatMessage[];
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  refetch: () => Promise<unknown>;
+  addMessage: (message: ChatMessage) => void;
+  updateMessage: (messageId: string, updates: Partial<ChatMessage>) => void;
+  setMessages: (targetChatId: string, messages: ChatMessage[]) => void;
+  clearMessages: (targetChatId?: string) => void;
+}
 
-  const query = useQuery({
+interface MessageCacheMutations {
+  addMessage: (message: ChatMessage) => void;
+  updateMessage: (messageId: string, updates: Partial<ChatMessage>) => void;
+  setMessages: (targetChatId: string, messages: ChatMessage[]) => void;
+  clearMessages: (targetChatId?: string) => void;
+}
+
+function useChatMessagesQuery(
+  apiClient: UseChatMessagesOptions['apiClient'],
+  chatId: UseChatMessagesOptions['chatId'],
+): UseQueryResult<ChatMessage[], Error> {
+  return useQuery<ChatMessage[], Error>({
     queryKey: chatMessagesKeys.byId(chatId),
     queryFn: async (): Promise<ChatMessage[]> => {
-      if (!chatId || !apiClient?.getChatMessages) {
+      if (chatId === null || chatId.length === 0 || apiClient?.getChatMessages === undefined) {
         return [];
       }
 
       const response = await apiClient.getChatMessages(chatId);
       return normalizeMessages(response);
     },
-    enabled: Boolean(chatId) && Boolean(apiClient?.getChatMessages) && isValidUUID(chatId),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled:
+      chatId !== null &&
+      chatId.length > 0 &&
+      apiClient?.getChatMessages !== undefined &&
+      isValidUUID(chatId),
+    staleTime: MESSAGE_STALE_TIME_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND,
   });
+}
 
-  /**
-   * Optimistically add a message to the cache.
-   * Used when sending a new message or receiving a response.
-   */
+function useMessageCacheMutations(
+  queryClient: ReturnType<typeof useQueryClient>,
+  chatId: string | null,
+): MessageCacheMutations {
   const addMessage = useCallback(
     (message: ChatMessage) => {
-      if (!chatId) return;
+      if (chatId === null || chatId.length === 0) return;
 
       queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), (old = []) => [
         ...old,
@@ -69,13 +88,9 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     [chatId, queryClient],
   );
 
-  /**
-   * Update a specific message in the cache.
-   * Used for updating pending messages after API response.
-   */
   const updateMessage = useCallback(
     (messageId: string, updates: Partial<ChatMessage>) => {
-      if (!chatId) return;
+      if (chatId === null || chatId.length === 0) return;
 
       queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), (old = []) =>
         old.map((msg) => (msg.id === messageId ? { ...msg, ...updates } : msg)),
@@ -84,10 +99,6 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     [chatId, queryClient],
   );
 
-  /**
-   * Set all messages for a chat.
-   * Used when starting a new chat or loading from history.
-   */
   const setMessages = useCallback(
     (targetChatId: string, messages: ChatMessage[]) => {
       queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(targetChatId), messages);
@@ -95,15 +106,36 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     [queryClient],
   );
 
-  /**
-   * Clear messages cache for a chat.
-   */
   const clearMessages = useCallback(
     (targetChatId?: string) => {
-      const key = targetChatId ? chatMessagesKeys.byId(targetChatId) : chatMessagesKeys.all;
+      const key =
+        targetChatId !== undefined && targetChatId.length > 0
+          ? chatMessagesKeys.byId(targetChatId)
+          : chatMessagesKeys.all;
       queryClient.removeQueries({ queryKey: key });
     },
     [queryClient],
+  );
+
+  return { addMessage, updateMessage, setMessages, clearMessages };
+}
+
+/**
+ * Hook for fetching chat messages with TanStack Query.
+ *
+ * Features:
+ * - Automatic caching and deduplication
+ * - Loading/error states managed by query
+ * - Stale-while-revalidate pattern
+ * - Suspense-ready if needed
+ */
+export function useChatMessages(options: UseChatMessagesOptions): UseChatMessagesResult {
+  const { apiClient, chatId } = options;
+  const queryClient = useQueryClient();
+  const query = useChatMessagesQuery(apiClient, chatId);
+  const { addMessage, updateMessage, setMessages, clearMessages } = useMessageCacheMutations(
+    queryClient,
+    chatId,
   );
 
   return {
