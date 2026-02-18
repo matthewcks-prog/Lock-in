@@ -30,7 +30,6 @@
     justify-content: flex-end;
   }
 
-  /* Touch fallback: always show a subtle kebab on touch-only devices */
   /* Action button */
   #lockin-root .lockin-msg-action-btn {
     display: inline-flex;
@@ -89,24 +88,7 @@
     border-top-color: var(--lockin-color-accent);
   }
 
-  /* ============================================================
-   USER MESSAGE BUBBLE
-
-   ARCHITECTURE: State-based styling pattern
-   - Base state: Right-aligned bubble with background and padding
-   - Edit state: Bubble styling moves from .lockin-msg-body to .lockin-msg-editor
-
-   RATIONALE:
-   1. MessageEditor renders inside .lockin-msg-body wrapper
-   2. Applying bubble styles to both creates nested container conflicts
-   3. Solution: Use --editing modifier to conditionally apply styles
-
-   BENEFITS:
-   - Seamless visual transition between view/edit modes
-   - No layout shift or reflow
-   - Maintains right-alignment in all states
-   - Testable: Each state is independently verifiable
-   ============================================================ */
+  /* === USER MESSAGE BUBBLE === */
   /* Right-align user message block with flex */
   #lockin-root .lockin-msg-block--user {
     display: flex;

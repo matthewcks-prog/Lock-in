@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act } from 'react';
 import type { SidebarInstance } from '../index';
 import type { LockInSidebarProps } from '../LockInSidebar';
 
@@ -47,10 +48,13 @@ describe('LockInUI global surface', () => {
 
     expect(createLockInSidebar).toBeDefined();
 
-    const instance = createLockInSidebar?.({
-      apiClient: null,
-      isOpen: false,
-      onToggle: vi.fn(),
+    let instance: SidebarInstance | undefined;
+    await act(async () => {
+      instance = createLockInSidebar?.({
+        apiClient: null,
+        isOpen: false,
+        onToggle: vi.fn(),
+      });
     });
 
     expect(instance).toBeDefined();
@@ -58,8 +62,13 @@ describe('LockInUI global surface', () => {
     expect(typeof instance?.updateProps).toBe('function');
     expect(instance?.root).toBeDefined();
 
-    expect(() => instance?.updateProps({ isOpen: true })).not.toThrow();
-    instance?.unmount();
+    await act(async () => {
+      instance?.updateProps({ isOpen: true });
+    });
+
+    await act(async () => {
+      instance?.unmount();
+    });
 
     expect(document.getElementById('lockin-root')).toBeNull();
   });

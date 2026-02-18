@@ -7,22 +7,18 @@
     background: var(--lockin-color-surface);
   }
 
-  /* Notes header: thin wrapper with no border.
-     In current-view the context-bar supplies the bottom border;
-     in all-notes view the body separates visually via its own padding/bg. */
+  /* Notes header wrapper. */
   #lockin-root .lockin-notes-header {
     display: flex;
     flex-direction: column;
     background: var(--lockin-color-surface);
   }
 
-  /* Tab-toolbar border removed inside notes header to prevent a double-line
-     between the toggle row and the context-bar / body content. */
+  /* Prevent a double separator between toolbar and context bar. */
   #lockin-root .lockin-notes-header > .lockin-tab-toolbar {
     border-bottom: none;
   }
 
-  /* Context bar: course info + action buttons, only visible in current view */
   #lockin-root .lockin-notes-context-bar {
     display: flex;
     align-items: center;
@@ -87,7 +83,7 @@
     align-items: center;
     gap: var(--lockin-size-2);
     box-sizing: border-box;
-    /* Same height as the hamburger button so toolbar rows match exactly */
+    /* Match the history toggle button height. */
     height: var(--lockin-size-28);
     padding: var(--lockin-size-2);
     background: var(--lockin-color-surface-muted);
@@ -124,7 +120,7 @@
     box-shadow: var(--lockin-shadow-08);
   }
 
-  /* Unified "+ New" button shared by both Chat and Notes */
+  /* Shared "+ New" button used by Chat and Notes. */
   #lockin-root .lockin-btn-new {
     display: inline-flex;
     flex-shrink: 0;
@@ -171,21 +167,6 @@
     opacity: 0.5;
     transform: none;
     cursor: not-allowed;
-  }
-
-  #lockin-root .lockin-btn-ghost {
-    padding: var(--lockin-size-8) var(--lockin-size-12);
-    font-size: var(--lockin-text-base);
-    color: var(--lockin-color-text-primary);
-    background: transparent;
-    border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-radius-lg);
-    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
-    cursor: pointer;
-  }
-
-  #lockin-root .lockin-btn-ghost:hover {
-    background: var(--lockin-color-surface-muted);
   }
 
   #lockin-root .lockin-notes-body {

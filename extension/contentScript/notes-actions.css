@@ -101,6 +101,21 @@
     font-size: var(--lockin-text-sm);
   }
 
+  #lockin-root .lockin-btn-ghost {
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    font-size: var(--lockin-text-base);
+    color: var(--lockin-color-text-primary);
+    background: transparent;
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-btn-ghost:hover {
+    background: var(--lockin-color-surface-muted);
+  }
+
   /* Spinner inside action buttons */
   #lockin-root .lockin-note-action-btn .lockin-inline-spinner {
     width: var(--lockin-size-14);

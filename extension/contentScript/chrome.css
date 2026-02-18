@@ -196,15 +196,7 @@
     background: var(--lockin-color-surface);
   }
 
-  /* Chat toolbar classes removed — both Chat and Notes now share
-     .lockin-tab-toolbar below */
-
-  /* ================================================================
-     SHARED TAB TOOLBAR
-     Identical 3-column grid used by both Chat and Notes sub-headers.
-     Guarantees the "+ New" button sits at the exact same (x, y)
-     regardless of which tab is active.
-     ================================================================ */
+  /* Shared toolbar layout used by Chat and Notes. */
   #lockin-root .lockin-tab-toolbar {
     display: grid;
     align-items: center;
@@ -237,11 +229,7 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    /*
-     * Match the notes toggle outer height so both toolbar rows
-     * resolve to the same intrinsic height without min-height hacks.
-     * Toggle = border(1)+pad(2)+btn(~22)+pad(2)+border(1) ≈ 28px.
-     */
+    /* Keep the same control height as the notes toggle button. */
     height: var(--lockin-size-28);
     padding: var(--lockin-size-6);
     color: var(--lockin-color-text-body);
