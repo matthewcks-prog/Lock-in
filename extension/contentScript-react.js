@@ -51,6 +51,7 @@ function resolveBootstrapHelpers() {
     createSidebarHost,
     createSessionManager,
     createInteractionController,
+    createFakeFullscreen,
   } = ContentHelpers;
   if (
     !resolveAdapterContext ||
@@ -68,6 +69,7 @@ function resolveBootstrapHelpers() {
     createSidebarHost,
     createSessionManager,
     createInteractionController,
+    createFakeFullscreen,
   };
 }
 
@@ -124,6 +126,22 @@ function bindInteractions(createInteractionController, stateStore) {
   }).bind();
 }
 
+async function restorePersistedSidebarWidth() {
+  const runtimeStorage = Runtime.storage;
+  if (!runtimeStorage || typeof runtimeStorage.getLocal !== 'function') {
+    return;
+  }
+  try {
+    const data = await runtimeStorage.getLocal('lockin_sidebar_width');
+    const width = data?.lockin_sidebar_width;
+    if (typeof width === 'number' && width > 0) {
+      document.documentElement.style.setProperty('--lockin-sidebar-width', `${width}px`);
+    }
+  } catch (error) {
+    Logger.warn('Failed to restore sidebar width from storage:', error);
+  }
+}
+
 async function renderSidebar({ apiClient, pageContext, stateStore, sidebarHost }) {
   const handleSidebarToggle = async () => {
     const snapshot = stateStore.getSnapshot();
@@ -137,6 +155,21 @@ async function renderSidebar({ apiClient, pageContext, stateStore, sidebarHost }
     onToggle: handleSidebarToggle,
     onClearPrefill: stateStore.clearPendingPrefill,
   });
+}
+
+function initFakeFullscreen(createFakeFullscreen, stateStore) {
+  if (typeof createFakeFullscreen !== 'function') {
+    return;
+  }
+  try {
+    const fakeFullscreen = createFakeFullscreen({ Logger, stateStore });
+    if (fakeFullscreen && typeof fakeFullscreen.init === 'function') {
+      fakeFullscreen.init();
+      Logger.debug('[Lock-in] Fake fullscreen initialized');
+    }
+  } catch (error) {
+    Logger.error('[Lock-in] Failed to initialize fake fullscreen:', error);
+  }
 }
 
 async function runBootstrapTask(helpers) {
@@ -154,10 +187,12 @@ async function runBootstrapTask(helpers) {
     origin: window.location.origin,
   });
   bindStateSync(stateStore, sidebarHost);
+  await restorePersistedSidebarWidth();
   await renderSidebar({ apiClient, pageContext, stateStore, sidebarHost });
   await sessionManager.getTabId();
   await sessionManager.restoreSession();
   bindInteractions(helpers.createInteractionController, stateStore);
+  initFakeFullscreen(helpers.createFakeFullscreen, stateStore);
   registerPrefillMessaging(stateStore);
   setupMediaFetchHandler();
   hasBootstrapped = true;

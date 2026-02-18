@@ -1,282 +1,215 @@
-/**
- * Tests for extension/content/fakeFullscreen.js
- *
- * The IIFE module registers on `window.LockInContent` on first import.
- */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-
-// ── Load the IIFE module ────────────────────────────────────────────────────
 window.LockInContent = window.LockInContent || {};
 await import('../fakeFullscreen.js');
 
 const { createFakeFullscreen } = window.LockInContent;
 
-// ── Test Suite ──────────────────────────────────────────────────────────────
+function restorePrototypeMethod(name, descriptor) {
+  if (descriptor) {
+    Object.defineProperty(Element.prototype, name, descriptor);
+    return;
+  }
+  delete Element.prototype[name];
+}
 
 describe('fakeFullscreen content script', () => {
-  let mockLogger;
-  let mockStateStore;
+  let fakeFullscreen;
+  let logger;
+  let stateStore;
+  let stateSubscriber;
+  let requestDescriptor;
+  let webkitDescriptor;
 
   beforeEach(() => {
-    mockLogger = {
+    requestDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, 'requestFullscreen');
+    webkitDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      'webkitRequestFullscreen',
+    );
+
+    logger = {
       debug: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
     };
-    mockStateStore = {
+
+    stateSubscriber = null;
+    stateStore = {
       getSnapshot: vi.fn().mockReturnValue({ isSidebarOpen: true }),
-      subscribe: vi.fn().mockReturnValue(() => {}),
+      subscribe: vi.fn((callback) => {
+        stateSubscriber = callback;
+        return vi.fn();
+      }),
     };
+
+    fakeFullscreen = createFakeFullscreen({ Logger: logger, stateStore });
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    if (fakeFullscreen) {
+      fakeFullscreen.destroy();
+      fakeFullscreen = null;
+    }
+
+    restorePrototypeMethod('requestFullscreen', requestDescriptor);
+    restorePrototypeMethod('webkitRequestFullscreen', webkitDescriptor);
+
     document.body.classList.remove('lockin-fake-fullscreen');
-    const toggle = document.getElementById('lockin-fake-fs-toggle');
-    if (toggle) toggle.remove();
-    document.querySelectorAll('.lockin-fake-fullscreen-video').forEach((el) => {
-      el.classList.remove('lockin-fake-fullscreen-video');
-    });
+    document.body.classList.remove('lockin-sidebar-open');
+
+    const toggleButton = document.getElementById('lockin-fake-fs-toggle');
+    if (toggleButton) {
+      toggleButton.remove();
+    }
+
+    document.body.innerHTML = '';
+
+    vi.restoreAllMocks();
   });
 
-  it('exports createFakeFullscreen on window.LockInContent', () => {
+  it('exports createFakeFullscreen', () => {
     expect(typeof createFakeFullscreen).toBe('function');
   });
 
-  describe('creation and lifecycle', () => {
-    it('creates an instance with expected API shape', () => {
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      expect(typeof fs.init).toBe('function');
-      expect(typeof fs.destroy).toBe('function');
-      expect(typeof fs.activate).toBe('function');
-      expect(typeof fs.deactivate).toBe('function');
-      expect(typeof fs.isActive).toBe('function');
+  it('intercepts video fullscreen requests and activates fake fullscreen', async () => {
+    const nativeRequest = vi.fn().mockResolvedValue('native-result');
+    Object.defineProperty(Element.prototype, 'requestFullscreen', {
+      configurable: true,
+      writable: true,
+      value: nativeRequest,
     });
 
-    it('starts inactive', () => {
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      expect(fs.isActive()).toBe(false);
-    });
+    const video = document.createElement('video');
+    document.body.appendChild(video);
 
-    it('init and destroy do not throw', () => {
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      expect(() => fs.init()).not.toThrow();
-      expect(() => fs.destroy()).not.toThrow();
-    });
+    fakeFullscreen.init();
+    const result = await video.requestFullscreen();
+
+    expect(result).toBeUndefined();
+    expect(fakeFullscreen.isActive()).toBe(true);
+    expect(nativeRequest).not.toHaveBeenCalled();
+    expect(video.classList.contains('lockin-fake-fullscreen-video')).toBe(true);
+    expect(document.body.classList.contains('lockin-fake-fullscreen')).toBe(true);
   });
 
-  describe('activate / deactivate', () => {
-    it('rejects activation with null element', () => {
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-      expect(fs.activate(null)).toBe(false);
-      expect(fs.isActive()).toBe(false);
-      fs.destroy();
+  it('passes non-video elements through native fullscreen', async () => {
+    const nativeRequest = vi.fn().mockResolvedValue('native-result');
+    Object.defineProperty(Element.prototype, 'requestFullscreen', {
+      configurable: true,
+      writable: true,
+      value: nativeRequest,
     });
 
-    it('activates with a video element', () => {
-      const video = document.createElement('video');
-      video.id = 'test-video';
-      document.body.appendChild(video);
+    const panel = document.createElement('div');
+    document.body.appendChild(panel);
 
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
+    fakeFullscreen.init();
+    const result = await panel.requestFullscreen();
 
-      const result = fs.activate(video);
-      expect(result).toBe(true);
-      expect(fs.isActive()).toBe(true);
-      expect(document.body.classList.contains('lockin-fake-fullscreen')).toBe(true);
-      expect(video.classList.contains('lockin-fake-fullscreen-video')).toBe(true);
-
-      fs.destroy();
-      video.remove();
-    });
-
-    it('activates with a non-video wrapper div', () => {
-      const wrapper = document.createElement('div');
-      wrapper.id = 'player-wrapper';
-      document.body.appendChild(wrapper);
-
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-
-      const result = fs.activate(wrapper);
-      expect(result).toBe(true);
-      expect(fs.isActive()).toBe(true);
-      expect(wrapper.classList.contains('lockin-fake-fullscreen-video')).toBe(true);
-
-      fs.destroy();
-      wrapper.remove();
-    });
-
-    it('deactivates and cleans up DOM', () => {
-      const video = document.createElement('video');
-      video.id = 'deact-video';
-      document.body.appendChild(video);
-
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-      fs.activate(video);
-      expect(fs.isActive()).toBe(true);
-
-      const result = fs.deactivate();
-      expect(result).toBe(true);
-      expect(fs.isActive()).toBe(false);
-      expect(document.body.classList.contains('lockin-fake-fullscreen')).toBe(false);
-      expect(video.classList.contains('lockin-fake-fullscreen-video')).toBe(false);
-
-      fs.destroy();
-      video.remove();
-    });
-
-    it('shows toggle button when activated', () => {
-      const video = document.createElement('video');
-      document.body.appendChild(video);
-
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-      fs.activate(video);
-
-      const btn = document.getElementById('lockin-fake-fs-toggle');
-      expect(btn).not.toBeNull();
-      expect(btn.classList.contains('lockin-fake-fs-toggle--visible')).toBe(true);
-
-      fs.destroy();
-      video.remove();
-    });
-
-    it('hides toggle button when deactivated', () => {
-      const video = document.createElement('video');
-      document.body.appendChild(video);
-
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-      fs.activate(video);
-      fs.deactivate();
-
-      const btn = document.getElementById('lockin-fake-fs-toggle');
-      if (btn) {
-        expect(btn.classList.contains('lockin-fake-fs-toggle--visible')).toBe(false);
-      }
-
-      fs.destroy();
-      video.remove();
-    });
+    expect(result).toBe('native-result');
+    expect(nativeRequest).toHaveBeenCalledTimes(1);
+    expect(fakeFullscreen.isActive()).toBe(false);
   });
 
-  describe('keyboard handling', () => {
-    it('deactivates on Escape key', () => {
-      const video = document.createElement('video');
-      document.body.appendChild(video);
+  it('exits fake fullscreen on Escape', () => {
+    const video = document.createElement('video');
+    document.body.appendChild(video);
 
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-      fs.activate(video);
-      expect(fs.isActive()).toBe(true);
+    fakeFullscreen.init();
+    fakeFullscreen.activate(video);
+    expect(fakeFullscreen.isActive()).toBe(true);
 
-      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true });
-      document.dispatchEvent(event);
-      expect(fs.isActive()).toBe(false);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
-      fs.destroy();
-      video.remove();
-    });
+    expect(fakeFullscreen.isActive()).toBe(false);
+    expect(document.body.classList.contains('lockin-fake-fullscreen')).toBe(false);
   });
 
-  describe('destroy', () => {
-    it('cleans up active state on destroy', () => {
-      const video = document.createElement('video');
-      document.body.appendChild(video);
+  it('intercepts native fullscreenchange for video-like elements', async () => {
+    const video = document.createElement('video');
+    document.body.appendChild(video);
 
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-      fs.activate(video);
-      expect(fs.isActive()).toBe(true);
-
-      fs.destroy();
-      expect(fs.isActive()).toBe(false);
-      expect(document.body.classList.contains('lockin-fake-fullscreen')).toBe(false);
-
-      video.remove();
+    const fullscreenDescriptor = Object.getOwnPropertyDescriptor(document, 'fullscreenElement');
+    let fullscreenElement = null;
+    Object.defineProperty(document, 'fullscreenElement', {
+      configurable: true,
+      get: () => fullscreenElement,
     });
-  });
 
-  describe('fullscreenchange interception', () => {
-    it('intercepts real fullscreen when sidebar is open', async () => {
-      const iframe = document.createElement('iframe');
-      document.body.appendChild(iframe);
+    const exitFullscreen = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      writable: true,
+      value: exitFullscreen,
+    });
 
-      // Mock the Fullscreen API on document
-      const origFSElement = Object.getOwnPropertyDescriptor(
-        Document.prototype,
-        'fullscreenElement',
-      );
-      let fakeFullscreenEl = null;
-      Object.defineProperty(document, 'fullscreenElement', {
-        get: () => fakeFullscreenEl,
-        configurable: true,
-      });
-      document.exitFullscreen = vi.fn().mockResolvedValue(undefined);
-
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
-
-      // Simulate native fullscreen being entered
-      fakeFullscreenEl = iframe;
+    try {
+      fakeFullscreen.init();
+      fullscreenElement = video;
       document.dispatchEvent(new Event('fullscreenchange'));
 
-      // Wait for the exitFullscreen promise to resolve
       await vi.waitFor(() => {
-        expect(fs.isActive()).toBe(true);
+        expect(fakeFullscreen.isActive()).toBe(true);
       });
 
-      expect(document.exitFullscreen).toHaveBeenCalled();
-      expect(iframe.classList.contains('lockin-fake-fullscreen-video')).toBe(true);
-
-      fs.destroy();
-      iframe.remove();
-      fakeFullscreenEl = null;
-
-      // Restore original property
-      if (origFSElement) {
-        Object.defineProperty(Document.prototype, 'fullscreenElement', origFSElement);
+      expect(exitFullscreen).toHaveBeenCalledTimes(1);
+      expect(video.classList.contains('lockin-fake-fullscreen-video')).toBe(true);
+    } finally {
+      if (fullscreenDescriptor) {
+        Object.defineProperty(document, 'fullscreenElement', fullscreenDescriptor);
       } else {
         delete document.fullscreenElement;
       }
+      delete document.exitFullscreen;
+    }
+  });
+
+  it('updates toggle visibility when sidebar state changes', () => {
+    const video = document.createElement('video');
+    document.body.appendChild(video);
+
+    fakeFullscreen.init();
+    fakeFullscreen.activate(video);
+
+    const toggleButton = document.getElementById('lockin-fake-fs-toggle');
+    expect(toggleButton).not.toBeNull();
+    expect(stateSubscriber).not.toBeNull();
+    expect(toggleButton.classList.contains('lockin-fake-fs-toggle--visible')).toBe(true);
+
+    stateSubscriber({ isSidebarOpen: false });
+    expect(toggleButton.classList.contains('lockin-fake-fs-toggle--visible')).toBe(false);
+
+    stateSubscriber({ isSidebarOpen: true });
+    expect(toggleButton.classList.contains('lockin-fake-fs-toggle--visible')).toBe(true);
+  });
+
+  it('restores fullscreen APIs when destroyed', () => {
+    const nativeRequest = vi.fn().mockResolvedValue(undefined);
+    const nativeWebkitRequest = vi.fn().mockResolvedValue(undefined);
+
+    Object.defineProperty(Element.prototype, 'requestFullscreen', {
+      configurable: true,
+      writable: true,
+      value: nativeRequest,
+    });
+    Object.defineProperty(Element.prototype, 'webkitRequestFullscreen', {
+      configurable: true,
+      writable: true,
+      value: nativeWebkitRequest,
     });
 
-    it('does not intercept when sidebar is closed', () => {
-      const div = document.createElement('div');
-      document.body.appendChild(div);
+    fakeFullscreen.init();
 
-      mockStateStore.getSnapshot.mockReturnValue({ isSidebarOpen: false });
+    const patchedRequest = Element.prototype.requestFullscreen;
+    const patchedWebkitRequest = Element.prototype.webkitRequestFullscreen;
 
-      const origFSElement = Object.getOwnPropertyDescriptor(
-        Document.prototype,
-        'fullscreenElement',
-      );
-      Object.defineProperty(document, 'fullscreenElement', {
-        get: () => div,
-        configurable: true,
-      });
-      document.exitFullscreen = vi.fn().mockResolvedValue(undefined);
+    expect(patchedRequest).not.toBe(nativeRequest);
+    expect(patchedWebkitRequest).not.toBe(nativeWebkitRequest);
 
-      const fs = createFakeFullscreen({ Logger: mockLogger, stateStore: mockStateStore });
-      fs.init();
+    fakeFullscreen.destroy();
 
-      document.dispatchEvent(new Event('fullscreenchange'));
-
-      expect(document.exitFullscreen).not.toHaveBeenCalled();
-      expect(fs.isActive()).toBe(false);
-
-      fs.destroy();
-      div.remove();
-      if (origFSElement) {
-        Object.defineProperty(Document.prototype, 'fullscreenElement', origFSElement);
-      } else {
-        delete document.fullscreenElement;
-      }
-    });
+    expect(Element.prototype.requestFullscreen).toBe(nativeRequest);
+    expect(Element.prototype.webkitRequestFullscreen).toBe(nativeWebkitRequest);
   });
 });

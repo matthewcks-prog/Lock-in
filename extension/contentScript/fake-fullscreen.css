@@ -1,0 +1,95 @@
+@layer lockin.layout {
+  /* Fake fullscreen keeps video playback visible while preserving sidebar controls. */
+  body.lockin-fake-fullscreen {
+    overflow: hidden !important;
+  }
+
+  body.lockin-fake-fullscreen .lockin-fake-fullscreen-video {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    z-index: 2147483642 !important;
+    width: var(--lockin-content-width) !important;
+    max-width: none !important;
+    height: 100vh !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: var(--lockin-color-0f172a) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
+    object-fit: contain !important;
+  }
+
+  body.lockin-fake-fullscreen.lockin-sidebar-open #lockin-page-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 2147483641;
+    width: var(--lockin-content-width) !important;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  body.lockin-fake-fullscreen:not(.lockin-sidebar-open) .lockin-fake-fullscreen-video,
+  body.lockin-fake-fullscreen:not(.lockin-sidebar-open) #lockin-page-wrapper {
+    width: 100vw !important;
+  }
+
+  body.lockin-fake-fullscreen:not(.lockin-sidebar-open) #lockin-page-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 2147483641;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  body.lockin-fake-fullscreen #lockin-root,
+  body.lockin-fake-fullscreen #lockin-sidebar {
+    z-index: 2147483647;
+  }
+
+  #lockin-fake-fs-toggle {
+    position: fixed;
+    top: var(--lockin-space-3);
+    left: var(--lockin-space-3);
+    z-index: 2147483645;
+    display: none;
+    align-items: center;
+    gap: var(--lockin-space-1-5);
+    padding: var(--lockin-space-1-5) var(--lockin-space-3);
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-sm);
+    font-weight: var(--lockin-font-medium);
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-rgba-0-0-0-05);
+    border: var(--lockin-size-1) solid var(--lockin-color-rgba-255-255-255-03);
+    border-radius: var(--lockin-radius-lg);
+    opacity: 0;
+    transition:
+      opacity var(--lockin-duration-200) var(--lockin-ease-standard),
+      background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+    pointer-events: none;
+    backdrop-filter: blur(var(--lockin-size-8));
+  }
+
+  #lockin-fake-fs-toggle.lockin-fake-fs-toggle--visible {
+    display: inline-flex;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #lockin-fake-fs-toggle:hover {
+    background: var(--lockin-color-rgba-0-0-0-02);
+  }
+
+  @media (max-width: 1024px) {
+    body.lockin-fake-fullscreen .lockin-fake-fullscreen-video,
+    body.lockin-fake-fullscreen.lockin-sidebar-open #lockin-page-wrapper {
+      width: 100vw !important;
+    }
+  }
+}
