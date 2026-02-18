@@ -8,7 +8,7 @@ import {
   createIifeBuildConfig,
   createOptionalDependencyAliases,
   ensureAsciiSafeOutput,
-} from './build/viteShared';
+} from './config/vite/shared';
 
 function hasNonEmptyValue(value: string | undefined): value is string {
   return value !== undefined && value.length > 0;

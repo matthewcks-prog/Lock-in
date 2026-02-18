@@ -20,7 +20,7 @@ export interface UseMessageEditOptions {
   chatId: string | null;
   /** Cancel any active stream before editing */
   cancelStream?: () => void;
-  /** Callback after edit succeeds — used to auto-regenerate the assistant reply */
+  /** Callback after edit succeeds - used to auto-regenerate the assistant reply */
   onEditComplete?: (editedContent: string, canonicalMessages: ChatMessage[]) => void;
 }
 
@@ -120,6 +120,40 @@ function resolveEditSubmitContext({
   };
 }
 
+async function executeEditRequest(
+  context: EditSubmitContext,
+  queryClient: ReturnType<typeof useQueryClient>,
+): Promise<ChatMessage[]> {
+  const response = await context.apiClient.editMessage(
+    context.chatId,
+    context.editingMessageId,
+    context.trimmed,
+  );
+  const normalized = normalizeCanonicalMessages(response.canonicalMessages);
+  updateMessageCache(queryClient, context.chatId, normalized);
+  return normalized;
+}
+
+function handleEditSuccess(
+  context: EditSubmitContext,
+  normalized: ChatMessage[],
+  callbacks: {
+    onEditComplete: ((editedContent: string, canonicalMessages: ChatMessage[]) => void) | undefined;
+    setEditingMessageId: (value: string | null) => void;
+    setEditDraft: (value: string) => void;
+  },
+): void {
+  clearEditState(callbacks.setEditingMessageId, callbacks.setEditDraft);
+
+  if (callbacks.onEditComplete !== undefined) {
+    try {
+      callbacks.onEditComplete(context.trimmed, normalized);
+    } catch (regenerationError) {
+      console.warn('Edit succeeded but regeneration failed:', regenerationError);
+    }
+  }
+}
+
 async function submitEditRequest({
   apiClient,
   chatId,
@@ -150,19 +184,17 @@ async function submitEditRequest({
   if (context === null) return false;
 
   setIsSubmittingEdit(true);
+
   try {
-    const result = await context.apiClient.editMessage(
-      context.chatId,
-      context.editingMessageId,
-      context.trimmed,
-    );
-    const normalizedMessages = normalizeCanonicalMessages(result.canonicalMessages);
-    updateMessageCache(queryClient, context.chatId, normalizedMessages);
-    clearEditState(setEditingMessageId, setEditDraft);
-    onEditComplete?.(context.trimmed, normalizedMessages);
+    const normalized = await executeEditRequest(context, queryClient);
+    handleEditSuccess(context, normalized, {
+      onEditComplete,
+      setEditingMessageId,
+      setEditDraft,
+    });
     return true;
   } catch (error) {
-    console.error('[useMessageEdit] Failed to submit edit:', error);
+    console.error('Edit submission failed:', error);
     return false;
   } finally {
     setIsSubmittingEdit(false);

@@ -96,11 +96,13 @@ function hasChatContext(deps: SendMessageDeps): boolean {
 }
 
 function resolveChatIdentifiers(deps: SendMessageDeps): ChatIdentifiers {
+  // Use actual UUIDs for provisional IDs to avoid cache mismatch issues
   const provisionalChatId = isValidUUID(deps.activeChatId)
     ? (deps.activeChatId as string)
-    : hasChatId(deps.activeHistoryId)
+    : hasChatId(deps.activeHistoryId) && isValidUUID(deps.activeHistoryId)
       ? deps.activeHistoryId
-      : `chat-${Date.now()}`;
+      : crypto.randomUUID(); // FIXED: Use crypto.randomUUID() instead of timestamp
+
   const queryChatId = hasChatId(deps.activeChatId) ? deps.activeChatId : provisionalChatId;
   return { provisionalChatId, queryChatId };
 }

@@ -1,0 +1,66 @@
+/**
+ * Lock-in Popup Design Tokens
+ */
+
+:root {
+  --popup-font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+  --popup-text-xs: 10px;
+  --popup-text-sm: 11px;
+  --popup-text-base: 12px;
+  --popup-text-md: 13px;
+  --popup-text-lg: 14px;
+  --popup-text-xl: 16px;
+  --popup-text-2xl: 20px;
+  --popup-text-3xl: 22px;
+
+  --popup-space-0-5: 2px;
+  --popup-space-1: 4px;
+  --popup-space-1-5: 6px;
+  --popup-space-2: 8px;
+  --popup-space-2-5: 10px;
+  --popup-space-3: 12px;
+  --popup-space-4: 16px;
+  --popup-space-5: 20px;
+
+  --popup-color-surface: #ffffff;
+  --popup-color-surface-subtle: #f9fafb;
+  --popup-color-surface-muted: #f3f4f6;
+
+  --popup-color-text-primary: #1f2937;
+  --popup-color-text-body: #374151;
+  --popup-color-text-secondary: #6b7280;
+  --popup-color-text-muted: #9ca3af;
+  --popup-color-text-on-fill: #ffffff;
+
+  --popup-color-border: #e5e7eb;
+  --popup-color-border-strong: #d1d5db;
+
+  --popup-color-accent-soft: #667eea;
+  --popup-color-accent-strong: #764ba2;
+  --popup-gradient-brand: linear-gradient(
+    135deg,
+    var(--popup-color-accent-soft) 0%,
+    var(--popup-color-accent-strong) 100%
+  );
+
+  --popup-color-success-surface: #d1fae5;
+  --popup-color-success-text: #065f46;
+  --popup-color-danger-surface: #fee2e2;
+  --popup-color-danger-text: #991b1b;
+  --popup-color-accent-surface: #eef2ff;
+  --popup-color-accent-text: #3730a3;
+
+  --popup-radius-sm: 4px;
+  --popup-radius-md: 6px;
+  --popup-radius-lg: 8px;
+  --popup-radius-full: 12px;
+
+  --popup-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --popup-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --popup-shadow-md: 0 4px 12px rgba(102, 126, 234, 0.35);
+
+  --popup-transition-fast: 0.15s ease;
+  --popup-transition-base: 0.2s ease;
+  --popup-transition-slow: 0.25s ease;
+}

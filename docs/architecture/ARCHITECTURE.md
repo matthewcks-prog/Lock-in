@@ -26,6 +26,7 @@ Purpose: Stable guardrails for how Lock-in is structured. Implementation details
 
 - **Sources**: `ui/extension/**`, `extension/src/**`, `/core`, `/api`, `/integrations`, `/shared/ui`.
 - **Build outputs (do not edit)**: `extension/dist/ui/**` (sidebar bundle built from `ui/extension`), `extension/dist/libs/**` (initApi/contentLibs bundles built from `extension/src`).
+- **Shared build config**: `config/vite/shared.ts` centralizes alias/define/build helper logic for all Vite and Vitest configs.
 
 ## Global Contracts
 

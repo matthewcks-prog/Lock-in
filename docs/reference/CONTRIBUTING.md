@@ -106,7 +106,8 @@ A pre-push hook automatically runs validation before pushing. If it fails, fix t
    - Site-specific logic in `/integrations/adapters`
 4. **Write tests**: Add tests for new functionality
 5. **Update documentation**:
-   - Update `docs/reference/CODE_OVERVIEW.md` if file structure changes
+   - Update the relevant section file in `docs/reference/code-overview/` if file structure changes
+   - Update `docs/reference/CODE_OVERVIEW.md` if ownership/scope changes
    - Update `docs/reference/DATABASE.md` if schema changes
    - Update relevant docs in `docs/` folders
 

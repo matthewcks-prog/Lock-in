@@ -32,7 +32,16 @@ describe('createChatEditService', () => {
       getChatById: mock.fn(async () => ({ id: CHAT_ID })),
       getMessageById: mock.fn(async () => makeMessage()),
       truncateAfterMessage: mock.fn(async () => 2),
-      editMessage: mock.fn(async () => makeMessage({ content: 'Updated' })),
+      editMessage: mock.fn(async () => ({
+        revision: makeMessage({ content: 'Updated' }),
+        canonicalMessages: [makeMessage()],
+        truncatedCount: 2,
+      })),
+      truncateForRegeneration: mock.fn(async () => ({
+        canonicalMessages: [makeMessage()],
+        truncatedCount: 1,
+        lastUserMessageId: 'msg-u1',
+      })),
       touchChat: mock.fn(async () => {}),
       getChatMessages: mock.fn(async () => [makeMessage()]),
     };
@@ -41,7 +50,7 @@ describe('createChatEditService', () => {
   });
 
   describe('editMessageAndTruncate', () => {
-    it('validates, truncates, edits, and returns timeline', async () => {
+    it('validates, edits atomically, and returns result', async () => {
       const result = await service.editMessageAndTruncate({
         userId: USER_ID,
         chatId: CHAT_ID,
@@ -49,11 +58,13 @@ describe('createChatEditService', () => {
         newContent: 'Updated question',
       });
 
+      // Should call getChatById to verify chat exists
       assert.strictEqual(mockRepo.getChatById.mock.calls.length, 1);
+      // Should call getMessageById to verify message is editable
       assert.strictEqual(mockRepo.getMessageById.mock.calls.length, 1);
-      assert.strictEqual(mockRepo.truncateAfterMessage.mock.calls.length, 1);
+      // Should call editMessage (atomic transaction)
       assert.strictEqual(mockRepo.editMessage.mock.calls.length, 1);
-      assert.strictEqual(mockRepo.touchChat.mock.calls.length, 1);
+      // Should NOT call touchChat or truncateAfterMessage (handled by transaction)
       assert.strictEqual(result.truncatedCount, 2);
       assert.ok(Array.isArray(result.canonicalMessages));
       assert.ok(result.revision);
@@ -124,20 +135,28 @@ describe('createChatEditService', () => {
   });
 
   describe('truncateForRegeneration', () => {
-    it('truncates the last assistant message and returns timeline', async () => {
-      mockRepo.getChatMessages.mock.mockImplementation(async () => [
-        makeMessage({ id: 'msg-u1', role: 'user', created_at: '2026-01-01T00:00:00Z' }),
-        makeMessage({ id: 'msg-a1', role: 'assistant', created_at: '2026-01-01T00:01:00Z' }),
-      ]);
+    it('truncates using atomic transaction and returns result', async () => {
+      // Override the mock for this specific test
+      mockRepo.truncateForRegeneration.mock.mockImplementation(async () => ({
+        canonicalMessages: [makeMessage({ id: 'msg-u1', role: 'user' })],
+        truncatedCount: 1,
+        lastUserMessageId: 'msg-u1',
+      }));
 
       const result = await service.truncateForRegeneration({
         userId: USER_ID,
         chatId: CHAT_ID,
       });
 
-      assert.strictEqual(mockRepo.truncateAfterMessage.mock.calls.length, 1);
-      const truncateArgs = mockRepo.truncateAfterMessage.mock.calls[0].arguments[0];
-      assert.strictEqual(truncateArgs.afterMessageId, 'msg-u1');
+      // Should call getChatById to verify chat exists
+      assert.strictEqual(mockRepo.getChatById.mock.calls.length, 1);
+      // Should call truncateForRegeneration (atomic transaction)
+      assert.strictEqual(mockRepo.truncateForRegeneration.mock.calls.length, 1);
+      const truncateArgs = mockRepo.truncateForRegeneration.mock.calls[0].arguments[0];
+      assert.strictEqual(truncateArgs.userId, USER_ID);
+      assert.strictEqual(truncateArgs.chatId, CHAT_ID);
+      // Should return canonical messages and last user message
+      assert.ok(Array.isArray(result.canonicalMessages));
       assert.ok(result.lastUserMessage);
       assert.strictEqual(result.lastUserMessage.id, 'msg-u1');
     });
@@ -154,8 +173,12 @@ describe('createChatEditService', () => {
       );
     });
 
-    it('throws 400 when no messages exist', async () => {
-      mockRepo.getChatMessages.mock.mockImplementation(async () => []);
+    it('throws 400 when no canonical messages returned', async () => {
+      mockRepo.truncateForRegeneration.mock.mockImplementation(async () => ({
+        canonicalMessages: [],
+        truncatedCount: 0,
+        lastUserMessageId: null,
+      }));
 
       await assert.rejects(
         () => service.truncateForRegeneration({ userId: USER_ID, chatId: CHAT_ID }),
@@ -167,16 +190,18 @@ describe('createChatEditService', () => {
       );
     });
 
-    it('throws 400 when no assistant message exists', async () => {
-      mockRepo.getChatMessages.mock.mockImplementation(async () => [
-        makeMessage({ id: 'msg-u1', role: 'user' }),
-      ]);
+    it('throws 400 when no last user message found', async () => {
+      mockRepo.truncateForRegeneration.mock.mockImplementation(async () => ({
+        canonicalMessages: [makeMessage({ id: 'msg-a1', role: 'assistant' })],
+        truncatedCount: 1,
+        lastUserMessageId: null,
+      }));
 
       await assert.rejects(
         () => service.truncateForRegeneration({ userId: USER_ID, chatId: CHAT_ID }),
         (err) => {
           assert.strictEqual(err.statusCode, 400);
-          assert.match(err.message, /no assistant message/i);
+          assert.match(err.message, /no user message/i);
           return true;
         },
       );

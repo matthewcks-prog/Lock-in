@@ -23,7 +23,7 @@ Use React Testing Library (RTL) for all UI and hook tests. Focus on user-visible
 
 ## Test Entry Points
 
-- **Setup:** `tests/setupTests.ts` (jest-dom, MSW lifecycle, DOM/polyfill stubs)
+- **Setup:** `shared/test/setupVitest.ts` (jest-dom, MSW lifecycle, DOM/polyfill stubs)
 - **Render:** `shared/test/renderWithProviders.tsx`
   - Provides a fresh QueryClient by default (no retries).
   - Returns `user` for interactions.

@@ -6,7 +6,7 @@
 
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
-import { createDefines, createIifeBuildConfig, ensureAsciiSafeOutput } from './build/viteShared';
+import { createDefines, createIifeBuildConfig, ensureAsciiSafeOutput } from './config/vite/shared';
 
 export default defineConfig(({ mode }) => ({
   define: createDefines(mode),

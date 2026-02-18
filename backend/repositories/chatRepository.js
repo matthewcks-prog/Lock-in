@@ -92,14 +92,17 @@ async function touchChat(chatId) {
 async function getRecentChats(userId, options = {}) {
   const { limit = DEFAULT_CHAT_LIST_LIMIT, cursor } = options;
   const cappedLimit = Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_CHAT_LIST_LIMIT;
+
   let query = supabase
     .from('chats')
     .select('id,title,created_at,updated_at,last_message_at')
     .eq('user_id', userId)
-    .order('last_message_at', { ascending: false, nullsFirst: false });
+    .not('last_message_at', 'is', null) // FIXED: Exclude chats with null last_message_at from pagination
+    .order('last_message_at', { ascending: false });
 
-  if (cursor) {
-    query = query.or(`last_message_at.lt.${cursor},last_message_at.is.null`);
+  // Only apply cursor filter if cursor is provided
+  if (cursor && typeof cursor === 'string' && cursor.length > 0) {
+    query = query.lt('last_message_at', cursor);
   }
 
   const { data, error } = await query.limit(cappedLimit + 1);
@@ -234,62 +237,84 @@ async function getMessageById(userId, chatId, messageId) {
 }
 
 /**
- * Edit a user message: mark the original as non-canonical and insert a revision row.
- * Returns the new canonical revision message.
+ * Edit a user message using atomic transaction.
+ * Uses stored procedure to ensure all-or-nothing execution.
  *
  * @param {object} params
  * @param {string} params.userId
  * @param {string} params.chatId
  * @param {string} params.messageId - original message to revise
  * @param {string} params.newContent - updated message content
- * @returns {Promise<object>} the new revision row
+ * @returns {Promise<{revision: object, canonicalMessages: object[], truncatedCount: number}>}
  */
 async function editMessage({ userId, chatId, messageId, newContent }) {
-  // 1. Mark original as non-canonical
-  const now = new Date().toISOString();
-  const { error: updateError } = await supabase
-    .from('chat_messages')
-    .update({ is_canonical: false, edited_at: now })
-    .eq('id', messageId)
-    .eq('chat_id', chatId)
-    .eq('user_id', userId);
-
-  if (updateError) {
-    throw new Error(`Failed to mark message as edited: ${updateError.message}`);
-  }
-
-  // 2. Fetch original to copy its metadata
-  const original = await getMessageById(userId, chatId, messageId);
-  if (!original) {
-    throw new Error('Original message not found after update');
-  }
-
-  // 3. Insert revision row
-  const revision = await insertChatMessage({
-    chat_id: chatId,
-    user_id: userId,
-    role: original.role,
-    mode: original.mode || null,
-    source: original.source || null,
-    input_text: newContent,
-    output_text: null,
-    revision_of: messageId,
-    is_canonical: true,
-    status: 'sent',
+  const { data, error } = await supabase.rpc('edit_message_transaction', {
+    p_user_id: userId,
+    p_chat_id: chatId,
+    p_message_id: messageId,
+    p_new_content: newContent,
   });
 
-  return revision;
+  if (error) {
+    throw new Error(`Failed to edit message: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error('Edit transaction returned no data');
+  }
+
+  const result = data[0];
+  const canonicalMessages = result.canonical_messages || [];
+  const truncatedCount = result.truncated_count || 0;
+  const revisionId = result.revision_id;
+
+  // Find the revision message in canonical timeline
+  const revision = canonicalMessages.find((msg) => msg.id === revisionId);
+  if (!revision) {
+    throw new Error('Revision message not found in canonical timeline');
+  }
+
+  return {
+    revision,
+    canonicalMessages,
+    truncatedCount,
+  };
 }
 
 /**
- * Truncate all messages after a given message in a chat.
- * Sets is_canonical = false for all messages created after the reference message.
+ * Prepare for message regeneration using atomic transaction.
+ * Uses stored procedure to truncate last assistant response atomically.
  *
  * @param {object} params
  * @param {string} params.userId
  * @param {string} params.chatId
- * @param {string} params.afterMessageId - messages after this one get truncated
- * @returns {Promise<number>} count of truncated messages
+ * @returns {Promise<{canonicalMessages: object[], truncatedCount: number, lastUserMessageId: string}>}
+ */
+async function truncateForRegeneration({ userId, chatId }) {
+  const { data, error } = await supabase.rpc('regenerate_message_transaction', {
+    p_user_id: userId,
+    p_chat_id: chatId,
+  });
+
+  if (error) {
+    throw new Error(`Failed to prepare regeneration: ${error.message}`);
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error('Regeneration transaction returned no data');
+  }
+
+  const result = data[0];
+  return {
+    canonicalMessages: result.canonical_messages || [],
+    truncatedCount: result.truncated_count || 0,
+    lastUserMessageId: result.last_user_message_id,
+  };
+}
+
+/**
+ * DEPRECATED: Use truncateForRegeneration instead.
+ * Kept for backward compatibility during migration.
  */
 async function truncateAfterMessage({ userId, chatId, afterMessageId }) {
   // Get the reference message's created_at
@@ -342,6 +367,7 @@ module.exports = {
   getChatMessages,
   getMessageById,
   editMessage,
+  truncateForRegeneration,
   truncateAfterMessage,
   updateMessageStatus,
   updateChatTitle,

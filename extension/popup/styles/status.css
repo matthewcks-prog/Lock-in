@@ -1,0 +1,31 @@
+.status-message {
+  display: none;
+  padding: var(--popup-space-3) var(--popup-space-5);
+  text-align: center;
+  font-size: var(--popup-text-md);
+  font-weight: 500;
+  animation: popup-slide-down 0.3s ease;
+}
+
+.status-message.success {
+  background: var(--popup-color-success-surface);
+  color: var(--popup-color-success-text);
+  display: block;
+}
+
+.status-message.error {
+  background: var(--popup-color-danger-surface);
+  color: var(--popup-color-danger-text);
+  display: block;
+}
+
+@keyframes popup-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

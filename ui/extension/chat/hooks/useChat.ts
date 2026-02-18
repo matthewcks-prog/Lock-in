@@ -50,6 +50,7 @@ function buildActionsParams({
   messagesState,
   upsertHistory,
   sendMessageMutation,
+  cancelStream,
 }: {
   apiClient: UseChatOptions['apiClient'];
   pageUrl: string;
@@ -59,6 +60,7 @@ function buildActionsParams({
   messagesState: ReturnType<typeof useChatMessages>;
   upsertHistory: ReturnType<typeof useChatHistory>['upsertHistory'];
   sendMessageMutation: ReturnType<typeof useChatSenders>['sendMessageMutation'];
+  cancelStream: () => void;
 }): UseChatActionsParams {
   return {
     apiClient,
@@ -75,6 +77,7 @@ function buildActionsParams({
     setActiveHistoryId: session.setActiveHistoryId,
     setIsHistoryOpen: session.setIsHistoryOpen,
     setError: session.setError,
+    cancelStream,
   };
 }
 
@@ -155,6 +158,7 @@ export function useChat(options: UseChatOptions): UseChatReturn {
       messagesState,
       upsertHistory: historyState.upsertHistory,
       sendMessageMutation: senders.sendMessageMutation,
+      cancelStream: senders.cancelStream,
     }),
   );
   const mutations = useChatRegenerationMutations({

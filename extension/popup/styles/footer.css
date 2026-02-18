@@ -1,0 +1,28 @@
+.footer {
+  padding: var(--popup-space-4) var(--popup-space-5);
+  text-align: center;
+  background: var(--popup-color-surface-subtle);
+  border-top: 1px solid var(--popup-color-border);
+}
+
+.footer p {
+  font-size: var(--popup-text-base);
+  color: var(--popup-color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--popup-space-1);
+}
+
+.disclaimer {
+  font-size: var(--popup-text-xs);
+  color: var(--popup-color-text-muted);
+  margin-top: var(--popup-space-2);
+  line-height: 1.4;
+  max-width: 100%;
+}
+
+.version {
+  font-size: var(--popup-text-sm);
+  color: var(--popup-color-text-muted);
+  margin-top: var(--popup-space-2);
+  font-weight: 500;
+}

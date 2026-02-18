@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { resolve } from 'node:path';
-import { createOptionalDependencyAliases } from './build/viteShared';
+import { createOptionalDependencyAliases } from './config/vite/shared';
 
 export default defineConfig({
   resolve: {
@@ -15,7 +15,7 @@ export default defineConfig({
   },
   test: {
     environment: 'jsdom',
-    setupFiles: ['tests/setupTests.ts'],
+    setupFiles: ['shared/test/setupVitest.ts'],
     include: ['**/__tests__/**/*.test.{ts,tsx}', '**/__tests__/**/*.test.js'],
     exclude: [
       '**/node_modules/**',

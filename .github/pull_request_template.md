@@ -70,6 +70,7 @@ If you added new backend test files, confirm:
 - [ ] Type checking passes (`npm run type-check`)
 - [ ] Build succeeds (`npm run build`)
 - [ ] Documentation updated (if needed)
+- [ ] Updated `docs/reference/code-overview/*` section docs for structural changes
 
 ## Architecture Compliance
 

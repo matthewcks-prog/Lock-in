@@ -2,11 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "useDefineForClassFields": true,
-    "lib": [
-      "ES2020",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
     "moduleResolution": "bundler",
@@ -26,36 +22,16 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitOverride": true,
     "useUnknownInCatchVariables": true,
-    "types": [
-      "node",
-      "chrome",
-      "vite/client",
-      "vitest/globals",
-      "@testing-library/jest-dom"
-    ],
+    "types": ["node", "chrome", "vite/client", "vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
-      "@core/*": [
-        "core/*"
-      ],
-      "@api/*": [
-        "api/*"
-      ],
-      "@ui/*": [
-        "ui/*"
-      ],
-      "@shared/ui": [
-        "shared/ui"
-      ],
-      "@shared/ui/*": [
-        "shared/ui/*"
-      ],
-      "@shared/test": [
-        "shared/test"
-      ],
-      "@shared/test/*": [
-        "shared/test/*"
-      ]
+      "@core/*": ["core/*"],
+      "@api/*": ["api/*"],
+      "@ui/*": ["ui/*"],
+      "@shared/ui": ["shared/ui"],
+      "@shared/ui/*": ["shared/ui/*"],
+      "@shared/test": ["shared/test"],
+      "@shared/test/*": ["shared/test/*"]
     }
   },
   "include": [
@@ -65,11 +41,7 @@
     "ui/**/*",
     "integrations/**/*",
     "extension/**/*.ts",
-    "types/**/*.d.ts",
-    "tests/**/*"
+    "types/**/*.d.ts"
   ],
-  "exclude": [
-    "node_modules",
-    "backend"
-  ]
+  "exclude": ["node_modules", "backend"]
 }

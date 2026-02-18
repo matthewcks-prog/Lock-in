@@ -1,0 +1,35 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--popup-font-family);
+  width: 380px;
+  background: var(--popup-color-surface-subtle);
+}
+
+.popup-container {
+  background: var(--popup-color-surface);
+  margin: 0;
+}
+
+.header {
+  background: var(--popup-gradient-brand);
+  color: var(--popup-color-text-on-fill);
+  padding: var(--popup-space-5);
+  text-align: center;
+}
+
+.header h1 {
+  font-size: var(--popup-text-3xl);
+  font-weight: 600;
+  margin-bottom: var(--popup-space-0-5);
+}
+
+.subtitle {
+  font-size: var(--popup-text-md);
+  opacity: 0.95;
+  font-weight: 400;
+}

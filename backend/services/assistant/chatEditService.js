@@ -57,49 +57,25 @@ async function ensureEditableUserMessage(services, { userId, chatId, messageId }
   }
 }
 
-async function getCanonicalMessagesForChat(services, { userId, chatId }) {
-  const messages = await services.chatRepository.getChatMessages(userId, chatId);
-  if (messages.length === 0) {
-    throw createHttpError('No messages to regenerate', HTTP_STATUS_BAD_REQUEST);
-  }
-  return messages;
-}
-
-function findLastAssistantMessageIndex(messages) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === 'assistant') {
-      return index;
-    }
-  }
-  throw createHttpError('No assistant message to regenerate', HTTP_STATUS_BAD_REQUEST);
-}
-
-function resolveReferenceMessageForRegeneration(messages, lastAssistantIndex) {
-  const refMessageIndex = Math.max(0, lastAssistantIndex - 1);
-  return messages[refMessageIndex];
-}
-
 async function editMessageAndTruncate(services, params) {
   const { userId, chatId, messageId, newContent } = params;
   requireEditInputs(params);
   await ensureChatExists(services, { userId, chatId });
   await ensureEditableUserMessage(services, { userId, chatId, messageId });
 
-  const truncatedCount = await services.chatRepository.truncateAfterMessage({
-    userId,
-    chatId,
-    afterMessageId: messageId,
-  });
-  const revision = await services.chatRepository.editMessage({
+  // Use atomic transaction (revision + truncation + chat update in single DB call)
+  const result = await services.chatRepository.editMessage({
     userId,
     chatId,
     messageId,
     newContent,
   });
 
-  await services.chatRepository.touchChat(chatId);
-  const canonicalMessages = await services.chatRepository.getChatMessages(userId, chatId);
-  return { revision, canonicalMessages, truncatedCount };
+  return {
+    revision: result.revision,
+    canonicalMessages: result.canonicalMessages,
+    truncatedCount: result.truncatedCount,
+  };
 }
 
 async function truncateForRegeneration(services, params) {
@@ -107,18 +83,31 @@ async function truncateForRegeneration(services, params) {
   requireRegenerationInputs(params);
   await ensureChatExists(services, { userId, chatId });
 
-  const messages = await getCanonicalMessagesForChat(services, { userId, chatId });
-  const lastAssistantIndex = findLastAssistantMessageIndex(messages);
-  const refMessage = resolveReferenceMessageForRegeneration(messages, lastAssistantIndex);
-
-  const truncatedCount = await services.chatRepository.truncateAfterMessage({
+  // Use atomic transaction (validation + truncation + chat update in single DB call)
+  const result = await services.chatRepository.truncateForRegeneration({
     userId,
     chatId,
-    afterMessageId: refMessage.id,
   });
-  const canonicalMessages = await services.chatRepository.getChatMessages(userId, chatId);
 
-  return { canonicalMessages, truncatedCount, lastUserMessage: refMessage };
+  // Validate we have messages to regenerate from
+  if (!result.canonicalMessages || result.canonicalMessages.length === 0) {
+    throw createHttpError('No messages to regenerate', HTTP_STATUS_BAD_REQUEST);
+  }
+
+  // Find the last user message in canonical timeline for regeneration context
+  const lastUserMessage = result.canonicalMessages.find(
+    (msg) => msg.id === result.lastUserMessageId,
+  );
+
+  if (!lastUserMessage) {
+    throw createHttpError('No user message found for regeneration', HTTP_STATUS_BAD_REQUEST);
+  }
+
+  return {
+    canonicalMessages: result.canonicalMessages,
+    truncatedCount: result.truncatedCount,
+    lastUserMessage,
+  };
 }
 
 function buildCanonicalHistory(canonicalMessages) {

@@ -29,6 +29,7 @@ interface PrimaryActionsParams {
   apiClient: UseChatOptions['apiClient'];
   pageUrl: string;
   courseCode: string | null;
+  queryClient: QueryClient;
   setMessages: MessagesState['setMessages'];
   upsertHistory: HistoryState['upsertHistory'];
   sendMessageMutation: BlockingSendState['sendMessage'];
@@ -36,6 +37,8 @@ interface PrimaryActionsParams {
   setActiveHistoryId: SessionState['setActiveHistoryId'];
   setIsHistoryOpen: SessionState['setIsHistoryOpen'];
   setError: SessionState['setError'];
+  cancelStream?: () => void;
+  activeChatId: string | null;
 }
 
 interface SendMessageActionParams {
@@ -58,6 +61,7 @@ export interface UseChatActionsParams extends PrimaryActionsParams {
   activeChatId: SessionState['activeChatId'];
   activeHistoryId: SessionState['activeHistoryId'];
   messages: MessagesState['messages'];
+  cancelStream?: () => void;
 }
 
 function createPrimaryActions(params: PrimaryActionsParams): PrimaryActions {
@@ -65,6 +69,7 @@ function createPrimaryActions(params: PrimaryActionsParams): PrimaryActions {
     apiClient,
     pageUrl,
     courseCode,
+    queryClient,
     setMessages,
     upsertHistory,
     sendMessageMutation,
@@ -94,10 +99,13 @@ function createPrimaryActions(params: PrimaryActionsParams): PrimaryActions {
   });
   const selectChat = createSelectChat({
     apiClient,
+    queryClient,
     setActiveChatId,
     setActiveHistoryId,
     setError,
     setMessages,
+    ...(params.cancelStream !== undefined && { cancelStream: params.cancelStream }),
+    currentChatId: params.activeChatId,
   });
 
   return { startNewChat, startBlankChat, selectChat };
@@ -155,6 +163,7 @@ export function useChatActions(params: UseChatActionsParams): ChatActions {
     apiClient,
     pageUrl,
     courseCode,
+    queryClient,
     setMessages,
     upsertHistory,
     sendMessageMutation,
@@ -162,6 +171,8 @@ export function useChatActions(params: UseChatActionsParams): ChatActions {
     setActiveHistoryId,
     setIsHistoryOpen,
     setError,
+    ...(params.cancelStream !== undefined && { cancelStream: params.cancelStream }),
+    activeChatId,
   });
   const sendMessage = createSendMessageAction({
     activeChatId,

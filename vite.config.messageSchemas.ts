@@ -12,7 +12,7 @@ import {
   createDefines,
   createIifeBuildConfig,
   ensureAsciiSafeOutput,
-} from './build/viteShared';
+} from './config/vite/shared';
 
 export default defineConfig(({ mode }) => ({
   define: createDefines(mode),
