@@ -1,5 +1,5 @@
 /* Layer order declaration - this is the only place order matters */
-@layer lockin.tokens, lockin.base, lockin.layout, lockin.chrome, lockin.chat, lockin.notes, lockin.components, lockin.dialogs, lockin.tools, lockin.responsive;
+@layer lockin.tokens, lockin.base, lockin.layout, lockin.chrome, lockin.chat, lockin.notes, lockin.tasks, lockin.components, lockin.dialogs, lockin.tools, lockin.responsive;
 
 /* Tokens — split by domain for scalability */
 @import './tokens/typography.css';
@@ -20,6 +20,12 @@
 @import './notes-images.css';
 @import './notes-list.css';
 @import './notes-actions.css';
+@import './tasks-shell.css';
+@import './tasks-list.css';
+@import './tasks-list-support.css';
+@import './tasks-modal.css';
+@import './tasks-board.css';
+@import './tasks-edit.css';
 @import './utilities.css';
 @import './dialogs.css';
 @import './transcript-list.css';

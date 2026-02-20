@@ -27,6 +27,12 @@ import {
   type ChatWithNotesParams,
 } from './resources/notesClient';
 import {
+  createTasksClient,
+  type ListTasksParams,
+  type TaskPayload,
+  type TaskOrderItem,
+} from './resources/tasksClient';
+import {
   createAssetsClient,
   type UploadNoteAssetParams,
   type ListNoteAssetsParams,
@@ -60,6 +66,7 @@ type FetcherClient = ReturnType<typeof createFetcher>;
 type LockinClient = ReturnType<typeof createLockinClient>;
 type ChatsClient = ReturnType<typeof createChatsClient>;
 type NotesClient = ReturnType<typeof createNotesClient>;
+type TasksClient = ReturnType<typeof createTasksClient>;
 type AssetsClient = ReturnType<typeof createAssetsClient>;
 type ChatAssetsClient = ReturnType<typeof createChatAssetsClient>;
 type FeedbackClient = ReturnType<typeof createFeedbackClient>;
@@ -67,6 +74,7 @@ type TranscriptsClient = ReturnType<typeof createTranscriptsClient>;
 type ResourceClients = LockinClient &
   ChatsClient &
   NotesClient &
+  TasksClient &
   AssetsClient &
   ChatAssetsClient &
   FeedbackClient &
@@ -76,6 +84,7 @@ export type ApiClient = FetcherClient &
   LockinClient &
   ChatsClient &
   NotesClient &
+  TasksClient &
   AssetsClient &
   ChatAssetsClient &
   FeedbackClient &
@@ -111,6 +120,7 @@ function createResourceClients(
   const lockin = createLockinClient(apiRequest, streamingConfig);
   const chats = createChatsClient(apiRequest);
   const notes = createNotesClient(apiRequest);
+  const tasks = createTasksClient(apiRequest);
   const assets = createAssetsClient(apiRequest);
   const chatAssets = createChatAssetsClient(apiRequest);
   const feedback = createFeedbackClient(apiRequest);
@@ -120,6 +130,7 @@ function createResourceClients(
     ...lockin,
     ...chats,
     ...notes,
+    ...tasks,
     ...assets,
     ...chatAssets,
     ...feedback,
@@ -176,6 +187,7 @@ export type {
   TranscriptCacheResponse,
 };
 export type { EditMessageResponse, RegenerateResponse } from './resources/chatsClient';
+export type { ListTasksParams, TaskPayload, TaskOrderItem };
 export type {
   StreamEvent,
   StreamMetaEvent,

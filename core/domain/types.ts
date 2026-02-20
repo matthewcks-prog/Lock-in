@@ -73,20 +73,6 @@ export type ApiResponse<T = StudyResponse> = {
 };
 
 /**
- * Task domain model (for future use)
- */
-export type Task = {
-  id: string | null;
-  title: string;
-  description: string;
-  courseCode: string | null;
-  dueDate?: string | null;
-  completed: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
-/**
  * Chat session
  */
 export type ChatSession = {
@@ -248,3 +234,18 @@ export type {
   NoteStatus,
   NoteType,
 } from './Note.ts';
+
+/**
+ * Task-related domain exports live in core/domain/Task.ts
+ * and are re-exported here for convenience.
+ */
+export type {
+  Task,
+  TaskFilter,
+  TaskPriority,
+  TaskStatus,
+  TaskWorkflowStatus,
+  TasksViewMode,
+  CreateTaskInput,
+  UpdateTaskInput,
+} from './Task.ts';

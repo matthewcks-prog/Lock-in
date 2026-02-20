@@ -8,8 +8,10 @@ import type { PageContext } from '../../core/domain/types';
 import type { Note } from '../../core/domain/Note';
 import type { ApiClient } from '../../api/client';
 import { createNotesService } from '../../core/services/notesService.ts';
+import { createTasksService } from '../../core/services/tasksService.ts';
 import { useNotesList } from '../hooks/useNotesList';
 import { NotesPanel } from './notes/NotesPanel';
+import { TasksPanel } from './tasks/TasksPanel';
 import { ToolProvider, useToolContext } from './tools';
 import { NoteSaveProvider } from './contexts/NoteSaveContext';
 import { TranscriptCacheProvider } from './contexts/TranscriptCacheContext';
@@ -22,20 +24,16 @@ import { ChatSection } from './sidebar/ChatSection';
 import { SidebarHeaderActions } from './sidebar/SidebarHeaderActions';
 import { ToolSection } from './sidebar/ToolSection';
 import { useResize } from './sidebar/useResize';
-import {
-  CHAT_TAB_ID,
-  NOTES_TAB_ID,
-  TOOL_TAB_ID,
-  SIDEBAR_MIN_WIDTH,
-  SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MAX_VW,
-  SIDEBAR_DEFAULT_WIDTH,
-  SIDEBAR_WIDTH_KEY,
-} from './sidebar/constants';
+import { CHAT_TAB_ID, NOTES_TAB_ID, TASKS_TAB_ID, TOOL_TAB_ID } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
 import { useSidebarState } from './sidebar/useSidebarState';
 import { useFeedbackListener } from './sidebar/hooks/useFeedbackListener';
 import type { NotesPanelHandlers, SidebarModel } from './sidebar/lockInSidebarTypes';
+import {
+  buildSidebarStateOptions,
+  buildResizeOptions,
+  getPageContextValues,
+} from './sidebar/lockInSidebarHelpers';
 
 export interface LockInSidebarProps {
   apiClient: ApiClient | null;
@@ -46,50 +44,6 @@ export interface LockInSidebarProps {
   pageContext?: PageContext;
   storage?: StorageAdapter;
   activeTabExternal?: string;
-}
-
-function buildSidebarStateOptions({
-  isOpen,
-  onToggle,
-  activeTabExternal,
-  storage,
-}: Pick<LockInSidebarProps, 'isOpen' | 'onToggle' | 'activeTabExternal' | 'storage'>): Parameters<
-  typeof useSidebarState
->[0] {
-  const options: Parameters<typeof useSidebarState>[0] = { isOpen, onToggle };
-  if (activeTabExternal !== undefined && activeTabExternal.length > 0) {
-    options.activeTabExternal = activeTabExternal;
-  }
-  if (storage !== undefined) {
-    options.storage = storage;
-  }
-  return options;
-}
-
-function buildResizeOptions(storage?: StorageAdapter): Parameters<typeof useResize>[0] {
-  const options: Parameters<typeof useResize>[0] = {
-    minWidth: SIDEBAR_MIN_WIDTH,
-    maxWidth: SIDEBAR_MAX_WIDTH,
-    maxVw: SIDEBAR_MAX_VW,
-    defaultWidth: SIDEBAR_DEFAULT_WIDTH,
-    storageKey: SIDEBAR_WIDTH_KEY,
-  };
-  if (storage !== undefined) {
-    options.storage = storage;
-  }
-  return options;
-}
-
-function getPageContextValues(pageContext?: PageContext): {
-  courseCode: string | null;
-  currentWeek: number | null;
-  pageUrl: string;
-} {
-  return {
-    courseCode: pageContext?.courseContext.courseCode ?? null,
-    currentWeek: pageContext?.courseContext?.week ?? null,
-    pageUrl: pageContext?.url ?? (typeof window !== 'undefined' ? window.location.href : ''),
-  };
 }
 
 function useSyncSidebarEffects({
@@ -152,14 +106,27 @@ function useNotesPanelHandlers({
   return { onDeleteNote, onNoteSaved, onRefreshNotes };
 }
 
+function useServices(apiClient: ApiClient | null): {
+  notesService: ReturnType<typeof createNotesService> | null;
+  tasksService: ReturnType<typeof createTasksService> | null;
+} {
+  return useMemo(
+    () =>
+      apiClient !== null
+        ? {
+            notesService: createNotesService(apiClient),
+            tasksService: createTasksService(apiClient),
+          }
+        : { notesService: null, tasksService: null },
+    [apiClient],
+  );
+}
+
 function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
   const { activeToolId, activeToolTitle, closeTool } = useToolContext();
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const sidebarState = useSidebarState(buildSidebarStateOptions(props));
-  const notesService = useMemo(
-    () => (props.apiClient !== null ? createNotesService(props.apiClient) : null),
-    [props.apiClient],
-  );
+  const { notesService, tasksService } = useServices(props.apiClient);
   const notesState = useNotesList({ notesService, limit: 50 });
   const { handleResizeStart } = useResize(buildResizeOptions(props.storage));
   const pageValues = getPageContextValues(props.pageContext);
@@ -198,11 +165,23 @@ function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
     setIsNoteEditing: sidebarState.setIsNoteEditing,
     setSelectedNoteId: sidebarState.setSelectedNoteId,
     storage: props.storage,
+    tasksService,
     toggleNoteStar: notesState.toggleStar,
     upsertNote: notesState.upsertNote,
     isOpen: props.isOpen,
     apiClient: props.apiClient,
   };
+}
+
+function TasksTabContent({ model }: { model: SidebarModel }): JSX.Element {
+  return (
+    <TasksPanel
+      tasksService={model.tasksService}
+      courseCode={model.courseCode}
+      pageUrl={model.pageUrl}
+      currentWeek={model.currentWeek}
+    />
+  );
 }
 
 function SidebarTabContent({
@@ -246,6 +225,7 @@ function SidebarTabContent({
       {model.activeTab === TOOL_TAB_ID && (
         <ToolSection activeToolId={model.activeToolId} onClose={model.closeTool} />
       )}
+      {model.activeTab === TASKS_TAB_ID && <TasksTabContent model={model} />}
       <PrivacyNotice />
     </>
   );
@@ -295,7 +275,9 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
               onCloseTool={model.closeTool}
             />
           }
-          headerRight={<SidebarHeaderActions />}
+          headerRight={
+            <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
+          }
         >
           <SidebarTabContent model={model} notesHandlers={notesHandlers} />
         </SidebarLayout>

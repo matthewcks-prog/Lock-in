@@ -2,6 +2,7 @@ import type { SidebarTabId } from './types';
 
 export const CHAT_TAB_ID: SidebarTabId = 'chat';
 export const NOTES_TAB_ID: SidebarTabId = 'notes';
+export const TASKS_TAB_ID: SidebarTabId = 'tasks';
 export const TOOL_TAB_ID: SidebarTabId = 'tool';
 
 export const SIDEBAR_ACTIVE_TAB_KEY = 'lockin_sidebar_activeTab';

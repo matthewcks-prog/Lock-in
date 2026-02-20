@@ -1,6 +1,7 @@
 import type { Note } from '@core/domain/Note';
 import type { ApiClient } from '@api/client';
 import type { NotesService } from '@core/services/notesService';
+import type { TasksService } from '@core/services/tasksService';
 import type { StorageAdapter } from './types';
 import type { useResize } from './useResize';
 import type { useSidebarState } from './useSidebarState';
@@ -31,6 +32,7 @@ export interface SidebarModel {
   setIsNoteEditing: ReturnType<typeof useSidebarState>['setIsNoteEditing'];
   setSelectedNoteId: ReturnType<typeof useSidebarState>['setSelectedNoteId'];
   storage?: StorageAdapter | undefined;
+  tasksService: TasksService | null;
   toggleNoteStar: ReturnType<typeof useNotesList>['toggleStar'];
   upsertNote: ReturnType<typeof useNotesList>['upsertNote'];
   isOpen: boolean;
