@@ -35,13 +35,26 @@
       var(--lockin-sidebar-ideal),
       var(--lockin-sidebar-max)
     );
-    /* Content width is the remaining space after sidebar (100vw - sidebar width) */
+    /*
+     * Scrollbar width is dynamically set by scrollbarWidth.js module.
+     * Default to 0 if not yet initialized.
+     */
+    --lockin-scrollbar-width: 0px;
+    /*
+     * Content width calculation accounts for scrollbar presence.
+     * JavaScript will update this to subtract scrollbar width when needed.
+     * Default: calc(100vw - sidebar width)
+     */
     --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
   }
 
-  /* Only apply restrictive styles when sidebar is open - avoid breaking site layouts */
+  /* Only apply restrictive styles when sidebar is open - avoid breaking site layouts.
+     scrollbar-gutter:stable reserves scrollbar space even when no scrollbar is
+     rendered, which keeps 100vw consistent and prevents the sidebar/page-wrapper
+     from shifting when scrollbar visibility changes (e.g. normal page → fake-fullscreen). */
   body.lockin-sidebar-open {
     overflow-x: hidden;
+    scrollbar-gutter: stable;
   }
 
   /* Page content wrapper (injected) */
@@ -127,6 +140,14 @@
     transition: transform var(--lockin-duration-300) var(--lockin-ease-standard);
     transform: translateX(0);
     pointer-events: auto;
+    container-name: sidebar;
+    /*
+     * container-type: inline-size enables @container queries scoped to the
+     * sidebar width. This lets child styles adapt to narrow/wide sidebar states
+     * without relying on viewport-width media queries, which would not reflect
+     * the user-resized sidebar width.
+     */
+    container-type: inline-size;
   }
 
   #lockin-root .lockin-sidebar-resize-handle {
@@ -184,7 +205,7 @@
     width: auto !important;
     height: auto !important;
     padding: var(--lockin-size-10) var(--lockin-size-18) !important;
-    font-size: var(--lockin-size-14) !important;
+    font-size: var(--lockin-text-md) !important;
     font-weight: 600 !important;
     color: var(--lockin-color-surface) !important;
     background: linear-gradient(
@@ -193,8 +214,8 @@
       var(--lockin-color-7c3aed) 100%
     ) !important;
     border: none !important;
-    border-radius: var(--lockin-size-9999) !important;
-    box-shadow: var(--lockin-shadow-17) !important;
+    border-radius: var(--lockin-radius-full) !important;
+    box-shadow: var(--lockin-shadow-pill) !important;
     opacity: 1 !important;
     visibility: visible !important;
     transition: all var(--lockin-duration-250) var(--lockin-ease-standard) !important;
@@ -204,7 +225,7 @@
   }
 
   #lockin-root > #lockin-toggle-pill:hover {
-    box-shadow: var(--lockin-shadow-21) !important;
+    box-shadow: var(--lockin-shadow-pill-hover) !important;
     transform: scale(1.05) !important;
   }
 

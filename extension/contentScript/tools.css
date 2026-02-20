@@ -15,32 +15,27 @@
     display: inline-flex;
     align-items: center;
     gap: var(--lockin-size-4);
-    padding: var(--lockin-size-4) var(--lockin-size-8);
+    padding: var(--lockin-size-5) var(--lockin-size-10);
+    font-family: var(--lockin-font-family-base);
     font-size: var(--lockin-text-xs);
     font-weight: 600;
+    line-height: var(--lockin-leading-snug);
     color: var(--lockin-color-text-body);
-    background: linear-gradient(
-      135deg,
-      var(--lockin-color-surface-subtle) 0%,
-      var(--lockin-color-surface-muted) 100%
-    );
-    border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-radius-lg);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-xl);
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
 
   #lockin-root .lockin-study-tools-btn:hover {
-    background: linear-gradient(
-      135deg,
-      var(--lockin-color-surface-muted) 0%,
-      var(--lockin-color-border) 100%
-    );
+    background: var(--lockin-color-surface-muted);
     border-color: var(--lockin-color-border-strong);
   }
 
   #lockin-root .lockin-study-tools-chevron {
-    font-size: 9px;
+    flex-shrink: 0;
+    /* SVG icon — size is controlled via the `size` prop (12px); only color needed here */
     color: var(--lockin-color-text-muted);
   }
 
@@ -54,8 +49,8 @@
     padding: var(--lockin-size-6);
     background: var(--lockin-color-surface);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-radius-lg);
-    box-shadow: var(--lockin-shadow-15);
+    border-radius: var(--lockin-radius-xl);
+    box-shadow: var(--lockin-shadow-md);
   }
 
   #lockin-root .lockin-study-tools-item {
@@ -89,25 +84,95 @@
     color: var(--lockin-color-text-muted);
   }
 
-  /* === CLOSABLE TAB === */
-  #lockin-root .lockin-tab-closable {
+  /*
+   * CLOSEABLE TAB WRAPPER
+   *
+   * A single <div role="tab"> wrapping a <button> close icon causes a permanent
+   * font inconsistency: host-page resets that target `button` elements (e.g.
+   * Normalize.css, EdStem's base styles) do not target `div`, so the two element
+   * types end up with different computed fonts regardless of what named-@layer
+   * CSS is written. This is the root cause that persisted across all previous
+   * CSS-only fix attempts.
+   *
+   * Solution: the label text lives in a genuine <button role="tab"> (same element
+   * type as Chat/Notes → provably identical cascade path). The close button is a
+   * sibling. This wrapper <div> is purely presentational: it provides the unified
+   * visual frame (background, shadow, hover) for the whole tab unit.
+   *
+   * Layout:
+   *   ┌─ .lockin-tab-closable-wrapper ──────────────────────────────┐
+   *   │  [ Transcript (button.lockin-tab) ] [ × (button.lockin-tab-close) ]  │
+   *   └─────────────────────────────────────────────────────┘
+   */
+  #lockin-root .lockin-tab-closable-wrapper {
     display: inline-flex;
     align-items: center;
-    gap: var(--lockin-size-6);
-    padding-right: var(--lockin-size-8);
+    /* min-width:0 allows the wrapper to shrink at narrow sidebar widths */
+    min-width: 0;
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
   }
 
+  /* Hover: whole unit (label + close) lights up together */
+  #lockin-root .lockin-tab-closable-wrapper:hover {
+    background: var(--lockin-color-rgba-0-0-0-005);
+  }
+
+  /* Active: wrapper owns the active background and shadow */
+  #lockin-root .lockin-tab-closable-wrapper.lockin-tab-active {
+    background: var(--lockin-color-surface);
+    box-shadow: var(--lockin-shadow-sm);
+  }
+
+  /*
+   * The label button inside the wrapper:
+   *   - reduced right padding (close button provides visual breathing room)
+   *   - surrenders its own visual states to the wrapper
+   */
+  #lockin-root .lockin-tab-closable-wrapper > .lockin-tab {
+    max-width: 8rem;
+    padding-right: var(--lockin-size-6);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Keep transparent on hover/active — only the wrapper changes visual state */
+  #lockin-root .lockin-tab-closable-wrapper > .lockin-tab:hover,
+  #lockin-root .lockin-tab-closable-wrapper > .lockin-tab.lockin-tab-active {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /*
+   * Forward text colour from wrapper hover/active to the label button.
+   * The button’s own :hover fires only when the cursor is over the label.
+   * When the cursor is over the close button, the wrapper still needs to keep
+   * the label text in its live state colour.
+   */
+  #lockin-root .lockin-tab-closable-wrapper:hover > .lockin-tab {
+    color: var(--lockin-color-text-body);
+  }
+
+  #lockin-root .lockin-tab-closable-wrapper.lockin-tab-active > .lockin-tab {
+    color: var(--lockin-color-text-primary);
+  }
+
+  /* Close icon button inside the tab — reset button chrome, style for SVG icon */
   #lockin-root .lockin-tab-close {
     display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    width: var(--lockin-size-16);
-    height: var(--lockin-size-16);
-    font-size: var(--lockin-text-md);
-    line-height: 1;
+    /* Slightly smaller than lockin-size-16 so it sits snugly inside compact tabs */
+    width: var(--lockin-size-14);
+    height: var(--lockin-size-14);
+    padding: 0;
     color: var(--lockin-color-text-muted);
+    background: none;
+    border: none;
     border-radius: 50%;
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
   }
 
   #lockin-root .lockin-tab-close:hover {

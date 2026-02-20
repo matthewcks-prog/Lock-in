@@ -2,6 +2,7 @@
  * React sidebar host. Responsible for mounting/updating the UI bundle.
  * Layout sync (body classes) is handled by the React component itself.
  */
+/* eslint-disable max-statements -- Module IIFE requires multiple top-level declarations */
 (function () {
   const PAGE_WRAPPER_ID = 'lockin-page-wrapper';
   const LOCKIN_ROOT_ID = 'lockin-root';
@@ -147,43 +148,33 @@
   }
 
   function createStorageAdapter(runtimeStorage, log) {
+    const wrapStorageCall =
+      (fn, fallback) =>
+      async (...args) => {
+        if (!runtimeStorage) return fallback;
+        try {
+          return await fn(...args);
+        } catch (error) {
+          log.warn('Storage error:', error);
+          return fallback;
+        }
+      };
+
     return {
-      get: async (key) => {
-        if (!runtimeStorage) return null;
-        try {
-          const data = await runtimeStorage.get(key);
-          return data[key];
-        } catch (error) {
-          log.warn('Storage get error:', error);
-          return null;
-        }
-      },
-      set: async (key, value) => {
-        if (!runtimeStorage) return;
-        try {
-          await runtimeStorage.set({ [key]: value });
-        } catch (error) {
-          log.warn('Storage set error:', error);
-        }
-      },
-      getLocal: async (key) => {
-        if (!runtimeStorage || !runtimeStorage.getLocal) return null;
-        try {
-          const data = await runtimeStorage.getLocal(key);
-          return data[key];
-        } catch (error) {
-          log.warn('Storage getLocal error:', error);
-          return null;
-        }
-      },
-      setLocal: async (key, value) => {
-        if (!runtimeStorage || !runtimeStorage.setLocal) return;
-        try {
-          await runtimeStorage.setLocal(key, value);
-        } catch (error) {
-          log.warn('Storage setLocal error:', error);
-        }
-      },
+      get: wrapStorageCall(async (key) => {
+        const data = await runtimeStorage.get(key);
+        return data[key];
+      }, null),
+      set: wrapStorageCall(async (key, value) => {
+        await runtimeStorage.set({ [key]: value });
+      }, undefined),
+      getLocal: wrapStorageCall(async (key) => {
+        const data = await runtimeStorage.getLocal(key);
+        return data[key];
+      }, null),
+      setLocal: wrapStorageCall(async (key, value) => {
+        await runtimeStorage.setLocal(key, value);
+      }, undefined),
     };
   }
 
@@ -209,11 +200,33 @@
     };
   }
 
+  function ensureScrollbarManager(scrollbarManagerState, log) {
+    if (scrollbarManagerState.instance) return;
+    if (window.LockInContent && window.LockInContent.scrollbarManager) {
+      scrollbarManagerState.instance = window.LockInContent.scrollbarManager;
+      return;
+    }
+    if (!window.LockInContent || !window.LockInContent.createScrollbarWidthManager) {
+      log.warn('ScrollbarWidthManager not available, layout may shift on scrollbar changes');
+      return;
+    }
+    try {
+      scrollbarManagerState.instance = window.LockInContent.createScrollbarWidthManager({
+        Logger: log,
+      });
+      scrollbarManagerState.instance.init();
+      window.LockInContent.scrollbarManager = scrollbarManagerState.instance;
+    } catch (error) {
+      log.error('Failed to initialize scrollbar width manager:', error);
+    }
+  }
+
   function createSidebarHost({ Logger, Storage }) {
     const log = createDefaultLogger(Logger);
     const runtimeStorage = resolveRuntimeStorage(Storage);
     const { ensurePageWrapper } = createPageWrapperManager();
     let sidebarInstance = null;
+    const scrollbarManagerState = { instance: null };
 
     function renderSidebar({ apiClient, pageContext, state, onToggle, onClearPrefill }) {
       if (!window.LockInUI || !window.LockInUI.createLockInSidebar) {
@@ -221,6 +234,7 @@
         return;
       }
 
+      ensureScrollbarManager(scrollbarManagerState, log);
       injectStyles(log);
       ensurePageWrapper();
       const sidebarProps = buildSidebarProps({
@@ -259,3 +273,4 @@
   window.LockInContent = window.LockInContent || {};
   window.LockInContent.createSidebarHost = createSidebarHost;
 })();
+/* eslint-enable max-statements */

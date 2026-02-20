@@ -105,8 +105,8 @@
     text-align: left;
     color: var(--lockin-color-accent-text);
     background: var(--lockin-color-accent-surface);
-    border-radius: var(--lockin-size-18) var(--lockin-size-18) var(--lockin-radius-sm)
-      var(--lockin-size-18);
+    border-radius: var(--lockin-radius-3xl) var(--lockin-radius-3xl) var(--lockin-radius-sm)
+      var(--lockin-radius-3xl);
   }
 
   /* STATE: Remove bubble styling when editing to prevent nested container conflicts */
@@ -158,8 +158,8 @@
     margin-left: auto;
     padding: var(--lockin-size-10) var(--lockin-size-16);
     background: var(--lockin-color-accent-surface);
-    border-radius: var(--lockin-size-18) var(--lockin-size-18) var(--lockin-radius-sm)
-      var(--lockin-size-18);
+    border-radius: var(--lockin-radius-3xl) var(--lockin-radius-3xl) var(--lockin-radius-sm)
+      var(--lockin-radius-3xl);
   }
 
   #lockin-root .lockin-msg-editor-textarea {

@@ -1,4 +1,4 @@
-import { ConfirmDialog, Toast } from '@shared/ui/components';
+import { ConfirmDialog, Toast } from '../../components';
 import { NoteEditor } from '../NoteEditor';
 import { NotesListView } from './NotesListView';
 import { NotesPanelHeader } from './NotesPanelHeader';

@@ -5,7 +5,7 @@
  * Reuses useTranscripts hook and TranscriptVideoListPanel - no duplication of logic.
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useTranscripts } from '../transcripts/useTranscripts';
 import { TranscriptVideoListPanel } from '../transcripts/components';
 import { TranscriptMessage } from '../transcripts/TranscriptMessage';
@@ -54,19 +54,6 @@ function useAutoDetectOnMount({
       void detectAndAutoExtract();
     }
   }, []);
-}
-
-function usePanelCloseAction({
-  closeVideoList,
-  clearError,
-}: {
-  closeVideoList: ReturnType<typeof useTranscripts>['closeVideoList'];
-  clearError: ReturnType<typeof useTranscripts>['clearError'];
-}): () => void {
-  return useCallback(() => {
-    closeVideoList();
-    clearError();
-  }, [clearError, closeVideoList]);
 }
 
 function shouldShowVideoList(state: TranscriptToolState, hasLastTranscript: boolean): boolean {
@@ -121,7 +108,6 @@ function VideoListSection({
   showVideoList,
   state,
   panelOptionalProps,
-  handlePanelClose,
   extractTranscript,
   transcribeWithAI,
   cancelAiTranscription,
@@ -129,7 +115,6 @@ function VideoListSection({
   showVideoList: boolean;
   state: TranscriptToolState;
   panelOptionalProps: PanelOptionalProps;
-  handlePanelClose: () => void;
   extractTranscript: ReturnType<typeof useTranscripts>['extractTranscript'];
   transcribeWithAI: ReturnType<typeof useTranscripts>['transcribeWithAI'];
   cancelAiTranscription: ReturnType<typeof useTranscripts>['cancelAiTranscription'];
@@ -147,7 +132,6 @@ function VideoListSection({
       onSelectVideo={(video) => {
         void extractTranscript(video);
       }}
-      onClose={handlePanelClose}
       {...panelOptionalProps}
       extractionResults={state.extractionsByVideoId}
       aiTranscription={state.aiTranscription}
@@ -197,11 +181,9 @@ export function TranscriptToolContent(): JSX.Element {
   const {
     state: transcriptState,
     detectAndAutoExtract,
-    closeVideoList,
     extractTranscript,
     transcribeWithAI,
     cancelAiTranscription,
-    clearError,
   } = useTranscripts();
   const lastTranscript = transcriptState.lastTranscript;
   const hasLastTranscript = hasTranscript(lastTranscript);
@@ -213,7 +195,6 @@ export function TranscriptToolContent(): JSX.Element {
     hasLastTranscript,
     detectAndAutoExtract,
   });
-  const handlePanelClose = usePanelCloseAction({ closeVideoList, clearError });
 
   return (
     <div className="lockin-tool-content lockin-transcript-tool">
@@ -228,7 +209,6 @@ export function TranscriptToolContent(): JSX.Element {
         showVideoList={showVideoList}
         state={transcriptState}
         panelOptionalProps={panelOptionalProps}
-        handlePanelClose={handlePanelClose}
         extractTranscript={extractTranscript}
         transcribeWithAI={transcribeWithAI}
         cancelAiTranscription={cancelAiTranscription}

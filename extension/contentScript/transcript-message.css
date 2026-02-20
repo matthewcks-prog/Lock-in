@@ -7,7 +7,7 @@
 
   #lockin-root .lockin-video-auth-message {
     margin: 0 0 var(--lockin-size-16) 0;
-    font-size: var(--lockin-size-14);
+    font-size: var(--lockin-text-md);
     color: var(--lockin-color-text-body);
   }
 
@@ -16,7 +16,7 @@
     align-items: center;
     justify-content: center;
     padding: var(--lockin-size-10) var(--lockin-size-20);
-    font-size: var(--lockin-size-14);
+    font-size: var(--lockin-text-md);
     font-weight: 600;
     color: var(--lockin-color-surface);
     background: linear-gradient(
@@ -25,7 +25,7 @@
       var(--lockin-color-6d28d9) 100%
     );
     border: none;
-    border-radius: var(--lockin-size-8);
+    border-radius: var(--lockin-radius-lg);
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
@@ -42,12 +42,12 @@
 
   #lockin-root .lockin-video-auth-hint {
     margin: var(--lockin-size-12) 0 0 0;
-    font-size: var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
     color: var(--lockin-color-text-muted);
   }
 
   #lockin-root .lockin-video-extract-icon {
-    font-size: var(--lockin-size-16);
+    font-size: var(--lockin-text-lg);
     color: var(--lockin-color-text-secondary);
     transition: transform var(--lockin-duration-150) var(--lockin-ease-default);
   }
@@ -63,7 +63,7 @@
     overflow: hidden;
     background: var(--lockin-color-f8fafc);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-size-12);
+    border-radius: var(--lockin-radius-2xl);
   }
 
   #lockin-root .lockin-transcript-header {
@@ -83,12 +83,12 @@
   }
 
   #lockin-root .lockin-transcript-icon {
-    font-size: var(--lockin-size-18);
+    font-size: var(--lockin-text-xl);
   }
 
   #lockin-root .lockin-transcript-title {
     overflow: hidden;
-    font-size: var(--lockin-size-14);
+    font-size: var(--lockin-text-md);
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -96,7 +96,7 @@
 
   #lockin-root .lockin-transcript-meta {
     margin-top: var(--lockin-size-4);
-    font-size: var(--lockin-size-11);
+    font-size: var(--lockin-text-xs);
     color: var(--lockin-color-rgba-255-255-255-08);
   }
 
@@ -104,7 +104,8 @@
     max-height: var(--lockin-size-500);
     padding: var(--lockin-size-16);
     overflow-y: auto;
-    font-size: var(--lockin-size-13);
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-base);
     line-height: 1.6;
     white-space: pre-wrap;
     color: var(--lockin-color-text-body);
@@ -124,12 +125,12 @@
     align-items: center;
     gap: var(--lockin-size-4);
     padding: var(--lockin-size-6) var(--lockin-size-12);
-    font-size: var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
     font-weight: 500;
     color: var(--lockin-color-text-body);
     background: var(--lockin-color-surface);
     border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
-    border-radius: var(--lockin-size-6);
+    border-radius: var(--lockin-radius-md);
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }

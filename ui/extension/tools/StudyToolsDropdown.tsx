@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { TOOLS } from './registry';
 import { useToolContext } from './ToolContext';
 
@@ -75,10 +76,13 @@ export function StudyToolsDropdown(): JSX.Element {
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span>Study Tools</span>
-        <span className="lockin-study-tools-chevron" aria-hidden="true">
-          v
-        </span>
+        <span className="lockin-study-tools-btn-label">Study Tools</span>
+        <ChevronDown
+          size={12}
+          strokeWidth={2}
+          className="lockin-study-tools-chevron"
+          aria-hidden="true"
+        />
       </button>
       {isOpen && <StudyToolMenu onSelect={handleToolSelect} />}
     </div>

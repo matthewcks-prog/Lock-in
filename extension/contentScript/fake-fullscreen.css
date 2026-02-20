@@ -1,5 +1,6 @@
 @layer lockin.layout {
-  /* Fake fullscreen keeps video playback visible while preserving sidebar controls. */
+  /* Fake fullscreen keeps video playback visible while preserving sidebar controls.
+     Only active when sidebar is open; closing the sidebar transitions to native fullscreen. */
   body.lockin-fake-fullscreen {
     overflow: hidden !important;
   }
@@ -18,11 +19,13 @@
     background: var(--lockin-color-0f172a) !important;
     border: none !important;
     border-radius: 0 !important;
+    /* Override inherited visibility:hidden from page-wrapper children rule */
+    visibility: visible !important;
     transform: none !important;
     object-fit: contain !important;
   }
 
-  body.lockin-fake-fullscreen.lockin-sidebar-open #lockin-page-wrapper {
+  body.lockin-fake-fullscreen #lockin-page-wrapper {
     position: fixed;
     top: 0;
     left: 0;
@@ -30,20 +33,32 @@
     width: var(--lockin-content-width) !important;
     height: 100vh;
     overflow: hidden;
+    /* Solid backdrop hides the underlying page content so HTML5 videos
+       (which may not fill the entire area) show a clean dark background. */
+    background: var(--lockin-color-0f172a, #0f172a) !important;
   }
 
-  body.lockin-fake-fullscreen:not(.lockin-sidebar-open) .lockin-fake-fullscreen-video,
-  body.lockin-fake-fullscreen:not(.lockin-sidebar-open) #lockin-page-wrapper {
-    width: 100vw !important;
+  /*
+   * In fake fullscreen the sidebar absorbs the scrollbar-gutter space by
+   * growing its actual width.  This keeps the resize handle (positioned at
+   * the sidebar's left edge) aligned with the *visual* edge the user sees,
+   * so drag-to-resize works from the correct position.
+   *
+   * --lockin-sidebar-width is still the "logical" width used by storage and
+   * the resize hook; the extra scrollbar sliver only exists on-screen.
+   */
+  body.lockin-fake-fullscreen #lockin-sidebar {
+    width: calc(var(--lockin-sidebar-width) + var(--lockin-scrollbar-width)) !important;
   }
 
-  body.lockin-fake-fullscreen:not(.lockin-sidebar-open) #lockin-page-wrapper {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 2147483641;
-    height: 100vh;
-    overflow: hidden;
+  /*
+   * Hide all page-wrapper children so HTML5 videos (which may not fill the
+   * entire content area) render against a clean dark backdrop instead of
+   * showing the underlying website.  The wrapper itself stays visible for
+   * its background colour; the video element is fixed-positioned above it.
+   */
+  body.lockin-fake-fullscreen #lockin-page-wrapper > * {
+    visibility: hidden !important;
   }
 
   body.lockin-fake-fullscreen #lockin-root,
@@ -51,44 +66,67 @@
     z-index: 2147483647;
   }
 
-  #lockin-fake-fs-toggle {
+  /* --- Exit button (upper-left corner of the video area) --- */
+  #lockin-fake-fullscreen-exit {
     position: fixed;
-    top: var(--lockin-space-3);
-    left: var(--lockin-space-3);
-    z-index: 2147483645;
-    display: none;
+    top: 12px;
+    left: 12px;
+    z-index: 2147483646;
+    display: flex;
     align-items: center;
-    gap: var(--lockin-space-1-5);
-    padding: var(--lockin-space-1-5) var(--lockin-space-3);
-    font-family: var(--lockin-font-family-base);
-    font-size: var(--lockin-text-sm);
-    font-weight: var(--lockin-font-medium);
-    color: var(--lockin-color-surface);
-    background: var(--lockin-color-rgba-0-0-0-05);
-    border: var(--lockin-size-1) solid var(--lockin-color-rgba-255-255-255-03);
-    border-radius: var(--lockin-radius-lg);
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
     opacity: 0;
     transition:
-      opacity var(--lockin-duration-200) var(--lockin-ease-standard),
-      background var(--lockin-duration-150) var(--lockin-ease-default);
+      opacity 0.2s ease,
+      background 0.15s ease;
     cursor: pointer;
+    /* Default: click-transparent so the button never silently blocks events
+       when fake fullscreen is inactive (e.g. after a fake→native transition). */
     pointer-events: none;
-    backdrop-filter: blur(var(--lockin-size-8));
+    backdrop-filter: blur(6px);
   }
 
-  #lockin-fake-fs-toggle.lockin-fake-fs-toggle--visible {
-    display: inline-flex;
+  #lockin-fake-fullscreen-exit:hover {
+    background: rgba(0, 0, 0, 0.85);
+  }
+
+  #lockin-fake-fullscreen-exit:active {
+    transform: scale(0.96);
+  }
+
+  /* Show on hover over the video / page-wrapper area or over the button itself */
+  body.lockin-fake-fullscreen #lockin-fake-fullscreen-exit:hover,
+  body.lockin-fake-fullscreen #lockin-fake-fullscreen-exit.lockin-exit-visible,
+  body.lockin-fake-fullscreen .lockin-fake-fullscreen-video:hover ~ #lockin-fake-fullscreen-exit,
+  body.lockin-fake-fullscreen #lockin-page-wrapper:hover ~ #lockin-fake-fullscreen-exit {
     opacity: 1;
     pointer-events: auto;
   }
 
-  #lockin-fake-fs-toggle:hover {
-    background: var(--lockin-color-rgba-0-0-0-02);
+  /* SVG icon inside the button */
+  #lockin-fake-fullscreen-exit svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
   }
 
   @media (max-width: 1024px) {
     body.lockin-fake-fullscreen .lockin-fake-fullscreen-video,
-    body.lockin-fake-fullscreen.lockin-sidebar-open #lockin-page-wrapper {
+    body.lockin-fake-fullscreen #lockin-page-wrapper {
       width: 100vw !important;
     }
   }

@@ -25,8 +25,6 @@ export interface TranscriptVideoListPanelProps {
   isLoading: boolean;
   /** Callback when a video is selected for extraction */
   onSelectVideo: (video: DetectedVideo) => void;
-  /** Callback to close the panel */
-  onClose: () => void;
 
   // State props
   /** Error message if detection failed */
@@ -119,7 +117,6 @@ export function TranscriptVideoListPanel({
   videos,
   isLoading,
   onSelectVideo,
-  onClose,
   error,
   detectionHint,
   authRequired,
@@ -137,7 +134,6 @@ export function TranscriptVideoListPanel({
       videos={videos}
       isLoading={isLoading}
       onSelectVideo={onSelectVideo}
-      onClose={onClose}
       {...buildPanelOptionalProps({ error, detectionHint, authRequired })}
       selectedVideoId={extractingVideoId}
       isVideoDisabled={(video) =>

@@ -162,7 +162,14 @@ function initFakeFullscreen(createFakeFullscreen, stateStore) {
     return;
   }
   try {
-    const fakeFullscreen = createFakeFullscreen({ Logger, stateStore });
+    const fakeFullscreen = createFakeFullscreen({
+      Logger,
+      stateStore,
+      scrollbarManager:
+        window.LockInContent && window.LockInContent.scrollbarManager
+          ? window.LockInContent.scrollbarManager
+          : null,
+    });
     if (fakeFullscreen && typeof fakeFullscreen.init === 'function') {
       fakeFullscreen.init();
       Logger.debug('[Lock-in] Fake fullscreen initialized');

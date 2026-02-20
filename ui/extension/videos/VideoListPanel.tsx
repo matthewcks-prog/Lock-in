@@ -30,8 +30,6 @@ export interface VideoListPanelProps {
   isLoading: boolean;
   /** Callback when a video is selected */
   onSelectVideo: (video: DetectedVideo) => void;
-  /** Callback to close the panel */
-  onClose: () => void;
 
   // State props
   /** Error message if detection failed */
@@ -100,18 +98,10 @@ function AuthRequiredPrompt({
   );
 }
 
-function VideoListHeader({ title, onClose }: { title: string; onClose: () => void }): JSX.Element {
+function VideoListHeader({ title }: { title: string }): JSX.Element {
   return (
     <div className="lockin-video-list-header">
       <h3 className="lockin-video-list-title">{title}</h3>
-      <button
-        className="lockin-video-list-close"
-        onClick={onClose}
-        aria-label="Close"
-        type="button"
-      >
-        \u00D7
-      </button>
     </div>
   );
 }
@@ -312,7 +302,6 @@ export function VideoListPanel({
   videos,
   isLoading,
   onSelectVideo,
-  onClose,
   error,
   detectionHint,
   authRequired,
@@ -327,7 +316,7 @@ export function VideoListPanel({
 }: VideoListPanelProps): JSX.Element {
   return (
     <div className="lockin-video-list-panel">
-      <VideoListHeader title={title} onClose={onClose} />
+      <VideoListHeader title={title} />
       <div className="lockin-video-list-body">
         <VideoListBody
           videos={videos}

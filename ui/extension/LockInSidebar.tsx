@@ -26,14 +26,15 @@ import {
   CHAT_TAB_ID,
   NOTES_TAB_ID,
   TOOL_TAB_ID,
-  SIDEBAR_WIDTH_KEY,
   SIDEBAR_MIN_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MAX_VW,
   SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_WIDTH_KEY,
 } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
 import { useSidebarState } from './sidebar/useSidebarState';
+import { useFeedbackListener } from './sidebar/hooks/useFeedbackListener';
 import type { NotesPanelHandlers, SidebarModel } from './sidebar/lockInSidebarTypes';
 
 export interface LockInSidebarProps {
@@ -170,6 +171,8 @@ function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
     setActiveTab: sidebarState.setActiveTab,
   });
 
+  useFeedbackListener(() => setIsFeedbackOpen(true));
+
   return {
     activeTab: sidebarState.activeTab,
     activeToolId,
@@ -292,9 +295,7 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
               onCloseTool={model.closeTool}
             />
           }
-          headerRight={
-            <SidebarHeaderActions onOpenFeedback={() => model.setIsFeedbackOpen(true)} />
-          }
+          headerRight={<SidebarHeaderActions />}
         >
           <SidebarTabContent model={model} notesHandlers={notesHandlers} />
         </SidebarLayout>

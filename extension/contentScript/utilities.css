@@ -19,6 +19,7 @@
   /* === FOCUS RING — single consistent style for all interactive elements === */
   #lockin-root .lockin-tab:focus-visible,
   #lockin-root .lockin-close-btn:focus-visible,
+  #lockin-root .lockin-tab-close:focus-visible,
   #lockin-root .lockin-btn-new:focus-visible,
   #lockin-root .lockin-history-toggle-btn:focus-visible,
   #lockin-root .lockin-history-item:focus-visible,

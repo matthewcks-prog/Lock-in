@@ -13,7 +13,7 @@ Purpose: Stable guardrails for how Lock-in is structured. Implementation details
 - **Core/API Chrome-free**: `/core` and `/api` must not depend on `chrome` or extension runtime.
 - **Extension-only Chrome usage**: Chrome APIs and extension wiring live in `/extension` and the sidebar source `ui/extension/**`.
 - **Integrations**: Adapters in `/integrations/adapters/**` are pure DOM/URL logic; registered via `/integrations/index.ts`.
-- **Shared UI**: `/shared/ui` is a low-level kit usable by both extension and future web app.
+- **Extension UI Components**: Shared reusable components live in `ui/extension/components/` for use across extension features.
 - **Single widget**: One `<LockInSidebar />` component reused across sites; site differences flow through adapters/context, not multiple widgets.
 - **Transcript system boundaries**:
   - **Core providers** (`/core/transcripts/providers/`): Pure TypeScript, no Chrome APIs. Business logic (extraction algorithms).
@@ -24,7 +24,7 @@ Purpose: Stable guardrails for how Lock-in is structured. Implementation details
 
 ## Build Outputs vs Source
 
-- **Sources**: `ui/extension/**`, `extension/src/**`, `/core`, `/api`, `/integrations`, `/shared/ui`.
+- **Sources**: `ui/extension/**`, `extension/src/**`, `/core`, `/api`, `/integrations`.
 - **Build outputs (do not edit)**: `extension/dist/ui/**` (sidebar bundle built from `ui/extension`), `extension/dist/libs/**` (initApi/contentLibs bundles built from `extension/src`).
 - **Shared build config**: `config/vite/shared.ts` centralizes alias/define/build helper logic for all Vite and Vitest configs.
 

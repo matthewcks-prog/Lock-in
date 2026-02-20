@@ -24,7 +24,9 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--lockin-size-8);
-    padding: var(--lockin-size-6) var(--lockin-size-12);
+    /* padding-inline matches lockin-notes-body so metadata left-edge aligns
+       with the note card content (title, toolbar, editor). */
+    padding: var(--lockin-size-6) var(--lockin-size-16);
     border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
   }
 
@@ -40,18 +42,18 @@
     display: flex;
     align-items: center;
     gap: var(--lockin-size-4);
-    font-size: var(--lockin-text-xs);
-    color: var(--lockin-color-text-emphasis);
   }
 
   #lockin-root .lockin-notes-label {
-    font-size: var(--lockin-text-xs);
+    /* text-sm (12px) keeps the label readable alongside the course value/link
+       without competing with the note title above it. */
+    font-size: var(--lockin-text-sm);
     font-weight: 600;
     color: var(--lockin-color-text-secondary);
   }
 
   #lockin-root .lockin-notes-course-value {
-    font-size: var(--lockin-text-xs);
+    font-size: var(--lockin-text-sm);
     font-weight: 700;
     color: var(--lockin-color-text-primary);
   }
@@ -62,12 +64,10 @@
     gap: var(--lockin-size-4);
     min-width: 0;
     overflow: hidden;
-    font-size: var(--lockin-text-xs);
-    color: var(--lockin-color-text-secondary);
   }
 
   #lockin-root .lockin-notes-link-href {
-    font-size: var(--lockin-text-xs);
+    font-size: var(--lockin-text-sm);
     font-weight: 500;
     text-decoration: none;
     color: var(--lockin-color-brand);
@@ -86,27 +86,30 @@
     /* Match the history toggle button height. */
     height: var(--lockin-size-28);
     padding: var(--lockin-size-2);
+    overflow: hidden;
     background: var(--lockin-color-surface-muted);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-radius-lg);
+    border-radius: var(--lockin-radius-xl);
   }
 
   #lockin-root .lockin-notes-toggle-btn {
     padding: var(--lockin-size-4) var(--lockin-size-8);
+    font-family: var(--lockin-font-family-base);
     font-size: var(--lockin-text-xs);
     font-weight: 600;
+    line-height: var(--lockin-leading-snug);
     white-space: nowrap;
     color: var(--lockin-color-text-secondary);
     background: transparent;
     border: none;
-    border-radius: var(--lockin-radius-md);
+    border-radius: var(--lockin-radius-lg);
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
 
   #lockin-root .lockin-notes-toggle-btn:hover {
     color: var(--lockin-color-text-primary);
-    background: var(--lockin-color-rgba-0-0-0-003);
+    background: var(--lockin-color-rgba-0-0-0-005);
   }
 
   #lockin-root .lockin-notes-toggle-btn:focus-visible {
@@ -116,8 +119,10 @@
 
   #lockin-root .lockin-notes-toggle-btn.is-active {
     color: var(--lockin-color-text-primary);
+    /* No box-shadow: the container already provides visual containment via
+       overflow:hidden + border; adding inner shadows here caused a
+       floating-white-box artefact on sites with white base colours. */
     background: var(--lockin-color-surface);
-    box-shadow: var(--lockin-shadow-08);
   }
 
   /* Shared "+ New" button used by Chat and Notes. */
@@ -126,7 +131,9 @@
     flex-shrink: 0;
     align-items: center;
     gap: var(--lockin-size-4);
-    padding: var(--lockin-size-3) var(--lockin-size-8);
+    padding: var(--lockin-size-3) var(--lockin-size-8); /* font-family matches .lockin-study-tools-btn and .lockin-tab-label: same token, no !important
+       so the host-page font wins when present, keeping the extension visually consistent with the site */
+    font-family: var(--lockin-font-family-base);
     font-size: var(--lockin-text-xs);
     font-weight: 600;
     line-height: var(--lockin-leading-snug);
@@ -176,7 +183,9 @@
     gap: var(--lockin-size-10);
     min-height: 0;
     padding: var(--lockin-size-12) var(--lockin-size-16) var(--lockin-size-14);
+    /* Use a subtle background so inner cards (editor / list) have visible depth */
     overflow: hidden;
+    background: var(--lockin-color-surface-subtle);
   }
 
   #lockin-root .lockin-note-shell-card {

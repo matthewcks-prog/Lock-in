@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { Dispatch, MouseEvent as ReactMouseEvent, SetStateAction } from 'react';
 import type { Note } from '@core/domain/Note';
-import type { ToastType } from '@shared/ui/components';
+import type { ToastType } from '../../components';
 
 const MAX_INLINE_ERROR_MESSAGE_LENGTH = 60;
 const DELETE_NOTE_FAILED_MESSAGE = 'Failed to delete note';

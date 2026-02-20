@@ -7,7 +7,17 @@
   #lockin-root button,
   #lockin-root input,
   #lockin-root select,
-  #lockin-root textarea {
+  #lockin-root textarea,
+  /*
+   * Elements with role="tab" may be <div> rather than <button> (e.g. the closeable
+   * tool tab) to allow a valid nested <button> for the close action.
+   * Adding them here ensures they start from the inherited lockin font baseline,
+   * matching the UA-stylesheet override that buttons already receive.
+   * Font tokens are then set explicitly (without !important) on individual component
+   * selectors in chrome.css / tools.css / notes-shell.css so that host-page unlayered
+   * font rules can still win, keeping extension typography consistent with the site.
+   */
+  #lockin-root [role="tab"] {
     font: inherit;
   }
 

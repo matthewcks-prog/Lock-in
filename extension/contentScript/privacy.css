@@ -5,7 +5,7 @@
     position: relative;
     margin: var(--lockin-size-8) var(--lockin-size-12);
     padding: var(--lockin-size-12) var(--lockin-size-14);
-    font-size: var(--lockin-size-13);
+    font-size: var(--lockin-text-base);
     color: var(--lockin-color-166534);
     background: linear-gradient(
       135deg,
@@ -13,7 +13,7 @@
       var(--lockin-color-ecfeff) 100%
     );
     border: var(--lockin-size-1) solid var(--lockin-color-86efac);
-    border-radius: var(--lockin-size-8);
+    border-radius: var(--lockin-radius-lg);
     box-shadow: var(--lockin-shadow-07);
   }
 
@@ -31,7 +31,7 @@
   }
 
   #lockin-root .lockin-privacy-icon {
-    font-size: var(--lockin-size-14);
+    font-size: var(--lockin-text-md);
   }
 
   #lockin-root .lockin-privacy-message {
@@ -43,7 +43,7 @@
   #lockin-root .lockin-privacy-list {
     margin: 0;
     padding: 0 0 0 var(--lockin-size-4);
-    font-size: var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
     color: var(--lockin-color-15803d);
     list-style: none;
   }
@@ -57,12 +57,12 @@
     display: block;
     width: 100%;
     padding: var(--lockin-size-8) var(--lockin-size-12);
-    font-size: var(--lockin-size-13);
+    font-size: var(--lockin-text-base);
     font-weight: 500;
     color: var(--lockin-color-surface);
     background: var(--lockin-color-16a34a);
     border: none;
-    border-radius: var(--lockin-size-6);
+    border-radius: var(--lockin-radius-md);
     transition: background var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
@@ -81,14 +81,14 @@
     align-items: center;
     gap: var(--lockin-size-6);
     padding: var(--lockin-size-8) var(--lockin-size-12);
-    font-size: var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
     color: var(--lockin-color-text-secondary);
     background: var(--lockin-color-fafafa);
     border-top: var(--lockin-size-1) solid var(--lockin-color-border);
   }
 
   #lockin-root .lockin-privacy-compact .lockin-privacy-icon {
-    font-size: var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
   }
 
   #lockin-root .lockin-privacy-compact .lockin-privacy-text {
@@ -98,7 +98,7 @@
 
   #lockin-root .lockin-privacy-link {
     padding: 0;
-    font-size: var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
     text-decoration: underline;
     color: var(--lockin-color-brand);
     background: none;
@@ -117,18 +117,18 @@
     gap: var(--lockin-size-8);
     margin: var(--lockin-size-12);
     padding: var(--lockin-size-12) var(--lockin-size-14);
-    font-size: var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
     line-height: 1.5;
     color: var(--lockin-color-text-secondary);
     background: var(--lockin-color-surface-subtle);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-size-6);
+    border-radius: var(--lockin-radius-md);
   }
 
   #lockin-root .lockin-privacy-footer .lockin-privacy-icon {
     flex-shrink: 0;
     margin-top: var(--lockin-size-1);
-    font-size: var(--lockin-size-14);
+    font-size: var(--lockin-text-md);
   }
 
   #lockin-root .lockin-privacy-footer .lockin-privacy-text {

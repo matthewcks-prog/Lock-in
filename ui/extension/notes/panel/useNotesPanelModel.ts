@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Note } from '@core/domain/Note';
 import type { NotesService } from '@core/services/notesService';
-import { useToast } from '@shared/ui/components';
+import { useToast } from '../../components';
 import { useNoteAssets } from '../../../hooks/useNoteAssets';
 import { useNoteEditor } from '../../../hooks/useNoteEditor';
 import { filterNotes } from './noteFilters';

@@ -8,7 +8,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock the stateStore module by creating a testable version
 // Since stateStore is an IIFE, we'll test the factory function directly
-// eslint-disable-next-line max-statements
 function createStateStore({ Storage, Logger }) {
   const storage = Storage;
   const DEFAULT_PREFS = {

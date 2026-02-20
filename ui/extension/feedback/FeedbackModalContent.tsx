@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import type { FeedbackType } from '@api/resources/feedbackClient';
 import {
   FEEDBACK_TYPES,
@@ -21,12 +22,14 @@ export function FeedbackModalHeader({
         Send Feedback
       </h2>
       <button
+        type="button"
         className="lockin-feedback-close"
         onClick={onClose}
         disabled={isSubmitting}
         aria-label="Close feedback form"
+        title="Close feedback form"
       >
-        x
+        <X size={16} strokeWidth={2} aria-hidden="true" />
       </button>
     </div>
   );

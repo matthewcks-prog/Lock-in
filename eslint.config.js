@@ -558,6 +558,7 @@ export default [
     files: ['**/__tests__/**/*.{js,mjs,cjs,ts,tsx}', '**/*.{test,spec}.{js,mjs,cjs,ts,tsx}'],
     rules: {
       'max-lines': 'off',
+      'max-statements': 'off',
       complexity: 'off',
       'max-lines-per-function': 'off',
       'max-nested-callbacks': 'off',

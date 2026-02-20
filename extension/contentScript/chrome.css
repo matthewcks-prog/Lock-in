@@ -22,34 +22,58 @@
   #lockin-root .lockin-tabs-wrapper {
     display: flex;
     gap: var(--lockin-size-2);
+    /* Prevent the tab strip from overflowing its flex parent at narrow sidebar widths */
+    min-width: 0;
     padding: var(--lockin-size-2);
-    background: var(--lockin-color-surface-subtle);
+    overflow: hidden;
+    background: var(--lockin-color-surface-muted);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-radius-lg);
+    border-radius: var(--lockin-radius-2xl);
   }
 
   #lockin-root .lockin-tab {
-    padding: var(--lockin-size-4) var(--lockin-size-10);
+    /*
+     * Shared base for ALL tab elements in the tab strip:
+     *   - Chat tab   <button class="lockin-tab">
+     *   - Notes tab  <button class="lockin-tab">
+     *   - Tool tabs  <button class="lockin-tab"> inside a wrapper div
+     *                (see .lockin-tab-closable-wrapper in tools.css)
+     *
+     * Using a genuine <button> for every label guarantees an identical CSS
+     * cascade path across all three tabs. Host-page resets (Normalize, EdStem,
+     * Moodle, …) target `button` elements explicitly, so all tab labels receive
+     * the same computed font regardless of the host stylesheet. This is the
+     * structural fix that no amount of CSS-only cascade manipulation can
+     * replicate reliably.
+     *
+     * display:inline-flex + align-items:center centres text and icons
+     * vertically without requiring a line-height hack.
+     */
+    display: inline-flex;
+    align-items: center;
+    padding: var(--lockin-size-5) var(--lockin-size-10);
+    font-family: var(--lockin-font-family-base);
     font-size: var(--lockin-text-xs);
     font-weight: 600;
+    line-height: var(--lockin-leading-snug);
     white-space: nowrap;
     color: var(--lockin-color-text-secondary);
     background: transparent;
     border: none;
-    border-radius: var(--lockin-radius-md);
+    border-radius: var(--lockin-radius-lg);
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
 
   #lockin-root .lockin-tab:hover {
     color: var(--lockin-color-text-body);
-    background: var(--lockin-color-rgba-0-0-0-003);
+    background: var(--lockin-color-rgba-0-0-0-005);
   }
 
   #lockin-root .lockin-tab.lockin-tab-active {
     color: var(--lockin-color-text-primary);
     background: var(--lockin-color-surface);
-    box-shadow: var(--lockin-shadow-06);
+    box-shadow: var(--lockin-shadow-sm);
   }
 
   #lockin-root .lockin-close-btn {
