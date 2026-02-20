@@ -73,6 +73,7 @@ export default [
     ignores: [
       '**/node_modules/**',
       'extension/dist/**',
+      'extension/config.js',
       '**/dist/**',
       '**/build/**',
       '**/coverage/**',

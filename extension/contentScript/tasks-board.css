@@ -1,0 +1,247 @@
+@layer lockin.tasks {
+  /* ========================================
+   Board Layout, Columns & Cards
+   ======================================== */
+
+  /* --- Board Layout --- */
+
+  #lockin-root .lockin-board {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    min-height: 200px;
+    padding: 8px;
+    overflow: auto hidden;
+  }
+
+  #lockin-root .lockin-board-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    font-size: 13px;
+    color: #9ca3af;
+  }
+
+  /* --- Board Columns --- */
+
+  #lockin-root .lockin-board-column {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 160px;
+    max-width: 300px;
+    overflow: hidden;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+  }
+
+  #lockin-root .lockin-board-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #f3f4f6;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  #lockin-root .lockin-board-column-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #374151;
+  }
+
+  #lockin-root .lockin-board-column-count {
+    min-width: 18px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-align: center;
+    color: #9ca3af;
+    background: #e5e7eb;
+    border-radius: 10px;
+  }
+
+  #lockin-root .lockin-board-column-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 60px;
+    padding: 6px;
+    overflow-y: auto;
+  }
+
+  #lockin-root .lockin-board-column-body.is-over {
+    background: #eff6ff;
+    border-color: #93c5fd;
+  }
+
+  #lockin-root .lockin-board-column-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 8px;
+    font-size: 11px;
+    font-style: italic;
+    text-align: center;
+    color: #d1d5db;
+  }
+
+  /* --- Board Cards --- */
+
+  #lockin-root .lockin-board-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    cursor: grab;
+    user-select: none;
+  }
+
+  #lockin-root .lockin-board-card:active {
+    cursor: grabbing;
+  }
+
+  #lockin-root .lockin-board-card:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  #lockin-root .lockin-board-card.is-completed {
+    opacity: 0.7;
+  }
+
+  #lockin-root .lockin-board-card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  #lockin-root .lockin-board-card-grip {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    min-height: 16px;
+    padding: 2px;
+    color: #d1d5db;
+    border-radius: 2px;
+    transition: color 0.1s ease;
+    cursor: grab;
+  }
+
+  #lockin-root .lockin-board-card-grip:hover {
+    color: #9ca3af;
+  }
+
+  #lockin-root .lockin-board-card-grip:active {
+    cursor: grabbing;
+  }
+
+  #lockin-root .lockin-board-card-title {
+    display: -webkit-box;
+    flex: 1;
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    color: #111827;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  #lockin-root .lockin-board-card-star {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: #f59e0b;
+  }
+
+  #lockin-root .lockin-board-card-preview {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 11px;
+    line-height: 1.4;
+    text-overflow: ellipsis;
+    color: #6b7280;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  #lockin-root .lockin-board-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  /* --- Board Drag Overlay --- */
+
+  #lockin-root .lockin-board-drag-overlay {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    transform: rotate(2deg);
+  }
+
+  /* --- Note Status & Meta Badges --- */
+
+  #lockin-root .lockin-note-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    border-radius: 4px;
+  }
+
+  #lockin-root .lockin-note-badge-status {
+    color: #1e40af;
+    background: #dbeafe;
+  }
+
+  /* stylelint-disable-next-line selector-class-pattern -- mirrors domain value 'in_progress' */
+  #lockin-root .lockin-note-badge-status-in_progress {
+    color: #92400e;
+    background: #fef3c7;
+  }
+
+  #lockin-root .lockin-note-badge-status-done {
+    color: #065f46;
+    background: #d1fae5;
+  }
+
+  #lockin-root .lockin-note-badge-status-backlog {
+    color: #6b7280;
+    background: #f3f4f6;
+  }
+
+  #lockin-root .lockin-note-badge-unit {
+    color: #5b21b6;
+    background: #ede9fe;
+  }
+
+  #lockin-root .lockin-note-badge-week {
+    color: #3730a3;
+    background: #e0e7ff;
+  }
+
+  #lockin-root .lockin-note-card-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+}

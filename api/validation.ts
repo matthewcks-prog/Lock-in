@@ -46,3 +46,10 @@ export {
   validateFeedbackResponse,
 } from './validationFeedback';
 export { StudyResponseSchema, ApiResponseSchema, validateLockinResponse } from './validationLockin';
+export {
+  TaskRecordSchema,
+  TaskRecordsSchema,
+  validateTaskRecord,
+  validateTaskRecords,
+  type TaskRecord,
+} from './validationTasks';

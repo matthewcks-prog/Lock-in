@@ -1,0 +1,246 @@
+@layer lockin.tasks {
+  /* ====================================================================
+   TASKS PANEL - iPhone Notes-style checklist
+   ==================================================================== */
+
+  /* --- Tasks trigger button in top bar --- */
+  #lockin-root .lockin-tasks-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-24);
+    height: var(--lockin-size-24);
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-tasks-trigger-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-tasks-trigger-btn:active {
+    background: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-tasks-trigger-btn.is-active {
+    color: var(--lockin-color-accent-stronger);
+    background: var(--lockin-color-accent-surface);
+    border-color: var(--lockin-color-accent-soft);
+  }
+
+  #lockin-root .lockin-tasks-trigger-btn svg {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+  }
+
+  #lockin-root .lockin-tasks-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    background: #fff;
+  }
+
+  /* --- Tasks Header --- */
+  #lockin-root .lockin-tasks-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  #lockin-root .lockin-tasks-header-left {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  #lockin-root .lockin-tasks-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #111827;
+  }
+
+  #lockin-root .lockin-tasks-context {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  #lockin-root .lockin-tasks-course {
+    font-weight: 600;
+    color: #4b5563;
+  }
+
+  #lockin-root .lockin-tasks-week {
+    color: #6b7280;
+  }
+
+  #lockin-root .lockin-tasks-header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #lockin-root .lockin-tasks-stats {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+  }
+
+  #lockin-root .lockin-tasks-stat {
+    font-weight: 500;
+    color: #6b7280;
+  }
+
+  #lockin-root .lockin-tasks-stat-completed {
+    color: #10b981;
+  }
+
+  #lockin-root .lockin-tasks-refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    color: #6b7280;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-tasks-refresh-btn:hover {
+    color: #111827;
+    background: #f3f4f6;
+  }
+
+  #lockin-root .lockin-tasks-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* --- Unit/Week Filter Dropdowns --- */
+
+  #lockin-root .lockin-notes-filter-dropdown {
+    max-width: 120px;
+    padding: 3px 22px 3px 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #374151;
+    background: #ffffff;
+    background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%236B7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: right 6px center;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    transition: border-color 0.15s ease;
+    cursor: pointer;
+    appearance: none;
+    background-repeat: no-repeat;
+  }
+
+  #lockin-root .lockin-notes-filter-dropdown:hover {
+    border-color: #d1d5db;
+  }
+
+  #lockin-root .lockin-notes-filter-dropdown:focus {
+    border-color: #3b82f6;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+  }
+
+  /* --- Header Overflow Menu --- */
+
+  #lockin-root .lockin-header-overflow {
+    position: relative;
+  }
+
+  #lockin-root .lockin-header-overflow-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    color: #6b7280;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-header-overflow-btn:hover {
+    color: #374151;
+    background: #f3f4f6;
+    border-color: #d1d5db;
+  }
+
+  #lockin-root .lockin-header-overflow-btn:active {
+    background: #e5e7eb;
+  }
+
+  #lockin-root .lockin-header-overflow-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    z-index: 50;
+    min-width: 160px;
+    padding: 4px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    animation: lockin-menu-in 0.12s ease-out;
+  }
+
+  #lockin-root .lockin-header-overflow-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: left;
+    color: #374151;
+    background: transparent;
+    border: none;
+    border-radius: 5px;
+    transition: background 0.1s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-header-overflow-item:hover {
+    background: #f3f4f6;
+  }
+
+  #lockin-root .lockin-header-overflow-item svg {
+    flex-shrink: 0;
+    color: #6b7280;
+  }
+
+  @keyframes lockin-menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

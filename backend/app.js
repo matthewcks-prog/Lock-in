@@ -10,6 +10,7 @@ const cors = require('cors');
 const { MAX_SELECTION_LENGTH, MAX_USER_MESSAGE_LENGTH, isOriginAllowed } = require('./config');
 const assistantRoutes = require('./routes/assistantRoutes');
 const noteRoutes = require('./routes/noteRoutes');
+const taskRoutes = require('./routes/taskRoutes');
 const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
@@ -62,6 +63,7 @@ function registerDebugSentryRoute(app) {
 function registerApiRoutes(app) {
   app.use('/api', assistantRoutes);
   app.use('/api', noteRoutes);
+  app.use('/api', taskRoutes);
   app.use('/api', transcriptsRoutes);
   app.use('/api', feedbackRoutes);
 }
