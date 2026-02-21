@@ -7,4 +7,5 @@
 export * from './panoptoProvider';
 export * from './echo360Provider';
 export * from './html5Provider';
+export * from './youtubeProvider';
 export * from '../providerRegistry';

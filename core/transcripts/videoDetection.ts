@@ -7,6 +7,7 @@ export const extractPanoptoInfo = _extractPanoptoInfo;
 export const isPanoptoUrl = _isPanoptoUrl;
 
 export { detectPanoptoVideosFromIframes } from './videoDetection/panoptoDetection';
+export { detectYouTubeVideos } from './videoDetection/youtubeDetection';
 export { detectHtml5Videos } from './videoDetection/html5Detection';
 export { detectVideosSync, type VideoDetectionResult } from './videoDetection/detectVideosSync';
 export {

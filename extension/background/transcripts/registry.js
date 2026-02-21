@@ -31,6 +31,7 @@
       transcriptProviders?.PanoptoProvider,
       transcriptProviders?.Echo360Provider,
       transcriptProviders?.Html5Provider,
+      transcriptProviders?.YouTubeProvider,
     ];
 
     providerClasses.forEach((Provider) => {

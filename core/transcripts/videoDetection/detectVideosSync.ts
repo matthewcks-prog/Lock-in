@@ -1,6 +1,7 @@
 import type { DetectedVideo, VideoDetectionContext, VideoProvider } from '../types';
 import { detectEcho360Videos } from '../providers/echo360Provider';
 import { detectPanoptoVideosFromIframes } from './panoptoDetection';
+import { detectYouTubeVideos } from './youtubeDetection';
 import { detectHtml5Videos } from './html5Detection';
 
 /**
@@ -34,6 +35,15 @@ export function detectVideosSync(context: VideoDetectionContext): VideoDetection
     return {
       videos: echoVideos,
       provider: 'echo360' as VideoProvider,
+      requiresApiCall: false,
+    };
+  }
+
+  const youtubeVideos = detectYouTubeVideos(context);
+  if (youtubeVideos.length > 0) {
+    return {
+      videos: youtubeVideos,
+      provider: 'youtube' as VideoProvider,
       requiresApiCall: false,
     };
   }

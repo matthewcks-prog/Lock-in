@@ -23,7 +23,13 @@
     "https://echo360.ca/*",
     "https://*.echo360.ca/*",
     "https://echo360.org.uk/*",
-    "https://*.echo360.org.uk/*"
+    "https://*.echo360.org.uk/*",
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://*.youtube.com/*",
+    "https://youtu.be/*",
+    "https://www.youtube-nocookie.com/*",
+    "https://*.googlevideo.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
