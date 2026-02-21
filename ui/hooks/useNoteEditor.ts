@@ -31,21 +31,12 @@ export interface UseNoteEditorResult {
 
 export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResult {
   const state = useNoteEditorState(options);
-  const persistenceOptions: {
-    notesService: NotesService | null | undefined;
-    defaultCourseCode?: string | null;
-    defaultSourceUrl?: string | null;
-    defaultWeek?: number | null;
-    sourceSelection?: string | null;
-    noteRef: typeof state.noteRef;
-    clientNoteIdRef: typeof state.clientNoteIdRef;
-    lastSavedFingerprintRef: typeof state.lastSavedFingerprintRef;
-    setNote: typeof state.setNote;
-    setStatus: typeof state.setStatus;
-    setError: typeof state.setError;
-    setActiveNoteId: typeof state.setActiveNoteId;
-  } = {
+  const persistence = useNoteEditorPersistence({
     notesService: options.notesService,
+    defaultCourseCode: options.defaultCourseCode,
+    defaultSourceUrl: options.defaultSourceUrl,
+    defaultWeek: options.defaultWeek,
+    sourceSelection: options.sourceSelection,
     noteRef: state.noteRef,
     clientNoteIdRef: state.clientNoteIdRef,
     lastSavedFingerprintRef: state.lastSavedFingerprintRef,
@@ -53,20 +44,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     setStatus: state.setStatus,
     setError: state.setError,
     setActiveNoteId: state.setActiveNoteId,
-  };
-  if (options.defaultCourseCode !== undefined) {
-    persistenceOptions.defaultCourseCode = options.defaultCourseCode;
-  }
-  if (options.defaultSourceUrl !== undefined) {
-    persistenceOptions.defaultSourceUrl = options.defaultSourceUrl;
-  }
-  if (options.defaultWeek !== undefined) {
-    persistenceOptions.defaultWeek = options.defaultWeek;
-  }
-  if (options.sourceSelection !== undefined) {
-    persistenceOptions.sourceSelection = options.sourceSelection;
-  }
-  const persistence = useNoteEditorPersistence(persistenceOptions);
+  });
 
   return {
     note: state.note,

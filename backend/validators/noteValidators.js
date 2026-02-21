@@ -19,6 +19,7 @@ const lexicalJsonSchema = z.object({}).passthrough(); // Allow any object struct
 // Content limits
 const MAX_CONTENT_LENGTH = MAX_NOTE_CONTENT_LENGTH;
 const MAX_TAG_LENGTH = 50;
+const MAX_WEEK = 52;
 const MAX_SEARCH_NOTES_K = 50;
 const MAX_LIST_NOTES_LIMIT = 100;
 const MAX_CHAT_NOTES_K = 20;
@@ -38,7 +39,7 @@ const createNoteSchema = z
     sourceSelection: z.string().optional().nullable(),
     sourceUrl: z.union([z.string().url(), z.literal(''), z.null()]).optional(),
     courseCode: z.string().optional().nullable(),
-    week: z.coerce.number().int().min(1).max(52).optional().nullable(),
+    week: z.coerce.number().int().min(1).max(MAX_WEEK).optional().nullable(),
     noteType: z.string().optional().nullable(),
     tags: z.union([z.array(z.string().max(MAX_TAG_LENGTH)), z.string(), z.null()]).optional(),
   })

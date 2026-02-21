@@ -1,4 +1,5 @@
 import {
+  MAX_WEEK,
   parseNote,
   type Note,
   type NoteContent,
@@ -229,7 +230,7 @@ const toDomainNote = (raw: NoteRecord | null | undefined): Note => {
 
   const rawWeek = record['week'];
   const week =
-    typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= 52
+    typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= MAX_WEEK
       ? rawWeek
       : null;
 

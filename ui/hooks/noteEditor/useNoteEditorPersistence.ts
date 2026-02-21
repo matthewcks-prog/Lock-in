@@ -8,10 +8,10 @@ import { usePersistenceCallbacks } from './useNoteEditorPersistenceCallbacks';
 
 export interface NoteEditorPersistenceOptions {
   notesService: NotesService | null | undefined;
-  defaultCourseCode?: string | null;
-  defaultSourceUrl?: string | null;
-  defaultWeek?: number | null;
-  sourceSelection?: string | null;
+  defaultCourseCode?: string | null | undefined;
+  defaultSourceUrl?: string | null | undefined;
+  defaultWeek?: number | null | undefined;
+  sourceSelection?: string | null | undefined;
   noteRef: MutableRefObject<Note | null>;
   clientNoteIdRef: MutableRefObject<string>;
   lastSavedFingerprintRef: MutableRefObject<string | null>;
@@ -66,20 +66,9 @@ function useOnlineSync(syncOfflineQueue: () => Promise<void>): void {
   }, [syncOfflineQueue]);
 }
 
-export function useNoteEditorPersistence({
-  notesService,
-  defaultCourseCode,
-  defaultSourceUrl,
-  defaultWeek,
-  sourceSelection,
-  noteRef,
-  clientNoteIdRef,
-  lastSavedFingerprintRef,
-  setNote,
-  setStatus,
-  setError,
-  setActiveNoteId,
-}: NoteEditorPersistenceOptions): NoteEditorPersistenceResult {
+export function useNoteEditorPersistence(
+  opts: NoteEditorPersistenceOptions,
+): NoteEditorPersistenceResult {
   const saveSequenceRef = useRef(0);
   const debounceRef = useRef<number | null>(null);
   const savedResetRef = useRef<number | null>(null);
@@ -88,36 +77,35 @@ export function useNoteEditorPersistence({
 
   const [pendingSaveCount, setPendingSaveCount] = useState(() => loadOfflineQueue().length);
   const defaults = useMemo(
-    () => buildPersistenceDefaults({ defaultCourseCode, defaultSourceUrl, sourceSelection, defaultWeek }),
-    [defaultCourseCode, defaultSourceUrl, sourceSelection, defaultWeek],
+    () =>
+      buildPersistenceDefaults({
+        defaultCourseCode: opts.defaultCourseCode,
+        defaultSourceUrl: opts.defaultSourceUrl,
+        sourceSelection: opts.sourceSelection,
+        defaultWeek: opts.defaultWeek,
+      }),
+    [opts.defaultCourseCode, opts.defaultSourceUrl, opts.sourceSelection, opts.defaultWeek],
   );
 
   const { handleContentChange, handleTitleChange, saveNow, resetToNew, syncOfflineQueue } =
     usePersistenceCallbacks({
-      notesService,
-      noteRef,
-      clientNoteIdRef,
-      lastSavedFingerprintRef,
+      notesService: opts.notesService,
+      noteRef: opts.noteRef,
+      clientNoteIdRef: opts.clientNoteIdRef,
+      lastSavedFingerprintRef: opts.lastSavedFingerprintRef,
       saveSequenceRef,
       debounceRef,
       savedResetRef,
       abortControllerRef,
       defaults,
       setPendingSaveCount,
-      setNote,
-      setStatus,
-      setError,
-      setActiveNoteId,
+      setNote: opts.setNote,
+      setStatus: opts.setStatus,
+      setError: opts.setError,
+      setActiveNoteId: opts.setActiveNoteId,
     });
 
   useOnlineSync(syncOfflineQueue);
 
-  return {
-    pendingSaveCount,
-    handleContentChange,
-    handleTitleChange,
-    saveNow,
-    resetToNew,
-    syncOfflineQueue,
-  };
+  return { pendingSaveCount, handleContentChange, handleTitleChange, saveNow, resetToNew, syncOfflineQueue };
 }

@@ -1,6 +1,8 @@
 const { ValidationError } = require('../../errors');
 const { MAX_NOTE_CONTENT_LENGTH } = require('../../utils/noteLimits');
 
+const MAX_WEEK = 52;
+
 function normalizeOptionalString(value) {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -37,7 +39,7 @@ async function prepareContent(contentPayload, services) {
 function buildCreateMetadata(payload, services) {
   const rawWeek = payload.week;
   const week =
-    typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= 52
+    typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= MAX_WEEK
       ? rawWeek
       : null;
 
@@ -79,7 +81,7 @@ function buildUpdateMetadata(payload, services) {
   if (hasOwn(payload, 'week')) {
     const rawWeek = payload.week;
     update.week =
-      typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= 52
+      typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= MAX_WEEK
         ? rawWeek
         : null;
   }
