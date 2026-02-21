@@ -6,6 +6,7 @@ import { useToast } from '../../components';
 import { useNoteAssets } from '../../../hooks/useNoteAssets';
 import { useNoteEditor } from '../../../hooks/useNoteEditor';
 import { filterNotes } from './noteFilters';
+import { resolveLinkedTarget, resolveNoteWeekLabel } from './notesPanelHelpers';
 import { useNotesPanelActions } from './useNotesPanelActions';
 
 const EDITING_STATUS_SETTLE_DELAY_MS = 3000;
@@ -52,45 +53,8 @@ export interface NotesPanelViewModel {
   isCurrentNoteStarred: boolean;
 }
 
-function formatLinkedLabel(week: number | null | undefined): string | null {
-  return week !== null && week !== undefined && week > 0 ? `Week ${week}` : null;
-}
-
 function hasValidWeek(currentWeek: number | null | undefined): boolean {
   return currentWeek !== null && currentWeek !== undefined && currentWeek > 0;
-}
-
-/**
- * Returns the week label to display for the editor context:
- * - If the note has a persisted `week`, show that (original creation week).
- * - If the note is new or on the same page, fall back to the current week.
- * - Otherwise null (note belongs to a different page context).
- */
-function resolveNoteWeekLabel(
-  note: Note | null,
-  currentWeek: number | null | undefined,
-  pageUrl: string,
-): string | null {
-  const storedWeek = note?.week ?? null;
-  if (storedWeek !== null) return formatLinkedLabel(storedWeek);
-  const noteSourceUrl = note?.sourceUrl ?? null;
-  const isNewNote = note?.id === null || note?.id === undefined || note?.id === '';
-  const isOnSamePage = noteSourceUrl !== null && noteSourceUrl === pageUrl;
-  return isNewNote || isOnSamePage ? formatLinkedLabel(currentWeek) : null;
-}
-
-function resolveLinkedTarget({
-  weekLabel,
-  noteSourceUrl,
-  pageUrl,
-}: {
-  weekLabel: string | null;
-  noteSourceUrl: string | null | undefined;
-  pageUrl: string;
-}): string | null {
-  if (weekLabel === null) return null;
-  if (noteSourceUrl !== null && noteSourceUrl !== undefined) return noteSourceUrl;
-  return pageUrl;
 }
 
 function hasActiveEditorNote(editorActiveId: string | null): boolean {
@@ -243,8 +207,7 @@ function useNotesPanelRuntime({
   const actions = usePanelActions({ props, editor, setView, showToast: toastState.showToast });
   const weekLabel = resolveNoteWeekLabel(editor.note, props.currentWeek, props.pageUrl);
   const linkedTarget = resolveLinkedTarget({
-    weekLabel,
-    noteSourceUrl: editor.note?.sourceUrl,
+    note: editor.note,
     pageUrl: props.pageUrl,
   });
   return { editor, assets, currentNoteFromList, filteredNotes, actions, weekLabel, linkedTarget };

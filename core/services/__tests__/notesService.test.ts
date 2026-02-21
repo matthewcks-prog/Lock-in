@@ -519,3 +519,29 @@ describe('NotesService updateNote (week field)', () => {
     );
   });
 });
+
+// ─────────────────────────────────────────────────────────────
+// Regression: sourceUrl immutability
+// sourceUrl must only be set at creation time and must never
+// be included in update payloads.
+// ─────────────────────────────────────────────────────────────
+
+describe('NotesService updateNote (sourceUrl immutability)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('does not send sourceUrl or source_url in the update API payload', async () => {
+    const mockNote = createMockNote({ source_url: 'https://original.edu/page' });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
+
+    await notesService.updateNote('note-1', { title: 'Updated title' });
+
+    const [, payload] = vi.mocked(mockApiClient.updateNote).mock.calls[0]!;
+    expect(payload).not.toHaveProperty('sourceUrl');
+    expect(payload).not.toHaveProperty('source_url');
+  });
+});

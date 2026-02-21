@@ -101,17 +101,21 @@ function NotesInfoBar({
           {courseCode !== null && courseCode !== '' ? courseCode : 'None'}
         </strong>
       </div>
-      {weekLabel !== null && weekLabel !== '' && (
+      {(linkedTarget !== null || weekLabel !== null) && (
         <div className="lockin-notes-link-row">
           <span className="lockin-notes-label">Linked to:</span>
-          <a
-            href={linkedTarget !== null && linkedTarget !== '' ? linkedTarget : '#'}
-            target="_blank"
-            rel="noreferrer"
-            className="lockin-notes-link-href"
-          >
-            {weekLabel}
-          </a>
+          {linkedTarget !== null ? (
+            <a
+              href={linkedTarget}
+              target="_blank"
+              rel="noreferrer"
+              className="lockin-notes-link-href"
+            >
+              {weekLabel ?? 'Source page'}
+            </a>
+          ) : (
+            <span className="lockin-notes-link-href">{weekLabel}</span>
+          )}
         </div>
       )}
     </div>

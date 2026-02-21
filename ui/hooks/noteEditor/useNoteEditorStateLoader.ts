@@ -12,6 +12,7 @@ interface UseActiveNoteLoaderArgs {
   defaultCourseCode?: string | null | undefined;
   defaultSourceUrl?: string | null | undefined;
   sourceSelection?: string | null | undefined;
+  defaultWeek?: number | null | undefined;
   clientNoteIdRef: MutableRefObject<string>;
   loadingNoteIdRef: MutableRefObject<string | null>;
   lastLoadedNoteIdRef: MutableRefObject<string | null>;
@@ -40,6 +41,7 @@ interface HandleActiveNoteChangeArgs extends UseActiveNoteLoaderArgs {
   defaultCourseCode?: string | null | undefined;
   defaultSourceUrl?: string | null | undefined;
   sourceSelection?: string | null | undefined;
+  defaultWeek?: number | null | undefined;
 }
 
 function getErrorMessage(err: unknown, fallback: string): string {
@@ -144,6 +146,7 @@ function handleBlankTarget(args: HandleActiveNoteChangeArgs): boolean {
     defaultCourseCode: args.defaultCourseCode,
     defaultSourceUrl: args.defaultSourceUrl,
     sourceSelection: args.sourceSelection,
+    defaultWeek: args.defaultWeek,
     clientNoteIdRef: args.clientNoteIdRef,
     loadingNoteIdRef: args.loadingNoteIdRef,
     lastLoadedNoteIdRef: args.lastLoadedNoteIdRef,
@@ -190,6 +193,7 @@ export function useActiveNoteLoader(args: UseActiveNoteLoaderArgs): void {
   const defaultCourseCodeRef = useLatestRef(args.defaultCourseCode);
   const defaultSourceUrlRef = useLatestRef(args.defaultSourceUrl);
   const sourceSelectionRef = useLatestRef(args.sourceSelection);
+  const defaultWeekRef = useLatestRef(args.defaultWeek);
 
   useEffect(() => {
     return handleActiveNoteChange({
@@ -199,6 +203,7 @@ export function useActiveNoteLoader(args: UseActiveNoteLoaderArgs): void {
       defaultCourseCode: defaultCourseCodeRef.current,
       defaultSourceUrl: defaultSourceUrlRef.current,
       sourceSelection: sourceSelectionRef.current,
+      defaultWeek: defaultWeekRef.current,
       clientNoteIdRef: args.clientNoteIdRef,
       loadingNoteIdRef: args.loadingNoteIdRef,
       lastLoadedNoteIdRef: args.lastLoadedNoteIdRef,
@@ -224,5 +229,6 @@ export function useActiveNoteLoader(args: UseActiveNoteLoaderArgs): void {
     defaultCourseCodeRef,
     defaultSourceUrlRef,
     sourceSelectionRef,
+    defaultWeekRef,
   ]);
 }

@@ -112,13 +112,6 @@ export function buildCreatePayload(initial: CreateNoteInput): NotePayload & { ti
   return payload;
 }
 
-function applySourceUrl(payload: NotePayload, sourceUrl: string | null | undefined): void {
-  if (sourceUrl === undefined) return;
-  const cleanSourceUrl = normalizeSourceUrl(sourceUrl);
-  payload.sourceUrl = cleanSourceUrl;
-  payload.source_url = cleanSourceUrl;
-}
-
 function applySourceSelection(
   payload: NotePayload,
   sourceSelection: string | null | undefined,
@@ -159,7 +152,6 @@ export function buildUpdatePayload(changes: UpdateNoteInput): NotePayload {
     payload.title = changes.title;
   }
 
-  applySourceUrl(payload, changes.sourceUrl);
   applySourceSelection(payload, changes.sourceSelection);
   applyCourseCode(payload, changes.courseCode);
   applyNoteType(payload, changes.noteType);

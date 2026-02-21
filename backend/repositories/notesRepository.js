@@ -78,13 +78,13 @@ function buildCreateInsertData(params) {
 }
 
 function buildUpdateData(params) {
-  const { title, sourceSelection, sourceUrl, courseCode, week, noteType, tags, embedding } = params;
+  const { title, sourceSelection, courseCode, week, noteType, tags, embedding } = params;
 
   return {
     title,
     ...buildContentPayload(params),
     source_selection: sourceSelection,
-    source_url: sourceUrl,
+    // source_url is intentionally omitted: the note's origin URL is immutable after creation.
     course_code: courseCode,
     week: week ?? null,
     note_type: noteType,

@@ -85,7 +85,6 @@ export function buildUpdatePayload(
   note: Note,
   defaults: {
     defaultCourseCode?: string | null;
-    defaultSourceUrl?: string | null;
     sourceSelection?: string | null;
   },
 ): UpdateNoteInput {
@@ -93,7 +92,7 @@ export function buildUpdatePayload(
     title: note.title,
     content: note.content,
     courseCode: note.courseCode ?? defaults.defaultCourseCode ?? null,
-    sourceUrl: note.sourceUrl ?? defaults.defaultSourceUrl ?? null,
+    // sourceUrl is intentionally excluded: the note's origin URL is immutable after creation.
     sourceSelection: note.sourceSelection ?? defaults.sourceSelection ?? null,
     noteType: note.noteType,
     tags: note.tags,
@@ -218,7 +217,7 @@ export function buildPendingUpdatePayload(pendingSave: PendingSave): UpdateNoteI
     title: pendingSave.title,
     content: pendingSave.content,
     courseCode: pendingSave.courseCode,
-    sourceUrl: pendingSave.sourceUrl,
+    // sourceUrl is intentionally excluded: the note's origin URL is immutable after creation.
     sourceSelection: pendingSave.sourceSelection,
     noteType: pendingSave.noteType,
     tags: pendingSave.tags,

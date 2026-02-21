@@ -16,7 +16,10 @@ export type CreateNoteInput = {
 export type UpdateNoteInput = {
   title?: string;
   content?: NoteContent;
-  sourceUrl?: string | null;
+  /**
+   * sourceUrl is intentionally omitted — the note's origin URL is
+   * immutable after creation and must never be overwritten via an update.
+   */
   sourceSelection?: string | null;
   courseCode?: string | null;
   week?: number | null;

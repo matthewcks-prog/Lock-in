@@ -62,10 +62,6 @@ function buildUpdateMetadata(payload, services) {
     update.sourceSelection = normalizeOptionalString(payload.sourceSelection);
   }
 
-  if (hasOwn(payload, 'sourceUrl')) {
-    update.sourceUrl = normalizeOptionalString(payload.sourceUrl);
-  }
-
   if (hasOwn(payload, 'courseCode')) {
     update.courseCode = normalizeOptionalString(payload.courseCode);
   }
