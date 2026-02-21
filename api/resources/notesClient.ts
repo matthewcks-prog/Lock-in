@@ -33,6 +33,7 @@ type NotePayload = {
   source_url?: string | null;
   courseCode?: string | null;
   course_code?: string | null;
+  week?: number | null;
   noteType?: string | null;
   note_type?: string | null;
   tags?: string[];

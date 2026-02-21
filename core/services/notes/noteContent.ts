@@ -1,12 +1,11 @@
 import {
+  MAX_WEEK,
   parseNote,
   type Note,
   type NoteContent,
   type NoteContentVersion,
   type NoteType,
 } from '../../domain/Note';
-
-const MAX_NOTE_WEEK = 52;
 
 type NotePayload = {
   title?: string;
@@ -230,8 +229,7 @@ const toDomainNote = (raw: NoteRecord | null | undefined): Note => {
       : 'manual';
 
   const rawWeek = record['week'];
-  const week =
-    typeof rawWeek === 'number' && rawWeek >= 1 && rawWeek <= MAX_NOTE_WEEK ? rawWeek : null;
+  const week = typeof rawWeek === 'number' && rawWeek >= 1 && rawWeek <= MAX_WEEK ? rawWeek : null;
 
   const note: Note = {
     id: readString(record['id']) ?? null,

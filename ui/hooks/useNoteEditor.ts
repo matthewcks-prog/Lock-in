@@ -1,9 +1,6 @@
 import type { Note, NoteContent, NoteStatus } from '../../core/domain/Note.ts';
 import type { NotesService } from '../../core/services/notesService.ts';
-import {
-  useNoteEditorPersistence,
-  type NoteEditorPersistenceOptions,
-} from './noteEditor/useNoteEditorPersistence';
+import { useNoteEditorPersistence } from './noteEditor/useNoteEditorPersistence';
 import { useNoteEditorState } from './noteEditor/useNoteEditorState';
 
 interface UseNoteEditorOptions {
@@ -32,11 +29,9 @@ export interface UseNoteEditorResult {
   syncOfflineQueue: () => Promise<void>;
 }
 
-function buildPersistenceOptions(
-  options: UseNoteEditorOptions,
-  state: ReturnType<typeof useNoteEditorState>,
-): NoteEditorPersistenceOptions {
-  const opts: NoteEditorPersistenceOptions = {
+export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResult {
+  const state = useNoteEditorState(options);
+  const persistenceOpts: Parameters<typeof useNoteEditorPersistence>[0] = {
     notesService: options.notesService,
     noteRef: state.noteRef,
     clientNoteIdRef: state.clientNoteIdRef,
@@ -46,16 +41,14 @@ function buildPersistenceOptions(
     setError: state.setError,
     setActiveNoteId: state.setActiveNoteId,
   };
-  if (options.defaultCourseCode !== undefined) opts.defaultCourseCode = options.defaultCourseCode;
-  if (options.defaultSourceUrl !== undefined) opts.defaultSourceUrl = options.defaultSourceUrl;
-  if (options.sourceSelection !== undefined) opts.sourceSelection = options.sourceSelection;
-  if (options.defaultWeek !== undefined) opts.defaultWeek = options.defaultWeek;
-  return opts;
-}
-
-export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResult {
-  const state = useNoteEditorState(options);
-  const persistence = useNoteEditorPersistence(buildPersistenceOptions(options, state));
+  if (options.defaultCourseCode !== undefined)
+    persistenceOpts.defaultCourseCode = options.defaultCourseCode;
+  if (options.defaultSourceUrl !== undefined)
+    persistenceOpts.defaultSourceUrl = options.defaultSourceUrl;
+  if (options.sourceSelection !== undefined)
+    persistenceOpts.sourceSelection = options.sourceSelection;
+  if (options.defaultWeek !== undefined) persistenceOpts.defaultWeek = options.defaultWeek;
+  const persistence = useNoteEditorPersistence(persistenceOpts);
 
   return {
     note: state.note,

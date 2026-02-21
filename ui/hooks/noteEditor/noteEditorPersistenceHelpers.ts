@@ -69,7 +69,12 @@ export function resolvePendingSaveLogId(pendingSave: PendingSave): string {
 }
 
 export function createDraftWithDefaults(defaults: PersistenceDefaults): Note {
-  return createDraftNote(defaults);
+  const opts: Parameters<typeof createDraftNote>[0] = {};
+  if (defaults.defaultCourseCode !== undefined) opts.courseCode = defaults.defaultCourseCode;
+  if (defaults.defaultSourceUrl !== undefined) opts.sourceUrl = defaults.defaultSourceUrl;
+  if (defaults.sourceSelection !== undefined) opts.sourceSelection = defaults.sourceSelection;
+  if (defaults.defaultWeek !== undefined) opts.week = defaults.defaultWeek;
+  return createDraftNote(opts);
 }
 
 export function resolveDraftBase(prev: Note | null, defaults: PersistenceDefaults): Note {
