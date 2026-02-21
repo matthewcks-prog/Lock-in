@@ -26,6 +26,8 @@ services:
       - .env.local
     ports:
       - '3000:3000'
+    # Use polling-based watch mode for reliable hot reloads on mounted volumes
+    command: npm run dev:docker
     environment:
       # Environment selection (ALWAYS development for local Docker testing)
       - NODE_ENV=development
