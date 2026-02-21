@@ -23,7 +23,7 @@ const {
   getChatAssetStatus,
   deleteChatAsset,
 } = require('../controllers/assistant/assets');
-const { assetUploadMiddleware } = require('../middleware/uploadMiddleware');
+const { chatAssetUploadMiddleware } = require('../middleware/uploadMiddleware');
 const { validate, validateQuery, validateParams } = require('../validators/middleware');
 const {
   lockinRequestSchema,
@@ -87,7 +87,7 @@ router.post(
   '/chats/:chatId/assets',
   requireSupabaseUser,
   validateParams(chatIdParamSchema),
-  assetUploadMiddleware,
+  chatAssetUploadMiddleware,
   uploadChatAsset,
 );
 router.get(
