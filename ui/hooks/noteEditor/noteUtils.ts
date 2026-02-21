@@ -48,6 +48,7 @@ export function createDraftNote(opts: {
   courseCode?: string | null;
   sourceUrl?: string | null;
   sourceSelection?: string | null;
+  week?: number | null;
 }): Note {
   const note: Note = {
     id: null,
@@ -61,6 +62,7 @@ export function createDraftNote(opts: {
     sourceUrl: opts.sourceUrl ?? null,
     sourceSelection: opts.sourceSelection ?? null,
     courseCode: opts.courseCode ?? null,
+    week: opts.week ?? null,
     noteType: 'manual',
     tags: [],
     createdAt: null,

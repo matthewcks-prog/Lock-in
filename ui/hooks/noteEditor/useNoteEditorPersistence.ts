@@ -10,6 +10,7 @@ export interface NoteEditorPersistenceOptions {
   notesService: NotesService | null | undefined;
   defaultCourseCode?: string | null;
   defaultSourceUrl?: string | null;
+  defaultWeek?: number | null;
   sourceSelection?: string | null;
   noteRef: MutableRefObject<Note | null>;
   clientNoteIdRef: MutableRefObject<string>;
@@ -69,6 +70,7 @@ export function useNoteEditorPersistence({
   notesService,
   defaultCourseCode,
   defaultSourceUrl,
+  defaultWeek,
   sourceSelection,
   noteRef,
   clientNoteIdRef,
@@ -86,8 +88,8 @@ export function useNoteEditorPersistence({
 
   const [pendingSaveCount, setPendingSaveCount] = useState(() => loadOfflineQueue().length);
   const defaults = useMemo(
-    () => buildPersistenceDefaults({ defaultCourseCode, defaultSourceUrl, sourceSelection }),
-    [defaultCourseCode, defaultSourceUrl, sourceSelection],
+    () => buildPersistenceDefaults({ defaultCourseCode, defaultSourceUrl, sourceSelection, defaultWeek }),
+    [defaultCourseCode, defaultSourceUrl, sourceSelection, defaultWeek],
   );
 
   const { handleContentChange, handleTitleChange, saveNow, resetToNew, syncOfflineQueue } =

@@ -8,6 +8,7 @@ interface UseNoteEditorOptions {
   notesService: NotesService | null | undefined;
   defaultCourseCode?: string | null;
   defaultSourceUrl?: string | null;
+  defaultWeek?: number | null;
   sourceSelection?: string | null;
 }
 
@@ -34,6 +35,7 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     notesService: NotesService | null | undefined;
     defaultCourseCode?: string | null;
     defaultSourceUrl?: string | null;
+    defaultWeek?: number | null;
     sourceSelection?: string | null;
     noteRef: typeof state.noteRef;
     clientNoteIdRef: typeof state.clientNoteIdRef;
@@ -57,6 +59,9 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
   }
   if (options.defaultSourceUrl !== undefined) {
     persistenceOptions.defaultSourceUrl = options.defaultSourceUrl;
+  }
+  if (options.defaultWeek !== undefined) {
+    persistenceOptions.defaultWeek = options.defaultWeek;
   }
   if (options.sourceSelection !== undefined) {
     persistenceOptions.sourceSelection = options.sourceSelection;

@@ -55,6 +55,7 @@ export function buildPendingSave({
   defaultCourseCode,
   defaultSourceUrl,
   sourceSelection,
+  defaultWeek,
   expectedUpdatedAt,
 }: {
   note: Note;
@@ -62,6 +63,7 @@ export function buildPendingSave({
   defaultCourseCode?: string | null;
   defaultSourceUrl?: string | null;
   sourceSelection?: string | null;
+  defaultWeek?: number | null;
   expectedUpdatedAt: string | null;
 }): PendingSave {
   return {
@@ -72,6 +74,10 @@ export function buildPendingSave({
     courseCode: note.courseCode ?? defaultCourseCode ?? null,
     sourceUrl: note.sourceUrl ?? defaultSourceUrl ?? null,
     sourceSelection: note.sourceSelection ?? sourceSelection ?? null,
+    week:
+      note.id !== null && note.id !== undefined && note.id.length > 0
+        ? (note.week ?? null)
+        : (note.week ?? defaultWeek ?? null),
     noteType: note.noteType,
     tags: note.tags,
     expectedUpdatedAt,
@@ -86,6 +92,7 @@ export function buildUpdatePayload(
     defaultCourseCode?: string | null;
     defaultSourceUrl?: string | null;
     sourceSelection?: string | null;
+    defaultWeek?: number | null;
   },
 ): UpdateNoteInput {
   return {
@@ -94,6 +101,7 @@ export function buildUpdatePayload(
     courseCode: note.courseCode ?? defaults.defaultCourseCode ?? null,
     sourceUrl: note.sourceUrl ?? defaults.defaultSourceUrl ?? null,
     sourceSelection: note.sourceSelection ?? defaults.sourceSelection ?? null,
+    week: note.week ?? null,
     noteType: note.noteType,
     tags: note.tags,
   };
@@ -106,6 +114,7 @@ export function buildCreatePayload(
     defaultCourseCode?: string | null;
     defaultSourceUrl?: string | null;
     sourceSelection?: string | null;
+    defaultWeek?: number | null;
   },
 ): CreateNoteInput {
   return {
@@ -114,6 +123,7 @@ export function buildCreatePayload(
     courseCode: note.courseCode ?? defaults.defaultCourseCode ?? null,
     sourceUrl: note.sourceUrl ?? defaults.defaultSourceUrl ?? null,
     sourceSelection: note.sourceSelection ?? defaults.sourceSelection ?? null,
+    week: note.week ?? defaults.defaultWeek ?? null,
     noteType: note.noteType,
     tags: note.tags,
     clientNoteId,
@@ -137,6 +147,7 @@ export async function saveNoteToService({
     defaultCourseCode?: string | null;
     defaultSourceUrl?: string | null;
     sourceSelection?: string | null;
+    defaultWeek?: number | null;
   };
 }): Promise<Note> {
   if (note.id !== null && note.id !== undefined && note.id.length > 0) {
@@ -217,6 +228,7 @@ export function buildPendingUpdatePayload(pendingSave: PendingSave): UpdateNoteI
     courseCode: pendingSave.courseCode,
     sourceUrl: pendingSave.sourceUrl,
     sourceSelection: pendingSave.sourceSelection,
+    week: pendingSave.week ?? null,
     noteType: pendingSave.noteType,
     tags: pendingSave.tags,
   };
@@ -229,6 +241,7 @@ export function buildPendingCreatePayload(pendingSave: PendingSave): CreateNoteI
     courseCode: pendingSave.courseCode,
     sourceUrl: pendingSave.sourceUrl,
     sourceSelection: pendingSave.sourceSelection,
+    week: pendingSave.week,
     noteType: pendingSave.noteType,
     tags: pendingSave.tags,
     clientNoteId: pendingSave.clientNoteId,

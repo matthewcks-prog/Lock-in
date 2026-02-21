@@ -10,6 +10,7 @@ export interface PendingSave {
   courseCode: string | null;
   sourceUrl: string | null;
   sourceSelection: string | null;
+  week: number | null;
   noteType: NoteType;
   tags: string[];
   expectedUpdatedAt: string | null;
@@ -114,6 +115,7 @@ function normalizeOfflineQueue(queue: PendingSave[]): PendingSave[] {
       clientNoteId,
       expectedUpdatedAt: item.expectedUpdatedAt ?? null,
       retryCount: item.retryCount ?? 0,
+      week: item.week ?? null,
     };
     const key = getQueueKey(normalized);
     const existing = latestByKey.get(key);

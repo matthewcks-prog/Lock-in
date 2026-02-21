@@ -35,11 +35,18 @@ async function prepareContent(contentPayload, services) {
 }
 
 function buildCreateMetadata(payload, services) {
+  const rawWeek = payload.week;
+  const week =
+    typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= 52
+      ? rawWeek
+      : null;
+
   return {
     title: services.contentService.validateTitle(payload.title),
     sourceSelection: normalizeOptionalString(payload.sourceSelection),
     sourceUrl: normalizeOptionalString(payload.sourceUrl),
     courseCode: normalizeOptionalString(payload.courseCode),
+    week,
     noteType:
       typeof payload.noteType === 'string' && payload.noteType.trim() ? payload.noteType : 'manual',
     tags: services.contentService.normalizeTags(payload.tags),
@@ -67,6 +74,14 @@ function buildUpdateMetadata(payload, services) {
 
   if (hasOwn(payload, 'courseCode')) {
     update.courseCode = normalizeOptionalString(payload.courseCode);
+  }
+
+  if (hasOwn(payload, 'week')) {
+    const rawWeek = payload.week;
+    update.week =
+      typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= 52
+        ? rawWeek
+        : null;
   }
 
   if (hasOwn(payload, 'noteType')) {

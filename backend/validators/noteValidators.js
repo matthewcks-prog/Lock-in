@@ -38,6 +38,7 @@ const createNoteSchema = z
     sourceSelection: z.string().optional().nullable(),
     sourceUrl: z.union([z.string().url(), z.literal(''), z.null()]).optional(),
     courseCode: z.string().optional().nullable(),
+    week: z.coerce.number().int().min(1).max(52).optional().nullable(),
     noteType: z.string().optional().nullable(),
     tags: z.union([z.array(z.string().max(MAX_TAG_LENGTH)), z.string(), z.null()]).optional(),
   })

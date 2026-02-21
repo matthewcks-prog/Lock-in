@@ -19,6 +19,7 @@ type NotePayload = {
   source_url?: string | null;
   courseCode?: string | null;
   course_code?: string | null;
+  week?: number | null;
   noteType?: string | null;
   note_type?: string | null;
   tags?: string[];
@@ -226,6 +227,12 @@ const toDomainNote = (raw: NoteRecord | null | undefined): Note => {
       ? (rawNoteType as NoteType)
       : 'manual';
 
+  const rawWeek = record['week'];
+  const week =
+    typeof rawWeek === 'number' && Number.isInteger(rawWeek) && rawWeek >= 1 && rawWeek <= 52
+      ? rawWeek
+      : null;
+
   const note: Note = {
     id: readString(record['id']) ?? null,
     title: readNonEmptyString(record['title']) ?? 'Untitled note',
@@ -233,6 +240,7 @@ const toDomainNote = (raw: NoteRecord | null | undefined): Note => {
     sourceUrl: firstStringOrNull([record['source_url'], record['sourceUrl']]),
     sourceSelection: firstStringOrNull([record['source_selection'], record['sourceSelection']]),
     courseCode: firstStringOrNull([record['course_code'], record['courseCode']]),
+    week,
     noteType: normalizedNoteType,
     tags,
     createdAt: firstStringOrNull([record['created_at'], record['createdAt']]),

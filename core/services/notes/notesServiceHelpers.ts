@@ -100,6 +100,7 @@ export function buildCreatePayload(initial: CreateNoteInput): NotePayload & { ti
     source_selection: initial.sourceSelection ?? null,
     courseCode: initial.courseCode ?? null,
     course_code: initial.courseCode ?? null,
+    week: initial.week ?? null,
     noteType: initial.noteType ?? 'manual',
     note_type: initial.noteType ?? 'manual',
     tags: initial.tags ?? [],
@@ -139,6 +140,11 @@ function applyNoteType(payload: NotePayload, noteType: string | null | undefined
   payload.note_type = noteType ?? null;
 }
 
+function applyWeek(payload: NotePayload, week: number | null | undefined): void {
+  if (week === undefined) return;
+  payload.week = week ?? null;
+}
+
 function applyTags(payload: NotePayload, tags: string[] | undefined): void {
   if (tags === undefined) return;
   payload.tags = tags;
@@ -157,6 +163,7 @@ export function buildUpdatePayload(changes: UpdateNoteInput): NotePayload {
   applySourceSelection(payload, changes.sourceSelection);
   applyCourseCode(payload, changes.courseCode);
   applyNoteType(payload, changes.noteType);
+  applyWeek(payload, changes.week);
   applyTags(payload, changes.tags);
 
   return payload;

@@ -56,6 +56,7 @@ function buildCreateInsertData(params) {
     sourceSelection,
     sourceUrl,
     courseCode,
+    week,
     noteType,
     tags,
     embedding,
@@ -69,6 +70,7 @@ function buildCreateInsertData(params) {
     source_selection: sourceSelection,
     source_url: sourceUrl,
     course_code: courseCode,
+    week: week ?? null,
     note_type: noteType,
     tags,
     embedding,
@@ -76,7 +78,7 @@ function buildCreateInsertData(params) {
 }
 
 function buildUpdateData(params) {
-  const { title, sourceSelection, sourceUrl, courseCode, noteType, tags, embedding } = params;
+  const { title, sourceSelection, sourceUrl, courseCode, week, noteType, tags, embedding } = params;
 
   return {
     title,
@@ -84,6 +86,7 @@ function buildUpdateData(params) {
     source_selection: sourceSelection,
     source_url: sourceUrl,
     course_code: courseCode,
+    week: week ?? null,
     note_type: noteType,
     tags,
     embedding,

@@ -205,11 +205,13 @@ function useNotesPanelRuntime({
   linkedTarget: string | null;
 } {
   const effectiveSourceUrl = hasValidWeek(props.currentWeek) ? props.pageUrl : null;
+  const effectiveWeek = hasValidWeek(props.currentWeek) ? (props.currentWeek ?? null) : null;
   const editor = useNoteEditor({
     noteId: props.activeNoteId,
     notesService: props.notesService,
     defaultCourseCode: props.courseCode,
     defaultSourceUrl: effectiveSourceUrl,
+    defaultWeek: effectiveWeek,
   });
   const assets = useNoteAssets(editor.activeNoteId, props.notesService);
   const currentNoteFromList = useCurrentNoteFromList(editor.activeNoteId, props.notes);
@@ -220,10 +222,26 @@ function useNotesPanelRuntime({
     search,
   });
   const actions = usePanelActions({ props, editor, setView, showToast: toastState.showToast });
-  const weekLabel = formatLinkedLabel(props.currentWeek);
+
+  // Use the stored week from the note if available.
+  // Fall back to currentWeek for:
+  //   - Brand-new unsaved notes (no ID)
+  //   - Notes whose sourceUrl matches the current page (we know the week is correct)
+  // Otherwise show nothing (we can't determine the correct week)
+  const storedWeek = editor.note?.week ?? null;
+  const noteSourceUrl = editor.note?.sourceUrl ?? null;
+  const isNewNote =
+    editor.note?.id === null || editor.note?.id === undefined || editor.note?.id === '';
+  const isOnSamePage = noteSourceUrl !== null && noteSourceUrl === props.pageUrl;
+  const weekLabel =
+    storedWeek !== null
+      ? formatLinkedLabel(storedWeek)
+      : isNewNote || isOnSamePage
+        ? formatLinkedLabel(props.currentWeek)
+        : null;
   const linkedTarget = resolveLinkedTarget({
     weekLabel,
-    noteSourceUrl: editor.note?.sourceUrl,
+    noteSourceUrl,
     pageUrl: props.pageUrl,
   });
   return { editor, assets, currentNoteFromList, filteredNotes, actions, weekLabel, linkedTarget };

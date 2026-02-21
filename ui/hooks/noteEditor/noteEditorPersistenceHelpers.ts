@@ -9,16 +9,19 @@ export type PersistenceDefaults = {
   defaultCourseCode?: string | null;
   defaultSourceUrl?: string | null;
   sourceSelection?: string | null;
+  defaultWeek?: number | null;
 };
 
 export function buildPersistenceDefaults({
   defaultCourseCode,
   defaultSourceUrl,
   sourceSelection,
+  defaultWeek,
 }: {
   defaultCourseCode: string | null | undefined;
   defaultSourceUrl: string | null | undefined;
   sourceSelection: string | null | undefined;
+  defaultWeek: number | null | undefined;
 }): PersistenceDefaults {
   const defaults: PersistenceDefaults = {};
   if (defaultCourseCode !== undefined) {
@@ -29,6 +32,9 @@ export function buildPersistenceDefaults({
   }
   if (sourceSelection !== undefined) {
     defaults.sourceSelection = sourceSelection;
+  }
+  if (defaultWeek !== undefined) {
+    defaults.defaultWeek = defaultWeek;
   }
   return defaults;
 }
