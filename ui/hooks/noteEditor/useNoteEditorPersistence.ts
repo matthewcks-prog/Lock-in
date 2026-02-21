@@ -11,6 +11,7 @@ export interface NoteEditorPersistenceOptions {
   defaultCourseCode?: string | null;
   defaultSourceUrl?: string | null;
   sourceSelection?: string | null;
+  defaultWeek?: number | null;
   noteRef: MutableRefObject<Note | null>;
   clientNoteIdRef: MutableRefObject<string>;
   lastSavedFingerprintRef: MutableRefObject<string | null>;
@@ -56,7 +57,6 @@ function usePersistenceCleanup({
 function useOnlineSync(syncOfflineQueue: () => Promise<void>): void {
   useEffect(() => {
     const handleOnline = (): void => {
-      console.log('[NoteEditor] Back online - syncing offline queue');
       void syncOfflineQueue();
     };
 
@@ -65,11 +65,44 @@ function useOnlineSync(syncOfflineQueue: () => Promise<void>): void {
   }, [syncOfflineQueue]);
 }
 
+function usePersistenceRefs(): {
+  saveSequenceRef: MutableRefObject<number>;
+  debounceRef: MutableRefObject<number | null>;
+  savedResetRef: MutableRefObject<number | null>;
+  abortControllerRef: MutableRefObject<AbortController | null>;
+} {
+  const saveSequenceRef = useRef<number>(0);
+  const debounceRef = useRef<number | null>(null);
+  const savedResetRef = useRef<number | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  usePersistenceCleanup({ debounceRef, savedResetRef, abortControllerRef });
+  return { saveSequenceRef, debounceRef, savedResetRef, abortControllerRef };
+}
+
+function useDefaultsMemo(
+  defaultCourseCode: string | null | undefined,
+  defaultSourceUrl: string | null | undefined,
+  sourceSelection: string | null | undefined,
+  defaultWeek: number | null | undefined,
+): ReturnType<typeof buildPersistenceDefaults> {
+  return useMemo(
+    () =>
+      buildPersistenceDefaults({
+        defaultCourseCode,
+        defaultSourceUrl,
+        sourceSelection,
+        defaultWeek,
+      }),
+    [defaultCourseCode, defaultSourceUrl, sourceSelection, defaultWeek],
+  );
+}
+
 export function useNoteEditorPersistence({
   notesService,
   defaultCourseCode,
   defaultSourceUrl,
   sourceSelection,
+  defaultWeek,
   noteRef,
   clientNoteIdRef,
   lastSavedFingerprintRef,
@@ -78,18 +111,14 @@ export function useNoteEditorPersistence({
   setError,
   setActiveNoteId,
 }: NoteEditorPersistenceOptions): NoteEditorPersistenceResult {
-  const saveSequenceRef = useRef(0);
-  const debounceRef = useRef<number | null>(null);
-  const savedResetRef = useRef<number | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  usePersistenceCleanup({ debounceRef, savedResetRef, abortControllerRef });
-
+  const { saveSequenceRef, debounceRef, savedResetRef, abortControllerRef } = usePersistenceRefs();
   const [pendingSaveCount, setPendingSaveCount] = useState(() => loadOfflineQueue().length);
-  const defaults = useMemo(
-    () => buildPersistenceDefaults({ defaultCourseCode, defaultSourceUrl, sourceSelection }),
-    [defaultCourseCode, defaultSourceUrl, sourceSelection],
+  const defaults = useDefaultsMemo(
+    defaultCourseCode,
+    defaultSourceUrl,
+    sourceSelection,
+    defaultWeek,
   );
-
   const { handleContentChange, handleTitleChange, saveNow, resetToNew, syncOfflineQueue } =
     usePersistenceCallbacks({
       notesService,
@@ -107,9 +136,7 @@ export function useNoteEditorPersistence({
       setError,
       setActiveNoteId,
     });
-
   useOnlineSync(syncOfflineQueue);
-
   return {
     pendingSaveCount,
     handleContentChange,

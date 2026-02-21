@@ -43,6 +43,7 @@ function buildCreateMetadata(payload, services) {
     noteType:
       typeof payload.noteType === 'string' && payload.noteType.trim() ? payload.noteType : 'manual',
     tags: services.contentService.normalizeTags(payload.tags),
+    week: typeof payload.week === 'number' ? payload.week : null,
     clientNoteId:
       typeof payload.clientNoteId === 'string' && payload.clientNoteId.trim()
         ? payload.clientNoteId.trim()
@@ -76,6 +77,10 @@ function buildUpdateMetadata(payload, services) {
 
   if (hasOwn(payload, 'tags')) {
     update.tags = services.contentService.normalizeTags(payload.tags);
+  }
+
+  if (hasOwn(payload, 'week')) {
+    update.week = typeof payload.week === 'number' ? payload.week : null;
   }
 
   return update;

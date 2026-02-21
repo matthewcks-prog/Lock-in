@@ -210,6 +210,7 @@ function useNotesPanelRuntime({
     notesService: props.notesService,
     defaultCourseCode: props.courseCode,
     defaultSourceUrl: effectiveSourceUrl,
+    ...(props.currentWeek !== undefined && { defaultWeek: props.currentWeek }),
   });
   const assets = useNoteAssets(editor.activeNoteId, props.notesService);
   const currentNoteFromList = useCurrentNoteFromList(editor.activeNoteId, props.notes);

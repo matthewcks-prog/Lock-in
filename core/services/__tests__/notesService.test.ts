@@ -420,3 +420,102 @@ describe('NotesService deleteAsset', () => {
     expect(mockApiClient.deleteNoteAsset).toHaveBeenCalledWith({ assetId: 'asset-1' });
   });
 });
+
+// Regression tests: week field persistence
+describe('NotesService createNote (week field)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('should include week in the API payload when provided', async () => {
+    const mockNote = createMockNote({ week: 5 });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    await notesService.createNote({
+      title: 'Week test',
+      content: createLexicalContent('content'),
+      week: 5,
+    });
+
+    expect(mockApiClient.createNote).toHaveBeenCalledWith(
+      expect.objectContaining({ week: 5 }),
+      undefined,
+    );
+  });
+
+  it('should return week from API response in the domain note', async () => {
+    const mockNote = createMockNote({ week: 3 });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    const result = await notesService.createNote({
+      title: 'Week test',
+      content: createLexicalContent('content'),
+      week: 3,
+    });
+
+    expect(result.week).toBe(3);
+  });
+
+  it('should return week: null when week is absent from API response', async () => {
+    const mockNote = createMockNote({});
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    const result = await notesService.createNote({
+      title: 'No week test',
+      content: createLexicalContent('content'),
+    });
+
+    expect(result.week).toBeNull();
+  });
+
+  it('should return week: null when week is out of range (0)', async () => {
+    const mockNote = createMockNote({ week: 0 });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    const result = await notesService.createNote({
+      title: 'Out of range test',
+      content: createLexicalContent('content'),
+    });
+
+    // toDomainNote should sanitize out-of-range values to null
+    expect(result.week).toBeNull();
+  });
+});
+
+describe('NotesService updateNote (week field)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('should include week in the update payload when provided', async () => {
+    const mockNote = createMockNote({ week: 7 });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
+
+    await notesService.updateNote('note-1', { week: 7 });
+
+    expect(mockApiClient.updateNote).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({ week: 7 }),
+      undefined,
+    );
+  });
+
+  it('should allow clearing week by passing null', async () => {
+    const mockNote = createMockNote({ week: null });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
+
+    await notesService.updateNote('note-1', { week: null });
+
+    expect(mockApiClient.updateNote).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({ week: null }),
+      undefined,
+    );
+  });
+});

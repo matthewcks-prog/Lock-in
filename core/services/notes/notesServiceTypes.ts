@@ -7,6 +7,7 @@ export type CreateNoteInput = {
   sourceUrl?: string | null;
   sourceSelection?: string | null;
   courseCode?: string | null;
+  week?: number | null;
   noteType?: NoteType;
   tags?: string[];
   clientNoteId?: string;
@@ -18,6 +19,7 @@ export type UpdateNoteInput = {
   sourceUrl?: string | null;
   sourceSelection?: string | null;
   courseCode?: string | null;
+  week?: number | null;
   noteType?: NoteType;
   tags?: string[];
 };

@@ -1,6 +1,9 @@
 import type { Note, NoteContent, NoteStatus } from '../../core/domain/Note.ts';
 import type { NotesService } from '../../core/services/notesService.ts';
-import { useNoteEditorPersistence } from './noteEditor/useNoteEditorPersistence';
+import {
+  useNoteEditorPersistence,
+  type NoteEditorPersistenceOptions,
+} from './noteEditor/useNoteEditorPersistence';
 import { useNoteEditorState } from './noteEditor/useNoteEditorState';
 
 interface UseNoteEditorOptions {
@@ -9,6 +12,7 @@ interface UseNoteEditorOptions {
   defaultCourseCode?: string | null;
   defaultSourceUrl?: string | null;
   sourceSelection?: string | null;
+  defaultWeek?: number | null;
 }
 
 export interface UseNoteEditorResult {
@@ -28,21 +32,11 @@ export interface UseNoteEditorResult {
   syncOfflineQueue: () => Promise<void>;
 }
 
-export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResult {
-  const state = useNoteEditorState(options);
-  const persistenceOptions: {
-    notesService: NotesService | null | undefined;
-    defaultCourseCode?: string | null;
-    defaultSourceUrl?: string | null;
-    sourceSelection?: string | null;
-    noteRef: typeof state.noteRef;
-    clientNoteIdRef: typeof state.clientNoteIdRef;
-    lastSavedFingerprintRef: typeof state.lastSavedFingerprintRef;
-    setNote: typeof state.setNote;
-    setStatus: typeof state.setStatus;
-    setError: typeof state.setError;
-    setActiveNoteId: typeof state.setActiveNoteId;
-  } = {
+function buildPersistenceOptions(
+  options: UseNoteEditorOptions,
+  state: ReturnType<typeof useNoteEditorState>,
+): NoteEditorPersistenceOptions {
+  const opts: NoteEditorPersistenceOptions = {
     notesService: options.notesService,
     noteRef: state.noteRef,
     clientNoteIdRef: state.clientNoteIdRef,
@@ -52,16 +46,16 @@ export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResul
     setError: state.setError,
     setActiveNoteId: state.setActiveNoteId,
   };
-  if (options.defaultCourseCode !== undefined) {
-    persistenceOptions.defaultCourseCode = options.defaultCourseCode;
-  }
-  if (options.defaultSourceUrl !== undefined) {
-    persistenceOptions.defaultSourceUrl = options.defaultSourceUrl;
-  }
-  if (options.sourceSelection !== undefined) {
-    persistenceOptions.sourceSelection = options.sourceSelection;
-  }
-  const persistence = useNoteEditorPersistence(persistenceOptions);
+  if (options.defaultCourseCode !== undefined) opts.defaultCourseCode = options.defaultCourseCode;
+  if (options.defaultSourceUrl !== undefined) opts.defaultSourceUrl = options.defaultSourceUrl;
+  if (options.sourceSelection !== undefined) opts.sourceSelection = options.sourceSelection;
+  if (options.defaultWeek !== undefined) opts.defaultWeek = options.defaultWeek;
+  return opts;
+}
+
+export function useNoteEditor(options: UseNoteEditorOptions): UseNoteEditorResult {
+  const state = useNoteEditorState(options);
+  const persistence = useNoteEditorPersistence(buildPersistenceOptions(options, state));
 
   return {
     note: state.note,

@@ -10,6 +10,8 @@ import { z } from 'zod';
 import type { ZodError } from 'zod';
 import { ValidationError } from '../errors';
 
+const MAX_NOTE_WEEK = 52;
+
 const NoteContentVersionSchema = z.enum(['lexical_v1', 'legacy_html']);
 
 export type NoteContentVersion = z.infer<typeof NoteContentVersionSchema>;
@@ -78,6 +80,7 @@ const NoteSchema = z
     sourceUrl: z.string().nullable(),
     sourceSelection: z.string().nullable().optional(),
     courseCode: z.string().nullable(),
+    week: z.number().int().min(1).max(MAX_NOTE_WEEK).nullable().optional(),
     noteType: NoteTypeSchema,
     tags: z.array(z.string()),
     createdAt: z.string().nullable(),

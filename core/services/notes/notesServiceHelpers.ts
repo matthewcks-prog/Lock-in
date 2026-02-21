@@ -103,6 +103,7 @@ export function buildCreatePayload(initial: CreateNoteInput): NotePayload & { ti
     noteType: initial.noteType ?? 'manual',
     note_type: initial.noteType ?? 'manual',
     tags: initial.tags ?? [],
+    week: initial.week ?? null,
     ...toBackendPayload(initial.content),
   };
   if (isNonEmptyString(initial.clientNoteId)) {
@@ -144,6 +145,11 @@ function applyTags(payload: NotePayload, tags: string[] | undefined): void {
   payload.tags = tags;
 }
 
+function applyWeek(payload: NotePayload, week: number | null | undefined): void {
+  if (week === undefined) return;
+  payload.week = week ?? null;
+}
+
 export function buildUpdatePayload(changes: UpdateNoteInput): NotePayload {
   const payload: NotePayload = {
     ...toBackendPayload(changes.content),
@@ -158,6 +164,7 @@ export function buildUpdatePayload(changes: UpdateNoteInput): NotePayload {
   applyCourseCode(payload, changes.courseCode);
   applyNoteType(payload, changes.noteType);
   applyTags(payload, changes.tags);
+  applyWeek(payload, changes.week);
 
   return payload;
 }

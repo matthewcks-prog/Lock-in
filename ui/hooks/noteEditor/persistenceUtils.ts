@@ -74,6 +74,7 @@ export function buildPendingSave({
     sourceSelection: note.sourceSelection ?? sourceSelection ?? null,
     noteType: note.noteType,
     tags: note.tags,
+    week: note.week ?? null,
     expectedUpdatedAt,
     timestamp: Date.now(),
     retryCount: 0,
@@ -96,6 +97,7 @@ export function buildUpdatePayload(
     sourceSelection: note.sourceSelection ?? defaults.sourceSelection ?? null,
     noteType: note.noteType,
     tags: note.tags,
+    week: note.week ?? null,
   };
 }
 
@@ -116,6 +118,7 @@ export function buildCreatePayload(
     sourceSelection: note.sourceSelection ?? defaults.sourceSelection ?? null,
     noteType: note.noteType,
     tags: note.tags,
+    week: note.week ?? null,
     clientNoteId,
   };
 }
@@ -219,6 +222,7 @@ export function buildPendingUpdatePayload(pendingSave: PendingSave): UpdateNoteI
     sourceSelection: pendingSave.sourceSelection,
     noteType: pendingSave.noteType,
     tags: pendingSave.tags,
+    week: pendingSave.week ?? null,
   };
 }
 
@@ -231,6 +235,7 @@ export function buildPendingCreatePayload(pendingSave: PendingSave): CreateNoteI
     sourceSelection: pendingSave.sourceSelection,
     noteType: pendingSave.noteType,
     tags: pendingSave.tags,
+    week: pendingSave.week ?? null,
     clientNoteId: pendingSave.clientNoteId,
   };
 }

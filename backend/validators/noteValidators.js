@@ -22,6 +22,7 @@ const MAX_TAG_LENGTH = 50;
 const MAX_SEARCH_NOTES_K = 50;
 const MAX_LIST_NOTES_LIMIT = 100;
 const MAX_CHAT_NOTES_K = 20;
+const MAX_NOTE_WEEK = 52;
 
 /**
  * Schema for creating a note
@@ -40,6 +41,7 @@ const createNoteSchema = z
     courseCode: z.string().optional().nullable(),
     noteType: z.string().optional().nullable(),
     tags: z.union([z.array(z.string().max(MAX_TAG_LENGTH)), z.string(), z.null()]).optional(),
+    week: z.number().int().min(1).max(MAX_NOTE_WEEK).optional().nullable(),
   })
   .refine(
     (data) => {

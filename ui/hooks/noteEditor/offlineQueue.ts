@@ -12,6 +12,7 @@ export interface PendingSave {
   sourceSelection: string | null;
   noteType: NoteType;
   tags: string[];
+  week?: number | null;
   expectedUpdatedAt: string | null;
   timestamp: number;
   retryCount: number;
