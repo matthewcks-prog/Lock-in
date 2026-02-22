@@ -17,6 +17,9 @@ import {
   parseYouTubeXmlTranscript,
 } from './captionExtraction';
 
+const INNERTUBE_PLAYER_URL = 'https://www.youtube.com/youtubei/v1/player?prettyPrint=false';
+const INNERTUBE_CLIENT_VERSION = '2.20250220.01.00';
+
 const isNonEmptyString = (value: string | null | undefined): value is string =>
   typeof value === 'string' && value.length > 0;
 
@@ -47,8 +50,56 @@ function buildNetworkErrorResult(message: string): TranscriptExtractionResult {
   };
 }
 
+function hasPostJson(fetcher: AsyncFetcher): fetcher is AsyncFetcher & { postJson: NonNullable<AsyncFetcher['postJson']> } {
+  return typeof fetcher.postJson === 'function';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Strategy 1: Direct timedtext API (most reliable from service workers)
+// Strategy 1: InnerTube player API (POST, most reliable)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildInnerTubeBody(videoId: string): Record<string, unknown> {
+  return {
+    context: {
+      client: {
+        clientName: 'WEB',
+        clientVersion: INNERTUBE_CLIENT_VERSION,
+        hl: 'en',
+      },
+    },
+    videoId,
+  };
+}
+
+function extractTracksFromInnerTubeResponse(data: Record<string, unknown>): CaptionTrack[] {
+  const captions = data['captions'] as Record<string, unknown> | undefined;
+  const renderer = captions?.['playerCaptionsTracklistRenderer'] as Record<string, unknown> | undefined;
+  const tracks = renderer?.['captionTracks'];
+  if (!Array.isArray(tracks)) return [];
+
+  const valid = tracks.every(
+    (t: unknown) => typeof t === 'object' && t !== null && typeof (t as Record<string, unknown>)['baseUrl'] === 'string',
+  );
+  return valid ? (tracks as CaptionTrack[]) : [];
+}
+
+async function tryInnerTubeApi(
+  videoId: string,
+  fetcher: AsyncFetcher,
+): Promise<CaptionTrack[]> {
+  if (!hasPostJson(fetcher)) return [];
+
+  try {
+    const body = buildInnerTubeBody(videoId);
+    const data = await fetcher.postJson<Record<string, unknown>>(INNERTUBE_PLAYER_URL, body);
+    return extractTracksFromInnerTubeResponse(data);
+  } catch {
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategy 2: Direct timedtext API
 // ─────────────────────────────────────────────────────────────────────────────
 
 function isNonEmptyXml(content: string): boolean {
@@ -71,7 +122,7 @@ async function tryTimedtextApi(
         }
       }
     } catch {
-      // This URL didn't work, try next
+      // try next URL
     }
   }
 
@@ -79,67 +130,69 @@ async function tryTimedtextApi(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Strategy 2: Watch page HTML scraping
+// Strategy 3: Watch page HTML scraping
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function tryWatchPageExtraction(
   videoId: string,
   fetcher: AsyncFetcher,
-): Promise<TranscriptExtractionResult | null> {
+): Promise<CaptionTrack[]> {
   try {
     const watchUrl = buildYouTubeWatchUrl(videoId);
     const html = await fetcher.fetchWithCredentials(watchUrl);
     const { tracks } = extractCaptionTracks(html);
-
-    if (tracks.length === 0) return null;
-
-    const bestTrack = selectBestTrack(tracks);
-    if (bestTrack === null) return null;
-
-    return fetchAndParseCaption(bestTrack, fetcher);
+    return tracks;
   } catch {
-    return null;
+    return [];
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared: fetch and parse caption content from a track
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function fetchAndParseCaption(
   track: CaptionTrack,
   fetcher: AsyncFetcher,
 ): Promise<TranscriptExtractionResult | null> {
-  // Try VTT format first
   try {
     const captionUrl = buildCaptionUrl(track);
     const content = await fetcher.fetchWithCredentials(captionUrl);
 
     if (content.length > 0) {
-      const transcript = parseWebVtt(content);
-      if (transcript.segments.length > 0) {
-        return { success: true, transcript };
-      }
+      const vtt = parseWebVtt(content);
+      if (vtt.segments.length > 0) return { success: true, transcript: vtt };
 
-      const xmlTranscript = parseYouTubeXmlTranscript(content);
-      if (xmlTranscript.segments.length > 0) {
-        return { success: true, transcript: xmlTranscript };
-      }
+      const xml = parseYouTubeXmlTranscript(content);
+      if (xml.segments.length > 0) return { success: true, transcript: xml };
     }
   } catch {
-    // VTT fetch failed
+    // VTT fetch failed, try raw
   }
 
-  // Try raw baseUrl (XML format)
   try {
-    const rawContent = await fetcher.fetchWithCredentials(track.baseUrl);
-    if (rawContent.length > 0) {
-      const rawXml = parseYouTubeXmlTranscript(rawContent);
-      if (rawXml.segments.length > 0) {
-        return { success: true, transcript: rawXml };
-      }
+    const raw = await fetcher.fetchWithCredentials(track.baseUrl);
+    if (raw.length > 0) {
+      const xml = parseYouTubeXmlTranscript(raw);
+      if (xml.segments.length > 0) return { success: true, transcript: xml };
     }
   } catch {
-    // Raw fetch failed
+    // raw fetch failed
   }
 
   return null;
+}
+
+async function extractFromTracks(
+  tracks: CaptionTrack[],
+  fetcher: AsyncFetcher,
+): Promise<TranscriptExtractionResult | null> {
+  if (tracks.length === 0) return null;
+
+  const bestTrack = selectBestTrack(tracks);
+  if (bestTrack === null) return null;
+
+  return fetchAndParseCaption(bestTrack, fetcher);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,17 +256,19 @@ export class YouTubeProvider implements TranscriptProviderV2 {
         };
       }
 
-      // Strategy 1: Direct timedtext API (works without HTML parsing)
-      const timedtextResult = await tryTimedtextApi(video.id, fetcher);
-      if (timedtextResult !== null) {
-        return timedtextResult;
-      }
+      // Strategy 1: InnerTube player API (POST — most reliable)
+      const innerTubeTracks = await tryInnerTubeApi(video.id, fetcher);
+      const innerTubeResult = await extractFromTracks(innerTubeTracks, fetcher);
+      if (innerTubeResult !== null) return innerTubeResult;
 
-      // Strategy 2: Watch page HTML scraping
-      const watchPageResult = await tryWatchPageExtraction(video.id, fetcher);
-      if (watchPageResult !== null) {
-        return watchPageResult;
-      }
+      // Strategy 2: Direct timedtext API
+      const timedtextResult = await tryTimedtextApi(video.id, fetcher);
+      if (timedtextResult !== null) return timedtextResult;
+
+      // Strategy 3: Watch page HTML scraping
+      const watchPageTracks = await tryWatchPageExtraction(video.id, fetcher);
+      const watchPageResult = await extractFromTracks(watchPageTracks, fetcher);
+      if (watchPageResult !== null) return watchPageResult;
 
       return buildNoCaptionsResult();
     } catch (error) {

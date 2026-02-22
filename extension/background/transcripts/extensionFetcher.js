@@ -6,6 +6,7 @@
   function createExtensionFetcherFactory({ networkUtils, transcriptProviders }) {
     const fetchWithCredentials = networkUtils?.fetchWithCredentials;
     const fetchHtmlWithRedirectInfo = networkUtils?.fetchHtmlWithRedirectInfo;
+    const postJsonFn = networkUtils?.postJson;
     const extractPanoptoInfoFromHtml = transcriptProviders?.extractPanoptoInfoFromHtml;
 
     class ExtensionFetcher {
@@ -16,6 +17,13 @@
       async fetchJson(url) {
         const text = await this.fetchWithCredentials(url);
         return JSON.parse(text);
+      }
+
+      async postJson(url, body) {
+        if (typeof postJsonFn === 'function') {
+          return postJsonFn(url, body);
+        }
+        throw new Error('postJson is not supported by this fetcher');
       }
 
       async fetchHtmlWithRedirectInfo(url) {

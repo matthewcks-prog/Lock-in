@@ -273,6 +273,43 @@
     };
   }
 
+  async function postJson(url, body) {
+    console.log('[Lock-in] postJson:', url.substring(0, 100));
+
+    try {
+      new URL(url);
+    } catch (e) {
+      console.error('[Lock-in] Invalid URL:', url, e);
+      throw new Error('Invalid URL provided');
+    }
+
+    const response = await fetchWithRetry(url, {
+      method: 'POST',
+      credentials: 'include',
+      mode: 'cors',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: typeof body === 'string' ? body : JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.error(`[Lock-in] POST failed: ${response.status} ${response.statusText}`);
+      if (
+        response.status === HTTP_STATUS_UNAUTHORIZED ||
+        response.status === HTTP_STATUS_FORBIDDEN
+      ) {
+        throw new Error('AUTH_REQUIRED');
+      }
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const text = await response.text();
+    console.log(`[Lock-in] POST response: ${text.length} bytes`);
+    return JSON.parse(text);
+  }
+
   if (typeof self !== 'undefined') {
     self.LockInNetworkUtils = {
       RETRY_CONFIG,
@@ -282,6 +319,7 @@
       fetchWithCredentials,
       fetchVttContent,
       fetchHtmlWithRedirectInfo,
+      postJson,
     };
   }
 })();

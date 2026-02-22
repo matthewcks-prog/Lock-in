@@ -21,6 +21,9 @@ export type AsyncFetcher = {
 
   /** Fetch JSON with credentials included */
   fetchJson<T>(url: string): Promise<T>;
+
+  /** POST JSON body and return parsed response (optional, for APIs requiring POST) */
+  postJson?<T>(url: string, body: unknown): Promise<T>;
 };
 
 /**
