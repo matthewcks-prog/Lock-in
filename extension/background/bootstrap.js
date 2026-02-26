@@ -56,6 +56,7 @@
       'background/handlers/settingsHandlers.js',
       'background/handlers/transcriptHandlers.js',
       'background/handlers/aiTranscriptionHandlers.js',
+      'background/handlers/seekHandlers.js',
       'background/contextMenus.js',
       'background/lifecycle.js',
       'background/index.js',

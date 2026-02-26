@@ -88,11 +88,15 @@
       aiTranscription: transcriptServices.aiTranscription,
       contentScriptMedia: transcriptServices.contentScriptMedia,
     });
+    const seekHandlers = registry.handlers.createSeekHandlers
+      ? registry.handlers.createSeekHandlers({ log: transcriptsLog })
+      : {};
     return {
       ...sessionHandlers,
       ...settingsHandlers,
       ...transcriptHandlers,
       ...aiHandlers,
+      ...seekHandlers,
     };
   }
 

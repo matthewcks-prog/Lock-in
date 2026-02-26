@@ -59,6 +59,8 @@
 
   /* Transcript Message */
   #lockin-root .lockin-transcript-message {
+    display: flex;
+    flex-direction: column;
     max-width: 100%;
     overflow: hidden;
     background: var(--lockin-color-f8fafc);
@@ -111,22 +113,36 @@
     color: var(--lockin-color-text-body);
   }
 
+  /* ── Action bar ───────────────────────────────────────────────────────── */
+
   #lockin-root .lockin-transcript-actions {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: var(--lockin-size-8);
     padding: var(--lockin-size-12) var(--lockin-size-16);
     background: var(--lockin-color-surface-muted);
     border-top: var(--lockin-size-1) solid var(--lockin-color-border);
   }
 
+  /* Primary button group (left) */
+  #lockin-root .lockin-transcript-actions-primary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--lockin-size-8);
+  }
+
+  /* Shared button base */
   #lockin-root .lockin-transcript-action-btn {
     display: inline-flex;
     align-items: center;
     gap: var(--lockin-size-4);
+    min-height: 44px;
     padding: var(--lockin-size-6) var(--lockin-size-12);
     font-size: var(--lockin-text-sm);
     font-weight: 500;
+    white-space: nowrap;
     color: var(--lockin-color-text-body);
     background: var(--lockin-color-surface);
     border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
@@ -140,14 +156,153 @@
     border-color: var(--lockin-color-text-muted);
   }
 
+  #lockin-root .lockin-transcript-action-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  /* Primary variant (Generate summary, Save note) */
   #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary {
     color: var(--lockin-color-surface);
     background: var(--lockin-color-brand);
     border-color: var(--lockin-color-brand);
   }
 
-  #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary:hover {
+  #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary:hover:not(:disabled) {
     background: var(--lockin-color-1d4ed8);
     border-color: var(--lockin-color-1d4ed8);
+  }
+
+  /* ── More options menu (right side) ───────────────────────────────────── */
+
+  /* Wrapper provides the positioning context for the dropdown */
+  #lockin-root .lockin-transcript-more-options {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* Trigger button – secondary style */
+  #lockin-root .lockin-transcript-more-btn {
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-transcript-more-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-subtle);
+  }
+
+  /* Dropdown panel – opens above the trigger */
+  #lockin-root .lockin-transcript-more-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--lockin-size-4));
+    z-index: 100;
+    min-width: 170px;
+    max-width: calc(100vw - var(--lockin-size-32));
+    padding: var(--lockin-size-4) 0;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-md);
+    box-shadow: var(--lockin-shadow-16);
+  }
+
+  /* Individual menu items */
+  #lockin-root .lockin-transcript-more-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    width: 100%;
+    min-height: 44px;
+    padding: var(--lockin-size-8) var(--lockin-size-14);
+    font-size: var(--lockin-text-sm);
+    font-weight: 500;
+    text-align: left;
+    color: var(--lockin-color-text-body);
+    background: none;
+    border: none;
+    transition: background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-more-menu-item:hover,
+  #lockin-root .lockin-transcript-more-menu-item:focus {
+    background: var(--lockin-color-surface-subtle);
+    outline: none;
+  }
+
+  #lockin-root .lockin-transcript-more-menu-item-icon {
+    flex-shrink: 0;
+  }
+
+  /* ── Narrow-viewport adjustments (≤ 360 px) ──────────────────────────── */
+  @media (max-width: 360px) {
+    #lockin-root .lockin-transcript-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    #lockin-root .lockin-transcript-actions-primary {
+      flex-direction: column;
+    }
+
+    #lockin-root .lockin-transcript-more-options {
+      align-self: flex-start;
+    }
+
+    /* On very small widths open the menu downward to avoid clipping above */
+    #lockin-root .lockin-transcript-more-menu {
+      top: calc(100% + var(--lockin-size-4));
+      bottom: auto;
+    }
+  }
+
+  /* Seek hint – shown when the user clicks a timestamp but the seek fails.
+   *
+   * Three semantic variants (applied as extra class alongside the base):
+   *   (none)         – blue info strip: "Jumping to 1:23…" (confirm)
+   *   --warning      – amber strip: "Please play the video first"
+   *   --error        – red strip:   "No player found in this tab"
+   */
+
+  #lockin-root .lockin-transcript-seek-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-8) var(--lockin-size-16);
+    font-size: var(--lockin-text-xs);
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--lockin-color-text-body);
+    background: rgba(37, 99, 235, 0.06);
+    border-bottom: var(--lockin-size-1) solid rgba(37, 99, 235, 0.15);
+  }
+
+  #lockin-root .lockin-transcript-seek-hint svg {
+    flex-shrink: 0;
+    color: var(--lockin-color-brand);
+  }
+
+  /* Warning variant – video hasn't been played yet (not-ready) */
+  #lockin-root .lockin-transcript-seek-hint--warning {
+    background: rgba(245, 158, 11, 0.08);
+    border-bottom-color: rgba(245, 158, 11, 0.28);
+  }
+
+  #lockin-root .lockin-transcript-seek-hint--warning svg {
+    /* amber-600 */
+    color: #d97706;
+  }
+
+  /* Error variant – no video player was found in this tab */
+  #lockin-root .lockin-transcript-seek-hint--error {
+    background: rgba(239, 68, 68, 0.07);
+    border-bottom-color: rgba(239, 68, 68, 0.22);
+  }
+
+  #lockin-root .lockin-transcript-seek-hint--error svg {
+    /* red-600 */
+    color: #dc2626;
   }
 }

@@ -23,8 +23,13 @@
 .PARAMETER DryRun
     Preview deletions without executing them (default: true)
 
+.PARAMETER Force
+    Skip the "Type 'DELETE' to confirm" prompt (for automation). Use with -DryRun $false.
+
 .EXAMPLE
     .\cleanup-acr.ps1 -RegistryName "myacr" -DryRun $true
+.EXAMPLE
+    .\cleanup-acr.ps1 -RegistryName "myacr" -DryRun $false -Force
 #>
 
 param(
@@ -41,7 +46,10 @@ param(
     [int]$ProductionRetentionDays = 90,
 
     [Parameter(Mandatory=$false)]
-    [bool]$DryRun = $true
+    [bool]$DryRun = $true,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$Force
 )
 
 # Set error preference only, strict mode caused environment compatibility issues
@@ -191,10 +199,14 @@ if ($toDelete.Count -eq 0) {
 
 if (-not $DryRun) {
     Write-Warning "You are about to PERMANENTLY DELETE $($toDelete.Count) tags."
-    $confirm = Read-Host "Type 'DELETE' to confirm"
-    if ($confirm -ne "DELETE") {
-        Write-Info "Operation cancelled."
-        exit 0
+    if (-not $Force) {
+        $confirm = Read-Host "Type 'DELETE' to confirm"
+        if ($confirm -ne "DELETE") {
+            Write-Info "Operation cancelled."
+            exit 0
+        }
+    } else {
+        Write-Info "Proceeding without prompt (-Force)."
     }
     Write-Header "Executing Deletions"
 } else {
@@ -207,12 +219,12 @@ foreach ($item in $toDelete) {
     if ($DryRun) {
         Write-Info "[DRY RUN] Would delete: $logMsg"
     } else {
-        try {
-            # Deleting the tag. If it's the last tag, ACR usually deletes the manifest too.
-            az acr repository delete --name $RegistryName --image "${Repository}:$($item.Tag)" --yes 2>$null | Out-Null
+        # az may write WARNING to stderr (e.g. "will delete manifest and all tags"); check exit code, not stderr.
+        $null = az acr repository delete --name $RegistryName --image "${Repository}:$($item.Tag)" --yes 2>&1
+        if ($LASTEXITCODE -eq 0) {
             Write-Success "Deleted: $logMsg"
-        } catch {
-            Write-Error "Failed to delete $logMsg : $_"
+        } else {
+            Write-Warning "Delete failed or tag already gone: $logMsg (exit $LASTEXITCODE)"
         }
     }
 }

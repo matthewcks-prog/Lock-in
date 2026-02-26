@@ -163,6 +163,8 @@ on:
 
 **Purpose**: Push Docker image to Azure Container Registry.
 
+**Gate**: Runs only when repository variable `DEPLOYMENT_ENABLED` = `true`. When unset or `false`, this job and all deploy jobs are skipped (see [Pausing and resuming deployment](#pausing-and-resuming-deployment-acr-cost-control)).
+
 **Steps:**
 
 1. **Login to Azure** - Using OIDC
@@ -183,7 +185,7 @@ on:
 
 **Conditions:**
 
-- Only runs if `should-deploy-staging == true`
+- Only runs if `DEPLOYMENT_ENABLED == 'true'` (via `push-to-acr` dependency) and `should-deploy-staging == true`
 - GitHub Environment: `staging` (no required reviewers)
 
 **Steps:**
@@ -201,7 +203,7 @@ on:
 
 **Conditions:**
 
-- Only runs if `should-deploy-production == true`
+- Only runs if `DEPLOYMENT_ENABLED == 'true'` (via `push-to-acr` dependency) and `should-deploy-production == true`
 - GitHub Environment: `production` ⚠️ **MUST have required reviewers enabled**
 
 **Steps:** Same as `deploy-staging` but targets `lock-in-backend` and `AZURE_RESOURCE_GROUP`.
@@ -210,9 +212,9 @@ on:
 
 ### 5. `deployment-summary`
 
-**Purpose**: Always runs to show deployment summary and manual commands.
+**Purpose**: Runs after build to show deployment summary or a "deployment paused" notice.
 
-Useful when OIDC secrets are not set and deployment is skipped.
+Shows manual deploy commands when `DEPLOYMENT_ENABLED` is true; otherwise explains how to enable deployment. Useful when deployment is paused or OIDC secrets are not set.
 
 ## Authentication & Secrets
 
@@ -243,6 +245,76 @@ Add these in GitHub Settings > Secrets and variables > Actions:
 | `AZURE_CONTAINER_REGISTRY`     | String (ACR name, no .azurecr.io)  | `lockincr`                 |
 | `AZURE_RESOURCE_GROUP`         | String (production resource group) | `lock-in-prod`             |
 | `AZURE_RESOURCE_GROUP_STAGING` | String (staging resource group)    | `lock-in-staging`          |
+
+### Repository variable: deployment gate
+
+| Variable             | Values                    | Purpose                                                                                                                                                                                  |
+| -------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEPLOYMENT_ENABLED` | `true` / `false` or unset | When `true`, workflows push to ACR and deploy to staging/production. When unset or `false`, ACR push and deploy are **skipped** (build and test still run). Use to pause Azure/ACR cost. |
+
+Add in **Settings → Secrets and variables → Actions → Variables**. See [Pausing and resuming deployment](#pausing-and-resuming-deployment-acr-cost-control) below.
+
+## Pausing and resuming deployment (ACR cost control)
+
+**Root cause of ACR cost:** Azure Container Registry is billed for the registry tier and storage. The backend-deploy workflow pushes images to ACR on push to `main` (and manual dispatch); the acr-cleanup workflow runs weekly. Both use the same gate so you can pause all ACR-related activity from one place.
+
+**To pause (stop ACR push and deploy):**
+
+- **Option A (default):** Do nothing. If `DEPLOYMENT_ENABLED` is not set, ACR push and deploy are **skipped**. Build and test still run.
+- **Option B:** Set repository variable `DEPLOYMENT_ENABLED` = `false` in **Settings → Secrets and variables → Actions → Variables** for clarity.
+
+**To resume when ready for staging/production:**
+
+1. Go to **Settings → Secrets and variables → Actions → Variables**.
+2. Add or edit: `DEPLOYMENT_ENABLED` = `true`.
+3. Push to `main` (or run workflow_dispatch) to push to ACR and deploy.
+
+**What stays on when paused:**
+
+- Build, test, Trivy, and container health check in `backend-deploy.yml`.
+- Quality gate and other non-deploy workflows.
+
+**What is skipped when paused:**
+
+- Push to Azure Container Registry.
+- Deploy to staging and production.
+- ACR cleanup workflow (no weekly ACR API calls).
+
+**To stop Azure billing entirely:** Pausing workflows stops _new_ pushes; the ACR resource in Azure still incurs cost until you delete or downsize it in the Azure Portal. To eliminate ACR cost, delete the registry (or remove the resource) in Azure when paused; recreate it when you are ready to deploy again.
+
+### Clean the registry while paused (recommended)
+
+**Best practice:** While deployment is paused, clean or remove the registry so you don’t pay for storage. When you resume, the next pipeline run will push fresh images; you don’t need to “keep” old ones for that.
+
+| Option                   | Action                                                                                                                                                                          | Cost impact                                     | When you resume                                                                                                                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **A. Delete ACR**        | Delete the ACR resource in Azure Portal (or `az acr delete`).                                                                                                                   | No registry or storage cost.                    | Recreate ACR (e.g. `scripts/infra/azure-setup.ps1` or Portal), ensure `AZURE_CONTAINER_REGISTRY` secret still matches, set `DEPLOYMENT_ENABLED=true`. First push repopulates the registry. |
+| **B. Clean images only** | Run a one-time cleanup (e.g. `acr-cleanup.yml` with `dry_run: false` and short retention, or `scripts/cleanup-acr.ps1`). Optionally keep last 1–2 production tags for rollback. | Lower storage cost; registry tier still billed. | Set `DEPLOYMENT_ENABLED=true`; next push adds new images.                                                                                                                                  |
+| **C. Keep as is**        | Do nothing in ACR.                                                                                                                                                              | Full storage (and tier) cost continues.         | Set `DEPLOYMENT_ENABLED=true`; next push adds new images.                                                                                                                                  |
+
+**Recommendation:** Use **Option A** if you want to stop all ACR cost. Use **Option B** only if you need to keep one or two recent production tags for rollback during the pause.
+
+#### One-time: log in and clean ACR images (Option B)
+
+From the repo root in PowerShell:
+
+```powershell
+# 1. Log in to Azure (opens browser if needed)
+az login
+
+# 2. Set your ACR name if not already set (use the value from GitHub secret AZURE_CONTAINER_REGISTRY)
+$env:AZURE_CONTAINER_REGISTRY = "your-acr-name"   # e.g. lockinacr
+
+# 3. Preview what would be deleted (dry run)
+.\scripts\cleanup-acr.ps1 -DryRun $true
+
+# 4. Run cleanup for real (short retention = delete almost everything)
+.\scripts\cleanup-acr.ps1 -StagingRetentionDays 0 -ProductionRetentionDays 0 -DryRun $false -Force
+```
+
+Use `-Force` to skip the "Type 'DELETE' to confirm" prompt (e.g. for automation).
+
+To keep the last 1–2 production images, use a small retention instead of `0` (e.g. `-ProductionRetentionDays 1`). The script preserves `*-latest` and semantic `v*.*.*` tags unless you change the script.
 
 ## GitHub Environments
 

@@ -31,8 +31,21 @@ export default defineConfig({
     globals: true,
     restoreMocks: true,
     clearMocks: true,
+    // Tests that do vi.resetModules() + dynamic import (initApiSurface,
+    // uiSurface) can be slow when all 60+ workers compile TypeScript in
+    // parallel on the same thread pool.  A global timeout of 60 s gives
+    // headroom, and capping worker threads reduces CPU contention without
+    // meaningfully increasing wall-clock time on sequential test files.
+    testTimeout: 60000,
     // CI/CD optimizations
     pool: 'threads',
+    poolOptions: {
+      threads: {
+        maxThreads: 8,
+        minThreads: 2,
+        useAtomics: true,
+      },
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],

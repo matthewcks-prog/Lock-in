@@ -64,11 +64,28 @@
     };
   }
 
+  function createSeekFallbackValidators() {
+    return {
+      SEEK_VIDEO: (message) => {
+        const p = message?.payload ?? message;
+        return {
+          ok: true,
+          payload: {
+            provider: typeof p?.provider === 'string' ? p.provider : 'unknown',
+            videoId: typeof p?.videoId === 'string' ? p.videoId : null,
+            seconds: typeof p?.seconds === 'number' ? p.seconds : 0,
+          },
+        };
+      },
+    };
+  }
+
   function createFallbackValidators() {
     return {
       ...createSessionFallbackValidators(),
       ...createSettingsFallbackValidators(),
       ...createTranscriptFallbackValidators(),
+      ...createSeekFallbackValidators(),
     };
   }
 

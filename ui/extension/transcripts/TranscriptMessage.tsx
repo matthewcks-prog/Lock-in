@@ -10,6 +10,8 @@ import type { SaveNoteOptions } from '../hooks/useNoteSave';
 import type { Note } from '@core/domain/Note';
 import { useTranscriptCacheContext } from '../contexts/TranscriptCacheContext';
 import { downloadFile, formatAsPlainText, formatAsVtt, formatTime } from './transcriptFormatting';
+import { TranscriptParagraphView } from './TranscriptParagraphView';
+import { TranscriptActions } from './TranscriptActions';
 
 interface TranscriptMessageProps {
   /** The transcript data */
@@ -23,8 +25,6 @@ interface TranscriptMessageProps {
 }
 
 const TRANSCRIPT_ICON = '\uD83D\uDCDD';
-const DOWNLOAD_ICON = '\uD83D\uDCE5';
-const SAVE_ICON = '\uD83D\uDCBE';
 
 function toSafeTitle(value: string): string {
   return value.replace(/[^a-z0-9]/gi, '_').toLowerCase();
@@ -32,45 +32,6 @@ function toSafeTitle(value: string): string {
 
 function buildTranscriptNoteContent(videoTitle: string, plainText: string): string {
   return `# Transcript: ${videoTitle}\n\n${plainText}`;
-}
-
-function TranscriptActions({
-  onDownloadTxt,
-  onDownloadVtt,
-  onSave,
-}: {
-  onDownloadTxt: () => void;
-  onDownloadVtt: () => void;
-  onSave: () => void;
-}): JSX.Element {
-  return (
-    <div className="lockin-transcript-actions">
-      <button
-        className="lockin-transcript-action-btn"
-        onClick={onDownloadTxt}
-        title="Download as plain text"
-        type="button"
-      >
-        {DOWNLOAD_ICON} Download .txt
-      </button>
-      <button
-        className="lockin-transcript-action-btn"
-        onClick={onDownloadVtt}
-        title="Download as VTT with timestamps"
-        type="button"
-      >
-        {DOWNLOAD_ICON} Download .vtt
-      </button>
-      <button
-        className="lockin-transcript-action-btn lockin-transcript-action-primary"
-        onClick={onSave}
-        title="Save transcript as note"
-        type="button"
-      >
-        {SAVE_ICON} Save note
-      </button>
-    </div>
-  );
 }
 
 function useTranscriptActions({
@@ -137,7 +98,7 @@ export function TranscriptMessage(props: TranscriptMessageProps): JSX.Element {
         </div>
       </div>
 
-      <div className="lockin-transcript-content">{transcript.plainText}</div>
+      <TranscriptParagraphView segments={transcript.segments} />
 
       <TranscriptActions
         onDownloadTxt={handleDownloadTxt}

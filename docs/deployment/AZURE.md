@@ -681,6 +681,15 @@ curl http://localhost:3000/health
 
 ## Cost Optimization
 
+### Pausing ACR and deployment
+
+To stop **Azure Container Registry** (and deploy) usage from the repo:
+
+- **Workflows:** ACR push and deploy run only when the repository variable `DEPLOYMENT_ENABLED` is set to `true`. If it is unset or `false`, the backend-deploy workflow still builds and tests but does not push to ACR or deploy; the ACR cleanup workflow does not run. See [CICD.md § Pausing and resuming deployment](./CICD.md#pausing-and-resuming-deployment-acr-cost-control).
+- **Azure billing:** Pausing workflows stops new image pushes. The ACR resource itself still incurs cost until you delete it (or change tier) in the Azure Portal. To eliminate ACR cost entirely, delete the registry when paused and recreate it when you are ready to deploy again.
+
+**Clean the registry while paused (best practice):** Prefer cleaning or deleting the registry so you don’t pay for storage. When you resume, the next pipeline run will push everything needed. See [CICD.md § Clean the registry while paused](./CICD.md#clean-the-registry-while-paused-recommended) for options (delete ACR vs one-time cleanup vs keep as is) and resume steps.
+
 ### Resource Sizing
 
 | Workload  | CPU | Memory | Min Replicas | Max Replicas |

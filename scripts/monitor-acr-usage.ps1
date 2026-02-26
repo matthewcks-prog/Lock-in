@@ -269,4 +269,4 @@ if ($storageGB -gt 10) {
 }
 
 Write-Host ""
-Write-Info "For more information, see: .github/workflows/ACR-CLEANUP-GUIDE.md"
+Write-Info "For more information, see: docs/deployment/CICD.md (Clean the registry while paused)"
