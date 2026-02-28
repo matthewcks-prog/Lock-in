@@ -30,7 +30,7 @@ describe('Study workspace visibility', () => {
   it('does not render Study workspace controls while Chat is active', async () => {
     const { storage } = renderSidebar();
     await waitFor(() => expect(storage.get).toHaveBeenCalled());
-    await screen.findByRole('alert');
+    await screen.findByRole('tab', { name: 'Chat' });
     expect(screen.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: /study tools/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/open a study tool to continue/i)).not.toBeInTheDocument();
@@ -39,7 +39,7 @@ describe('Study workspace visibility', () => {
   it('renders only on Study tab and unmounts when leaving Study', async () => {
     const { user, storage } = renderSidebar();
     await waitFor(() => expect(storage.get).toHaveBeenCalled());
-    await screen.findByRole('alert');
+    await screen.findByRole('tab', { name: 'Study' });
 
     await user.click(screen.getByRole('tab', { name: 'Study' }));
     expect(await screen.findByRole('button', { name: /study tools/i })).toBeInTheDocument();

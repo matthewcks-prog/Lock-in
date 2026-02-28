@@ -8,7 +8,6 @@ interface SidebarLayoutProps {
   headerLeft: ReactNode;
   headerRight?: ReactNode;
   children: ReactNode;
-  footer?: ReactNode;
 }
 
 export function SidebarLayout({
@@ -18,7 +17,6 @@ export function SidebarLayout({
   headerLeft,
   headerRight,
   children,
-  footer,
 }: SidebarLayoutProps): JSX.Element {
   return (
     <>
@@ -45,9 +43,6 @@ export function SidebarLayout({
             <CloseButton onClick={onToggle} label="Close sidebar" />
           </div>
           <div className="lockin-sidebar-body">{children}</div>
-          {footer !== undefined && footer !== null && (
-            <div className="lockin-sidebar-footer">{footer}</div>
-          )}
         </div>
       )}
     </>

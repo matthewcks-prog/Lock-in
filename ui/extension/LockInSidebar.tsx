@@ -17,7 +17,6 @@ import { TranscriptCacheProvider } from './contexts/TranscriptCacheContext';
 import { ChatQueryProvider } from './chat';
 import { FeedbackModal } from './feedback';
 import { StudySummaryProvider, StudyWorkspace, StudyWorkspaceProvider } from './study';
-import { PrivacyNotice } from './sidebar/PrivacyNotice';
 import { SidebarLayout } from './sidebar/SidebarLayout';
 import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ChatSection } from './sidebar/ChatSection';
@@ -252,7 +251,6 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
           headerRight={
             <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
           }
-          footer={<PrivacyNotice />}
         >
           <SidebarTabContent model={model} notesHandlers={notesHandlers} />
         </SidebarLayout>

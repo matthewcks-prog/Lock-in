@@ -1,4 +1,5 @@
 import type { Note } from '@core/domain/Note';
+import { ChevronDown, RotateCcw } from 'lucide-react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { NotesListItem } from './NotesListItem';
 
@@ -36,6 +37,34 @@ function resolveItemKey(note: Note): string {
   return hasNoteId(note) ? note.id : note.title;
 }
 
+function NotesFilterSelect({
+  filter,
+  onFilterChange,
+}: {
+  filter: NotesFilter;
+  onFilterChange: (value: NotesFilter) => void;
+}): JSX.Element {
+  return (
+    <div className="lockin-notes-filter-select-shell">
+      <select
+        className="lockin-notes-filter-select"
+        value={filter}
+        onChange={(e) => onFilterChange(e.target.value as NotesFilter)}
+      >
+        <option value="course">This course</option>
+        <option value="all">All notes</option>
+        <option value="starred">Starred</option>
+      </select>
+      <ChevronDown
+        aria-hidden="true"
+        className="lockin-notes-filter-select-chevron"
+        size={12}
+        strokeWidth={2}
+      />
+    </div>
+  );
+}
+
 function NotesFilterBar({
   filter,
   onFilterChange,
@@ -53,15 +82,7 @@ function NotesFilterBar({
     <div className="lockin-notes-filter-bar">
       <div className="lockin-notes-filter-group">
         <span className="lockin-notes-filter-label">Filter</span>
-        <select
-          className="lockin-notes-filter-select"
-          value={filter}
-          onChange={(e) => onFilterChange(e.target.value as NotesFilter)}
-        >
-          <option value="course">This course</option>
-          <option value="all">All notes</option>
-          <option value="starred">Starred</option>
-        </select>
+        <NotesFilterSelect filter={filter} onFilterChange={onFilterChange} />
       </div>
       <input
         type="text"
@@ -70,8 +91,14 @@ function NotesFilterBar({
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
       />
-      <button type="button" className="lockin-btn-ghost" onClick={onRefreshNotes}>
-        Refresh
+      <button
+        type="button"
+        className="lockin-notes-refresh-btn"
+        onClick={onRefreshNotes}
+        title="Refresh notes"
+        aria-label="Refresh notes"
+      >
+        <RotateCcw size={14} strokeWidth={2} aria-hidden="true" />
       </button>
     </div>
   );

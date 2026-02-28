@@ -104,7 +104,8 @@ Grounding requirements:
 - Use only information that appears in the provided transcript source.
 - Do not add outside facts, examples, definitions, corrections, or assumptions.
 - If a requested detail is missing or unclear, write exactly "Not stated in transcript" and place it under "Open Questions / Missing Info".
-- Every factual claim must include evidence in this format: (evidence: "short quote" @ time or line range).
+- Every factual claim must include evidence in this format: (evidence: "short quote" @ mm:ss-mm:ss).
+- Always cite using the timestamp range from the transcript line (e.g. @ 01:23-01:45), never line numbers.
 - Keep quotes short.
 
 Output quality rules:
@@ -135,7 +136,7 @@ function buildStudyGuideOutputInstructions({ includeJson }) {
       '',
       'After the Markdown, append a JSON block labeled "STUDY_GUIDE_JSON" with keys:',
       'tldr, high_yield, definitions, recall_questions, flashcards, open_questions.',
-      'Each item must include evidence with quote and start/end timestamps or line range.',
+      'Each item must include evidence with quote and start/end timestamps (e.g. @ 01:23-01:45).',
     );
   }
 
@@ -194,7 +195,7 @@ function buildStudyGuideChunkDigestPrompt({
   const system = `You extract grounded study evidence from transcript chunks.
 Return concise Markdown only.
 Use only the provided transcript chunk.
-Every bullet must include evidence in format: (evidence: "short quote" @ time or line).`;
+Every bullet must include evidence in format: (evidence: "short quote" @ mm:ss-mm:ss). Always use the timestamp from the transcript line, never the line number.`;
 
   const user = [
     `Lecture: ${title}`,

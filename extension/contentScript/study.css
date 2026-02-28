@@ -76,6 +76,33 @@
     gap: var(--lockin-size-8);
   }
 
+  #lockin-root .lockin-study-summary-regen-btn {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-28);
+    height: var(--lockin-size-28);
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-05);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-study-summary-regen-btn:hover {
+    color: var(--lockin-color-text-primary);
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-04);
+  }
+
+  #lockin-root .lockin-study-summary-regen-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
   #lockin-root .lockin-study-summary-depth {
     display: inline-flex;
     flex-wrap: wrap;

@@ -24,10 +24,78 @@ const CHUNK_DIGEST_TEMPERATURE = 0.2;
 const CHUNK_DIGEST_MAX_TOKENS = 1000;
 
 const SUMMARY_MAX_TOKENS_BY_DEPTH = {
-  brief: 1100,
-  standard: 1700,
-  detailed: 2400,
+  brief: 2000,
+  standard: 4500,
+  detailed: 6000,
 };
+
+/**
+ * Silently trims any incomplete trailing content from LLM-generated markdown.
+ *
+ * When a model hits its output token limit the response is cut at an arbitrary
+ * character boundary, leaving the user with a half-sentence or dangling list
+ * item. Rather than exposing implementation details ("max tokens reached") we
+ * simply remove the incomplete fragment so the summary ends cleanly.
+ *
+ * Strategy (line-by-line from the end):
+ *  - Skip blank lines.
+ *  - Any line ending with sentence-closing punctuation or recognised markdown
+ *    delimiters (closing paren, bracket, table pipe, quote) is treated as the
+ *    natural end of the document.
+ *  - A heading line with no body content following it is treated as a
+ *    truncation point (the section was opened but cut before content was
+ *    written) and is removed, unless it is the only meaningful content.
+ *  - If no clearly "complete" line is found the original text is returned
+ *    unchanged, allowing naturally-terse summaries to pass through intact.
+ *
+ * @param {string} text - Raw markdown from the LLM
+ * @returns {string}
+ */
+function trimIncompleteMarkdownTail(text) {
+  if (!text || text.length === 0) return text;
+
+  const lines = text.split('\n');
+  // Sentence-ending punctuation and closing delimiters common in structured
+  // markdown (evidence citations end with `)`, table rows end with `|`, etc.)
+  const endsComplete = /[.!?)\]|"'>][\s*_`]*$/;
+
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const trimmed = lines[i].trimEnd();
+    if (trimmed === '') continue; // skip blank separator lines
+
+    if (trimmed.startsWith('#')) {
+      // A heading with body content below it is a valid stopping point.
+      const hasBodyBelow = lines.slice(i + 1).some((l) => l.trim() !== '');
+      if (hasBodyBelow) {
+        return lines
+          .slice(0, i + 1)
+          .join('\n')
+          .trim();
+      }
+      // A heading with no body below it is an orphaned section header —
+      // the content was truncated. Remove it, unless this heading is the
+      // only meaningful line in the entire output (edge case / short summary).
+      const hasContentAbove = lines.slice(0, i).some((l) => l.trim() !== '');
+      if (hasContentAbove) {
+        return lines.slice(0, i).join('\n').trim();
+      }
+      // Only content is this heading — return it as-is.
+      return trimmed;
+    }
+
+    if (endsComplete.test(trimmed)) {
+      return lines
+        .slice(0, i + 1)
+        .join('\n')
+        .trim();
+    }
+
+    // This line does not end cleanly — discard it and keep scanning upward.
+  }
+
+  // No clean ending found; return the original rather than an empty string.
+  return text.trim();
+}
 
 function createRequestError(status, message) {
   const error = new Error(message);
@@ -140,7 +208,7 @@ async function generateChunkDigest({
     throw new Error(`No digest content returned for chunk ${chunkIndex + 1}`);
   }
 
-  return `## Chunk ${chunkIndex + 1}\n${content.trim()}`;
+  return `## Chunk ${chunkIndex + 1}\n${trimIncompleteMarkdownTail(content)}`;
 }
 
 async function buildChunkDigestTranscriptSource({
@@ -221,7 +289,7 @@ async function generateFinalSummary({ services, depth, finalPrompt }) {
   if (typeof markdown !== 'string' || markdown.trim().length === 0) {
     throw new Error('No study summary content returned from model');
   }
-  return markdown.trim();
+  return trimIncompleteMarkdownTail(markdown);
 }
 
 async function createStudySummary(services, payload) {

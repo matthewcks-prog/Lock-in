@@ -163,10 +163,6 @@
     min-height: 0;
   }
 
-  #lockin-root .lockin-sidebar-footer {
-    flex-shrink: 0;
-  }
-
   #lockin-root .lockin-sidebar-resize-handle {
     position: absolute;
     top: 0;

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 import type { StudySummaryDepth } from '@api/client';
 import { MarkdownRenderer } from '../chat/components/MarkdownRenderer';
 import { useStudySummary } from './StudySummaryContext';
@@ -29,13 +30,22 @@ function StudySummaryControls(): JSX.Element {
       </div>
       <button
         type="button"
-        className="lockin-transcript-change-video-btn"
+        className="lockin-study-summary-regen-btn"
+        aria-label={
+          summaryState.status === 'loading' ? 'Generating summary…' : 'Regenerate summary'
+        }
+        title={summaryState.status === 'loading' ? 'Generating…' : 'Regenerate'}
         onClick={() => {
           void generateSummary({ force: true });
         }}
         disabled={summaryState.status === 'loading'}
       >
-        {summaryState.status === 'loading' ? 'Generating...' : 'Regenerate'}
+        <RefreshCw
+          size={14}
+          strokeWidth={2}
+          className={summaryState.status === 'loading' ? 'lockin-spin' : undefined}
+          aria-hidden="true"
+        />
       </button>
     </div>
   );
@@ -91,7 +101,6 @@ export function StudySummaryTool(): JSX.Element {
   return (
     <div className="lockin-study-summary-shell">
       <div className="lockin-study-summary-placeholder">
-        <h3 className="lockin-study-summary-title">Summary</h3>
         <StudySummaryControls />
         <StudySummaryStatus />
       </div>

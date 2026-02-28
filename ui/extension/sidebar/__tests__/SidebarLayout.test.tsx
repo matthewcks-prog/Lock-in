@@ -1,15 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { SidebarLayout } from '../SidebarLayout';
 
-function renderLayout({
-  isOpen = true,
-  footer = null,
-}: {
-  isOpen?: boolean;
-  footer?: ReactNode;
-} = {}): ReturnType<typeof render> {
+function renderLayout({ isOpen = true }: { isOpen?: boolean } = {}): ReturnType<typeof render> {
   return render(
     <SidebarLayout
       isOpen={isOpen}
@@ -17,7 +10,6 @@ function renderLayout({
       onResizeStart={vi.fn()}
       headerLeft={<div>Tabs</div>}
       headerRight={<div>Actions</div>}
-      footer={footer}
     >
       <section data-testid="sidebar-content">Body</section>
     </SidebarLayout>,
@@ -33,17 +25,5 @@ describe('SidebarLayout', () => {
 
     expect(body).not.toBeNull();
     expect(body?.contains(content)).toBe(true);
-  });
-
-  it('renders footer content in a dedicated footer region', () => {
-    const { container } = renderLayout({
-      footer: <div data-testid="sidebar-footer-content">Footer</div>,
-    });
-
-    const footer = container.querySelector('.lockin-sidebar-footer');
-    const footerContent = screen.getByTestId('sidebar-footer-content');
-
-    expect(footer).not.toBeNull();
-    expect(footer?.contains(footerContent)).toBe(true);
   });
 });
