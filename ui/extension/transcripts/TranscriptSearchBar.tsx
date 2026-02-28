@@ -1,7 +1,5 @@
 /**
- * TranscriptSearchBar
- *
- * Compact search bar with Lucide icons and match navigation.
+ * Compact search bar with match navigation for transcript paragraphs.
  * Presentation-only: all state lives in the parent.
  */
 
@@ -45,7 +43,7 @@ function SearchControls({
   onPrev: () => void;
   onNext: () => void;
 }): JSX.Element {
-  const btnCls = 'lockin-transcript-search-bar-btn lockin-transcript-search-bar-btn';
+  const btnCls = 'lockin-transcript-search-bar-btn';
   return (
     <>
       {query.length > 0 && (
@@ -90,10 +88,10 @@ export function TranscriptSearchBar({
       <input
         aria-label="Search transcript"
         className="lockin-transcript-search-bar-input"
-        onChange={(e) => {
-          onQueryChange(e.target.value);
+        onChange={(event) => {
+          onQueryChange(event.target.value);
         }}
-        placeholder="Search transcript…"
+        placeholder="Search transcript..."
         type="search"
         value={query}
       />

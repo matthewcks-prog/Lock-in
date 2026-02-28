@@ -12,6 +12,7 @@ export const API_CLIENT_EXPECTED_KEYS = [
   'deleteTask',
   'editMessage',
   'generateChatTitle',
+  'generateStudySummary',
   'getBackendUrl',
   'getChatAssetStatus',
   'getChatMessages',

@@ -12,19 +12,18 @@ import { createTasksService } from '../../core/services/tasksService.ts';
 import { useNotesList } from '../hooks/useNotesList';
 import { NotesPanel } from './notes/NotesPanel';
 import { TasksPanel } from './tasks/TasksPanel';
-import { ToolProvider, useToolContext } from './tools';
 import { NoteSaveProvider } from './contexts/NoteSaveContext';
 import { TranscriptCacheProvider } from './contexts/TranscriptCacheContext';
 import { ChatQueryProvider } from './chat';
 import { FeedbackModal } from './feedback';
+import { StudySummaryProvider, StudyWorkspace, StudyWorkspaceProvider } from './study';
 import { PrivacyNotice } from './sidebar/PrivacyNotice';
 import { SidebarLayout } from './sidebar/SidebarLayout';
 import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ChatSection } from './sidebar/ChatSection';
 import { SidebarHeaderActions } from './sidebar/SidebarHeaderActions';
-import { ToolSection } from './sidebar/ToolSection';
 import { useResize } from './sidebar/useResize';
-import { CHAT_TAB_ID, NOTES_TAB_ID, TASKS_TAB_ID, TOOL_TAB_ID } from './sidebar/constants';
+import { CHAT_TAB_ID, NOTES_TAB_ID, STUDY_TAB_ID, TASKS_TAB_ID } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
 import { useSidebarState } from './sidebar/useSidebarState';
 import { useFeedbackListener } from './sidebar/hooks/useFeedbackListener';
@@ -48,21 +47,11 @@ export interface LockInSidebarProps {
 
 function useSyncSidebarEffects({
   activeTab,
-  activeToolId,
   refreshNotes,
-  setActiveTab,
 }: {
   activeTab: ReturnType<typeof useSidebarState>['activeTab'];
-  activeToolId: string | null;
   refreshNotes: ReturnType<typeof useNotesList>['refresh'];
-  setActiveTab: ReturnType<typeof useSidebarState>['setActiveTab'];
 }): void {
-  useEffect(() => {
-    if (activeToolId !== null && activeToolId.length > 0) {
-      setActiveTab(TOOL_TAB_ID);
-    }
-  }, [activeToolId, setActiveTab]);
-
   useEffect(() => {
     if (activeTab === NOTES_TAB_ID) {
       void refreshNotes();
@@ -123,7 +112,6 @@ function useServices(apiClient: ApiClient | null): {
 }
 
 function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
-  const { activeToolId, activeToolTitle, closeTool } = useToolContext();
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const sidebarState = useSidebarState(buildSidebarStateOptions(props));
   const { notesService, tasksService } = useServices(props.apiClient);
@@ -133,18 +121,13 @@ function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
 
   useSyncSidebarEffects({
     activeTab: sidebarState.activeTab,
-    activeToolId,
     refreshNotes: notesState.refresh,
-    setActiveTab: sidebarState.setActiveTab,
   });
 
   useFeedbackListener(() => setIsFeedbackOpen(true));
 
   return {
     activeTab: sidebarState.activeTab,
-    activeToolId,
-    activeToolTitle,
-    closeTool,
     courseCode: pageValues.courseCode,
     currentWeek: pageValues.currentWeek,
     deleteNoteFromList: notesState.deleteNote,
@@ -222,11 +205,8 @@ function SidebarTabContent({
           onNoteEditingChange={model.setIsNoteEditing}
         />
       )}
-      {model.activeTab === TOOL_TAB_ID && (
-        <ToolSection activeToolId={model.activeToolId} onClose={model.closeTool} />
-      )}
+      {model.activeTab === STUDY_TAB_ID && <StudyWorkspace />}
       {model.activeTab === TASKS_TAB_ID && <TasksTabContent model={model} />}
-      <PrivacyNotice />
     </>
   );
 }
@@ -267,17 +247,12 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
           onToggle={model.onToggle}
           onResizeStart={model.handleResizeStart}
           headerLeft={
-            <SidebarTabs
-              activeTab={model.activeTab}
-              onTabChange={model.handleTabChange}
-              activeToolId={model.activeToolId}
-              activeToolTitle={model.activeToolTitle}
-              onCloseTool={model.closeTool}
-            />
+            <SidebarTabs activeTab={model.activeTab} onTabChange={model.handleTabChange} />
           }
           headerRight={
             <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
           }
+          footer={<PrivacyNotice />}
         >
           <SidebarTabContent model={model} notesHandlers={notesHandlers} />
         </SidebarLayout>
@@ -293,11 +268,20 @@ function LockInSidebarContent(props: LockInSidebarProps): JSX.Element {
 }
 
 export function LockInSidebar(props: LockInSidebarProps): JSX.Element {
+  const courseContext = props.pageContext?.courseContext;
   return (
-    <ToolProvider>
-      <ChatQueryProvider>
-        <LockInSidebarContent {...props} />
-      </ChatQueryProvider>
-    </ToolProvider>
+    <StudyWorkspaceProvider>
+      <StudySummaryProvider
+        apiClient={props.apiClient}
+        courseCode={courseContext?.courseCode ?? null}
+        courseName={courseContext?.courseName ?? null}
+        week={courseContext?.week ?? null}
+        topic={courseContext?.topic ?? null}
+      >
+        <ChatQueryProvider>
+          <LockInSidebarContent {...props} />
+        </ChatQueryProvider>
+      </StudySummaryProvider>
+    </StudyWorkspaceProvider>
   );
 }

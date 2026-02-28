@@ -1,14 +1,11 @@
 @layer lockin.responsive {
   /* ================================================================
      BREAKPOINTS
-     - xs:  <=480px   (mobile phone — extension disabled)
-     - sm:  <=768px   (tablet)
-     - md:  <=1024px  (small laptop / narrow window)
-     - lg:  <=1440px  (standard laptop)
-     - xl:  >1440px   (large monitor)
+     - xs: <=480px (mobile phone, extension hidden)
+     - sm: <=768px (tablet)
+     - md: <=1024px (small laptop / narrow window)
      ================================================================ */
 
-  /* --- Mobile phone (<=480px) – hide the extension entirely --- */
   @media (max-width: 480px) {
     #lockin-root {
       display: none !important;
@@ -23,7 +20,6 @@
     }
   }
 
-  /* --- Small laptop (<=1024px) – sidebar overlays, no page push --- */
   @media (max-width: 1024px) {
     body.lockin-sidebar-open #lockin-page-wrapper {
       width: 100%;
@@ -37,12 +33,10 @@
       max-width: 100%;
     }
 
-    /* Disable resize handle in overlay mode — sidebar is full-width */
     #lockin-root .lockin-sidebar-resize-handle {
       display: none;
     }
 
-    /* History panel overlays on narrow viewports */
     #lockin-root .lockin-chat-history-panel {
       position: absolute;
       top: 0;
@@ -53,7 +47,6 @@
     }
   }
 
-  /* --- Tablet (<=768px) – tighter spacing --- */
   @media (max-width: 768px) {
     #lockin-root .lockin-chat-messages {
       padding: var(--lockin-space-3) var(--lockin-space-3);
@@ -71,7 +64,6 @@
       padding: var(--lockin-size-4) var(--lockin-size-8);
     }
 
-    /* Notes context-bar compact layout */
     #lockin-root .lockin-notes-context-bar {
       padding: var(--lockin-size-4) var(--lockin-size-8);
     }
@@ -80,7 +72,40 @@
       gap: var(--lockin-size-2);
     }
 
-    /* Ensure touch targets are at least 44px on touch devices */
+    #lockin-root .lockin-study-header {
+      gap: var(--lockin-size-6);
+      grid-template-columns: 1fr;
+    }
+
+    #lockin-root .lockin-study-video-control {
+      flex-wrap: wrap;
+    }
+
+    #lockin-root .lockin-study-header-actions {
+      justify-content: flex-end;
+    }
+
+    #lockin-root .lockin-study-body.is-selection {
+      padding: var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-study-selection-shell {
+      padding: var(--lockin-size-4) 0 var(--lockin-size-10);
+    }
+
+    #lockin-root .lockin-study-selection-shell .lockin-video-list-panel {
+      width: 100%;
+      max-width: none;
+    }
+
+    #lockin-root .lockin-study-tool-layout {
+      padding: var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-study-tool-tab {
+      max-width: min(60%, var(--lockin-size-180));
+    }
+
     #lockin-root .lockin-tab,
     #lockin-root .lockin-close-btn,
     #lockin-root .lockin-history-toggle-btn,
@@ -91,34 +116,34 @@
     }
   }
 
-  /* --- Narrow sidebar (≤520px) — tighten the top bar so all controls fit ---
-   *
-   * Uses CSS container queries scoped to #lockin-sidebar so the compact layout
-   * triggers based on the sidebar's own width, not the viewport width.
-   * This correctly handles user-resized sidebars on large monitors.
-   */
   @container sidebar (max-width: 520px) {
-    /* Reduce tab padding so Chat / Notes / Tool tabs all fit */
     .lockin-tab {
       padding: var(--lockin-size-4) var(--lockin-size-6);
     }
 
-    /* Cap the closable tool tab width tighter on very narrow sidebars */
-    .lockin-tab-closable {
-      max-width: 6rem;
-    }
-
-    /* Collapse "Study Tools ▼" label to icon-only on very narrow sidebars */
     .lockin-study-tools-btn-label {
       display: none;
     }
 
     .lockin-study-tools-btn {
-      padding: var(--lockin-size-4);
+      justify-content: center;
+      width: var(--lockin-size-28);
+      padding: 0;
+    }
+
+    .lockin-study-video-label {
+      display: none;
+    }
+
+    .lockin-study-tool-tab-trigger {
+      max-width: var(--lockin-size-120);
+    }
+
+    .lockin-study-tool-tab {
+      max-width: var(--lockin-size-150);
     }
   }
 
-  /* --- Touch devices – always-visible interactive elements --- */
   @media (hover: none) {
     #lockin-root .lockin-msg-action-bar {
       opacity: 1;
@@ -130,7 +155,6 @@
     }
   }
 
-  /* --- Reduced motion – respect user preference --- */
   @media (prefers-reduced-motion: reduce) {
     #lockin-sidebar,
     #lockin-root .lockin-chat-history-panel,
@@ -144,7 +168,6 @@
     }
   }
 
-  /* --- High contrast – reinforce borders & focus --- */
   @media (forced-colors: active) {
     #lockin-root .lockin-msg-action-btn:focus-visible,
     #lockin-root .lockin-send-btn:focus-visible,

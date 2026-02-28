@@ -1,23 +1,18 @@
 /**
- * TranscriptActions
- *
  * Action bar rendered below a transcript message.
  *
- * Layout (left → right):
- *   Primary (always visible):  "Generate summary"  |  "Save note"
- *   Secondary (right, menu):   "More options" → Download .txt / Download .vtt
- *
- * Note: the "Generate summary" button is intentionally a stub pending
- * backend integration (see useGenerateSummary).
+ * Layout:
+ * - Primary actions: Generate summary, Save note
+ * - Secondary actions: More options menu (downloads)
  */
 
 import type { MoreOptionsMenuItem } from './TranscriptMoreOptionsMenu';
 import { TranscriptMoreOptionsMenu } from './TranscriptMoreOptionsMenu';
 import { useGenerateSummary } from './useGenerateSummary';
 
-const DOWNLOAD_ICON = '\uD83D\uDCE5'; // 📥
-const SAVE_ICON = '\uD83D\uDCBE'; // 💾
-const SUMMARY_ICON = '\u2728'; // ✨
+const DOWNLOAD_ICON = '\uD83D\uDCE5';
+const SAVE_ICON = '\uD83D\uDCBE';
+const SUMMARY_ICON = '\u2728';
 
 interface TranscriptActionsProps {
   onDownloadTxt: () => void;
@@ -49,14 +44,13 @@ export function TranscriptActions({
 
   return (
     <div className="lockin-transcript-actions">
-      {/* Primary buttons – left side */}
       <div className="lockin-transcript-actions-primary">
         <button
-          aria-label="Generate summary (coming soon)"
+          aria-label="Generate summary"
           className="lockin-transcript-action-btn lockin-transcript-action-primary"
           disabled={isLoading}
           onClick={generateSummary}
-          title="Generate summary (coming soon)"
+          title="Generate summary"
           type="button"
         >
           {SUMMARY_ICON} Generate summary
@@ -71,7 +65,6 @@ export function TranscriptActions({
         </button>
       </div>
 
-      {/* Secondary – More options menu (right side) */}
       <TranscriptMoreOptionsMenu items={moreItems} />
     </div>
   );

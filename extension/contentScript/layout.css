@@ -133,6 +133,7 @@
     min-width: var(--lockin-sidebar-min, 420px);
     max-width: var(--lockin-sidebar-max, min(1500px, 75vw));
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     background: var(--lockin-color-surface);
     border-left: var(--lockin-size-1) solid var(--lockin-color-border);
@@ -148,6 +149,22 @@
      * the user-resized sidebar width.
      */
     container-type: inline-size;
+  }
+
+  #lockin-root .lockin-sidebar-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-sidebar-body > * {
+    min-height: 0;
+  }
+
+  #lockin-root .lockin-sidebar-footer {
+    flex-shrink: 0;
   }
 
   #lockin-root .lockin-sidebar-resize-handle {

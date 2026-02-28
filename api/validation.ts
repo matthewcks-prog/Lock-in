@@ -53,3 +53,12 @@ export {
   validateTaskRecords,
   type TaskRecord,
 } from './validationTasks';
+export {
+  StudySummaryDepthSchema,
+  StudySummaryDataSchema,
+  StudySummaryResponseSchema,
+  validateStudySummaryResponse,
+  type StudySummaryDepth,
+  type StudySummaryData,
+  type StudySummaryResponse,
+} from './validationStudy';

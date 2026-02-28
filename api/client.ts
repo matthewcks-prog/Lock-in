@@ -61,6 +61,12 @@ import {
   type TranscriptCacheMeta,
   type TranscriptCacheResponse,
 } from './resources/transcriptsClient';
+import {
+  createStudyClient,
+  type GenerateStudySummaryParams,
+  type StudyClient,
+} from './resources/studyClient';
+import type { StudySummaryDepth, StudySummaryResponse } from './validationStudy';
 
 type FetcherClient = ReturnType<typeof createFetcher>;
 type LockinClient = ReturnType<typeof createLockinClient>;
@@ -71,6 +77,7 @@ type AssetsClient = ReturnType<typeof createAssetsClient>;
 type ChatAssetsClient = ReturnType<typeof createChatAssetsClient>;
 type FeedbackClient = ReturnType<typeof createFeedbackClient>;
 type TranscriptsClient = ReturnType<typeof createTranscriptsClient>;
+type StudyClientResource = ReturnType<typeof createStudyClient>;
 type ResourceClients = LockinClient &
   ChatsClient &
   NotesClient &
@@ -78,7 +85,8 @@ type ResourceClients = LockinClient &
   AssetsClient &
   ChatAssetsClient &
   FeedbackClient &
-  TranscriptsClient;
+  TranscriptsClient &
+  StudyClientResource;
 
 export type ApiClient = FetcherClient &
   LockinClient &
@@ -88,7 +96,8 @@ export type ApiClient = FetcherClient &
   AssetsClient &
   ChatAssetsClient &
   FeedbackClient &
-  TranscriptsClient;
+  TranscriptsClient &
+  StudyClientResource;
 
 export type ApiClientConfig = {
   backendUrl: string;
@@ -125,6 +134,7 @@ function createResourceClients(
   const chatAssets = createChatAssetsClient(apiRequest);
   const feedback = createFeedbackClient(apiRequest);
   const transcripts = createTranscriptsClient(apiRequest);
+  const study = createStudyClient(apiRequest);
 
   return {
     ...lockin,
@@ -135,6 +145,7 @@ function createResourceClients(
     ...chatAssets,
     ...feedback,
     ...transcripts,
+    ...study,
   };
 }
 
@@ -185,6 +196,9 @@ export type {
   CacheTranscriptParams,
   TranscriptCacheMeta,
   TranscriptCacheResponse,
+  GenerateStudySummaryParams,
+  StudySummaryDepth,
+  StudySummaryResponse,
 };
 export type { EditMessageResponse, RegenerateResponse } from './resources/chatsClient';
 export type { ListTasksParams, TaskPayload, TaskOrderItem };
@@ -195,3 +209,4 @@ export type {
   StreamFinalEvent,
   StreamErrorEvent,
 } from './fetcher/sseParser';
+export type { StudyClient };

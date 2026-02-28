@@ -36,9 +36,7 @@
      * Shared base for ALL tab elements in the tab strip:
      *   - Chat tab   <button class="lockin-tab">
      *   - Notes tab  <button class="lockin-tab">
-     *   - Tool tabs  <button class="lockin-tab"> inside a wrapper div
-     *                (see .lockin-tab-closable-wrapper in tools.css)
-     *
+     *   - Study tab  <button class="lockin-tab">
      * Using a genuine <button> for every label guarantees an identical CSS
      * cascade path across all three tabs. Host-page resets (Normalize, EdStem,
      * Moodle, …) target `button` elements explicitly, so all tab labels receive

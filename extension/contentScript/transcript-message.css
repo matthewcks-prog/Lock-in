@@ -1,12 +1,11 @@
 @layer lockin.tools {
-  /* Auth Required Prompt */
   #lockin-root .lockin-video-auth-required {
     padding: var(--lockin-size-20);
     text-align: center;
   }
 
   #lockin-root .lockin-video-auth-message {
-    margin: 0 0 var(--lockin-size-16) 0;
+    margin: 0 0 var(--lockin-size-16);
     font-size: var(--lockin-text-md);
     color: var(--lockin-color-text-body);
   }
@@ -41,7 +40,7 @@
   }
 
   #lockin-root .lockin-video-auth-hint {
-    margin: var(--lockin-size-12) 0 0 0;
+    margin: var(--lockin-size-12) 0 0;
     font-size: var(--lockin-text-sm);
     color: var(--lockin-color-text-muted);
   }
@@ -57,11 +56,15 @@
     transform: translateX(var(--lockin-size-2));
   }
 
-  /* Transcript Message */
+  /* Transcript shell contract: header / body / footer */
   #lockin-root .lockin-transcript-message {
     display: flex;
+    flex: 1;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
     max-width: 100%;
+    min-height: 0;
     overflow: hidden;
     background: var(--lockin-color-f8fafc);
     border: var(--lockin-size-1) solid var(--lockin-color-border);
@@ -69,6 +72,7 @@
   }
 
   #lockin-root .lockin-transcript-header {
+    flex-shrink: 0;
     padding: var(--lockin-size-12) var(--lockin-size-16);
     color: var(--lockin-color-surface);
     background: linear-gradient(
@@ -76,6 +80,11 @@
       var(--lockin-color-1e3a5f) 0%,
       var(--lockin-color-brand) 100%
     );
+  }
+
+  #lockin-root .lockin-transcript-header--compact {
+    padding-top: var(--lockin-size-10);
+    padding-bottom: var(--lockin-size-10);
   }
 
   #lockin-root .lockin-transcript-title-row {
@@ -102,46 +111,45 @@
     color: var(--lockin-color-rgba-255-255-255-08);
   }
 
-  #lockin-root .lockin-transcript-content {
-    max-height: var(--lockin-size-500);
-    padding: var(--lockin-size-16);
-    overflow-y: auto;
-    font-family: var(--lockin-font-family-base);
-    font-size: var(--lockin-text-base);
-    line-height: 1.6;
-    white-space: pre-wrap;
-    color: var(--lockin-color-text-body);
+  #lockin-root .lockin-transcript-meta--compact {
+    margin-top: 0;
   }
 
-  /* ── Action bar ───────────────────────────────────────────────────────── */
+  #lockin-root .lockin-transcript-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
 
   #lockin-root .lockin-transcript-actions {
     display: flex;
     flex-wrap: wrap;
+    flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
-    gap: var(--lockin-size-8);
-    padding: var(--lockin-size-12) var(--lockin-size-16);
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-10) var(--lockin-size-14);
     background: var(--lockin-color-surface-muted);
     border-top: var(--lockin-size-1) solid var(--lockin-color-border);
   }
 
-  /* Primary button group (left) */
   #lockin-root .lockin-transcript-actions-primary {
     display: flex;
     flex-wrap: wrap;
     gap: var(--lockin-size-8);
   }
 
-  /* Shared button base */
   #lockin-root .lockin-transcript-action-btn {
     display: inline-flex;
     align-items: center;
     gap: var(--lockin-size-4);
-    min-height: 44px;
-    padding: var(--lockin-size-6) var(--lockin-size-12);
-    font-size: var(--lockin-text-sm);
-    font-weight: 500;
+    padding: var(--lockin-size-3) var(--lockin-size-10);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
     white-space: nowrap;
     color: var(--lockin-color-text-body);
     background: var(--lockin-color-surface);
@@ -161,7 +169,6 @@
     cursor: not-allowed;
   }
 
-  /* Primary variant (Generate summary, Save note) */
   #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary {
     color: var(--lockin-color-surface);
     background: var(--lockin-color-brand);
@@ -173,15 +180,11 @@
     border-color: var(--lockin-color-1d4ed8);
   }
 
-  /* ── More options menu (right side) ───────────────────────────────────── */
-
-  /* Wrapper provides the positioning context for the dropdown */
   #lockin-root .lockin-transcript-more-options {
     position: relative;
     flex-shrink: 0;
   }
 
-  /* Trigger button – secondary style */
   #lockin-root .lockin-transcript-more-btn {
     color: var(--lockin-color-text-secondary);
     background: var(--lockin-color-surface);
@@ -193,12 +196,11 @@
     background: var(--lockin-color-surface-subtle);
   }
 
-  /* Dropdown panel – opens above the trigger */
   #lockin-root .lockin-transcript-more-menu {
     position: absolute;
     right: 0;
     bottom: calc(100% + var(--lockin-size-4));
-    z-index: 100;
+    z-index: var(--lockin-z-overlay);
     min-width: 170px;
     max-width: calc(100vw - var(--lockin-size-32));
     padding: var(--lockin-size-4) 0;
@@ -208,16 +210,16 @@
     box-shadow: var(--lockin-shadow-16);
   }
 
-  /* Individual menu items */
   #lockin-root .lockin-transcript-more-menu-item {
     display: flex;
     align-items: center;
     gap: var(--lockin-size-8);
     width: 100%;
-    min-height: 44px;
-    padding: var(--lockin-size-8) var(--lockin-size-14);
-    font-size: var(--lockin-text-sm);
-    font-weight: 500;
+    min-height: var(--lockin-size-32);
+    padding: var(--lockin-size-6) var(--lockin-size-12);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
     text-align: left;
     color: var(--lockin-color-text-body);
     background: none;
@@ -236,7 +238,6 @@
     flex-shrink: 0;
   }
 
-  /* ── Narrow-viewport adjustments (≤ 360 px) ──────────────────────────── */
   @media (max-width: 360px) {
     #lockin-root .lockin-transcript-actions {
       flex-direction: column;
@@ -251,20 +252,11 @@
       align-self: flex-start;
     }
 
-    /* On very small widths open the menu downward to avoid clipping above */
     #lockin-root .lockin-transcript-more-menu {
       top: calc(100% + var(--lockin-size-4));
       bottom: auto;
     }
   }
-
-  /* Seek hint – shown when the user clicks a timestamp but the seek fails.
-   *
-   * Three semantic variants (applied as extra class alongside the base):
-   *   (none)         – blue info strip: "Jumping to 1:23…" (confirm)
-   *   --warning      – amber strip: "Please play the video first"
-   *   --error        – red strip:   "No player found in this tab"
-   */
 
   #lockin-root .lockin-transcript-seek-hint {
     display: flex;
@@ -284,25 +276,21 @@
     color: var(--lockin-color-brand);
   }
 
-  /* Warning variant – video hasn't been played yet (not-ready) */
   #lockin-root .lockin-transcript-seek-hint--warning {
     background: rgba(245, 158, 11, 0.08);
     border-bottom-color: rgba(245, 158, 11, 0.28);
   }
 
   #lockin-root .lockin-transcript-seek-hint--warning svg {
-    /* amber-600 */
     color: #d97706;
   }
 
-  /* Error variant – no video player was found in this tab */
   #lockin-root .lockin-transcript-seek-hint--error {
     background: rgba(239, 68, 68, 0.07);
     border-bottom-color: rgba(239, 68, 68, 0.22);
   }
 
   #lockin-root .lockin-transcript-seek-hint--error svg {
-    /* red-600 */
     color: #dc2626;
   }
 }

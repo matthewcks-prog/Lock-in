@@ -1,9 +1,96 @@
 @layer lockin.tools {
-  /* === STUDY TOOLS DROPDOWN === */
   #lockin-root .lockin-top-bar-right {
     display: flex;
     flex-shrink: 0;
     align-items: center;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-study-workspace {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+  }
+
+  #lockin-root .lockin-study-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #lockin-root .lockin-study-video-control {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-study-video-label {
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-study-video-select {
+    width: min(var(--lockin-size-280), 100%);
+    max-width: 100%;
+    height: var(--lockin-size-28);
+    padding: 0 var(--lockin-size-24) 0 var(--lockin-size-8);
+    overflow: hidden;
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-sm);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-05);
+    cursor: pointer;
+    appearance: none;
+  }
+
+  #lockin-root .lockin-study-video-select-shell {
+    position: relative;
+    width: min(var(--lockin-size-280), 100%);
+    max-width: 100%;
+  }
+
+  #lockin-root .lockin-study-video-select-chevron {
+    position: absolute;
+    top: 50%;
+    right: var(--lockin-size-8);
+    color: var(--lockin-color-text-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  #lockin-root .lockin-study-video-select:hover {
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-04);
+  }
+
+  #lockin-root .lockin-study-video-select:focus {
+    border-color: var(--lockin-color-accent);
+    outline: none;
+    box-shadow: var(--lockin-shadow-04);
+  }
+
+  #lockin-root .lockin-study-video-placeholder {
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-study-header-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
     gap: var(--lockin-size-8);
   }
 
@@ -12,31 +99,17 @@
   }
 
   #lockin-root .lockin-study-tools-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--lockin-size-4);
-    padding: var(--lockin-size-5) var(--lockin-size-10);
-    font-family: var(--lockin-font-family-base);
-    font-size: var(--lockin-text-xs);
-    font-weight: 600;
-    line-height: var(--lockin-leading-snug);
-    color: var(--lockin-color-text-body);
-    background: var(--lockin-color-surface);
-    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
-    border-radius: var(--lockin-radius-xl);
-    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
-    cursor: pointer;
-  }
-
-  #lockin-root .lockin-study-tools-btn:hover {
-    background: var(--lockin-color-surface-muted);
-    border-color: var(--lockin-color-border-strong);
+    /*
+     * Inherit natural button height and font-size from .lockin-btn-new so
+     * "Study Tools" has the exact same visual height as "+ New chat".
+     * Only the horizontal padding is wider here to fit the longer label.
+     */
+    padding: var(--lockin-size-3) var(--lockin-size-10);
   }
 
   #lockin-root .lockin-study-tools-chevron {
     flex-shrink: 0;
-    /* SVG icon — size is controlled via the `size` prop (12px); only color needed here */
-    color: var(--lockin-color-text-muted);
+    color: var(--lockin-color-rgba-255-255-255-08);
   }
 
   #lockin-root .lockin-study-tools-menu {
@@ -45,218 +118,249 @@
     right: 0;
     z-index: var(--lockin-z-overlay);
     min-width: var(--lockin-size-180);
-    margin-top: var(--lockin-size-4);
+    margin-top: var(--lockin-size-6);
     padding: var(--lockin-size-6);
     background: var(--lockin-color-surface);
-    border: var(--lockin-size-1) solid var(--lockin-color-border);
-    border-radius: var(--lockin-radius-xl);
-    box-shadow: var(--lockin-shadow-md);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-18);
   }
 
   #lockin-root .lockin-study-tools-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     width: 100%;
-    padding: var(--lockin-size-6) var(--lockin-size-10);
-    font-size: var(--lockin-text-xs);
+    padding: var(--lockin-size-7) var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    font-weight: 500;
     text-align: left;
     color: var(--lockin-color-text-strong);
     background: transparent;
     border: none;
-    border-radius: var(--lockin-radius-md);
-    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
-    cursor: pointer;
-  }
-
-  #lockin-root .lockin-study-tools-item:hover:not(:disabled) {
-    background: var(--lockin-color-surface-muted);
-  }
-
-  #lockin-root .lockin-study-tools-item-disabled {
-    color: var(--lockin-color-text-muted);
-    cursor: not-allowed;
-  }
-
-  #lockin-root .lockin-coming-soon {
-    font-size: var(--lockin-text-xs);
-    font-style: italic;
-    color: var(--lockin-color-text-muted);
-  }
-
-  /*
-   * CLOSEABLE TAB WRAPPER
-   *
-   * A single <div role="tab"> wrapping a <button> close icon causes a permanent
-   * font inconsistency: host-page resets that target `button` elements (e.g.
-   * Normalize.css, EdStem's base styles) do not target `div`, so the two element
-   * types end up with different computed fonts regardless of what named-@layer
-   * CSS is written. This is the root cause that persisted across all previous
-   * CSS-only fix attempts.
-   *
-   * Solution: the label text lives in a genuine <button role="tab"> (same element
-   * type as Chat/Notes → provably identical cascade path). The close button is a
-   * sibling. This wrapper <div> is purely presentational: it provides the unified
-   * visual frame (background, shadow, hover) for the whole tab unit.
-   *
-   * Layout:
-   *   ┌─ .lockin-tab-closable-wrapper ──────────────────────────────┐
-   *   │  [ Transcript (button.lockin-tab) ] [ × (button.lockin-tab-close) ]  │
-   *   └─────────────────────────────────────────────────────┘
-   */
-  #lockin-root .lockin-tab-closable-wrapper {
-    display: inline-flex;
-    align-items: center;
-    /* min-width:0 allows the wrapper to shrink at narrow sidebar widths */
-    min-width: 0;
     border-radius: var(--lockin-radius-lg);
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
-  }
-
-  /* Hover: whole unit (label + close) lights up together */
-  #lockin-root .lockin-tab-closable-wrapper:hover {
-    background: var(--lockin-color-rgba-0-0-0-005);
-  }
-
-  /* Active: wrapper owns the active background and shadow */
-  #lockin-root .lockin-tab-closable-wrapper.lockin-tab-active {
-    background: var(--lockin-color-surface);
-    box-shadow: var(--lockin-shadow-sm);
-  }
-
-  /*
-   * The label button inside the wrapper:
-   *   - reduced right padding (close button provides visual breathing room)
-   *   - surrenders its own visual states to the wrapper
-   */
-  #lockin-root .lockin-tab-closable-wrapper > .lockin-tab {
-    max-width: 8rem;
-    padding-right: var(--lockin-size-6);
-    background: transparent;
-    box-shadow: none;
-  }
-
-  /* Keep transparent on hover/active — only the wrapper changes visual state */
-  #lockin-root .lockin-tab-closable-wrapper > .lockin-tab:hover,
-  #lockin-root .lockin-tab-closable-wrapper > .lockin-tab.lockin-tab-active {
-    background: transparent;
-    box-shadow: none;
-  }
-
-  /*
-   * Forward text colour from wrapper hover/active to the label button.
-   * The button’s own :hover fires only when the cursor is over the label.
-   * When the cursor is over the close button, the wrapper still needs to keep
-   * the label text in its live state colour.
-   */
-  #lockin-root .lockin-tab-closable-wrapper:hover > .lockin-tab {
-    color: var(--lockin-color-text-body);
-  }
-
-  #lockin-root .lockin-tab-closable-wrapper.lockin-tab-active > .lockin-tab {
-    color: var(--lockin-color-text-primary);
-  }
-
-  /* Close icon button inside the tab — reset button chrome, style for SVG icon */
-  #lockin-root .lockin-tab-close {
-    display: inline-flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    /* Slightly smaller than lockin-size-16 so it sits snugly inside compact tabs */
-    width: var(--lockin-size-14);
-    height: var(--lockin-size-14);
-    padding: 0;
-    color: var(--lockin-color-text-muted);
-    background: none;
-    border: none;
-    border-radius: 50%;
-    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
 
-  #lockin-root .lockin-tab-close:hover {
-    color: var(--lockin-color-text-body);
-    background: var(--lockin-color-rgba-0-0-0-01);
+  #lockin-root .lockin-study-tools-item:hover {
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-accent-surface);
   }
 
-  /* === TOOL PANEL === */
-  #lockin-root .lockin-tool-panel {
+  #lockin-root .lockin-study-body {
     display: flex;
     flex: 1;
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    background: var(--lockin-color-surface-subtle);
   }
 
-  #lockin-root .lockin-tool-content {
-    flex: 1;
-    padding: var(--lockin-size-16);
-    overflow-y: auto;
-  }
-
-  #lockin-root .lockin-tool-placeholder {
+  #lockin-root .lockin-study-tool-layout {
     display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    padding: var(--lockin-size-10) var(--lockin-size-12) var(--lockin-size-12);
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-study-tool-tabs {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-end;
+    gap: var(--lockin-size-4);
+    min-height: var(--lockin-size-28);
+    padding: 0 var(--lockin-size-2);
+    overflow: auto hidden;
+    background: linear-gradient(
+      to bottom,
+      var(--lockin-color-surface-subtle),
+      var(--lockin-color-surface-muted)
+    );
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-study-tool-tabs-empty {
+    align-items: center;
+    padding-top: var(--lockin-size-8);
+    padding-bottom: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-study-tool-tabs-copy {
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-study-tool-tab {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: min(48%, var(--lockin-size-220));
+    margin-bottom: var(--lockin-size-neg-1);
+    background: var(--lockin-color-surface-muted);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg) var(--lockin-radius-lg) 0 0;
+    transition: background var(--lockin-duration-150) var(--lockin-ease-default);
+    border-bottom-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-study-tool-tab.is-active {
+    background: var(--lockin-color-surface);
+    border-color: var(--lockin-color-border-strong);
+    border-bottom-color: var(--lockin-color-surface);
+  }
+
+  #lockin-root .lockin-study-tool-tab-trigger {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    padding: var(--lockin-size-6) var(--lockin-size-9);
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-sm);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
+    color: var(--lockin-color-text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-study-tool-tab-trigger:hover {
+    color: var(--lockin-color-text-body);
+  }
+
+  #lockin-root .lockin-study-tool-tab.is-active .lockin-study-tool-tab-trigger {
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-study-tool-tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #lockin-root .lockin-study-tool-tab-close {
+    display: inline-flex;
+    flex-shrink: 0;
     align-items: center;
     justify-content: center;
-    height: 100%;
-    padding: var(--lockin-size-32);
-    font-size: var(--lockin-text-md);
+    width: var(--lockin-size-18);
+    height: var(--lockin-size-18);
+    margin-right: var(--lockin-size-4);
+    padding: 0;
     color: var(--lockin-color-text-secondary);
-  }
-
-  /* === TRANSCRIPT TOOL SPECIFIC === */
-  #lockin-root .lockin-transcript-tool {
-    display: flex;
-    flex-direction: column;
-    gap: var(--lockin-size-16);
-  }
-
-  #lockin-root .lockin-transcript-change-video {
-    padding: var(--lockin-size-12) 0;
-    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
-  }
-
-  #lockin-root .lockin-transcript-change-video-btn {
-    padding: var(--lockin-size-8) var(--lockin-size-12);
-    font-size: var(--lockin-text-base);
-    color: var(--lockin-color-text-body);
     background: none;
-    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border: var(--lockin-size-1) solid transparent;
     border-radius: var(--lockin-radius-md);
     transition: all var(--lockin-duration-150) var(--lockin-ease-default);
     cursor: pointer;
   }
 
-  #lockin-root .lockin-transcript-change-video-btn:hover {
-    background: var(--lockin-color-surface-muted);
-    border-color: var(--lockin-color-border-strong);
+  #lockin-root .lockin-study-tool-tab-close:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-subtle);
+    border-color: var(--lockin-color-border);
   }
 
-  #lockin-root .lockin-transcript-empty {
+  #lockin-root .lockin-study-tool-panel-shell {
     display: flex;
+    flex: 1;
     flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-study-tool-panels {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-study-tool-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-top: none;
+    border-radius: 0 var(--lockin-radius-xl) var(--lockin-radius-xl) var(--lockin-radius-xl);
+  }
+
+  #lockin-root .lockin-study-tool-panel.is-active {
+    display: flex;
+  }
+
+  #lockin-root .lockin-study-tool-panel-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-study-tool-panel-content > * {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  #lockin-root .lockin-study-tool-panel-actions {
+    flex-shrink: 0;
+    background: var(--lockin-color-surface-muted);
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-study-tool-panel-empty {
+    display: flex;
+    flex: 1;
     align-items: center;
     justify-content: center;
-    gap: var(--lockin-size-12);
+    min-height: 0;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-top: none;
+    border-radius: 0 var(--lockin-radius-xl) var(--lockin-radius-xl) var(--lockin-radius-xl);
+  }
+
+  #lockin-root .lockin-study-transcript-shell {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-study-transcript-shell > .lockin-transcript-message {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+  }
+
+  #lockin-root .lockin-study-tool-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
     padding: var(--lockin-size-32);
+    font-size: var(--lockin-text-base);
     text-align: center;
     color: var(--lockin-color-text-secondary);
-  }
-
-  #lockin-root .lockin-transcript-retry-btn {
-    padding: var(--lockin-size-8) var(--lockin-size-16);
-    font-size: var(--lockin-text-base);
-    font-weight: 500;
-    color: var(--lockin-color-surface);
-    background: var(--lockin-color-text-primary);
-    border: none;
-    border-radius: var(--lockin-radius-md);
-    transition: opacity var(--lockin-duration-150) var(--lockin-ease-default);
-    cursor: pointer;
-  }
-
-  #lockin-root .lockin-transcript-retry-btn:hover {
-    opacity: 0.9;
   }
 }

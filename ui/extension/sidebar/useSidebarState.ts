@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SidebarTabId, StorageAdapter } from './types';
-import {
-  CHAT_TAB_ID,
-  NOTES_TAB_ID,
-  TOOL_TAB_ID,
-  SIDEBAR_ACTIVE_TAB_KEY,
-  SELECTED_NOTE_ID_KEY,
-  SIDEBAR_OPEN_KEY,
-} from './constants';
+import { SIDEBAR_ACTIVE_TAB_KEY, SELECTED_NOTE_ID_KEY, SIDEBAR_OPEN_KEY } from './constants';
 import { coerceTab, isValidUUID } from './utils';
 
 const LAYOUT_TRANSITION_MS = 320;
@@ -63,9 +56,7 @@ function useHydrateActiveTab(
       .get(SIDEBAR_ACTIVE_TAB_KEY)
       .then((tab) => {
         if (typeof tab !== 'string') return;
-        if (tab === CHAT_TAB_ID || tab === NOTES_TAB_ID || tab === TOOL_TAB_ID) {
-          setActiveTab(tab);
-        }
+        setActiveTab(coerceTab(tab));
       })
       .catch(() => {
         /* ignore */

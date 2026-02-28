@@ -22,7 +22,7 @@ export const STORAGE_KEYS = {
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
 
-const SIDEBAR_TAB_SCHEMA = z.enum(['chat', 'notes', 'tool']);
+const SIDEBAR_TAB_SCHEMA = z.enum(['chat', 'notes', 'study', 'tasks', 'tool']);
 const NON_EMPTY_STRING_SCHEMA = z.string().min(1);
 const NULLABLE_STRING_SCHEMA = z.string().min(1).nullable();
 const BOOLEAN_SCHEMA = z.boolean();

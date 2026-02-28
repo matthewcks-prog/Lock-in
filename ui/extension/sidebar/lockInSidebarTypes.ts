@@ -9,9 +9,6 @@ import type { useNotesList } from '../../hooks/useNotesList';
 
 export interface SidebarModel {
   activeTab: ReturnType<typeof useSidebarState>['activeTab'];
-  activeToolId: string | null;
-  activeToolTitle: string | null;
-  closeTool: () => void;
   courseCode: string | null;
   currentWeek: number | null;
   deleteNoteFromList: (noteId: string) => Promise<void>;
