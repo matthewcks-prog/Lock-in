@@ -24,7 +24,7 @@ name: Backend Build & Deploy
 
 on:
   push:
-    branches: [main] #exclude develop for now
+    branches: [main, develop] # develop triggers build/test; deployment guarded by DEPLOYMENT_ENABLED var
     paths:
       - 'backend/**'
       - 'core/config/**'
@@ -119,19 +119,24 @@ jobs:
       - name: Run Trivy vulnerability scanner
         # Only scan on push events (actual deployments), skip PRs
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:test
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true # Only fail on vulnerabilities with available fixes
-          trivyignores: '.trivyignore' # Use project-level ignore file
-          exit-code: '0' # Report vulnerabilities but don't fail the build
+        run: |
+          # Run Trivy from official container image to avoid action setup drift.
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}:/workspace" \
+            aquasec/trivy:0.69.1 \
+            image \
+            --format sarif \
+            --output /workspace/trivy-results.sarif \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --ignorefile /workspace/.trivyignore \
+            --exit-code 0 \
+            "${{ env.IMAGE_NAME }}:test"
         continue-on-error: false
 
       - name: Upload Trivy scan results
-        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
