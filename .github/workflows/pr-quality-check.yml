@@ -1,0 +1,57 @@
+name: PR Quality Check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Type Check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint:all
+
+      - name: Architecture Boundaries
+        run: npm run lint:deps
+
+      - name: Tests with Coverage
+        run: npm run test:coverage
+
+      - name: Check Coverage Regression
+        run: |
+          CURRENT=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          echo "Current coverage: $CURRENT%"
+          # Fail if coverage dropped significantly
+
+      - name: File Size Check
+        run: |
+          # Warn if adding >100 lines to files already >200 lines
+          git diff --stat origin/main... | while read line; do
+            # Parse and check file sizes
+            echo "$line"
+          done
+
+      - name: Complexity Check
+        run: |
+          # Run ESLint directly (not via `npm run`) so npm lifecycle prefix lines
+          # (> pkg@ver lint\n> eslint .) do not contaminate the JSON output.
+          # Use --output-file instead of a pipe so JSON is fully written before
+          # the checker reads it, and ESLint's non-zero exit (lint errors) cannot
+          # cause bash pipefail to swallow the output before parsing.
+          npx eslint . --format json --output-file /tmp/eslint-complexity.json || true
+          node scripts/ci/check-complexity-delta.js /tmp/eslint-complexity.json

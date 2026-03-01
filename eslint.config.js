@@ -1,7 +1,71 @@
+/* eslint-disable max-lines */
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import tseslint from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
 import importPlugin from 'eslint-plugin-import';
 import prettierConfig from 'eslint-config-prettier';
+
+const tsconfigRootDir = path.dirname(fileURLToPath(import.meta.url));
+const MAX_FUNCTION_COMPLEXITY = 15;
+const MAX_NESTING_DEPTH = 4;
+const MAX_NESTED_CALLBACKS = 3;
+const MAX_FUNCTION_PARAMS = 4;
+const MAX_FUNCTION_STATEMENTS = 20;
+
+const qualityRules = {
+  'max-lines': [
+    'error',
+    {
+      max: 300,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ],
+  'max-lines-per-function': [
+    'error',
+    {
+      max: 50,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ],
+  complexity: ['error', MAX_FUNCTION_COMPLEXITY],
+  'max-depth': ['error', MAX_NESTING_DEPTH],
+  'max-nested-callbacks': ['error', MAX_NESTED_CALLBACKS],
+  'max-params': ['error', MAX_FUNCTION_PARAMS],
+  'max-statements': ['error', MAX_FUNCTION_STATEMENTS],
+  'no-magic-numbers': [
+    'error',
+    {
+      ignore: [0, 1, -1, 2, 100, 1000],
+      ignoreArrayIndexes: true,
+      enforceConst: true,
+    },
+  ],
+  'prefer-const': 'error',
+  'no-var': 'error',
+  eqeqeq: ['error', 'always'],
+  curly: ['error', 'all'],
+  'no-else-return': 'error',
+  'no-lonely-if': 'warn',
+  'no-unneeded-ternary': 'warn',
+  'no-eval': 'warn',
+  'no-implied-eval': 'warn',
+  'no-new-func': 'warn',
+  'no-script-url': 'warn',
+  'no-proto': 'warn',
+  'no-extend-native': 'warn',
+};
+
+const errorRules = Object.fromEntries(
+  Object.entries(qualityRules).map(([rule, setting]) => {
+    if (Array.isArray(setting)) {
+      return [rule, ['error', ...setting.slice(1)]];
+    }
+    return [rule, 'error'];
+  }),
+);
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
@@ -9,10 +73,19 @@ export default [
     ignores: [
       '**/node_modules/**',
       'extension/dist/**',
+      'extension/config.js',
       '**/dist/**',
       '**/build/**',
       '**/coverage/**',
     ],
+  },
+  {
+    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: qualityRules,
+  },
+  {
+    files: ['api/**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: errorRules,
   },
 
   // Legacy globals guardrail: prefer canonical LockInContent runtime
@@ -89,6 +162,8 @@ export default [
       sourceType: 'module',
       parserOptions: {
         ecmaFeatures: { jsx: true },
+        project: './tsconfig.eslint.json',
+        tsconfigRootDir,
       },
       globals: {
         chrome: 'readonly',
@@ -112,31 +187,62 @@ export default [
           caughtErrorsIgnorePattern: '^_',
         },
       ],
-      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unsafe-assignment': 'error',
+      '@typescript-eslint/no-unsafe-call': 'error',
+      '@typescript-eslint/no-unsafe-member-access': 'error',
+      '@typescript-eslint/no-unsafe-return': 'error',
+      '@typescript-eslint/no-unsafe-argument': 'error',
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+      '@typescript-eslint/promise-function-async': 'error',
+      '@typescript-eslint/await-thenable': 'error',
+      '@typescript-eslint/explicit-function-return-type': [
+        'error',
+        {
+          allowExpressions: true,
+          allowTypedFunctionExpressions: true,
+        },
+      ],
+      '@typescript-eslint/strict-boolean-expressions': [
+        'error',
+        {
+          allowString: false,
+          allowNumber: false,
+          allowNullableObject: false,
+        },
+      ],
+      '@typescript-eslint/switch-exhaustiveness-check': 'error',
+      '@typescript-eslint/consistent-type-imports': 'error',
+      '@typescript-eslint/consistent-type-exports': 'error',
+      '@typescript-eslint/naming-convention': [
+        'error',
+        { selector: 'interface', format: ['PascalCase'] },
+        { selector: 'typeAlias', format: ['PascalCase'] },
+        { selector: 'enum', format: ['PascalCase'] },
+        { selector: 'enumMember', format: ['UPPER_CASE'] },
+      ],
       'import/no-duplicates': 'warn',
     },
   },
   // Architectural boundaries:
-  // - /core and /api must remain Chrome-free and extension-independent (ERROR)
-  // Architectural boundaries:
-  // - /core and /api must remain Chrome-free and extension-independent (ERROR)
+  // - /core must remain platform-agnostic and independent of other layers (ERROR)
   {
-    files: ['core/**/*.{js,mjs,cjs,ts,tsx}', 'api/**/*.{js,mjs,cjs,ts,tsx}'],
+    files: ['core/**/*.{js,mjs,cjs,ts,tsx}'],
     rules: {
       'no-restricted-globals': [
         'error',
         {
           name: 'chrome',
-          message:
-            'Chrome APIs are not allowed in core/api. Use extension/* wrappers or DI instead.',
+          message: 'Chrome APIs are not allowed in core. Use extension/* wrappers or DI instead.',
         },
         {
           name: 'window',
-          message: 'Browser globals are not allowed in core/api. Core must be platform-agnostic.',
+          message: 'Browser globals are not allowed in core. Core must be platform-agnostic.',
         },
         {
           name: 'document',
-          message: 'DOM globals are not allowed in core/api. Core must be platform-agnostic.',
+          message: 'DOM globals are not allowed in core. Core must be platform-agnostic.',
         },
       ],
       'no-restricted-imports': [
@@ -144,9 +250,108 @@ export default [
         {
           patterns: [
             {
-              group: ['**/extension/**', '**/backend/**', 'express', 'react', 'react-dom'],
+              group: [
+                '**/api/**',
+                '@api/*',
+                '**/extension/**',
+                '**/backend/**',
+                '**/ui/**',
+                '**/integrations/**',
+                '**/shared/ui/**',
+                '@shared/ui',
+                '@shared/ui/*',
+                'express',
+                'react*',
+              ],
               message:
-                'core/api must remain Chrome-free, UI-free, and backend-agnostic (pure logic only).',
+                'Core must remain platform-agnostic. No api/backend/extension/ui/integrations imports.',
+            },
+            {
+              group: ['chrome', 'window', 'document'],
+              message: 'Core must remain platform-agnostic. No browser globals imports.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // - /api must remain Chrome-free and extension-independent (ERROR)
+  {
+    files: ['api/**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: {
+      'no-restricted-globals': [
+        'error',
+        {
+          name: 'chrome',
+          message: 'Chrome APIs are not allowed in api. Use DI instead.',
+        },
+        {
+          name: 'window',
+          message: 'Browser globals are not allowed in api. Api must be platform-agnostic.',
+        },
+        {
+          name: 'document',
+          message: 'DOM globals are not allowed in api. Api must be platform-agnostic.',
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/backend/**',
+                '**/extension/**',
+                '**/ui/**',
+                '**/integrations/**',
+                '**/shared/ui/**',
+                '@shared/ui',
+                '@shared/ui/*',
+                'express',
+                'react*',
+              ],
+              message:
+                'Api must remain Chrome-free, UI-free, and backend-agnostic (pure logic only).',
+            },
+            {
+              group: ['chrome', 'window', 'document'],
+              message: 'Api must remain platform-agnostic. No browser globals imports.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['backend/services/**/*.js'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/controllers/**', '**/routes/**', '**/middleware/**'],
+              message: 'Services cannot import controllers/routes/middleware (layer violation).',
+            },
+            {
+              group: ['express'],
+              message: 'Services must not depend on Express (HTTP concern).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['backend/controllers/**/*.js'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/repositories/**', '**/providers/**', '**/db/**'],
+              message: 'Controllers must call services only (no direct repo/provider/db access).',
             },
           ],
         },
@@ -164,6 +369,7 @@ export default [
     ],
     rules: {
       'no-restricted-globals': 'off', // Allow document, window, etc. in tests
+      'no-restricted-imports': 'off',
     },
   },
 
@@ -202,8 +408,8 @@ export default [
         {
           patterns: [
             {
-              group: ['**/extension/**', '**/ui/**', '**/integrations/**', 'chrome'],
-              message: 'Backend cannot import frontend/extension code.',
+              group: ['**/api/**', '**/extension/**', '**/ui/**', '**/integrations/**', 'chrome'],
+              message: 'Backend cannot import api/frontend/extension code.',
             },
             {
               // Prevent importing core files that might accidentally use browser types in comments/JSDoc validation if strict
@@ -232,14 +438,48 @@ export default [
     },
   },
 
-  // - /ui and /extension should prefer path aliases over deep relative imports (WARN)
+  // - /extension should prefer path aliases over deep relative imports (WARN-first)
   {
-    files: ['ui/**/*.{js,mjs,cjs,ts,tsx}', 'extension/**/*.{js,mjs,cjs,ts,tsx}'],
+    files: ['extension/**/*.{js,mjs,cjs,ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'warn',
         {
           patterns: [
+            {
+              group: ['**/backend/**'],
+              message: 'Extension cannot import backend code.',
+            },
+            {
+              group: ['../../../core/*', '../../../../core/*', '../../../../../core/*'],
+              message: 'Use @core/* path aliases instead of deep relative imports.',
+            },
+            {
+              group: ['../../../api/*', '../../../../api/*', '../../../../../api/*'],
+              message: 'Use @api/* path aliases instead of deep relative imports.',
+            },
+            {
+              group: ['../../../shared/*', '../../../../shared/*', '../../../../../shared/*'],
+              message: 'Use @shared/ui* path aliases instead of deep relative imports.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // - /ui should avoid backend/extension/integrations + prefer path aliases (WARN-first)
+  {
+    files: ['ui/**/*.{js,mjs,cjs,ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'warn',
+        {
+          patterns: [
+            {
+              group: ['**/backend/**', '**/extension/**', '**/integrations/**'],
+              message: 'UI cannot import backend/extension/integrations code.',
+            },
             {
               group: ['../../../core/*', '../../../../core/*', '../../../../../core/*'],
               message: 'Use @core/* path aliases instead of deep relative imports.',
@@ -287,6 +527,9 @@ export default [
         URLSearchParams: 'readonly', // Node.js 18+ built-in
         AbortController: 'readonly', // Node.js 18+ built-in
         AbortSignal: 'readonly', // Node.js 18+ built-in
+        TextDecoder: 'readonly', // Web Streams API (Node.js 18+)
+        TextEncoder: 'readonly', // Web Streams API (Node.js 18+)
+        ReadableStream: 'readonly', // Web Streams API (Node.js 18+)
       },
     },
     rules: {
@@ -310,6 +553,17 @@ export default [
     },
     rules: {
       'no-undef': 'off', // Test globals
+    },
+  },
+  {
+    files: ['**/__tests__/**/*.{js,mjs,cjs,ts,tsx}', '**/*.{test,spec}.{js,mjs,cjs,ts,tsx}'],
+    rules: {
+      'max-lines': 'off',
+      'max-statements': 'off',
+      complexity: 'off',
+      'max-lines-per-function': 'off',
+      'max-nested-callbacks': 'off',
+      'no-magic-numbers': 'off',
     },
   },
   prettierConfig,

@@ -4,6 +4,11 @@
 
 import type { DetectedVideo, TranscriptResult } from '@core/transcripts/types';
 
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+const SECONDS_PER_HOUR = 3600;
+const LONG_DURATION_CONFIRM_MINUTES = 20;
+
 // -----------------------------------------------------------------------------
 // AI Transcription Types
 // -----------------------------------------------------------------------------
@@ -88,14 +93,16 @@ export interface PanoptoMediaUrlResponse {
  */
 export async function sendToBackground<T>(message: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
-    if (typeof chrome === 'undefined' || !chrome.runtime) {
+    const runtime = globalThis.chrome?.runtime;
+    if (runtime === undefined) {
       reject(new Error('Chrome runtime not available'));
       return;
     }
 
-    chrome.runtime.sendMessage(message, (response: T) => {
-      if (chrome.runtime.lastError) {
-        reject(new Error(chrome.runtime.lastError.message));
+    runtime.sendMessage(message, (response: T) => {
+      const lastError = runtime.lastError;
+      if (lastError !== undefined) {
+        reject(new Error(lastError.message));
       } else {
         resolve(response);
       }
@@ -107,26 +114,59 @@ export async function sendToBackground<T>(message: unknown): Promise<T> {
 // Response Normalization
 // -----------------------------------------------------------------------------
 
+function copyResponseFields(
+  target: TranscriptResponseData,
+  source: {
+    transcript?: TranscriptResult;
+    error?: string;
+    errorCode?: string;
+    aiTranscriptionAvailable?: boolean;
+  },
+): void {
+  if (source.transcript !== undefined) {
+    target.transcript = source.transcript;
+  }
+  if (source.error !== undefined) {
+    target.error = source.error;
+  }
+  if (source.errorCode !== undefined) {
+    target.errorCode = source.errorCode;
+  }
+  if (source.aiTranscriptionAvailable !== undefined) {
+    target.aiTranscriptionAvailable = source.aiTranscriptionAvailable;
+  }
+}
+
+function mergeTopLevelFallbacks(
+  target: TranscriptResponseData,
+  response: BackgroundResponse,
+): void {
+  if (target.errorCode === undefined && response.errorCode !== undefined) {
+    target.errorCode = response.errorCode;
+  }
+  if (
+    target.aiTranscriptionAvailable === undefined &&
+    response.aiTranscriptionAvailable !== undefined
+  ) {
+    target.aiTranscriptionAvailable = response.aiTranscriptionAvailable;
+  }
+}
+
 /**
  * Normalize the background script response for transcript extraction
  */
 export function normalizeTranscriptResponse(response: BackgroundResponse): TranscriptResponseData {
-  const data = response.data as TranscriptResponseData | undefined;
-  if (data) {
-    return {
-      ...data,
-      errorCode: data.errorCode ?? response.errorCode,
-      aiTranscriptionAvailable: data.aiTranscriptionAvailable ?? response.aiTranscriptionAvailable,
-    };
+  const data = response.data;
+  if (data !== undefined) {
+    const normalized: TranscriptResponseData = { success: data.success };
+    copyResponseFields(normalized, data);
+    mergeTopLevelFallbacks(normalized, response);
+    return normalized;
   }
 
-  return {
-    success: response.success ?? false,
-    transcript: response.transcript,
-    error: response.error,
-    errorCode: response.errorCode,
-    aiTranscriptionAvailable: response.aiTranscriptionAvailable,
-  };
+  const normalized: TranscriptResponseData = { success: response.success ?? false };
+  copyResponseFields(normalized, response);
+  return normalized;
 }
 
 /**
@@ -152,6 +192,9 @@ export function mapStageToStatus(
   fallback: AiTranscriptionStatus,
 ): AiTranscriptionStatus {
   switch (stage) {
+    case null:
+    case undefined:
+      return fallback;
     case 'starting':
       return 'starting';
     case 'uploading':
@@ -186,12 +229,15 @@ export function formatAiProgressMessage(
   percent: number | null | undefined,
   fallback: string | null,
 ): string | null {
-  if (message) {
+  if (message !== null && message !== undefined && message.length > 0) {
     return typeof percent === 'number' ? `${message} (${Math.round(percent)}%)` : message;
   }
 
   const stageLabel = (() => {
     switch (stage) {
+      case null:
+      case undefined:
+        return null;
       case 'starting':
         return 'Preparing AI transcription';
       case 'uploading':
@@ -211,7 +257,7 @@ export function formatAiProgressMessage(
     }
   })();
 
-  if (!stageLabel) return fallback;
+  if (stageLabel === null) return fallback;
   if (typeof percent === 'number') {
     return `${stageLabel} (${Math.round(percent)}%)`;
   }
@@ -223,11 +269,18 @@ export function formatAiProgressMessage(
 // -----------------------------------------------------------------------------
 
 export function formatDurationForConfirm(durationMs?: number): string | null {
-  if (!durationMs || durationMs <= 0) return null;
-  const totalSeconds = Math.round(durationMs / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+  if (
+    durationMs === undefined ||
+    Number.isNaN(durationMs) ||
+    !Number.isFinite(durationMs) ||
+    durationMs <= 0
+  ) {
+    return null;
+  }
+  const totalSeconds = Math.round(durationMs / MS_PER_SECOND);
+  const hours = Math.floor(totalSeconds / SECONDS_PER_HOUR);
+  const minutes = Math.floor((totalSeconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const seconds = totalSeconds % SECONDS_PER_MINUTE;
 
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
@@ -242,7 +295,8 @@ export function formatDurationForConfirm(durationMs?: number): string | null {
 // Constants
 // -----------------------------------------------------------------------------
 
-export const LONG_DURATION_CONFIRM_MS = 20 * 60 * 1000;
+export const LONG_DURATION_CONFIRM_MS =
+  LONG_DURATION_CONFIRM_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND;
 
 export const INITIAL_AI_TRANSCRIPTION_STATE: AiTranscriptionState = {
   status: 'idle',

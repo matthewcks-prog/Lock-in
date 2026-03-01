@@ -111,5 +111,5 @@ npm run dev
 
 - Azure deployment: `docs/deployment/AZURE.md`
 - CI/CD pipelines: `docs/deployment/CICD.md`
-- Local Supabase workflow: `docs/setup/LOCAL_SUPABASE_SETUP.md`
+- Local development workflow: `docs/setup/LOCAL_DEVELOPMENT.md`
 - Database reference: `docs/reference/DATABASE.md`

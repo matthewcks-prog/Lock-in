@@ -1,0 +1,178 @@
+@layer lockin.responsive {
+  /* ================================================================
+     BREAKPOINTS
+     - xs: <=480px (mobile phone, extension hidden)
+     - sm: <=768px (tablet)
+     - md: <=1024px (small laptop / narrow window)
+     ================================================================ */
+
+  @media (max-width: 480px) {
+    #lockin-root {
+      display: none !important;
+      pointer-events: none !important;
+    }
+
+    body.lockin-sidebar-open #lockin-page-wrapper {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-right: 0 !important;
+      margin-inline-end: 0 !important;
+    }
+  }
+
+  @media (max-width: 1024px) {
+    body.lockin-sidebar-open #lockin-page-wrapper {
+      width: 100%;
+      max-width: 100%;
+      margin-right: 0;
+      margin-inline-end: 0;
+    }
+
+    #lockin-sidebar {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    #lockin-root .lockin-sidebar-resize-handle {
+      display: none;
+    }
+
+    #lockin-root .lockin-chat-history-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: var(--lockin-z-dropdown, 10);
+      box-shadow: var(--lockin-shadow-24);
+    }
+  }
+
+  @media (max-width: 768px) {
+    #lockin-root .lockin-chat-messages {
+      padding: var(--lockin-space-3) var(--lockin-space-3);
+    }
+
+    #lockin-root .lockin-top-bar {
+      padding: var(--lockin-size-6) var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-chat-bottom-section {
+      padding: var(--lockin-space-2) var(--lockin-space-3);
+    }
+
+    #lockin-root .lockin-tab-toolbar {
+      padding: var(--lockin-size-4) var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-notes-context-bar {
+      padding: var(--lockin-size-4) var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-notes-header-actions {
+      gap: var(--lockin-size-2);
+    }
+
+    #lockin-root .lockin-study-header {
+      gap: var(--lockin-size-6);
+      grid-template-columns: 1fr;
+    }
+
+    #lockin-root .lockin-study-video-control {
+      flex-wrap: wrap;
+    }
+
+    #lockin-root .lockin-study-header-actions {
+      justify-content: flex-end;
+    }
+
+    #lockin-root .lockin-study-body.is-selection {
+      padding: var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-study-selection-shell {
+      padding: var(--lockin-size-4) 0 var(--lockin-size-10);
+    }
+
+    #lockin-root .lockin-study-selection-shell .lockin-video-list-panel {
+      width: 100%;
+      max-width: none;
+    }
+
+    #lockin-root .lockin-study-tool-layout {
+      padding: var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-study-tool-tab {
+      max-width: min(60%, var(--lockin-size-180));
+    }
+
+    #lockin-root .lockin-tab,
+    #lockin-root .lockin-close-btn,
+    #lockin-root .lockin-history-toggle-btn,
+    #lockin-root .lockin-msg-action-btn,
+    #lockin-root .lockin-send-btn {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+
+  @container sidebar (max-width: 520px) {
+    .lockin-tab {
+      padding: var(--lockin-size-4) var(--lockin-size-6);
+    }
+
+    .lockin-study-tools-btn-label {
+      display: none;
+    }
+
+    .lockin-study-tools-btn {
+      justify-content: center;
+      width: var(--lockin-size-28);
+      padding: 0;
+    }
+
+    .lockin-study-video-label {
+      display: none;
+    }
+
+    .lockin-study-tool-tab-trigger {
+      max-width: var(--lockin-size-120);
+    }
+
+    .lockin-study-tool-tab {
+      max-width: var(--lockin-size-150);
+    }
+  }
+
+  @media (hover: none) {
+    #lockin-root .lockin-msg-action-bar {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #lockin-root .lockin-note-card-actions {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #lockin-sidebar,
+    #lockin-root .lockin-chat-history-panel,
+    #lockin-toggle-pill,
+    #lockin-root .lockin-close-btn,
+    #lockin-root .lockin-confirm-backdrop,
+    #lockin-root .lockin-confirm-dialog,
+    #lockin-root .lockin-toast {
+      transition: none;
+      animation: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    #lockin-root .lockin-msg-action-btn:focus-visible,
+    #lockin-root .lockin-send-btn:focus-visible,
+    #lockin-root .lockin-tab:focus-visible {
+      outline: 2px solid CanvasText;
+    }
+  }
+}

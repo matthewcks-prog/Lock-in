@@ -8,6 +8,9 @@
 #   - Production images: 90 days (configurable)
 #   - Semantic version tags (v*.*.*): Never deleted
 #   - Latest tags: Never deleted
+#
+# PAUSING: Runs only when DEPLOYMENT_ENABLED = 'true' (same as backend-deploy).
+# When deployment is paused, this workflow does nothing (no ACR API calls).
 # =============================================================================
 
 name: ACR Cleanup
@@ -58,6 +61,8 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Skip when deployment/ACR is paused (see backend-deploy.yml and CICD.md)
+    if: vars.DEPLOYMENT_ENABLED == 'true'
 
     steps:
       - name: Checkout code

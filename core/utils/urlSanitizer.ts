@@ -95,7 +95,7 @@ const SAFE_PARAMS = new Set([
  * // Returns: 'https://moodle.edu/mod/page/view.php?id=123'
  */
 export function sanitizeUrl(url: string | undefined | null): string {
-  if (!url || typeof url !== 'string') {
+  if (url === null || url === undefined || url === '') {
     return '';
   }
 
@@ -131,7 +131,7 @@ export function sanitizeUrl(url: string | undefined | null): string {
  * @returns URL without any query parameters
  */
 export function stripQueryParams(url: string | undefined | null): string {
-  if (!url || typeof url !== 'string') {
+  if (url === null || url === undefined || url === '') {
     return '';
   }
 
@@ -176,7 +176,7 @@ function stripSensitiveParamsFromString(urlString: string): string {
  * @returns true if URL contains sensitive params
  */
 export function hasSensitiveParams(url: string | undefined | null): boolean {
-  if (!url || typeof url !== 'string') {
+  if (url === null || url === undefined || url === '') {
     return false;
   }
 

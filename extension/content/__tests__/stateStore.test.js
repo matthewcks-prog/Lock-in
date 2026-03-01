@@ -10,7 +10,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 // Since stateStore is an IIFE, we'll test the factory function directly
 function createStateStore({ Storage, Logger }) {
   const storage = Storage;
-  const DEFAULT_MODE = 'explain';
   const DEFAULT_PREFS = {
     preferredLanguage: 'en',
   };
@@ -20,15 +19,10 @@ function createStateStore({ Storage, Logger }) {
   const SIDEBAR_OPEN_KEY = keys.SIDEBAR_IS_OPEN || 'lockin_sidebar_isOpen';
   const SIDEBAR_ACTIVE_TAB_KEY = keys.SIDEBAR_ACTIVE_TAB || 'lockin_sidebar_activeTab';
   const CHAT_ID_STORAGE_KEY = keys.CURRENT_CHAT_ID || 'lockinCurrentChatId';
-  const MODE_KEY = keys.ACTIVE_MODE || 'lockinActiveMode';
-  const MODE_PREF_KEY = keys.MODE_PREFERENCE || 'modePreference';
-  const DEFAULT_MODE_KEY = keys.DEFAULT_MODE || 'defaultMode';
-  const LAST_USED_MODE_KEY = keys.LAST_USED_MODE || 'lastUsedMode';
   const HIGHLIGHTING_KEY = keys.HIGHLIGHTING_ENABLED || 'highlightingEnabled';
 
   const state = {
     highlightingEnabled: true,
-    currentMode: DEFAULT_MODE,
     isSidebarOpen: false,
     pendingPrefill: '',
     currentChatId: null,
@@ -72,85 +66,11 @@ function createStateStore({ Storage, Logger }) {
         log.warn('Failed to load toggle state:', error);
       }
 
-      await loadMode();
       await loadChatId();
     }
 
     notify();
     return getSnapshot();
-  }
-
-  async function loadMode() {
-    if (!storage) return state.currentMode;
-    try {
-      const data = await storage.get(MODE_KEY);
-      if (data[MODE_KEY]) {
-        state.currentMode = data[MODE_KEY];
-      }
-    } catch (error) {
-      log.warn('Failed to load mode:', error);
-    }
-    return state.currentMode;
-  }
-
-  async function determineDefaultMode() {
-    if (!storage) {
-      state.currentMode = DEFAULT_MODE;
-      notify();
-      return state.currentMode;
-    }
-
-    try {
-      const data = await storage.get([
-        MODE_PREF_KEY,
-        DEFAULT_MODE_KEY,
-        LAST_USED_MODE_KEY,
-        MODE_KEY,
-      ]);
-
-      if (data[MODE_KEY]) {
-        state.currentMode = data[MODE_KEY];
-      } else {
-        const modePref = data[MODE_PREF_KEY] || 'fixed';
-        if (modePref === 'lastUsed' && data[LAST_USED_MODE_KEY]) {
-          state.currentMode = data[LAST_USED_MODE_KEY];
-        } else {
-          state.currentMode = data[DEFAULT_MODE_KEY] || DEFAULT_MODE;
-        }
-      }
-    } catch (error) {
-      log.warn('Mode determination error:', error);
-      state.currentMode = DEFAULT_MODE;
-    }
-
-    notify();
-    return state.currentMode;
-  }
-
-  function setMode(mode) {
-    state.currentMode = mode || DEFAULT_MODE;
-    notify();
-  }
-
-  async function persistMode(mode) {
-    state.currentMode = mode || DEFAULT_MODE;
-    if (!storage) {
-      notify();
-      return state.currentMode;
-    }
-
-    try {
-      const data = await storage.get(MODE_PREF_KEY);
-      if (data[MODE_PREF_KEY] === 'lastUsed') {
-        await storage.set({ [LAST_USED_MODE_KEY]: state.currentMode });
-      }
-      await storage.set({ [MODE_KEY]: state.currentMode });
-    } catch (error) {
-      log.warn('Storage access error:', error);
-    }
-
-    notify();
-    return state.currentMode;
   }
 
   async function loadChatId() {
@@ -236,10 +156,6 @@ function createStateStore({ Storage, Logger }) {
       state.highlightingEnabled = changes[HIGHLIGHTING_KEY].newValue !== false;
     }
 
-    if (areaName === 'sync' && changes[MODE_KEY]) {
-      state.currentMode = changes[MODE_KEY].newValue;
-    }
-
     if (areaName === 'sync' && changes[SIDEBAR_OPEN_KEY]) {
       state.isSidebarOpen = changes[SIDEBAR_OPEN_KEY].newValue === true;
     }
@@ -273,9 +189,6 @@ function createStateStore({ Storage, Logger }) {
 
   return {
     loadInitial,
-    determineDefaultMode,
-    persistMode,
-    setMode,
     setSidebarOpen,
     setPendingPrefill,
     clearPendingPrefill,
@@ -318,10 +231,8 @@ describe('StateStore', () => {
   describe('getSnapshot', () => {
     it('should return current state snapshot', () => {
       const snapshot = stateStore.getSnapshot();
-      expect(snapshot).toHaveProperty('currentMode');
       expect(snapshot).toHaveProperty('isSidebarOpen');
       expect(snapshot).toHaveProperty('currentChatId');
-      expect(snapshot.currentMode).toBe('explain');
       expect(snapshot.isSidebarOpen).toBe(false);
     });
   });
@@ -367,48 +278,6 @@ describe('StateStore', () => {
       await storeWithoutStorage.setSidebarOpen(true);
 
       expect(storeWithoutStorage.getSnapshot().isSidebarOpen).toBe(true);
-    });
-  });
-
-  describe('setMode', () => {
-    it('should update mode without persisting', () => {
-      stateStore.setMode('general');
-
-      expect(stateStore.getSnapshot().currentMode).toBe('general');
-      expect(mockStorage.set).not.toHaveBeenCalled();
-    });
-
-    it('should use default mode when mode is null', () => {
-      stateStore.setMode(null);
-      expect(stateStore.getSnapshot().currentMode).toBe('explain');
-    });
-  });
-
-  describe('persistMode', () => {
-    it('should update mode and persist to storage', async () => {
-      await stateStore.persistMode('general');
-
-      expect(stateStore.getSnapshot().currentMode).toBe('general');
-      expect(mockStorage.set).toHaveBeenCalledWith({
-        lockinActiveMode: 'general',
-      });
-    });
-
-    it("should save to lastUsed when mode preference is 'lastUsed'", async () => {
-      mockStorage.get.mockResolvedValue({
-        modePreference: 'lastUsed',
-      });
-
-      await stateStore.persistMode('general');
-
-      // Storage.set is called twice: once for lastUsedMode, once for lockinActiveMode
-      expect(mockStorage.set).toHaveBeenCalledTimes(2);
-      expect(mockStorage.set).toHaveBeenNthCalledWith(1, {
-        lastUsedMode: 'general',
-      });
-      expect(mockStorage.set).toHaveBeenNthCalledWith(2, {
-        lockinActiveMode: 'general',
-      });
     });
   });
 
@@ -521,49 +390,6 @@ describe('StateStore', () => {
       const snapshot = await storeWithoutStorage.loadInitial();
 
       expect(snapshot).toBeDefined();
-      expect(snapshot.currentMode).toBe('explain');
-    });
-  });
-
-  describe('determineDefaultMode', () => {
-    it('should use stored mode if available', async () => {
-      mockStorage.get.mockResolvedValue({
-        lockinActiveMode: 'general',
-      });
-
-      const mode = await stateStore.determineDefaultMode();
-
-      expect(mode).toBe('general');
-    });
-
-    it("should use lastUsed mode when preference is 'lastUsed'", async () => {
-      mockStorage.get.mockResolvedValue({
-        modePreference: 'lastUsed',
-        lastUsedMode: 'general',
-      });
-
-      const mode = await stateStore.determineDefaultMode();
-
-      expect(mode).toBe('general');
-    });
-
-    it("should use default mode when preference is 'fixed'", async () => {
-      mockStorage.get.mockResolvedValue({
-        modePreference: 'fixed',
-        defaultMode: 'general',
-      });
-
-      const mode = await stateStore.determineDefaultMode();
-
-      expect(mode).toBe('general');
-    });
-
-    it("should fallback to 'explain' when no preferences found", async () => {
-      mockStorage.get.mockResolvedValue({});
-
-      const mode = await stateStore.determineDefaultMode();
-
-      expect(mode).toBe('explain');
     });
   });
 
@@ -596,13 +422,13 @@ describe('StateStore', () => {
 
       changeHandler(
         {
-          lockinActiveMode: { newValue: 'general' },
+          highlightingEnabled: { newValue: false },
         },
         'sync',
       );
 
       expect(callback).toHaveBeenCalled();
-      expect(stateStore.getSnapshot().currentMode).toBe('general');
+      expect(stateStore.getSnapshot().highlightingEnabled).toBe(false);
     });
   });
 });

@@ -21,27 +21,29 @@ export function detectPanoptoVideosFromIframes(
     if (seenIds.has(info.deliveryId)) return;
     seenIds.add(info.deliveryId);
     const embedUrl = buildPanoptoEmbedUrl(info.tenant, info.deliveryId);
+    const resolvedTitle = title.trim().length > 0 ? title : `Panopto video ${videos.length + 1}`;
     videos.push({
       id: info.deliveryId,
       provider: 'panopto',
-      title: title || `Panopto video ${videos.length + 1}`,
+      title: resolvedTitle,
       embedUrl,
       panoptoTenant: info.tenant,
     });
   };
 
-  if (pageUrl) {
+  if (typeof pageUrl === 'string' && pageUrl.length > 0) {
     const pageInfo = extractPanoptoInfo(pageUrl);
-    if (pageInfo) {
+    if (pageInfo !== null) {
       addVideo(pageInfo, '');
     }
   }
 
   for (const iframe of iframes) {
-    if (!iframe.src) continue;
+    if (iframe.src.length === 0) continue;
     const info = extractPanoptoInfo(iframe.src);
-    if (info) {
-      addVideo(info, iframe.title || '');
+    if (info !== null) {
+      const iframeTitle = typeof iframe.title === 'string' ? iframe.title : '';
+      addVideo(info, iframeTitle.length > 0 ? iframeTitle : '');
     }
   }
 

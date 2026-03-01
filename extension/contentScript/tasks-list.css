@@ -1,0 +1,264 @@
+@layer lockin.tasks {
+  /* stylelint-disable no-descending-specificity -- component CSS groups by logical section */
+  /* --- Tasks Body --- */
+  #lockin-root .lockin-tasks-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    padding: 0;
+    overflow-y: auto;
+  }
+  /* --- Tasks List Container --- */
+  #lockin-root .lockin-tasks-list {
+    display: flex;
+    flex-direction: column;
+  }
+  /* --- Filter Tabs --- */
+  #lockin-root .lockin-tasks-filters {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 10px 14px;
+    overflow-x: auto;
+    border-bottom: 1px solid #e5e7eb;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  #lockin-root .lockin-tasks-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  #lockin-root .lockin-tasks-filter-btn {
+    flex-shrink: 0;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: #6b7280;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-tasks-filter-btn:hover {
+    color: #111827;
+    background: #f3f4f6;
+  }
+
+  #lockin-root .lockin-tasks-filter-btn.is-active {
+    color: #111827;
+    background: #f3f4f6;
+    border-color: #e5e7eb;
+  }
+
+  /* --- Add Task Button --- */
+  #lockin-root .lockin-tasks-create {
+    padding: 8px 14px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  #lockin-root .lockin-tasks-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7280;
+    background: #f9fafb;
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-tasks-add-btn:hover {
+    color: #111827;
+    background: #f3f4f6;
+    border-color: #9ca3af;
+  }
+
+  /* --- Task Items Container --- */
+  #lockin-root .lockin-tasks-items {
+    padding: 8px 0;
+  }
+
+  /* --- Individual Task Item --- */
+  #lockin-root .lockin-task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.1s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-task-item:hover {
+    background: #f9fafb;
+  }
+
+  #lockin-root .lockin-task-item.is-editing {
+    background: #f9fafb;
+  }
+
+  #lockin-root .lockin-task-item.is-new {
+    border-bottom: none;
+  }
+
+  #lockin-root .lockin-task-item.is-completed .lockin-task-title {
+    text-decoration: line-through;
+    color: #9ca3af;
+  }
+
+  /* --- Task Checkbox --- */
+  #lockin-root .lockin-task-checkbox {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    transition: transform 0.1s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-task-checkbox:hover {
+    transform: scale(1.1);
+  }
+
+  #lockin-root .lockin-task-checkbox:active {
+    transform: scale(0.95);
+  }
+
+  #lockin-root .lockin-task-checkbox-placeholder {
+    color: #9ca3af;
+    cursor: default;
+  }
+
+  #lockin-root .lockin-task-checkbox-placeholder:hover {
+    transform: none;
+  }
+
+  #lockin-root .lockin-task-circle-icon {
+    color: #d1d5db;
+  }
+
+  #lockin-root .lockin-task-check-icon {
+    color: #10b981;
+  }
+
+  #lockin-root .lockin-task-item.is-completed .lockin-task-checkbox .lockin-task-check-icon {
+    color: #10b981;
+  }
+
+  /* --- Task Content --- */
+  #lockin-root .lockin-task-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-task-title {
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: #111827;
+    overflow-wrap: break-word;
+  }
+
+  #lockin-root .lockin-task-input {
+    width: 100%;
+    padding: 0;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+    color: #111827;
+    background: transparent;
+    border: none;
+    outline: none;
+  }
+
+  #lockin-root .lockin-task-input::placeholder {
+    color: #9ca3af;
+  }
+
+  /* --- Week Selector in Task Creation --- */
+  #lockin-root .lockin-task-create-week {
+    flex-shrink: 0;
+    min-width: 52px;
+    padding: 3px 20px 3px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #6b7280;
+    background: #f9fafb;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' fill='none'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236b7280' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-position: right 5px center;
+    border: 1px solid #e5e7eb;
+    border-radius: 5px;
+    cursor: pointer;
+    appearance: none;
+    background-repeat: no-repeat;
+  }
+
+  #lockin-root .lockin-task-create-week:focus {
+    border-color: #93c5fd;
+    outline: none;
+  }
+
+  #lockin-root .lockin-task-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #4b5563;
+    background: #f3f4f6;
+    border-radius: 4px;
+  }
+
+  /* --- Task Delete Button --- */
+  #lockin-root .lockin-task-delete-btn {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    color: #9ca3af;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    opacity: 0;
+    transition: all 0.15s ease;
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-task-item:hover .lockin-task-delete-btn {
+    opacity: 1;
+  }
+
+  #lockin-root .lockin-task-delete-btn:hover {
+    color: #ef4444;
+    background: #fef2f2;
+  }
+
+  #lockin-root .lockin-task-delete-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

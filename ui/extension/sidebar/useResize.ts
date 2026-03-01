@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type MutableRefObject,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 import type { StorageAdapter } from './types';
 
 interface UseResizeOptions {
@@ -6,29 +13,62 @@ interface UseResizeOptions {
   minWidth?: number;
   maxWidth?: number;
   maxVw?: number;
+  defaultWidth?: number;
   storageKey?: string;
 }
 
-export function useResize({
-  storage,
-  minWidth = 360,
-  maxWidth = 1500,
-  maxVw = 0.75,
-  storageKey = 'lockin_sidebar_width',
-}: UseResizeOptions) {
-  const isResizingRef = useRef(false);
-  const resizeRafRef = useRef<number | null>(null);
-  const pendingWidthRef = useRef<number | null>(null);
-  const currentWidthRef = useRef<number | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
+interface UseResizeReturn {
+  handleResizeStart: (event: ReactPointerEvent<HTMLDivElement>) => void;
+}
 
-  const getMaxSidebarWidth = useCallback(() => {
+/** Debounce delay (ms) for window resize re-clamping. */
+const RESIZE_DEBOUNCE_MS = 150;
+const DEFAULT_MIN_WIDTH = 380;
+const DEFAULT_MAX_WIDTH = 1500;
+const DEFAULT_MAX_VIEWPORT_WIDTH_RATIO = 0.75;
+const DEFAULT_WIDTH = 480;
+
+interface ResizeRefs {
+  isResizingRef: MutableRefObject<boolean>;
+  resizeRafRef: MutableRefObject<number | null>;
+  pendingWidthRef: MutableRefObject<number | null>;
+  currentWidthRef: MutableRefObject<number | null>;
+  cleanupRef: MutableRefObject<(() => void) | null>;
+  resizeDebounceRef: MutableRefObject<number | null>;
+}
+
+function useResizeRefs(): ResizeRefs {
+  return {
+    isResizingRef: useRef(false),
+    resizeRafRef: useRef<number | null>(null),
+    pendingWidthRef: useRef<number | null>(null),
+    currentWidthRef: useRef<number | null>(null),
+    cleanupRef: useRef<(() => void) | null>(null),
+    resizeDebounceRef: useRef<number | null>(null),
+  };
+}
+
+function useSidebarWidthHelpers({
+  minWidth,
+  maxWidth,
+  maxVw,
+  currentWidthRef,
+}: {
+  minWidth: number;
+  maxWidth: number;
+  maxVw: number;
+  currentWidthRef: MutableRefObject<number | null>;
+}): {
+  clampSidebarWidth: (width: number) => number;
+  applySidebarWidth: (width: number) => void;
+} {
+  const getMaxSidebarWidth = useCallback((): number => {
     if (typeof window === 'undefined') return maxWidth;
     return Math.min(maxWidth, Math.floor(window.innerWidth * maxVw));
   }, [maxWidth, maxVw]);
 
   const clampSidebarWidth = useCallback(
-    (width: number) => {
+    (width: number): number => {
       const computedMax = getMaxSidebarWidth();
       const computedMin = Math.min(minWidth, computedMax);
       return Math.min(computedMax, Math.max(computedMin, Math.round(width)));
@@ -37,89 +77,153 @@ export function useResize({
   );
 
   const applySidebarWidth = useCallback(
-    (width: number) => {
+    (width: number): void => {
       if (typeof document === 'undefined') return;
       const clamped = clampSidebarWidth(width);
       currentWidthRef.current = clamped;
       document.documentElement.style.setProperty('--lockin-sidebar-width', `${clamped}px`);
     },
-    [clampSidebarWidth],
+    [clampSidebarWidth, currentWidthRef],
   );
 
-  const handleResizeStart = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) return;
-      if (typeof window === 'undefined') return;
-      event.preventDefault();
-      event.stopPropagation();
+  return { clampSidebarWidth, applySidebarWidth };
+}
 
-      const handle = event.currentTarget;
-      const pointerId = event.pointerId;
+function createRafWidthUpdater({
+  applySidebarWidth,
+  pendingWidthRef,
+  resizeRafRef,
+}: {
+  applySidebarWidth: (width: number) => void;
+  pendingWidthRef: MutableRefObject<number | null>;
+  resizeRafRef: MutableRefObject<number | null>;
+}): (clientX: number) => void {
+  return (clientX: number): void => {
+    pendingWidthRef.current = window.innerWidth - clientX;
+    if (resizeRafRef.current !== null) return;
 
-      const updateWidth = (clientX: number) => {
-        const nextWidth = window.innerWidth - clientX;
-        pendingWidthRef.current = nextWidth;
-        if (resizeRafRef.current !== null) return;
-        resizeRafRef.current = window.requestAnimationFrame(() => {
-          resizeRafRef.current = null;
-          if (pendingWidthRef.current === null) return;
-          applySidebarWidth(pendingWidthRef.current);
-          pendingWidthRef.current = null;
-        });
-      };
+    resizeRafRef.current = window.requestAnimationFrame(() => {
+      resizeRafRef.current = null;
+      if (pendingWidthRef.current === null) return;
+      applySidebarWidth(pendingWidthRef.current);
+      pendingWidthRef.current = null;
+    });
+  };
+}
 
-      const handlePointerMove = (moveEvent: PointerEvent) => {
-        if (!isResizingRef.current) return;
-        updateWidth(moveEvent.clientX);
-      };
+function finalizeResizeSession({
+  handle,
+  pointerId,
+  refs,
+  applySidebarWidth,
+  storage,
+  storageKey,
+  handlePointerMove,
+}: {
+  handle: HTMLDivElement;
+  pointerId: number;
+  refs: ResizeRefs;
+  applySidebarWidth: (width: number) => void;
+  storage: StorageAdapter | undefined;
+  storageKey: string;
+  handlePointerMove: (event: PointerEvent) => void;
+}): void {
+  if (!refs.isResizingRef.current) return;
+  refs.isResizingRef.current = false;
+  refs.cleanupRef.current = null;
 
-      const stopResize = () => {
-        if (!isResizingRef.current) return;
-        isResizingRef.current = false;
-        cleanupRef.current = null;
+  if (handle.hasPointerCapture?.(pointerId)) {
+    handle.releasePointerCapture?.(pointerId);
+  }
 
-        if (handle.hasPointerCapture?.(pointerId)) {
-          handle.releasePointerCapture?.(pointerId);
-        }
+  document.documentElement.classList.remove('lockin-sidebar-resizing');
+  window.removeEventListener('pointermove', handlePointerMove);
 
-        document.documentElement.classList.remove('lockin-sidebar-resizing');
-        window.removeEventListener('pointermove', handlePointerMove);
-        window.removeEventListener('pointerup', stopResize);
-        window.removeEventListener('pointercancel', stopResize);
+  if (refs.resizeRafRef.current !== null) {
+    window.cancelAnimationFrame(refs.resizeRafRef.current);
+    refs.resizeRafRef.current = null;
+  }
 
-        if (resizeRafRef.current !== null) {
-          window.cancelAnimationFrame(resizeRafRef.current);
-          resizeRafRef.current = null;
-        }
+  if (refs.pendingWidthRef.current !== null) {
+    applySidebarWidth(refs.pendingWidthRef.current);
+    refs.pendingWidthRef.current = null;
+  }
 
-        if (pendingWidthRef.current !== null) {
-          applySidebarWidth(pendingWidthRef.current);
-          pendingWidthRef.current = null;
-        }
+  if (refs.currentWidthRef.current !== null) {
+    storage?.setLocal?.(storageKey, refs.currentWidthRef.current).catch(() => {
+      /* ignore */
+    });
+  }
+}
 
-        if (currentWidthRef.current !== null) {
-          storage?.setLocal?.(storageKey, currentWidthRef.current).catch(() => {
-            /* ignore */
-          });
-        }
-      };
+function beginResizeSession({
+  event,
+  refs,
+  applySidebarWidth,
+  storage,
+  storageKey,
+}: {
+  event: ReactPointerEvent<HTMLDivElement>;
+  refs: ResizeRefs;
+  applySidebarWidth: (width: number) => void;
+  storage: StorageAdapter | undefined;
+  storageKey: string;
+}): void {
+  const handle = event.currentTarget;
+  const pointerId = event.pointerId;
+  const updateWidth = createRafWidthUpdater({
+    applySidebarWidth,
+    pendingWidthRef: refs.pendingWidthRef,
+    resizeRafRef: refs.resizeRafRef,
+  });
 
-      isResizingRef.current = true;
-      cleanupRef.current = stopResize;
+  const handlePointerMove = (moveEvent: PointerEvent): void => {
+    if (!refs.isResizingRef.current) return;
+    updateWidth(moveEvent.clientX);
+  };
 
-      handle.setPointerCapture?.(pointerId);
-      document.documentElement.classList.add('lockin-sidebar-resizing');
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', stopResize);
-      window.addEventListener('pointercancel', stopResize);
+  const stopResize = (): void => {
+    window.removeEventListener('pointerup', stopResize);
+    window.removeEventListener('pointercancel', stopResize);
+    finalizeResizeSession({
+      handle,
+      pointerId,
+      refs,
+      applySidebarWidth,
+      storage,
+      storageKey,
+      handlePointerMove,
+    });
+  };
 
-      updateWidth(event.clientX);
-    },
-    [applySidebarWidth, storage, storageKey],
-  );
+  refs.isResizingRef.current = true;
+  refs.cleanupRef.current = stopResize;
 
+  handle.setPointerCapture?.(pointerId);
+  document.documentElement.classList.add('lockin-sidebar-resizing');
+  window.addEventListener('pointermove', handlePointerMove);
+  window.addEventListener('pointerup', stopResize);
+  window.addEventListener('pointercancel', stopResize);
+  updateWidth(event.clientX);
+}
+
+function useRestoreSidebarWidth({
+  storage,
+  storageKey,
+  defaultWidth,
+  applySidebarWidth,
+}: {
+  storage: StorageAdapter | undefined;
+  storageKey: string;
+  defaultWidth: number;
+  applySidebarWidth: (width: number) => void;
+}): void {
   useEffect(() => {
-    if (!storage?.getLocal) return;
+    if (storage === undefined || storage.getLocal === undefined) {
+      applySidebarWidth(defaultWidth);
+      return;
+    }
+
     let cancelled = false;
     storage
       .getLocal(storageKey)
@@ -133,33 +237,95 @@ export function useResize({
               : null;
         if (typeof numeric === 'number' && !Number.isNaN(numeric) && numeric > 0) {
           applySidebarWidth(numeric);
+        } else {
+          applySidebarWidth(defaultWidth);
         }
       })
       .catch(() => {
-        /* ignore */
+        applySidebarWidth(defaultWidth);
       });
+
     return () => {
       cancelled = true;
     };
-  }, [applySidebarWidth, storage, storageKey]);
+  }, [applySidebarWidth, defaultWidth, storage, storageKey]);
+}
 
+function useReclampOnWindowResize({
+  refs,
+  applySidebarWidth,
+}: {
+  refs: ResizeRefs;
+  applySidebarWidth: (width: number) => void;
+}): void {
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
-    const handleResize = () => {
-      if (currentWidthRef.current === null) return;
-      applySidebarWidth(currentWidthRef.current);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [applySidebarWidth]);
 
-  useEffect(() => {
+    const handleWindowResize = (): void => {
+      if (refs.isResizingRef.current || refs.currentWidthRef.current === null) return;
+      if (document.documentElement.classList.contains('lockin-sidebar-transitioning')) return;
+
+      if (refs.resizeDebounceRef.current !== null) {
+        window.clearTimeout(refs.resizeDebounceRef.current);
+      }
+
+      refs.resizeDebounceRef.current = window.setTimeout(() => {
+        refs.resizeDebounceRef.current = null;
+        if (refs.currentWidthRef.current === null) return;
+        applySidebarWidth(refs.currentWidthRef.current);
+      }, RESIZE_DEBOUNCE_MS);
+    };
+
+    window.addEventListener('resize', handleWindowResize);
     return () => {
-      if (cleanupRef.current) {
-        cleanupRef.current();
+      window.removeEventListener('resize', handleWindowResize);
+      if (refs.resizeDebounceRef.current !== null) {
+        window.clearTimeout(refs.resizeDebounceRef.current);
       }
     };
-  }, []);
+  }, [applySidebarWidth, refs]);
+}
+
+function useResizeCleanup(refs: ResizeRefs): void {
+  useEffect(() => {
+    return () => {
+      const cleanup = refs.cleanupRef.current;
+      if (cleanup !== null) {
+        cleanup();
+      }
+    };
+  }, [refs]);
+}
+
+export function useResize({
+  storage,
+  minWidth = DEFAULT_MIN_WIDTH,
+  maxWidth = DEFAULT_MAX_WIDTH,
+  maxVw = DEFAULT_MAX_VIEWPORT_WIDTH_RATIO,
+  defaultWidth = DEFAULT_WIDTH,
+  storageKey = CLIENT_STORAGE_KEYS.SIDEBAR_WIDTH,
+}: UseResizeOptions): UseResizeReturn {
+  const refs = useResizeRefs();
+  const { applySidebarWidth } = useSidebarWidthHelpers({
+    minWidth,
+    maxWidth,
+    maxVw,
+    currentWidthRef: refs.currentWidthRef,
+  });
+
+  const handleResizeStart = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0 || typeof window === 'undefined') return;
+      event.preventDefault();
+      event.stopPropagation();
+      beginResizeSession({ event, refs, applySidebarWidth, storage, storageKey });
+    },
+    [applySidebarWidth, refs, storage, storageKey],
+  );
+
+  useRestoreSidebarWidth({ storage, storageKey, defaultWidth, applySidebarWidth });
+  useReclampOnWindowResize({ refs, applySidebarWidth });
+  useResizeCleanup(refs);
 
   return { handleResizeStart };
 }

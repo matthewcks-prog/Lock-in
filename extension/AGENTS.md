@@ -331,6 +331,14 @@ chrome.runtime.sendMessage(message, (response) => {
 });
 ```
 
+### Content Script CSS
+
+- Source: `extension/contentScript/` (tokens + feature modules)
+- Build: `npm run build:css` -> `extension/contentScript.css`
+- Max file size: ~400 lines per module
+- Tokens: `tokens.css` is the single source of truth for all design values
+- Layers: Cascade controlled via `@layer`; order defined in `index.css`
+
 ---
 
 ## God File Prevention

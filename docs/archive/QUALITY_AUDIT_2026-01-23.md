@@ -1,16 +1,18 @@
-Critical Issues
+﻿Critical Issues
 
-Transcript extraction logic is duplicated across background.js, transcriptHandler.ts, panoptoResolver.js, and core/transcripts/providers/\*\* (plus transcriptProviders.js), violating ARCHITECTURE.md and AGENTS.md; this is a major source‑of‑truth conflict.
+Note (2026-01-29): Backend path references updated to current layout (`services/llmClient.js`, `services/transcripts/transcriptsService.js`, `config/index.js`).
+
+Transcript extraction logic is duplicated across background.js, transcriptHandler.ts, panoptoResolver.js, and core/transcripts/providers/\*\* (plus transcriptProviders.js), violating ARCHITECTURE.md and AGENTS.md; this is a major sourceâ€‘ofâ€‘truth conflict.
 STATUS.md is referenced by AGENTS.md, ARCHITECTURE.md, README.md, REPO_MAP.md, and transcript troubleshooting docs, but the file is missing; the documentation contract is broken.
-Backend transcript processing relies on in‑memory state (transcriptsService.js ACTIVE_JOBS, controllers/transcripts/index.js UPLOAD_RATE_WINDOWS, idempotency.js); this won’t scale across instances and risks lost/duplicated jobs.
-textUtils.ts uses document.createElement, breaking the “core is Node‑compatible” rule and making /core unsafe to import outside a browser.
+Backend transcript processing relies on inâ€‘memory state (services/transcripts/transcriptsService.js ACTIVE_JOBS, controllers/transcripts/index.js UPLOAD_RATE_WINDOWS, idempotency.js); this wonâ€™t scale across instances and risks lost/duplicated jobs.
+textUtils.ts uses document.createElement, breaking the â€œcore is Nodeâ€‘compatibleâ€ rule and making /core unsafe to import outside a browser.
 Organization Review (misplaced .md)
 
-CHANGELOG.md → move to CHANGELOG.md (or CHANGELOG.md) and update references.
-CODE_OVERVIEW.md → move to CODE_OVERVIEW.md and update references in ARCHITECTURE.md + REPO_MAP.md.
-CONTRIBUTING.md → move to CONTRIBUTING.md.
-DATABASE.MD → move to DATABASE.md and normalize filename case.
-WORKFLOW_REVIEW_SUMMARY.md → move to WORKFLOW_REVIEW_SUMMARY.md or WORKFLOW_REVIEW_SUMMARY_2026-01-22.md.
+CHANGELOG.md â†’ move to CHANGELOG.md (or CHANGELOG.md) and update references.
+CODE_OVERVIEW.md â†’ move to CODE_OVERVIEW.md and update references in ARCHITECTURE.md + REPO_MAP.md.
+CONTRIBUTING.md â†’ move to CONTRIBUTING.md.
+DATABASE.MD â†’ move to DATABASE.md and normalize filename case.
+WORKFLOW_REVIEW_SUMMARY.md â†’ move to WORKFLOW_REVIEW_SUMMARY.md or WORKFLOW_REVIEW_SUMMARY_2026-01-22.md.
 docs/achieve/ looks like a typo; consolidate into docs/archive/.
 Refactoring Candidates (files >250 lines)
 
@@ -18,13 +20,13 @@ Use these instead of line count:
 
 1. Responsibility / cohesion test
 
-Split if the file answers “yes” to any:
+Split if the file answers â€œyesâ€ to any:
 
-Does it contain multiple “mini-modules” that could stand alone?
+Does it contain multiple â€œmini-modulesâ€ that could stand alone?
 
 Does it mix domain logic + I/O + wiring + UI/state?
 
-Does it have multiple unrelated exports that don’t share the same reason to change?
+Does it have multiple unrelated exports that donâ€™t share the same reason to change?
 
 2. Change frequency & conflict test
 
@@ -32,7 +34,7 @@ Split if:
 
 multiple people regularly touch different areas of the file
 
-PRs often include unrelated edits “because it’s all in here”
+PRs often include unrelated edits â€œbecause itâ€™s all in hereâ€
 
 3. Testability test (especially for your repo)
 
@@ -41,11 +43,11 @@ Split if:
 
 code executes on import (listeners registered, timers started, config parsed)
 
-dependencies can’t be injected (fetch, storage, fs, process env, chrome)
+dependencies canâ€™t be injected (fetch, storage, fs, process env, chrome)
 
 4. Boundary rule fit
 
-Your own architecture says “source of truth” belongs in specific places (e.g., transcript extraction in core/transcripts/providers/\*\*). A file gets too big when it violates boundaries.
+Your own architecture says â€œsource of truthâ€ belongs in specific places (e.g., transcript extraction in core/transcripts/providers/\*\*). A file gets too big when it violates boundaries.
 
 CODE_OVERVIEW
 
@@ -53,23 +55,23 @@ Practical guidance for your list
 
 background.js (1803): treat size as a symptom. The real fix is to make it mostly routing + wiring and move logic into modules behind interfaces (which also improves testing).
 
-controllers/services (600–400): it’s acceptable to be larger if they are composed of smaller functions and delegate to helpers/repositories. Split when they start accumulating unrelated endpoints/workflows.
+controllers/services (600â€“400): itâ€™s acceptable to be larger if they are composed of smaller functions and delegate to helpers/repositories. Split when they start accumulating unrelated endpoints/workflows.
 
-providers/resolvers/transcriptHandler: here, size matters more because you’re fighting multiple sources of truth. Splitting and consolidating is warranted even if the result is still >250 in one file.
+providers/resolvers/transcriptHandler: here, size matters more because youâ€™re fighting multiple sources of truth. Splitting and consolidating is warranted even if the result is still >250 in one file.
 
 A good rule of thumb you can adopt
 
 < 300 lines: usually fine if cohesive.
 
-300–600: acceptable when it’s a “composition” module (controller wiring, registry) and is internally clean.
+300â€“600: acceptable when itâ€™s a â€œcompositionâ€ module (controller wiring, registry) and is internally clean.
 
-> 600: almost always worth splitting unless it’s generated code or a very stable, well-tested module.
+> 600: almost always worth splitting unless itâ€™s generated code or a very stable, well-tested module.
 
 Regardless of size: split immediately when it violates architecture boundaries or becomes hard to test.
 
 Recommendation
 
-Keep “250 lines” as a lint-like warning, not a goal. For refactoring priority, rank files by:
+Keep â€œ250 linesâ€ as a lint-like warning, not a goal. For refactoring priority, rank files by:
 
 boundary violations / duplicated source of truth
 
@@ -84,11 +86,11 @@ notes/crud.js (605)
 sentry.ts (545)
 transcriptHandler.ts (530)
 panoptoProvider.test.ts (528)
-openaiClient.js (509)
+services/llmClient.js (509)
 stateStore.test.js (477)
 ImageNode.tsx (453)
 echo360Provider.test.ts (444)
-transcriptsService.js (433)
+services/transcripts/transcriptsService.js (433)
 transcripts/index.js (432)
 useChat.ts (426)
 NoteToolbar.tsx (396)
@@ -97,7 +99,7 @@ notesService.ts (380)
 popup.js (357)
 setup-ci-cd.ps1 (345)
 notesService.test.ts (341)
-config.js (340)
+config/index.js (340)
 index.js (337)
 fetcher.ts (330)
 provider.ts (318)
@@ -133,31 +135,31 @@ Transcript troubleshooting docs exist in two places; source of truth should live
 Deployment docs are split between docs/deployment/ and docs/setup/; source of truth should be docs/deployment/ (per AUDIT_SUMMARY.md).
 REPO_MAP.md lists files and paths that no longer exist (STATUS.md, SMOKE_CHECKLIST.md, QUALITY_AUDIT_2025-12-16.md path, TRANSCRIPT_TROUBLESHOOTING.md); update to match current structure.
 AGENTS.md references AGENTS.\_LIVINGDOC.md, which does not exist; remove the reference or add the file.
-Root docs (CODE_OVERVIEW.md, DATABASE.MD) are referenced as canonical in architecture docs but violate the “docs-only” placement rule; choose a single policy and update references accordingly.
-Setup scripts overlap (setup.ps1, setup_oidc.ps1, setup_uami.ps1, setup_umi_oidc.ps1, azure-setup.ps1, deploy.ps1); use deploy.ps1 + validate.ps1 as canonical for deployment, and document the others as one‑time bootstrap or legacy.
+Root docs (CODE_OVERVIEW.md, DATABASE.MD) are referenced as canonical in architecture docs but violate the â€œdocs-onlyâ€ placement rule; choose a single policy and update references accordingly.
+Setup scripts overlap (setup.ps1, setup_oidc.ps1, setup_uami.ps1, setup_umi_oidc.ps1, azure-setup.ps1, deploy.ps1); use deploy.ps1 + validate.ps1 as canonical for deployment, and document the others as oneâ€‘time bootstrap or legacy.
 Scalability & Reliability Risks
 
-In‑memory job tracking and rate limiting (ACTIVE_JOBS, UPLOAD_RATE_WINDOWS, createIdempotencyStore) will diverge across instances and resets; move to persistent storage (DB/Redis/queue).
-Transcript chunk storage on local filesystem (TRANSCRIPTION_TEMP_DIR) is not durable across instance restarts and won’t work with scale‑out; use object storage (Azure Blob/S3) or a dedicated job processor.
+Inâ€‘memory job tracking and rate limiting (ACTIVE_JOBS, UPLOAD_RATE_WINDOWS, createIdempotencyStore) will diverge across instances and resets; move to persistent storage (DB/Redis/queue).
+Transcript chunk storage on local filesystem (TRANSCRIPTION_TEMP_DIR) is not durable across instance restarts and wonâ€™t work with scaleâ€‘out; use object storage (Azure Blob/S3) or a dedicated job processor.
 Several critical fetches lack retry/timeout handling (background.js fetchJsonWithAuth, transcriptHandler.ts, mediaFetcher.js, auth.ts); consolidate under a shared retry/timeout policy.
 Large media flows use base64 chunking in content scripts; this can spike memory and UI thread time on big files.
 Testability Risk Spots
 
 background.js, panoptoResolver.js, and networkUtils.js rely on globals (chrome, window, self) and execute side effects at module load; hard to unit test.
-transcriptsService.js uses filesystem and child processes directly; no abstraction layer for mocking.
-openaiClient.js mixes prompt assembly, validation, and I/O; minimal dependency injection.
-config.js centralizes env parsing at import time, making isolated testing harder.
+services/transcripts/transcriptsService.js uses filesystem and child processes directly; no abstraction layer for mocking.
+services/llmClient.js mixes prompt assembly, validation, and I/O; minimal dependency injection.
+config/index.js centralizes env parsing at import time, making isolated testing harder.
 Proposed AGENTS.md Updates (not applied)
 
-Add a strict “single transcript source of truth” rule: extraction algorithms live only in core/transcripts/providers/\*\*; background is routing + fetcher only.
-Add a “no in‑memory state for cross‑request workflows” rule (jobs, rate limits, idempotency must be persisted in DB/Redis).
-Add a “no DOM globals in /core” rule (use pure utils or move to /ui//extension).
-Add a “network calls must use shared retry/timeout wrapper” rule for extension + api.
-Add a “docs placement + link integrity” rule (only README/AGENTS/LICENSE at root; all other docs under docs/, keep STATUS.md present and updated).
+Add a strict â€œsingle transcript source of truthâ€ rule: extraction algorithms live only in core/transcripts/providers/\*\*; background is routing + fetcher only.
+Add a â€œno inâ€‘memory state for crossâ€‘request workflowsâ€ rule (jobs, rate limits, idempotency must be persisted in DB/Redis).
+Add a â€œno DOM globals in /coreâ€ rule (use pure utils or move to /ui//extension).
+Add a â€œnetwork calls must use shared retry/timeout wrapperâ€ rule for extension + api.
+Add a â€œdocs placement + link integrityâ€ rule (only README/AGENTS/LICENSE at root; all other docs under docs/, keep STATUS.md present and updated).
 Best Practice Recommendations
 
 Consolidate transcript flow to core providers + fetcher interface only; delete legacy extraction paths and add tests for provider selection and fetcher error cases.
-Introduce persistent storage/queue for transcription jobs and rate limiting (Redis + worker or DB‑backed job table).
+Introduce persistent storage/queue for transcription jobs and rate limiting (Redis + worker or DBâ€‘backed job table).
 Standardize retry/timeout handling across extension/background/auth flows; add a small shared fetch wrapper with unit tests.
 Clean up docs: move root docs into docs/, restore or replace STATUS.md, and update REPO_MAP.md to reflect reality; add a CI check for broken doc links.
-Break up large files (especially background.js, \*.js, openaiClient.js) into smaller modules with focused responsibilities.
+Break up large files (especially background.js, \*.js, services/llmClient.js) into smaller modules with focused responsibilities.

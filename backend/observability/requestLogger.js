@@ -12,6 +12,7 @@ const pinoHttp = require('pino-http');
 const { v4: uuidv4 } = require('uuid');
 const Sentry = require('@sentry/node');
 const { logger } = require('./index');
+const HTTP_STATUS = require('../constants/httpStatus');
 
 const LOG_REQUEST_HEADERS = process.env.LOG_REQUEST_HEADERS === 'true';
 const IGNORED_PATH_PREFIXES = ['/health', '/ready', '/metrics', '/favicon.ico'];
@@ -63,8 +64,8 @@ function createRequestLogger() {
 
     // Custom log level based on status code
     customLogLevel: (req, res, error) => {
-      if (error || res.statusCode >= 500) return 'error';
-      if (res.statusCode >= 400) return 'warn';
+      if (error || res.statusCode >= HTTP_STATUS.INTERNAL_SERVER_ERROR) return 'error';
+      if (res.statusCode >= HTTP_STATUS.BAD_REQUEST) return 'warn';
       return 'info';
     },
 

@@ -1,28 +1,25 @@
-# Status
-
-Last updated: 2026-01-27
+# Status (Updated 2026-02-18)
 
 ## Summary
 
-- Current focus: Phase 5 documentation consolidation is complete; next priorities are Phase 4 retry/timeout standardization and Phase 6 module splits.
-- Build health: `npm run validate` (2026-01-27) - PASS (lint warnings only).
-- Primary risks: Phase 4 retry/timeout policy remains inconsistent, and large modules still need cohesion-driven splits.
+- Repository structure has been cleaned for clearer ownership:
+  - Shared Vite/Vitest helper moved to `config/vite/shared.ts`.
+  - Vitest bootstrap moved to `shared/test/setupVitest.ts`.
+  - Backend operational docs moved to `docs/backend/`.
+- Legacy runtime artifact `backend/server.err` was removed.
+- Stale/obsolete path references were updated in architecture/testing docs.
 
-## Recent changes
+## Quality Gate
 
-- Moved root docs into `docs/reference/` and kept root to `AGENTS.md`, `README.md`, and `LICENSE` only.
-- Archived `docs/achieve/*` into `docs/archive/` with corrected date-based naming.
-- Consolidated environment documentation into `docs/deployment/ENVIRONMENTS.md` and removed outdated environment setup duplicates.
-- Sanitized `.env` defaults and clarified `.env.example` and `.env.example.local` roles.
-- Added a doc link integrity check: `scripts/check-doc-links.mjs`, `npm run docs:check-links`, and a CI step in `.github/workflows/quality-gate.yml`.
+`npm run validate` is the required gate for all changes. This includes formatting, doc-link checks, lint/boundary rules, tests, type-checking, and build verification.
 
-## Open issues
+## Current Risks
 
-- Phase 4 network reliability + retry policy alignment is still incomplete.
-- Phase 6 cohesion-driven module splits are still pending.
-- Lint warnings remain in several modules (non-blocking but noisy).
+- Some large non-critical files remain and should be refactored incrementally with tests.
+- UI/runtime size growth should be monitored before new feature expansion.
 
-## Next up
+## Next Focus
 
-- Implement Phase 4 shared retry/timeout wrapper without breaking redirect-sensitive flows.
-- Start Phase 6 splits in `extension/background.js`, transcript handler, and backend controllers/services.
+1. Reduce complexity in top hotspot files without API changes.
+2. Expand targeted regression tests around refactored modules.
+3. Continue deleting stale docs/code as replacements land.

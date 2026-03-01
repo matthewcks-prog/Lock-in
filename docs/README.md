@@ -12,6 +12,15 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 - Phased refactor plan: `docs/tracking/REFACTOR_PLAN.md`
 - Refactor prompt log: `docs/tracking/PROMPT_LOG.md`
 
+## Compliance And Policy
+
+- `PRIVACY.md` - Privacy policy for extension, backend, and provider usage
+- `TERMS.md` - Terms of service and academic integrity boundaries
+- `SECURITY.md` - Security controls and disclosure guidance
+- `docs/data-handling.md` - End-to-end data flow and AI provider disclosure
+- `docs/permissions.md` - Manifest permissions mapped to callsites
+- `docs/retention.md` - Retention windows and cleanup paths
+
 ## Folder Structure
 
 ### Architecture (`docs/architecture/`)
@@ -23,7 +32,8 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 
 ### Reference (`docs/reference/`)
 
-- `CODE_OVERVIEW.md` - Living snapshot of implementation details
+- `CODE_OVERVIEW.md` - Ownership index for implementation snapshots
+- `code-overview/` - Section-owned implementation snapshots (extension/backend/cross-layer/operations)
 - `DATABASE.md` - Canonical schema, RLS, and migration notes
 - `CHANGELOG.md` - Versioned change history
 - `CONTRIBUTING.md` - Contribution workflow and guardrails
@@ -37,13 +47,18 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 - `ROLLBACK.md` - Rollback and recovery procedures
 - `README.md` - Deployment index
 
+### Backend (`docs/backend/`)
+
+- `AZURE_EMBEDDINGS_SETUP.md` - Azure embeddings setup and verification
+- `MIGRATION_CHECKLIST.md` - Backend migration checklist
+
 ### Features (`docs/features/`)
 
 - `transcripts/` - Transcript system docs and troubleshooting
 
 ### Setup (`docs/setup/`)
 
-- `LOCAL_SUPABASE_SETUP.md` - Local Supabase CLI workflow
+- `LOCAL_DEVELOPMENT.md` - Complete local development setup (primary)
 - `CODE_FORMATTING.md` - Formatting conventions
 - Environment configuration: see `docs/deployment/ENVIRONMENTS.md`
 
@@ -51,6 +66,7 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 
 - `BACKEND_TESTING.md` - Backend testing standards and patterns
 - `SMOKE_CHECKLIST.md` - Manual smoke tests and validation checklist
+- `release-checklist.md` - Release-readiness manual checks for compliance features
 
 ### Tracking (`docs/tracking/`)
 

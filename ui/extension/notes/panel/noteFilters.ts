@@ -18,18 +18,18 @@ export function filterNotes({
     if (filter === 'all') {
       matchesFilter = true;
     } else if (filter === 'course') {
-      if (courseCode != null) {
+      if (courseCode !== null && courseCode !== undefined) {
         matchesFilter = item.courseCode === courseCode;
       } else {
-        matchesFilter = item.courseCode == null;
+        matchesFilter = item.courseCode === null || item.courseCode === undefined;
       }
     } else if (filter === 'starred') {
       matchesFilter = item.isStarred === true;
     }
 
-    const preview = item.previewText || item.content?.plainText || '';
+    const preview = item.previewText ?? item.content?.plainText ?? '';
     const matchesSearch =
-      !searchTerm ||
+      searchTerm.length === 0 ||
       item.title.toLowerCase().includes(searchTerm) ||
       preview.toLowerCase().includes(searchTerm);
 

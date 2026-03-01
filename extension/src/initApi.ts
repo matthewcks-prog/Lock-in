@@ -10,7 +10,10 @@
 
 import { createAuthClient, type AuthClient } from '../../api/auth';
 import { createApiClient, type ApiClient } from '../../api/client';
+import { CLIENT_STORAGE_KEYS } from '../../core/storage/clientStorageKeys';
 import { chromeStorage } from './chromeStorage';
+
+const DEFAULT_TOKEN_EXPIRY_BUFFER_MS = 60000;
 
 /**
  * Extension configuration from window.LOCKIN_CONFIG (set by config.js)
@@ -28,12 +31,22 @@ export interface LockInConfig {
  */
 export function getConfig(): LockInConfig {
   const config = typeof window !== 'undefined' ? (window.LOCKIN_CONFIG ?? {}) : {};
+  const tokenExpiryBufferMs = Number(config.TOKEN_EXPIRY_BUFFER_MS);
   return {
-    backendUrl: config.BACKEND_URL || 'http://localhost:3000',
-    supabaseUrl: config.SUPABASE_URL || '',
-    supabaseAnonKey: config.SUPABASE_ANON_KEY || '',
-    sessionStorageKey: config.SESSION_STORAGE_KEY || 'lockinSupabaseSession',
-    tokenExpiryBufferMs: Number(config.TOKEN_EXPIRY_BUFFER_MS) || 60000,
+    backendUrl:
+      config.BACKEND_URL !== undefined && config.BACKEND_URL.length > 0
+        ? config.BACKEND_URL
+        : 'http://localhost:3000',
+    supabaseUrl: config.SUPABASE_URL ?? '',
+    supabaseAnonKey: config.SUPABASE_ANON_KEY ?? '',
+    sessionStorageKey:
+      config.SESSION_STORAGE_KEY !== undefined && config.SESSION_STORAGE_KEY.length > 0
+        ? config.SESSION_STORAGE_KEY
+        : CLIENT_STORAGE_KEYS.SUPABASE_SESSION,
+    tokenExpiryBufferMs:
+      Number.isFinite(tokenExpiryBufferMs) && tokenExpiryBufferMs > 0
+        ? tokenExpiryBufferMs
+        : DEFAULT_TOKEN_EXPIRY_BUFFER_MS,
   };
 }
 
@@ -42,7 +55,6 @@ export function getConfig(): LockInConfig {
  */
 export function initAuthClient(): AuthClient {
   const config = getConfig();
-  const fetcher = typeof globalThis.fetch === 'function' ? globalThis.fetch : undefined;
   return createAuthClient(
     {
       supabaseUrl: config.supabaseUrl,
@@ -51,7 +63,6 @@ export function initAuthClient(): AuthClient {
       tokenExpiryBufferMs: config.tokenExpiryBufferMs,
     },
     chromeStorage,
-    { fetcher },
   );
 }
 
@@ -60,12 +71,11 @@ export function initAuthClient(): AuthClient {
  */
 export function initApiClient(authClient: AuthClient): ApiClient {
   const config = getConfig();
-  const fetcher = typeof globalThis.fetch === 'function' ? globalThis.fetch : undefined;
-  return createApiClient({
+  const apiConfig: Parameters<typeof createApiClient>[0] = {
     backendUrl: config.backendUrl,
     authClient,
-    fetcher,
-  });
+  };
+  return createApiClient(apiConfig);
 }
 
 /**
@@ -77,7 +87,7 @@ let cachedClients: { authClient: AuthClient; apiClient: ApiClient } | null = nul
  * Initialize both clients and expose globally for backward compatibility
  */
 export function initClients(): { authClient: AuthClient; apiClient: ApiClient } {
-  if (cachedClients) {
+  if (cachedClients !== null) {
     return cachedClients;
   }
 
@@ -103,7 +113,7 @@ export function initClients(): { authClient: AuthClient; apiClient: ApiClient } 
  * Get cached clients (or initialize if not cached)
  */
 export function getClients(): { authClient: AuthClient; apiClient: ApiClient } {
-  return cachedClients || initClients();
+  return cachedClients ?? initClients();
 }
 
 // Auto-initialize when loaded in browser context

@@ -10,24 +10,24 @@
  * No Chrome dependencies - pure interfaces.
  */
 
-import type { PanoptoInfo } from '../providers/panoptoProvider';
+import type { PanoptoInfo } from '../providers/panopto/urlUtils';
 
 /**
  * Base fetcher interface - all fetchers must implement
  */
-export interface AsyncFetcher {
+export type AsyncFetcher = {
   /** Fetch HTML/text content with credentials included */
   fetchWithCredentials(url: string): Promise<string>;
 
   /** Fetch JSON with credentials included */
   fetchJson<T>(url: string): Promise<T>;
-}
+};
 
 /**
  * Enhanced fetcher with optional capabilities for advanced features.
  * Fetchers can implement these if they support them (e.g., redirect tracking).
  */
-export interface EnhancedAsyncFetcher extends AsyncFetcher {
+export type EnhancedAsyncFetcher = AsyncFetcher & {
   /**
    * Fetch HTML with redirect tracking.
    * Returns the final URL after redirects, which is useful for dynamic URL discovery.
@@ -49,12 +49,20 @@ export interface EnhancedAsyncFetcher extends AsyncFetcher {
     html: string,
     baseUrl: string,
   ): { info: PanoptoInfo; url?: string } | null;
-}
+};
+
+export type RedirectSupportingFetcher = EnhancedAsyncFetcher & {
+  fetchHtmlWithRedirectInfo: NonNullable<EnhancedAsyncFetcher['fetchHtmlWithRedirectInfo']>;
+};
+
+export type HtmlParsingFetcher = EnhancedAsyncFetcher & {
+  extractPanoptoInfoFromHtml: NonNullable<EnhancedAsyncFetcher['extractPanoptoInfoFromHtml']>;
+};
 
 /**
  * Type guard to check if fetcher supports redirect tracking
  */
-export function hasRedirectSupport(fetcher: AsyncFetcher): fetcher is EnhancedAsyncFetcher {
+export function hasRedirectSupport(fetcher: AsyncFetcher): fetcher is RedirectSupportingFetcher {
   return (
     'fetchHtmlWithRedirectInfo' in fetcher &&
     typeof fetcher.fetchHtmlWithRedirectInfo === 'function'
@@ -64,7 +72,7 @@ export function hasRedirectSupport(fetcher: AsyncFetcher): fetcher is EnhancedAs
 /**
  * Type guard to check if fetcher supports HTML parsing
  */
-export function hasHtmlParsingSupport(fetcher: AsyncFetcher): fetcher is EnhancedAsyncFetcher {
+export function hasHtmlParsingSupport(fetcher: AsyncFetcher): fetcher is HtmlParsingFetcher {
   return (
     'extractPanoptoInfoFromHtml' in fetcher &&
     typeof fetcher.extractPanoptoInfoFromHtml === 'function'

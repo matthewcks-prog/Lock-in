@@ -10,50 +10,92 @@
  * Source maps are uploaded to Sentry when SENTRY_AUTH_TOKEN is configured.
  */
 
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type PluginOption, type UserConfig } from 'vite';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { resolve } from 'path';
 import {
   createAliases,
+  createDefines,
   createIifeBuildConfig,
   ensureAsciiSafeOutput,
-  sharedDefines,
-} from './build/viteShared';
+} from './config/vite/shared';
 
-export default defineConfig(({ mode }) => {
-  // Load environment variables from .env file
+function hasNonEmptyValue(value: string | undefined): value is string {
+  return value !== undefined && value.length > 0;
+}
+
+function resolveReleaseVersion(): string {
+  const packageVersion = process.env.npm_package_version;
+  return packageVersion !== undefined && packageVersion.length > 0 ? packageVersion : '1.0.0';
+}
+
+function createBasePlugins(): PluginOption[] {
+  return [
+    ensureAsciiSafeOutput(
+      resolve(process.cwd(), 'extension/dist/libs/sentry.js'),
+      'Processed Sentry bundle for ASCII compatibility',
+    ),
+  ];
+}
+
+function addSentryPluginIfConfigured({
+  mode,
+  sentryAuthToken,
+  sentryOrg,
+  sentryProject,
+  releaseVersion,
+  plugins,
+}: {
+  mode: string;
+  sentryAuthToken?: string;
+  sentryOrg?: string;
+  sentryProject?: string;
+  releaseVersion: string;
+  plugins: PluginOption[];
+}): void {
+  if (
+    mode === 'production' &&
+    hasNonEmptyValue(sentryAuthToken) &&
+    hasNonEmptyValue(sentryOrg) &&
+    hasNonEmptyValue(sentryProject)
+  ) {
+    plugins.push(
+      sentryVitePlugin({
+        org: sentryOrg,
+        project: sentryProject,
+        authToken: sentryAuthToken,
+        release: {
+          name: `lockin-extension@${releaseVersion}`,
+        },
+        sourcemaps: {
+          filesToDeleteAfterUpload: ['extension/dist/libs/sentry.js.map'],
+        },
+        telemetry: false,
+      }),
+    );
+  }
+}
+
+function buildSentryViteConfig(mode: string): UserConfig {
   const env = loadEnv(mode, process.cwd(), '');
-
-  // Only upload source maps in production builds when Sentry auth is configured
-  const shouldUploadSourceMaps =
-    mode === 'production' && env.SENTRY_AUTH_TOKEN && env.SENTRY_ORG && env.SENTRY_PROJECT;
+  const releaseVersion = resolveReleaseVersion();
+  const plugins = createBasePlugins();
+  addSentryPluginIfConfigured({
+    mode,
+    sentryAuthToken: env.SENTRY_AUTH_TOKEN,
+    sentryOrg: env.SENTRY_ORG,
+    sentryProject: env.SENTRY_PROJECT,
+    releaseVersion,
+    plugins,
+  });
 
   return {
     define: {
-      ...sharedDefines,
+      ...createDefines(mode),
       // Inject Sentry DSN at build time (required for service worker where import.meta doesn't work)
-      'import.meta.env.VITE_SENTRY_DSN': JSON.stringify(env.VITE_SENTRY_DSN || ''),
+      'import.meta.env.VITE_SENTRY_DSN': JSON.stringify(env.VITE_SENTRY_DSN ?? ''),
     },
-    plugins: [
-      ensureAsciiSafeOutput(
-        resolve(process.cwd(), 'extension/dist/libs/sentry.js'),
-        'Processed Sentry bundle for ASCII compatibility',
-      ),
-      // Upload source maps to Sentry for readable stack traces
-      shouldUploadSourceMaps &&
-        sentryVitePlugin({
-          org: env.SENTRY_ORG,
-          project: env.SENTRY_PROJECT,
-          authToken: env.SENTRY_AUTH_TOKEN,
-          release: {
-            name: `lockin-extension@${process.env.npm_package_version || '1.0.0'}`,
-          },
-          sourcemaps: {
-            filesToDeleteAfterUpload: ['extension/dist/libs/sentry.js.map'],
-          },
-          telemetry: false,
-        }),
-    ].filter(Boolean),
+    plugins,
     build: {
       ...createIifeBuildConfig({
         outDir: 'extension/dist/libs',
@@ -66,7 +108,9 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: false,
     },
     resolve: {
-      alias: createAliases({ includeCore: false }),
+      alias: createAliases({ includeCore: true }),
     },
   };
-});
+}
+
+export default defineConfig(({ mode }) => buildSentryViteConfig(mode));

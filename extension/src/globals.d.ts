@@ -17,6 +17,24 @@ export type LockInConfig = {
   DEBUG_PANOPTO_RESOLVER: boolean;
   DEBUG?: string | boolean;
   SENTRY_DSN?: string;
+  REPO_URL?: string;
+  MONASH_MOODLE_HOSTS?: string[];
+  POLICY_LINKS?: {
+    TERMS_OF_SERVICE?: string;
+    PRIVACY_POLICY?: string;
+  };
+  EXTERNAL_LINKS?: Record<string, string>;
+  CLIENT_STORAGE?: {
+    KEYS?: Record<string, string>;
+    ALIASES?: Record<string, readonly string[]>;
+    PREFIXES?: Record<string, string>;
+    CLEAR_SCOPE?: {
+      sync?: readonly string[];
+      local?: readonly string[];
+      localStorage?: readonly string[];
+      localPrefixes?: readonly string[];
+    };
+  };
 };
 
 declare global {
@@ -28,6 +46,37 @@ declare global {
     LockInStorage?: Storage;
     LockInAuth?: AuthClient;
     LockInAPI?: ApiClient;
+    LockInNetworkRetry?: {
+      fetchWithRetry: (
+        url: string,
+        options?: RequestInit,
+        config?: {
+          maxRetries?: number;
+          baseDelayMs?: number;
+          maxDelayMs?: number;
+          timeoutMs?: number;
+          retryableStatuses?: number[];
+          retryOnServerError?: boolean;
+          retryOnNetworkError?: boolean;
+          retryOnTimeout?: boolean;
+          context?: string;
+        },
+      ) => Promise<Response>;
+      DEFAULT_RETRY_CONFIG?: {
+        maxRetries: number;
+        baseDelayMs: number;
+        maxDelayMs: number;
+        timeoutMs: number;
+      };
+    };
+    LockInMessageSchemas?: {
+      createMessageValidators: () => Record<
+        string,
+        (
+          message: unknown,
+        ) => { ok: true; payload?: Record<string, unknown> } | { ok: false; error: string }
+      >;
+    };
     authClient?: AuthClient;
     apiClient?: ApiClient;
   }

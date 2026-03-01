@@ -9,6 +9,7 @@ export {
   AuthError,
   ValidationError,
   NetworkError,
+  TimeoutError,
   NotFoundError,
   ConflictError,
   RateLimitError,

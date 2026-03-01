@@ -2,6 +2,12 @@
   const root = typeof globalThis !== 'undefined' ? globalThis : self;
   const registry = root.LockInBackground || (root.LockInBackground = {});
   const transcripts = registry.transcripts || (registry.transcripts = {});
+  const HTTP_STATUS_UNAUTHORIZED = 401;
+  const HTTP_STATUS_FORBIDDEN = 403;
+  const HASH_SHIFT_BITS = 5;
+  const HASH_RADIX = 36;
+  const HEX_RADIX = 16;
+  const SHA_256_ALGORITHM = 'SHA-256';
 
   const TRACKING_QUERY_KEYS = new Set([
     'utm_source',
@@ -56,7 +62,7 @@
   }
 
   function isAuthStatus(status) {
-    return status === 401 || status === 403;
+    return status === HTTP_STATUS_UNAUTHORIZED || status === HTTP_STATUS_FORBIDDEN;
   }
 
   function isBlobUrl(mediaUrl) {
@@ -66,10 +72,10 @@
   function fallbackHash(value) {
     let hash = 0;
     for (let i = 0; i < value.length; i += 1) {
-      hash = (hash << 5) - hash + value.charCodeAt(i);
+      hash = (hash << HASH_SHIFT_BITS) - hash + value.charCodeAt(i);
       hash |= 0;
     }
-    return Math.abs(hash).toString(36);
+    return Math.abs(hash).toString(HASH_RADIX);
   }
 
   async function hashStringSha256(value) {
@@ -77,10 +83,10 @@
       return fallbackHash(value);
     }
     const encoded = new TextEncoder().encode(value);
-    const buffer = await crypto.subtle.digest('SHA-256', encoded);
+    const buffer = await crypto.subtle.digest(SHA_256_ALGORITHM, encoded);
     const bytes = new Uint8Array(buffer);
     return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(HEX_RADIX).padStart(2, '0'))
       .join('');
   }
 

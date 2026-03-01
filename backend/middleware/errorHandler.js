@@ -11,6 +11,7 @@
  */
 
 const isDev = process.env.NODE_ENV !== 'production';
+const HTTP_STATUS = require('../constants/httpStatus');
 
 /**
  * Standard error response format
@@ -22,79 +23,13 @@ const isDev = process.env.NODE_ENV !== 'production';
  * @property {Object} [error.details] - Additional error details (dev only)
  */
 
-/**
- * Map of known error codes to HTTP status codes
- */
-const ERROR_STATUS_MAP = {
-  VALIDATION_ERROR: 400,
-  INVALID_INPUT: 400,
-  MISSING_REQUIRED_FIELD: 400,
-  INVALID_JSON: 400,
-  AUTH_REQUIRED: 401,
-  INVALID_TOKEN: 401,
-  SESSION_EXPIRED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  CONFLICT: 409,
-  RATE_LIMIT: 429,
-  INTERNAL_ERROR: 500,
-  BAD_GATEWAY: 502,
-  SERVICE_UNAVAILABLE: 503,
-};
-
-/**
- * Custom application error class
- */
-class AppError extends Error {
-  constructor(message, code = 'INTERNAL_ERROR', statusCode = null, details = null) {
-    super(message);
-    this.name = 'AppError';
-    this.code = code;
-    this.statusCode = statusCode || ERROR_STATUS_MAP[code] || 500;
-    this.details = details;
-    this.isOperational = true; // Distinguishes from programming errors
-    Error.captureStackTrace(this, this.constructor);
-  }
-}
-
-/**
- * Not found error
- */
-class NotFoundError extends AppError {
-  constructor(resource = 'Resource', id = null) {
-    const message = id ? `${resource} with ID ${id} not found` : `${resource} not found`;
-    super(message, 'NOT_FOUND', 404);
-  }
-}
-
-/**
- * Validation error
- */
-class ValidationError extends AppError {
-  constructor(message, field = null) {
-    super(message, 'VALIDATION_ERROR', 400, field ? { field } : null);
-  }
-}
-
-/**
- * Conflict error (for optimistic locking)
- */
-class ConflictError extends AppError {
-  constructor(message = 'Resource was modified by another session', updatedAt = null) {
-    super(message, 'CONFLICT', 409, updatedAt ? { updatedAt } : null);
-    this.updatedAt = updatedAt;
-  }
-}
-
-/**
- * Rate limit error
- */
-class RateLimitError extends AppError {
-  constructor(message = 'Too many requests', retryAfterSeconds = null) {
-    super(message, 'RATE_LIMIT', 429, retryAfterSeconds ? { retryAfterSeconds } : null);
-    this.retryAfterSeconds = retryAfterSeconds;
-  }
-}
+const {
+  AppError,
+  NotFoundError,
+  ValidationError,
+  ConflictError,
+  RateLimitError,
+} = require('../errors');
 
 /**
  * Format error for response
@@ -132,13 +67,13 @@ function logError(err, req) {
     userId: req.user?.id || 'anonymous',
     errorCode: err.code || 'UNKNOWN',
     errorMessage: err.message,
-    statusCode: err.statusCode || 500,
+    statusCode: err.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR,
   };
 
   // Always log operational errors at info/warn level
   // Log programming errors at error level
   if (err.isOperational) {
-    if (err.statusCode >= 500) {
+    if (err.statusCode >= HTTP_STATUS.INTERNAL_SERVER_ERROR) {
       console.error('[API Error]', JSON.stringify(logData));
     } else {
       console.warn('[API Warning]', JSON.stringify(logData));
@@ -147,6 +82,38 @@ function logError(err, req) {
     // Programming error - log with stack trace
     console.error('[API Critical Error]', JSON.stringify(logData), err.stack);
   }
+}
+
+const STATUS_RULES = [
+  {
+    matches: (error) => error.name === 'ValidationError' || error.code === 'VALIDATION_ERROR',
+    status: HTTP_STATUS.BAD_REQUEST,
+  },
+  {
+    matches: (error) => error.name === 'UnauthorizedError' || error.code === 'AUTH_REQUIRED',
+    status: HTTP_STATUS.UNAUTHORIZED,
+  },
+  {
+    matches: (error) => error.code === 'PGRST116',
+    status: HTTP_STATUS.NOT_FOUND,
+    apply: (error) => {
+      error.code = 'NOT_FOUND';
+      error.message = error.message || 'Resource not found';
+    },
+  },
+];
+
+function resolveStatusCode(err) {
+  for (const rule of STATUS_RULES) {
+    if (rule.matches(err)) {
+      if (rule.apply) {
+        rule.apply(err);
+      }
+      return rule.status;
+    }
+  }
+
+  return err.statusCode || err.status || HTTP_STATUS.INTERNAL_SERVER_ERROR;
 }
 
 /**
@@ -158,19 +125,7 @@ function errorHandler(err, req, res, _next) {
   logError(err, req);
 
   // Determine status code
-  let statusCode = err.statusCode || err.status || 500;
-
-  // Handle specific error types
-  if (err.name === 'ValidationError' || err.code === 'VALIDATION_ERROR') {
-    statusCode = 400;
-  } else if (err.name === 'UnauthorizedError' || err.code === 'AUTH_REQUIRED') {
-    statusCode = 401;
-  } else if (err.code === 'PGRST116') {
-    // Supabase "no rows found" error
-    statusCode = 404;
-    err.code = 'NOT_FOUND';
-    err.message = err.message || 'Resource not found';
-  }
+  const statusCode = resolveStatusCode(err);
 
   // Don't expose internal error details in production
   const errorResponse = formatErrorResponse(err, isDev);
@@ -196,7 +151,7 @@ function errorHandler(err, req, res, _next) {
  * 404 handler for unmatched routes
  */
 function notFoundHandler(req, res) {
-  res.status(404).json({
+  res.status(HTTP_STATUS.NOT_FOUND).json({
     success: false,
     error: {
       code: 'NOT_FOUND',

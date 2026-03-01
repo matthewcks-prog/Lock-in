@@ -1,6 +1,8 @@
 // backend/repositories/feedbackRepository.js
 
-const { supabase } = require('../supabaseClient');
+const { supabase } = require('../db/supabaseClient');
+
+const DEFAULT_USER_FEEDBACK_LIMIT = 50;
 
 /**
  * Repository for feedback CRUD operations.
@@ -45,7 +47,7 @@ async function createFeedback({ userId, type, message, context }) {
  * @param {number} [options.limit=50] - Maximum records to return
  * @returns {Promise<Object[]>} Array of feedback records
  */
-async function getFeedbackByUser(userId, { limit = 50 } = {}) {
+async function getFeedbackByUser(userId, { limit = DEFAULT_USER_FEEDBACK_LIMIT } = {}) {
   const { data, error } = await supabase
     .from('feedback')
     .select('*')

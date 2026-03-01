@@ -1,19 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
-import {
-  $getNodeByKey,
-  CLICK_COMMAND,
-  COMMAND_PRIORITY_LOW,
-  DecoratorNode,
-  KEY_BACKSPACE_COMMAND,
-  KEY_DELETE_COMMAND,
-  LexicalEditor,
-  LexicalNode,
-  NodeKey,
-} from 'lexical';
-import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
-import { useLexicalNodeSelection } from '@lexical/react/useLexicalNodeSelection';
-import { mergeRegister } from '@lexical/utils';
+import type { LexicalNode, NodeKey } from 'lexical';
+import { DecoratorNode } from 'lexical';
+import { ResizableImage } from './ResizableImage';
 
 export type SerializedImageNode = {
   type: 'image';
@@ -25,406 +12,72 @@ export type SerializedImageNode = {
   height?: number | null;
 };
 
-// Constants
-const DEFAULT_WIDTH = 320;
-const MIN_WIDTH = 80;
-const MAX_WIDTH = 960;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
-
-function getMaxWidth(editor: LexicalEditor): number {
-  const root = editor.getRootElement();
-  const scrollContainer = root?.closest('.lockin-note-editor-scroll') as HTMLElement | null;
-  const container = scrollContainer ?? root?.parentElement;
-  const measured = container?.getBoundingClientRect().width ?? 0;
-  // Account for padding: 24px left + 24px right
-  return measured > 0 ? clamp(measured - 48, MIN_WIDTH, MAX_WIDTH) : MAX_WIDTH;
-}
-
-/**
- * ResizableImage component for Lexical editor
- * Industry-standard resize behavior with corner handles only
- */
-function ResizableImage({
-  src,
-  alt,
-  nodeKey,
-  assetId,
-  width,
-  height,
-}: {
+interface ImageNodePayload {
   src: string;
-  alt: string;
-  nodeKey: NodeKey;
+  alt?: string;
   assetId?: string | null;
   width?: number | null;
   height?: number | null;
-}) {
-  const [editor] = useLexicalComposerContext();
-  const [isSelected, setSelected, clearSelection] = useLexicalNodeSelection(nodeKey);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
-
-  // Dimensions state
-  const [dimensions, setDimensions] = useState({
-    width: width ?? DEFAULT_WIDTH,
-    height: height ?? DEFAULT_WIDTH,
-    aspectRatio: 1,
-    maxWidth: MAX_WIDTH,
-  });
-  const [isResizing, setIsResizing] = useState(false);
-
-  // Ref for resize calculations (avoids stale closures)
-  const resizeRef = useRef({
-    startX: 0,
-    startY: 0,
-    startWidth: 0,
-    aspectRatio: 1,
-    maxWidth: MAX_WIDTH,
-  });
-
-  // Sync with prop changes
-  useEffect(() => {
-    if (width != null && height != null) {
-      setDimensions((prev) => ({
-        ...prev,
-        width,
-        height,
-        aspectRatio: width / height || 1,
-      }));
-    }
-  }, [width, height]);
-
-  // Recalculate max width on window resize
-  useEffect(() => {
-    const updateMaxWidth = () => {
-      const maxWidth = getMaxWidth(editor);
-      setDimensions((prev) => {
-        const newWidth = clamp(prev.width, MIN_WIDTH, maxWidth);
-        return {
-          ...prev,
-          maxWidth,
-          width: newWidth,
-          height: newWidth / prev.aspectRatio,
-        };
-      });
-    };
-    updateMaxWidth();
-    window.addEventListener('resize', updateMaxWidth);
-    return () => window.removeEventListener('resize', updateMaxWidth);
-  }, [editor]);
-
-  // Handle image load - set initial dimensions from natural size
-  const handleImageLoad = useCallback(() => {
-    const img = imageRef.current;
-    if (!img) return;
-
-    const { naturalWidth, naturalHeight } = img;
-    const aspectRatio = naturalWidth / naturalHeight || 1;
-    const maxWidth = getMaxWidth(editor);
-
-    // Use saved dimensions or calculate from natural size
-    const targetWidth = width ?? clamp(Math.min(naturalWidth, maxWidth), MIN_WIDTH, maxWidth);
-    const targetHeight = height ?? targetWidth / aspectRatio;
-
-    setDimensions({
-      width: targetWidth,
-      height: targetHeight,
-      aspectRatio,
-      maxWidth,
-    });
-
-    // Persist if not already saved
-    if (width == null || height == null) {
-      editor.update(() => {
-        const node = $getNodeByKey(nodeKey);
-        if ($isImageNode(node)) {
-          node.setWidth(targetWidth);
-          node.setHeight(targetHeight);
-        }
-      });
-    }
-  }, [editor, nodeKey, width, height]);
-
-  // Commit dimensions to Lexical node
-  const commitDimensions = useCallback(
-    (w: number, h: number) => {
-      editor.update(() => {
-        const node = $getNodeByKey(nodeKey);
-        if ($isImageNode(node)) {
-          node.setWidth(w);
-          node.setHeight(h);
-        }
-      });
-    },
-    [editor, nodeKey],
-  );
-
-  // Handle corner resize with pointer capture for smooth dragging
-  const handleResizeStart = useCallback(
-    (e: ReactPointerEvent, corner: string) => {
-      e.preventDefault();
-      e.stopPropagation();
-
-      const target = e.target as HTMLElement;
-      target.setPointerCapture(e.pointerId);
-
-      const maxWidth = getMaxWidth(editor);
-      resizeRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        startWidth: dimensions.width,
-        aspectRatio: dimensions.aspectRatio,
-        maxWidth,
-      };
-      setIsResizing(true);
-
-      const onPointerMove = (moveEvent: PointerEvent) => {
-        const { startX, startY, startWidth, aspectRatio, maxWidth } = resizeRef.current;
-        const deltaX = moveEvent.clientX - startX;
-        const deltaY = moveEvent.clientY - startY;
-
-        // Calculate new width based on handle being dragged
-        let widthDelta = 0;
-        switch (corner) {
-          // Corner handles (diagonal movement)
-          case 'se':
-            widthDelta = Math.max(deltaX, deltaY * aspectRatio);
-            break;
-          case 'sw':
-            widthDelta = Math.max(-deltaX, deltaY * aspectRatio);
-            break;
-          case 'ne':
-            widthDelta = Math.max(deltaX, -deltaY * aspectRatio);
-            break;
-          case 'nw':
-            widthDelta = Math.max(-deltaX, -deltaY * aspectRatio);
-            break;
-          // Horizontal edge handles
-          case 'e':
-            widthDelta = deltaX;
-            break;
-          case 'w':
-            widthDelta = -deltaX;
-            break;
-          // Vertical edge handles (convert Y to width via aspect ratio)
-          case 's':
-            widthDelta = deltaY * aspectRatio;
-            break;
-          case 'n':
-            widthDelta = -deltaY * aspectRatio;
-            break;
-        }
-
-        const newWidth = clamp(startWidth + widthDelta, MIN_WIDTH, maxWidth);
-        const newHeight = newWidth / aspectRatio;
-
-        setDimensions((prev) => ({
-          ...prev,
-          width: newWidth,
-          height: newHeight,
-        }));
-      };
-
-      const onPointerUp = (upEvent: PointerEvent) => {
-        target.releasePointerCapture(upEvent.pointerId);
-        document.removeEventListener('pointermove', onPointerMove);
-        document.removeEventListener('pointerup', onPointerUp);
-        setIsResizing(false);
-
-        // Get final dimensions from ref to avoid stale closure
-        setDimensions((current) => {
-          commitDimensions(current.width, current.height);
-          return current;
-        });
-      };
-
-      document.addEventListener('pointermove', onPointerMove);
-      document.addEventListener('pointerup', onPointerUp);
-    },
-    [editor, dimensions.width, dimensions.aspectRatio, commitDimensions],
-  );
-
-  // Lexical command handlers for click and keyboard
-  useEffect(() => {
-    return mergeRegister(
-      editor.registerCommand(
-        CLICK_COMMAND,
-        (event: MouseEvent) => {
-          if (containerRef.current?.contains(event.target as HTMLElement)) {
-            const target = event.target as HTMLElement;
-            if (target.dataset.resizeHandle) return false;
-
-            if (event.shiftKey) {
-              setSelected(!isSelected);
-            } else {
-              clearSelection();
-              setSelected(true);
-            }
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-      editor.registerCommand(
-        KEY_DELETE_COMMAND,
-        (e) => {
-          if (isSelected) {
-            e?.preventDefault();
-            editor.update(() => {
-              const node = $getNodeByKey(nodeKey);
-              if ($isImageNode(node)) node.remove();
-            });
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-      editor.registerCommand(
-        KEY_BACKSPACE_COMMAND,
-        (e) => {
-          if (isSelected) {
-            e?.preventDefault();
-            editor.update(() => {
-              const node = $getNodeByKey(nodeKey);
-              if ($isImageNode(node)) node.remove();
-            });
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_LOW,
-      ),
-    );
-  }, [editor, isSelected, nodeKey, setSelected, clearSelection]);
-
-  const containerClass = [
-    'lockin-image-container',
-    isSelected && 'is-selected',
-    isResizing && 'is-resizing',
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  return (
-    <div
-      ref={containerRef}
-      className={containerClass}
-      style={{ width: dimensions.width }}
-      role="figure"
-      aria-label={alt || 'Image'}
-      data-asset-id={assetId ?? undefined}
-    >
-      <img
-        ref={imageRef}
-        src={src}
-        alt={alt}
-        className="lockin-image"
-        draggable={false}
-        onLoad={handleImageLoad}
-      />
-
-      {/* Resize handles - only show when selected */}
-      {isSelected && (
-        <>
-          {/* Corner handles */}
-          <div
-            className="lockin-resize-handle corner nw"
-            data-resize-handle="nw"
-            onPointerDown={(e) => handleResizeStart(e, 'nw')}
-          />
-          <div
-            className="lockin-resize-handle corner ne"
-            data-resize-handle="ne"
-            onPointerDown={(e) => handleResizeStart(e, 'ne')}
-          />
-          <div
-            className="lockin-resize-handle corner sw"
-            data-resize-handle="sw"
-            onPointerDown={(e) => handleResizeStart(e, 'sw')}
-          />
-          <div
-            className="lockin-resize-handle corner se"
-            data-resize-handle="se"
-            onPointerDown={(e) => handleResizeStart(e, 'se')}
-          />
-          {/* Edge handles */}
-          <div
-            className="lockin-resize-handle edge n"
-            data-resize-handle="n"
-            onPointerDown={(e) => handleResizeStart(e, 'n')}
-          />
-          <div
-            className="lockin-resize-handle edge s"
-            data-resize-handle="s"
-            onPointerDown={(e) => handleResizeStart(e, 's')}
-          />
-          <div
-            className="lockin-resize-handle edge e"
-            data-resize-handle="e"
-            onPointerDown={(e) => handleResizeStart(e, 'e')}
-          />
-          <div
-            className="lockin-resize-handle edge w"
-            data-resize-handle="w"
-            onPointerDown={(e) => handleResizeStart(e, 'w')}
-          />
-        </>
-      )}
-    </div>
-  );
 }
 
-// --- Lexical Node Class ---
+function toNullableNumber(value: number | null | undefined): number | null {
+  return value ?? null;
+}
+
+function normalizePayload(payload: ImageNodePayload): Required<ImageNodePayload> {
+  return {
+    src: payload.src,
+    alt: payload.alt ?? '',
+    assetId: payload.assetId ?? null,
+    width: toNullableNumber(payload.width),
+    height: toNullableNumber(payload.height),
+  };
+}
 
 export class ImageNode extends DecoratorNode<JSX.Element> {
   __src: string;
   __alt: string;
-  __assetId?: string | null;
-  __width?: number | null;
-  __height?: number | null;
+  __assetId: string | null;
+  __width: number | null;
+  __height: number | null;
 
-  static getType(): string {
+  static override getType(): string {
     return 'image';
   }
 
-  static clone(node: ImageNode): ImageNode {
+  static override clone(node: ImageNode): ImageNode {
     return new ImageNode(
-      node.__src,
-      node.__alt,
-      node.__assetId,
-      node.__width,
-      node.__height,
+      {
+        src: node.__src,
+        alt: node.__alt,
+        assetId: node.__assetId,
+        width: node.__width,
+        height: node.__height,
+      },
       node.getKey(),
     );
   }
 
-  static importJSON(serializedNode: SerializedImageNode): ImageNode {
+  static override importJSON(serializedNode: SerializedImageNode): ImageNode {
     const { src, alt, assetId, width = null, height = null } = serializedNode;
-    return new ImageNode(src, alt, assetId, width, height);
+    const payload: ImageNodePayload = { src, alt, width, height };
+    if (assetId !== undefined) {
+      payload.assetId = assetId;
+    }
+    return new ImageNode(payload);
   }
 
-  constructor(
-    src: string,
-    alt = '',
-    assetId?: string | null,
-    width?: number | null,
-    height?: number | null,
-    key?: NodeKey,
-  ) {
+  constructor(payload: ImageNodePayload, key?: NodeKey) {
     super(key);
-    this.__src = src;
-    this.__alt = alt;
-    this.__assetId = assetId;
-    this.__width = width ?? null;
-    this.__height = height ?? null;
+    const normalized = normalizePayload(payload);
+    this.__src = normalized.src;
+    this.__alt = normalized.alt;
+    this.__assetId = normalized.assetId;
+    this.__width = normalized.width;
+    this.__height = normalized.height;
   }
 
-  getAssetId(): string | null | undefined {
+  getAssetId(): string | null {
     return this.__assetId;
   }
 
@@ -442,7 +95,7 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     self.__height = height;
   }
 
-  exportJSON(): SerializedImageNode {
+  override exportJSON(): SerializedImageNode {
     return {
       type: 'image',
       version: 1,
@@ -454,17 +107,17 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
     };
   }
 
-  createDOM(): HTMLElement {
-    const span = document.createElement('span');
-    span.className = 'lockin-image-wrapper';
-    return span;
+  override createDOM(): HTMLElement {
+    const wrapper = document.createElement('span');
+    wrapper.className = 'lockin-image-wrapper';
+    return wrapper;
   }
 
-  updateDOM(): false {
+  override updateDOM(): false {
     return false;
   }
 
-  decorate(): JSX.Element {
+  override decorate(): JSX.Element {
     return (
       <ResizableImage
         src={this.__src}
@@ -478,20 +131,8 @@ export class ImageNode extends DecoratorNode<JSX.Element> {
   }
 }
 
-export function $createImageNode(params: {
-  src: string;
-  alt?: string;
-  assetId?: string | null;
-  width?: number | null;
-  height?: number | null;
-}): ImageNode {
-  return new ImageNode(
-    params.src,
-    params.alt ?? '',
-    params.assetId ?? null,
-    params.width ?? null,
-    params.height ?? null,
-  );
+export function $createImageNode(params: ImageNodePayload): ImageNode {
+  return new ImageNode(params);
 }
 
 export function $isImageNode(node: LexicalNode | null | undefined): node is ImageNode {

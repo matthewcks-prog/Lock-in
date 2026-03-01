@@ -1,6 +1,12 @@
 import type { NoteStatus } from '@core/domain/Note';
 import { relativeLabel } from '../utils/relativeTime';
 
+export interface StatusLabel {
+  label: string;
+  tone: 'error' | 'muted' | 'success';
+  spinner: boolean;
+}
+
 export function buildStatusLabel({
   status,
   updatedAt,
@@ -11,10 +17,10 @@ export function buildStatusLabel({
   updatedAt?: string | null;
   isAssetUploading?: boolean;
   error?: string | null;
-}) {
-  if (error) {
+}): StatusLabel {
+  if (error !== null && error !== undefined && error.length > 0) {
     return {
-      label: error || 'Error saving - retry soon',
+      label: error,
       tone: 'error' as const,
       spinner: false,
     };
@@ -29,7 +35,7 @@ export function buildStatusLabel({
   if (status === 'saving') {
     return { label: 'Saving...', tone: 'muted' as const, spinner: true };
   }
-  if (isAssetUploading) {
+  if (isAssetUploading === true) {
     return {
       label: 'Uploading attachment...',
       tone: 'muted' as const,

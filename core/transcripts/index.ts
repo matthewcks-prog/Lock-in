@@ -5,19 +5,17 @@
  * No Chrome dependencies - pure TypeScript.
  */
 
-export * from './types';
+export type * from './types';
 export * from './webvttParser';
 export * from './videoDetection';
 export * from './providerRegistry';
-export * from './fetchers/types';
+export type * from './fetchers/types';
 export {
   PanoptoProvider,
   createPanoptoProvider,
   extractCaptionVttUrl,
   extractPanoptoInfoFromHtml,
   extractPanoptoMediaUrl,
-  extractDeliveryId,
-  extractTenantDomain,
   extractPanoptoInfo,
   buildPanoptoEmbedUrl,
   buildPanoptoViewerUrl,

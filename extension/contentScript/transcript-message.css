@@ -1,0 +1,296 @@
+@layer lockin.tools {
+  #lockin-root .lockin-video-auth-required {
+    padding: var(--lockin-size-20);
+    text-align: center;
+  }
+
+  #lockin-root .lockin-video-auth-message {
+    margin: 0 0 var(--lockin-size-16);
+    font-size: var(--lockin-text-md);
+    color: var(--lockin-color-text-body);
+  }
+
+  #lockin-root .lockin-video-auth-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-10) var(--lockin-size-20);
+    font-size: var(--lockin-text-md);
+    font-weight: 600;
+    color: var(--lockin-color-surface);
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-4a1d96) 0%,
+      var(--lockin-color-6d28d9) 100%
+    );
+    border: none;
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-video-auth-button:hover {
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-5b21b6) 0%,
+      var(--lockin-color-7c3aed) 100%
+    );
+    box-shadow: var(--lockin-shadow-16);
+    transform: translateY(var(--lockin-size-neg-1));
+  }
+
+  #lockin-root .lockin-video-auth-hint {
+    margin: var(--lockin-size-12) 0 0;
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-video-extract-icon {
+    font-size: var(--lockin-text-lg);
+    color: var(--lockin-color-text-secondary);
+    transition: transform var(--lockin-duration-150) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-video-item-main:hover .lockin-video-extract-icon {
+    color: var(--lockin-color-accent);
+    transform: translateX(var(--lockin-size-2));
+  }
+
+  /* Transcript shell contract: header / body / footer */
+  #lockin-root .lockin-transcript-message {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--lockin-color-f8fafc);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-2xl);
+  }
+
+  #lockin-root .lockin-transcript-header {
+    flex-shrink: 0;
+    padding: var(--lockin-size-12) var(--lockin-size-16);
+    color: var(--lockin-color-surface);
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-1e3a5f) 0%,
+      var(--lockin-color-brand) 100%
+    );
+  }
+
+  #lockin-root .lockin-transcript-header--compact {
+    padding-top: var(--lockin-size-10);
+    padding-bottom: var(--lockin-size-10);
+  }
+
+  #lockin-root .lockin-transcript-title-row {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-transcript-icon {
+    font-size: var(--lockin-text-xl);
+  }
+
+  #lockin-root .lockin-transcript-title {
+    overflow: hidden;
+    font-size: var(--lockin-text-md);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #lockin-root .lockin-transcript-meta {
+    margin-top: var(--lockin-size-4);
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-rgba-255-255-255-08);
+  }
+
+  #lockin-root .lockin-transcript-meta--compact {
+    margin-top: 0;
+  }
+
+  #lockin-root .lockin-transcript-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-transcript-actions {
+    display: flex;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-10) var(--lockin-size-14);
+    background: var(--lockin-color-surface-muted);
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-transcript-actions-primary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-transcript-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    padding: var(--lockin-size-3) var(--lockin-size-10);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
+    white-space: nowrap;
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-action-btn:hover {
+    background: var(--lockin-color-surface-subtle);
+    border-color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-transcript-action-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary {
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-brand);
+    border-color: var(--lockin-color-brand);
+  }
+
+  #lockin-root .lockin-transcript-action-btn.lockin-transcript-action-primary:hover:not(:disabled) {
+    background: var(--lockin-color-1d4ed8);
+    border-color: var(--lockin-color-1d4ed8);
+  }
+
+  #lockin-root .lockin-transcript-more-options {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  #lockin-root .lockin-transcript-more-btn {
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-transcript-more-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-subtle);
+  }
+
+  #lockin-root .lockin-transcript-more-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--lockin-size-4));
+    z-index: var(--lockin-z-overlay);
+    min-width: 170px;
+    max-width: calc(100vw - var(--lockin-size-32));
+    padding: var(--lockin-size-4) 0;
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-md);
+    box-shadow: var(--lockin-shadow-16);
+  }
+
+  #lockin-root .lockin-transcript-more-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    width: 100%;
+    min-height: var(--lockin-size-32);
+    padding: var(--lockin-size-6) var(--lockin-size-12);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
+    text-align: left;
+    color: var(--lockin-color-text-body);
+    background: none;
+    border: none;
+    transition: background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-more-menu-item:hover,
+  #lockin-root .lockin-transcript-more-menu-item:focus {
+    background: var(--lockin-color-surface-subtle);
+    outline: none;
+  }
+
+  #lockin-root .lockin-transcript-more-menu-item-icon {
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 360px) {
+    #lockin-root .lockin-transcript-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    #lockin-root .lockin-transcript-actions-primary {
+      flex-direction: column;
+    }
+
+    #lockin-root .lockin-transcript-more-options {
+      align-self: flex-start;
+    }
+
+    #lockin-root .lockin-transcript-more-menu {
+      top: calc(100% + var(--lockin-size-4));
+      bottom: auto;
+    }
+  }
+
+  #lockin-root .lockin-transcript-seek-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    padding: var(--lockin-size-8) var(--lockin-size-16);
+    font-size: var(--lockin-text-xs);
+    font-weight: 500;
+    line-height: 1.4;
+    color: var(--lockin-color-text-body);
+    background: rgba(37, 99, 235, 0.06);
+    border-bottom: var(--lockin-size-1) solid rgba(37, 99, 235, 0.15);
+  }
+
+  #lockin-root .lockin-transcript-seek-hint svg {
+    flex-shrink: 0;
+    color: var(--lockin-color-brand);
+  }
+
+  #lockin-root .lockin-transcript-seek-hint--warning {
+    background: rgba(245, 158, 11, 0.08);
+    border-bottom-color: rgba(245, 158, 11, 0.28);
+  }
+
+  #lockin-root .lockin-transcript-seek-hint--warning svg {
+    color: #d97706;
+  }
+
+  #lockin-root .lockin-transcript-seek-hint--error {
+    background: rgba(239, 68, 68, 0.07);
+    border-bottom-color: rgba(239, 68, 68, 0.22);
+  }
+
+  #lockin-root .lockin-transcript-seek-hint--error svg {
+    color: #dc2626;
+  }
+}

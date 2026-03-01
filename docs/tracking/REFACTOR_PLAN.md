@@ -1,253 +1,250 @@
-# Refactor Plan (Quality Audit 2026-01-23)
+# Compliance + Transparency Refactor Plan
 
-Last updated: 2026-01-28
+> Updated: 2026-02-28  
+> Scope: Employer-grade compliance, transparency, consent, and data controls for Lock-in extension + backend/API/docs
 
-This plan is derived from `docs/archive/QUALITY_AUDIT_2026-01-23.md`, updated to reflect work already completed and the remaining backlog. Phases are ordered by risk reduction, scalability, and architectural alignment. Use the acceptance criteria to verify completion before moving to the next phase.
+## Decision
 
----
+This refactor is the right direction for this repo and aligns with current architecture:
 
-## Phase 0 -- Completed Foundations (DONE)
+1. `extension` already owns Chrome glue and popup UX, so policy UI + consent + permission hardening belong there.
+2. `api` + `backend` already own authenticated cloud data operations, so export/delete-account integration belongs there.
+3. `core` can remain platform-agnostic by keeping policy/Chrome behavior out of domain logic.
 
-- [x] **Restore status + doc link integrity**
-  - **Problem:** `docs/tracking/STATUS.md` missing; REPO_MAP + troubleshooting links stale.
-  - **Outcome:** `docs/tracking/STATUS.md` restored; REPO_MAP updated; legacy troubleshooting marked non-canonical.
-  - **Acceptance criteria:** `docs/tracking/STATUS.md` exists; doc links resolve; canonical transcript troubleshooting is under `docs/features/transcripts/`.
+## Current Repo Alignment (Verified)
 
-- [x] **Remove hardcoded Supabase keys from extension bundle**
-  - **Problem:** Extension config embedded anon keys.
-  - **Outcome:** Keys moved to build-time env; bundle no longer ships keys.
-  - **Acceptance criteria:** No anon keys committed in extension output; dev/prod builds load env-injected values.
+- MV3 is already in place (`extension/manifest.json`).
+- Popup is the settings surface (`popup.html` + `popup.js`), no separate options page.
+- Storage is split across `chrome.storage.sync` and `chrome.storage.local`, plus `localStorage` in some UI hooks.
+- Sentry scrubber exists (`extension/src/sentry/privacy.ts`) and already redacts transcript/note/prompt/chat-like keys.
+- Permissions currently declared: `activeTab`, `scripting`, `storage`, `contextMenus`, `tabs`, `webNavigation`.
+- Important storage-key inconsistency exists now and must be handled during centralization:
+  - `lockin_selectedNoteId`
+  - `lockin_sidebar_selectedNoteId`
 
-- [x] **Add API response validation**
-  - **Problem:** API responses were cast to `T` without validation.
-  - **Outcome:** Validation/type guards added for critical endpoints.
-  - **Acceptance criteria:** Invalid payloads surface as typed errors; tests cover validation.
+## Non-Negotiables For Every Phase
 
-- [x] **Tighten storage interface typing**
-  - **Problem:** Storage interfaces used `any`.
-  - **Outcome:** Storage typing moved to generics and explicit change record shapes.
-  - **Acceptance criteria:** Storage interfaces compile without `any` usage.
+1. Respect AGENTS layer boundaries (`extension` glue only, no backend internals in popup/content scripts).
+2. Keep behavior-compatible slices and small, reviewable commits.
+3. Add/adjust tests with each behavioral change.
+4. At end of each phase: make sure `npm run validate` passes.
 
-- [x] **Split oversized notes editor modules**
-  - **Problem:** Notes editor and hooks exceeded 500-1100 lines.
-  - **Outcome:** Notes editor modules decomposed into focused subcomponents/hooks.
-  - **Acceptance criteria:** Editor modules are cohesive and independently testable.
+## Phase Order
 
-- [x] **Split transcript providers/parsers**
-  - **Problem:** Providers/parsers blended detection/extraction/parsing.
-  - **Outcome:** Providers reduced to composition layers with helper modules.
-  - **Acceptance criteria:** Provider files stay small and tests continue to pass.
+### Phase 0: Discovery (Blocker, Required Before Implementation)
 
-- [x] **Coverage thresholds + CI enforcement**
-  - **Problem:** Coverage could regress silently.
-  - **Outcome:** Baseline coverage thresholds added in `vitest.config.ts`; CI coverage step enforced.
-  - **Acceptance criteria:** `npm run test:coverage` passes locally; CI fails on coverage regression.
+Create `docs/DISCOVERY.md` with:
 
-- [x] **Structured logging in backend runtime paths**
-  - **Problem:** `console.log` used in runtime services.
-  - **Outcome:** `backend/services/transcriptsService.js` and `backend/sentry.js` log via observability logger.
-  - **Acceptance criteria:** No direct `console.log`/`console.error` in backend runtime paths.
+1. Folder map:
+   - `extension/`, `ui/extension/`, `backend/`, `api/`, `core/`, `integrations/`
+2. Storage keys map:
+   - Include key, storage area (`sync`/`local`/`localStorage`), owning module, purpose
+   - Include known keys:
+     - `lockin_sidebar_*`
+     - `lockin_telemetry_disabled`
+     - `lockin_session_*`
+     - `lockin_transcript_show_timestamps`
+     - `lockin_tasks_viewMode`
+     - `lockinCurrentChatId`
+     - `lockin_selectedNoteId`
+     - `lockin_sidebar_selectedNoteId`
+     - `lockin_sidebar_width`
+     - `lockin_offline_notes_queue`
+3. Permissions map:
+   - permission -> concrete files/features requiring it
+4. Existing state summary:
+   - MV3, popup-as-settings, storage model, Supabase auth backend, Sentry scrubber coverage
 
-- [x] **Test log noise + circular require warnings**
-  - **Problem:** Node tests emitted circular dependency warnings from stubbed modules; transcript/provider/Sentry debug logs cluttered vitest output.
-  - **Outcome:** Test module stubs are marked loaded, transcript logging is level-gated (silent in tests), and extension logger/Sentry debug logs are suppressed in test runs.
-  - **Acceptance criteria:** `npm run test` and `npm run test:backend` run without warning noise.
+Exit criteria:
 
-- [x] **Targeted notes/chat test coverage**
-  - **Problem:** Critical UI paths lacked coverage.
-  - **Outcome:** Notes list hook tests and chat send empty-guard test added.
-  - **Acceptance criteria:** Regression tests cover notes list load/rollback and chat send guard.
+- `docs/DISCOVERY.md` exists and is complete enough to drive implementation.
+- Risks/deviations are explicitly called out in the doc.
+- Make sure `npm run validate` passes.
 
-- [x] **Align extension JSX runtime in Vite builds**
-  - **Problem:** Local builds could emit `jsxDEV` calls while bundling the production runtime, causing `jsxDEV is not a function` crashes.
-  - **Outcome:** Vite UI build now forces `NODE_ENV` to match mode and sets `esbuild.jsxDev` by mode to keep JSX transform/runtime aligned.
-  - **Acceptance criteria:** Production builds avoid `jsxDEV` calls; dev builds use a matching dev runtime.
+### Phase 1: Link Constants + Host Detection Foundations
 
-- [x] **Harden CI/CD environment setup + deployment verification**
-  - **Problem:** `setup_uami.ps1` attempted environment creation without checking GitHub auth/admin access; deployment verification could wait for hours and hang on missing ingress.
-  - **Outcome:** Environment creation is idempotent with auth/admin checks and guidance; staging/production verification uses bounded backoff with per-request timeouts and fails fast on missing FQDNs. Runtime identity permissions are scoped to AcrPull + Key Vault secrets get/list only.
-  - **Acceptance criteria:** `setup_uami.ps1` skips or creates environments cleanly and enforces runtime least privilege; deployment verification exits within 10 minutes with actionable logs.
+Implement config foundations first:
 
-- [x] **Parameterize infra for environment split**
-  - **Problem:** Bicep and infra scripts hardcoded runtime identity and resource group names, making production separation error-prone.
-  - **Outcome:** Added staging/production parameters for resource groups and runtime identity IDs in `infrastructure/main.bicep`; `deploy.ps1` and `validate.ps1` accept overrides while preserving staging defaults.
-  - **Acceptance criteria:** Staging deploys unchanged by default; production can be configured via parameters without code edits.
+1. Add `extension/src/config/externalLinks.ts` with exact URLs provided.
+2. Add `extension/src/config/hostRules.ts`:
+   - `MONASH_MOODLE_HOSTS = ["learning.monash.edu", "lms.monash.edu", "moodle.monash.edu.au", "cpw-lms.monash.edu"]`
+   - Host matcher supports exact host and constrained Monash suffix handling.
+   - Active-tab URL is checked only when popup opens (no history capture).
+3. Add policy URL config (for Terms/Privacy targets) with GitHub blob fallback when hosted URLs are unset.
 
----
+Exit criteria:
 
-## Phase 1 -- Transcript Single Source of Truth (P0)
+- Constants are imported (not duplicated as literals).
+- Host checks are centralized and unit-tested.
+- Make sure `npm run validate` passes.
 
-**Goal:** Eliminate duplicate transcript extraction logic and enforce `/core/transcripts/providers/**` as the sole source of truth.
+### Phase 2: Popup Compliance Surfaces (About, Responsible Use, Monash Banner, Signup Consent)
 
-- [x] **Consolidate extraction flow into core providers**
-  - **Problem:** Logic duplicated across `extension/background.js`, `transcriptHandler.ts`, `panoptoResolver.js`, and providers.
-  - **Work:**
-    - Move any extraction/parsing logic out of extension/background into core providers.
-    - Make `background.js` fetcher + routing only.
-    - Remove legacy extraction paths in `transcriptHandler.ts` and `panoptoResolver.js` after parity is achieved.
-  - **Acceptance criteria:** Extension uses provider registry + fetcher only; no duplicate extraction logic outside `/core/transcripts/providers/**`.
+Add popup-first UX changes:
 
-- [x] **Consolidate Panopto helpers**
-  - **Problem:** Helpers duplicated across core and extension.
-  - **Work:** Route all Panopto URL parsing/extraction via core provider utilities.
-  - **Acceptance criteria:** Panopto extraction helpers exist only in core provider modules.
+1. About section:
+   - Version from `chrome.runtime.getManifest().version` (remove hardcoded `v1.0.0`).
+   - Exact statements:
+     - "Not affiliated with or endorsed by Monash University."
+     - "Built independently by Matthew (Software Engineering student) as a learning project."
+   - Add Privacy, Terms, Repo links.
+2. Responsible Use accordion:
+   - Unit AI rules from Chief Examiner
+   - Learning support only, not assessment submission
+   - Acknowledge AI use when required
+   - Link buttons from `externalLinks.ts`
+3. Monash Moodle contextual banner:
+   - On popup mount query active tab, evaluate host rules, show dismissible reminder
+   - Persist dismissal in `chrome.storage.local` (`dismissed.monashNotice` or equivalent documented key)
+4. Signup consent checkbox:
+   - Required checkbox for Terms + Privacy before enabling "Create account"
 
-- [x] **Add provider selection + fetcher error tests**
-  - **Problem:** Behavior changes can regress silently.
-  - **Work:** Add tests that validate provider selection and fetcher error handling.
-  - **Acceptance criteria:** Tests prove correct provider selection and resilient fetcher error behavior.
+Exit criteria:
 
----
+- Popup remains functional for login/help/privacy toggles.
+- Signup cannot submit without consent checkbox in signup mode.
+- Monash banner appears only on matching hosts and respects dismissal.
+- Make sure `npm run validate` passes.
 
-## Phase 2 -- Scalability + Reliability (P0/P1)
+### Phase 3: Sidebar First-Use Consent Gate (Blocking)
 
-**Goal:** Remove in-memory cross-request state and make transcript processing durable across instances.
+Implement one-time consent gating in sidebar:
 
-- [x] **Replace in-memory job tracking and rate limiting**
-  - **Problem:** `ACTIVE_JOBS`, `UPLOAD_RATE_WINDOWS`, `createIdempotencyStore` are in-memory.
-  - **Work:** Persist job state + rate limits in DB/Redis/queue.
-  - **Acceptance criteria:** No cross-request state stored in memory; multi-instance safe.
+1. On first sidebar use, show blocking modal:
+   - Title: "Welcome to Lock-in"
+   - Include Terms/Privacy links and learning-only statement
+2. Storage key:
+   - `lockin_acceptedTermsAt` in `chrome.storage.local` (ISO string or null)
+3. Behavior:
+   - `I Accept`: set timestamp and unlock app
+   - `Decline`: block study/chat/notes interactions and close or keep blocked state
+   - Reopen sidebar => modal shown again until accepted
+4. Legacy logged-in users:
+   - Treat as consented if valid session already exists (backward compatibility)
 
-- [x] **Durable transcript storage + job processing**
-  - **Problem:** Transcript chunks stored on local filesystem; not durable.
-  - **Work:** Use a dedicated Supabase Storage bucket for raw chunks, with very short retention:
-    Bucket: transcript-jobs (private).
-    For e.g (You can ammend if you have a better way).
-    Path: <user_id>/<job_id>/<chunk_index>.bin or <user_id>/<job_id>.webm if you merge chunks server-side.
-    Add a column storage_path (or similar) to transcript_jobs if you need a pointer.
-    Retention:
-    Delete raw blobs immediately after transcript status becomes done + a small grace period (e.g. 24–72h for retry/debug).
-    Hard TTL on blobs via a scheduled job (or storage lifecycle): delete anything older than, say, 7 days regardless of status.
-    Worker behavior:
-    Job status + chunks live in transcript_jobs / transcript_job_chunks (already durable).
-    Worker resumes by:
-    Looking up job + chunk indices in Supabase.
-    Reading missing or all chunks from the storage bucket.
-    No dependency on any local filesystem.
-    Access control:
-    Keep bucket private and allow authenticated users to read their own objects only within a short access window (e.g., 48h).
-  - **Acceptance criteria:** Job resume/retry works across restarts; no local-only chunk dependency.
+Exit criteria:
 
-- [x] **Large media handling improvements**
-  - **Problem:** Base64 chunking can spike memory/CPU on large files.
-  - **Work:** Streamed uploads where possible; enforce chunk sizing and backpressure; add server-side chunk size guard + rate-limit tests.
-  - **Acceptance criteria:** Large media uploads do not block UI thread; memory spikes reduced.
+- Sidebar interaction is blocked until accepted for first-use users.
+- Decline flow is repeatable and does not corrupt state.
+- Legacy signed-in users are not forced through a broken loop.
+- Make sure `npm run validate` passes.
 
-- [x] **External transcript cache endpoint + UI hook**
-  - **Problem:** External-provider transcripts could be lost between sessions.
-  - **Work:** Add `/api/transcripts/cache` service/controller/route and `useTranscriptCache` hook to persist transcripts on feature actions.
-  - **Acceptance criteria:** Transcript cache records are upserted when features call the cache hook.
+### Phase 4: Policy + Security Documentation Pack
 
-- [x] **Docs consistency**
-  - Make sure CODE_OVERVIEW.md,DATABASE.md, AGENTS.md or any other docs are consistent with what is implemented and updated.
+Create and wire policy documentation:
 
-- [x] **No feature breaks or regression**
-  - Ensure npm run validate still passes. Add more tests if needed.
+1. Create:
+   - `PRIVACY.md`
+   - `TERMS.md`
+   - `SECURITY.md`
+   - `docs/data-handling.md`
+   - `docs/permissions.md`
+   - `docs/retention.md`
+2. Add required AI provider disclosure in Privacy/data-handling docs:
+   - What is sent
+   - What is not sent
+3. Add exact academic integrity statements to `TERMS.md` and root `README.md`:
+   - "Lock-in does not provide answers intended to be submitted as assessment."
+   - "Lock-in supports comprehension, summarisation, self-testing, and study planning."
+4. Ensure popup/settings link to Terms/Privacy docs.
 
----
+Exit criteria:
 
-## Phase 3 -- Core Purity + Testability (P1)
+- All new docs are linked and discoverable from `docs/README.md`.
+- Popup links resolve correctly in development and production packaging.
+- Make sure `npm run validate` passes.
 
-**Goal:** Ensure `/core` and `/api` are Node/SSR safe and testable.
+### Phase 5: Data Export + Clear Local Data + Delete Account Path
 
-- [x] **Remove DOM usage from core**
-  - **Problem:** `core/utils/textUtils.ts` uses `document.createElement`.
-  - **Work:** Move DOM-dependent logic to UI/extension or provide pure utilities.
-  - **Acceptance criteria:** `/core` imports succeed in Node without DOM globals.
+Implement user data controls with minimal architecture churn:
 
-- [x] **Eliminate module-load side effects**
-  - **Problem:** Listeners/timers/config parse on import make testing hard.
-  - **Work:** Refactor to explicit initialization functions with dependency injection.
-  - **Acceptance criteria:** Modules are inert on import; behavior only on explicit init.
+1. Centralize client storage key ownership:
+   - Single source for keys + compatibility aliases for legacy key names.
+2. Add app repository interface for local export/clear paths when direct storage calls are fragmented.
+3. Export JSON button:
+   - Schema:
+     - `schemaVersion: 1`
+     - `exportedAt`
+     - `appVersion`
+     - `data` object (local + cloud slices)
+   - Cloud data fetched via authenticated API for notes/tasks/chats
+   - Filename: `lockin-export-YYYYMMDD-HHMM.json`
+4. Clear local data:
+   - Confirm dialog and explicit scope text
+   - Local browser data only (cloud unchanged)
+5. Delete account:
+   - If backend endpoint exists/addable safely, implement `DELETE /api/users/me` + popup action.
+   - If not available in this phase, hide action and present explicit fallback message.
 
-- [x] **Dependency injection for globals**
-  - **Problem:** Hard dependencies on `fetch`, `chrome`, `window`, env at import time.
-  - **Work:** Inject fetch/storage/env into modules; add lightweight interfaces.
-  - **Acceptance criteria:** Tests can stub dependencies without global hacks.
+Exit criteria:
 
-- [x] **Modularize MV3 background service worker**
-  - **Problem:** `extension/background.js` mixed routing, sessions, transcripts, and AI transcription logic, making testing difficult.
-  - **Work:** Split into `extension/background/` modules (router/validators, handlers, sessions/settings/auth, transcripts, lifecycle) with a single entrypoint in `background.js`; add unit tests for router/validators/helpers with chrome adapter.
-  - **Acceptance criteria:** No module-load side effects beyond `initBackground()`; message contracts unchanged; unit tests cover router/validators/helpers.
+- Export contains valid schema and includes both cloud and local sections where available.
+- Clear local data works without deleting cloud records.
+- Delete-account behavior is explicit (working endpoint or clearly hidden with rationale).
+- Make sure `npm run validate` passes.
 
-- [x] **No feature breaks or regression**
-  - Ensure npm run validate still passes. Add more tests if needed.
+### Phase 6: Permissions Audit + Logging Safety Hardening
 
----
+Harden privacy and least-privilege posture:
 
-## Phase 4 -- Network Reliability + Retry Policy (P1)
+1. Permissions:
+   - Audit each manifest permission and host permission against actual callsites.
+   - Remove only proven-unused permissions.
+   - If a permission remains, document exact reason in `docs/permissions.md`.
+2. Logging safety:
+   - Add/extend logger utilities to redact transcript chunks, chat prompts, and sensitive URLs/query params.
+   - Replace risky raw logging paths in transcript/media flows and popup/content error logs.
+   - Ensure error logs keep code/context, not payload bodies.
+3. Sentry:
+   - Verify `beforeSendScrubber` coverage and no bypass paths.
+4. Clean up misleading examples that normalize unsafe logging patterns.
 
-**Goal:** Standardize retry/timeout behavior across extension + backend.
+Exit criteria:
 
-- [ ] **Single shared retry/timeout wrapper**
-  - **Problem:** Retry logic split between `networkUtils.js` and ad-hoc fetch calls.
-  - **Work:** Consolidate to one wrapper used by background/auth/transcripts flows.
-  - **Acceptance criteria:** No raw fetches in critical paths without wrapper; consistent timeout + retry policy.
+- No transcript/chat content appears in routine logs.
+- Manifest permissions match documented usage.
+- Make sure `npm run validate` passes.
 
-  - Key Advice for your implementation:
-    Don't delete mediaFetcher.js logic blindly: I noticed mediaFetcher.js has very specific logic for handling "manual" redirects (Moodle -> CDN) and "same-origin" vs "omit" credentials. A generic wrapper might break this.
-    Solution: Your standardized wrapper should accept a config object that allows disabling default behaviors (like followRedirects: false) so specialised callers can still use the retry machinery without losing their custom logic.
-    Make it Universal: Ensure
-    background.js, transcriptHandler.ts, and your Backend all import the same logic (or equivalent logic).
-    If there is a better solution you propose feel free to do it, these were just my observations, but i want my code to really be scalable, reliable and bulletproof.
+### Phase 7: README + Release Readiness
 
----
+Finalize release-facing docs and checks:
 
-## Phase 5 -- Documentation Consolidation + Structure (P2)
+1. Update `README.md`:
+   - Non-affiliation
+   - Learning-support-only messaging
+   - Academic integrity statements
+   - Privacy/Terms links
+   - Responsible use section
+2. Add `docs/release-checklist.md` with manual checks:
+   - Monash Moodle banner behavior
+   - First-use consent blocking behavior
+   - Export JSON
+   - Clear local data
+   - Permissions/doc parity
+   - `npm run validate`
+3. Add CI badge reference after pipeline is confirmed stable.
 
-**Goal:** Remove doc duplication, fix placement, and align with docs-only rule.
+Exit criteria:
 
-- [x] **Remove legacy CI/CD auth artifacts**
-  - **Outcome:** Removed deprecated SP-based setup scripts and duplicate Azure deployment doc; updated workflows/docs to OIDC managed identity and environment-scoped federated credentials.
-  - **Acceptance criteria:** No `AZURE_CREDENTIALS` usage; rollback workflow uses OIDC; Azure deployment docs point to `docs/deployment/AZURE.md`.
+- README and release checklist match shipped behavior.
+- CI badge reference points to active workflow.
+- Make sure `npm run validate` passes.
 
-- [x] **Resolve docs/achieve typo + archive legacy audits**
-  - **Outcome:** Moved `docs/achieve/*` into `docs/archive/` with corrected date naming:
-    `QUALITY_AUDIT_2026-01-19.md` and `QUALITY_AUDIT_2026-01-23.md`.
-  - **Acceptance criteria:** No canonical references point to `docs/achieve/`.
+## Risks and Guardrails
 
-- [x] **Remove duplicated docs + establish canonical sources**
-  - Transcript troubleshooting: canonical docs live under `docs/features/transcripts/`.
-  - Deployment: deployment and environment guidance is centralized under `docs/deployment/`.
-  - Environment setup: canonical guidance is `docs/deployment/ENVIRONMENTS.md`.
+1. Storage-key drift risk:
+   - Mitigate with compatibility mapping during key centralization.
+2. Consent-flow regressions risk:
+   - Mitigate with targeted unit tests + manual first-run smoke tests.
+3. Permissions false-positive removals risk:
+   - Mitigate by proving callsite absence before removal.
+4. Delete-account backend complexity risk:
+   - Treat as conditional slice with explicit fallback if endpoint cannot be safely shipped in-phase.
 
-- [x] **Root docs policy decision**
-  - **Policy:** Root contains only `AGENTS.md`, `README.md`, and `LICENSE`.
-  - **Outcome:** Moved root docs into `docs/reference/` and archived legacy reviews.
-  - **Acceptance criteria:** `docs/architecture/ARCHITECTURE.md`, `docs/architecture/REPO_MAP.md`, and `docs/README.md` reflect the chosen policy.
+## Definition of Done (Program-Level)
 
-- [x] **Whole repo**
-  - Consolidated documentation into canonical locations.
-  - Standardized reference docs under `docs/reference/` and archives under `docs/archive/`.
-  - Aligned environment files and templates: sanitized `.env` and clarified `.env.example` and `.env.example.local`.
-  - Verified doc link integrity locally with `npm run docs:check-links`.
-
-- [x] **CI link integrity check**
-  - **Outcome:** Added `scripts/check-doc-links.mjs`, a `docs:check-links` npm script, and a CI step in `.github/workflows/quality-gate.yml`.
-  - **Acceptance criteria:** CI fails fast on broken local doc links.
-
----
-
-## Phase 6 -- Cohesion-Driven Module Splits (P2)
-
-**Goal:** Apply responsibility/cohesion/testability/boundary rules to split high-risk files.
-
-- [ ] **Extension background + transcript handler**
-  - Target: `extension/background.js`, `extension/src/transcripts/transcriptHandler.ts`.
-  - Split by responsibility (routing vs extraction vs networking), keep background as wiring only.
-
-- [ ] **Backend controllers/services**
-  - Target: `backend/controllers/*.js`, `backend/services/*.js`, `backend/openaiClient.js`.
-  - Split by workflow boundaries and dependency injection.
-
-- [ ] **Large UI modules**
-  - Target: `ui/extension/notes/*`, `ui/extension/chat/*`, `ui/extension/sidebar/*`.
-  - Split by cohesive subcomponents/hooks; ensure test coverage for extracted units.
-
----
-
-## Progress checklist
-
-- [ ] Keep `npm run validate` green after each phase.
-- [ ] Update `docs/tracking/PROMPT_LOG.md` for each refactor-prep session.
-- [ ] Update `docs/tracking/STATUS.md` when phase focus changes.
+1. All phases completed with `npm run validate` passing at each phase boundary.
+2. Compliance UI and docs are present, linked, and consistent.
+3. Consent is enforced for first-use users and handled safely for existing users.
+4. Data controls (export/clear/delete path) are explicit and tested.
+5. Logging and permissions posture is hardened and documented.

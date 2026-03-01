@@ -23,18 +23,25 @@ export interface TranscriptCacheResponse {
   cachedAt?: string;
 }
 
-export function createTranscriptsClient(apiRequest: ApiRequest) {
+export type TranscriptsClient = {
+  cacheTranscript: (
+    params: CacheTranscriptParams,
+    options?: ApiRequestOptions,
+  ) => Promise<TranscriptCacheResponse>;
+};
+
+export function createTranscriptsClient(apiRequest: ApiRequest): TranscriptsClient {
   async function cacheTranscript(
     params: CacheTranscriptParams,
     options?: ApiRequestOptions,
   ): Promise<TranscriptCacheResponse> {
-    if (!params?.fingerprint) {
+    if (typeof params?.fingerprint !== 'string' || params.fingerprint.length === 0) {
       throw new Error('fingerprint is required');
     }
-    if (!params?.provider) {
+    if (typeof params?.provider !== 'string' || params.provider.length === 0) {
       throw new Error('provider is required');
     }
-    if (!params?.transcript) {
+    if (params?.transcript === null || params?.transcript === undefined) {
       throw new Error('transcript is required');
     }
 

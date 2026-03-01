@@ -6,7 +6,7 @@
  * Delegates to provider's requiresAsyncDetection() for async detection needs.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type Dispatch, type SetStateAction } from 'react';
 import type { DetectedVideo } from '@core/transcripts/types';
 import { detectVideosSync, collectIframeInfo } from '@core/transcripts/videoDetection';
 import { getProviderForUrl } from '@core/transcripts/providerRegistry';
@@ -15,6 +15,7 @@ import {
   normalizeVideoDetectionResponse,
   type BackgroundResponse,
 } from './types';
+import { useVideoDetectionStateActions } from './videoDetectionStateActions';
 
 // -----------------------------------------------------------------------------
 // Echo360 Detection Helpers
@@ -25,6 +26,21 @@ import {
 const ECHO360_SECTION_REGEX =
   /\/section\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const ECHO360_EMPTY_HINT = 'Echo360 tip: open a lesson page or the syllabus list to load videos.';
+
+function sanitizeUrlForLog(value: string): string {
+  try {
+    const parsed = new URL(value, 'http://placeholder.local');
+    parsed.search = '';
+    parsed.hash = '';
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
+      return parsed.toString().replace(/\/$/, '');
+    }
+    return parsed.pathname;
+  } catch {
+    const withoutQuery = value.split('?')[0] ?? value;
+    return withoutQuery.split('#')[0] ?? withoutQuery;
+  }
+}
 
 function hasEcho360Hint(value: string | null | undefined): boolean {
   return typeof value === 'string' && value.toLowerCase().includes('echo360');
@@ -63,10 +79,15 @@ function shouldFetchEcho360Async(
   const echoVideos = videos.filter((video) => video.provider === 'echo360');
   if (echoVideos.length === 0) return false;
 
-  return echoVideos.some(
-    (video) =>
-      !video.echoLessonId || !video.echoMediaId || ECHO360_SECTION_REGEX.test(video.embedUrl),
-  );
+  return echoVideos.some((video) => {
+    const hasLessonId =
+      video.echoLessonId !== null &&
+      video.echoLessonId !== undefined &&
+      video.echoLessonId.length > 0;
+    const hasMediaId =
+      video.echoMediaId !== null && video.echoMediaId !== undefined && video.echoMediaId.length > 0;
+    return !hasLessonId || !hasMediaId || ECHO360_SECTION_REGEX.test(video.embedUrl);
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -98,6 +119,8 @@ export interface UseVideoDetectionResult {
   setVideos: (videos: DetectedVideo[]) => void;
 }
 
+type DetectionStateSetter = Dispatch<SetStateAction<VideoDetectionState>>;
+
 // -----------------------------------------------------------------------------
 // Initial State
 // -----------------------------------------------------------------------------
@@ -109,219 +132,232 @@ const INITIAL_STATE: VideoDetectionState = {
   detectionHint: null,
 };
 
+function buildDetectionContext(currentUrl: string): {
+  pageUrl: string;
+  iframes: ReturnType<typeof collectIframeInfo>;
+  document: Document;
+} {
+  const iframes = collectIframeInfo(document);
+  const context = {
+    pageUrl: currentUrl,
+    iframes,
+    document,
+  };
+  console.log('[Lock-in UI] Detection context built', {
+    pageUrl: sanitizeUrlForLog(context.pageUrl),
+    iframeCount: context.iframes.length,
+  });
+  return context;
+}
+
+function runDetectionAttempt(currentUrl: string): {
+  result: ReturnType<typeof detectVideosSync>;
+  context: ReturnType<typeof buildDetectionContext>;
+} {
+  const context = buildDetectionContext(currentUrl);
+  const result = detectVideosSync(context);
+  console.log('[Lock-in UI] Sync detection result', {
+    videoCount: result.videos.length,
+    provider: result.provider,
+    requiresApiCall: result.requiresApiCall,
+    providers: [...new Set(result.videos.map((video) => video.provider))],
+  });
+  return { result, context };
+}
+
+function shouldRetryDetection(result: ReturnType<typeof detectVideosSync>): boolean {
+  if (result.videos.length > 0 || result.requiresApiCall) {
+    return false;
+  }
+  const videoElements = document.querySelectorAll('video');
+  const hasUnreadyVideos = Array.from(videoElements).some((v) => {
+    const video = v as HTMLVideoElement;
+    return (
+      video.currentSrc.length === 0 &&
+      video.src.length === 0 &&
+      video.querySelector('source') !== null
+    );
+  });
+  return hasUnreadyVideos || videoElements.length > 0;
+}
+
+async function runDetectionWithRetries(currentUrl: string): Promise<{
+  result: ReturnType<typeof detectVideosSync>;
+  context: ReturnType<typeof buildDetectionContext>;
+}> {
+  let { result, context } = runDetectionAttempt(currentUrl);
+  if (!shouldRetryDetection(result)) {
+    return { result, context };
+  }
+
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 500;
+  const videoElements = document.querySelectorAll('video');
+  const hasUnreadyVideos = Array.from(videoElements).some((v) => {
+    const video = v as HTMLVideoElement;
+    return (
+      video.currentSrc.length === 0 &&
+      video.src.length === 0 &&
+      video.querySelector('source') !== null
+    );
+  });
+  console.log('[Lock-in UI] Retrying detection for delayed video players', {
+    videoElementCount: videoElements.length,
+    hasUnreadyVideos,
+  });
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    ({ result, context } = runDetectionAttempt(currentUrl));
+    if (result.videos.length > 0) {
+      console.log('[Lock-in UI] Videos detected on retry', {
+        attempt,
+        videoCount: result.videos.length,
+      });
+      break;
+    }
+  }
+
+  return { result, context };
+}
+
+interface AsyncDetectionInfo {
+  providerName: string | null;
+  echo360Context: boolean;
+  shouldFetchAsync: boolean;
+  requiresAsync: boolean;
+}
+
+function resolveAsyncDetectionInfo(
+  result: ReturnType<typeof detectVideosSync>,
+  contextForBackground: { pageUrl: string; iframes: Array<{ src: string; title?: string }> },
+): AsyncDetectionInfo {
+  const echo360Context = hasEcho360Context(contextForBackground);
+  const shouldFetchAsync = shouldFetchEcho360Async(
+    contextForBackground,
+    result.videos,
+    echo360Context,
+  );
+  const provider = getProviderForUrl(contextForBackground.pageUrl);
+  const providerName = result.provider ?? (echo360Context ? 'echo360' : null);
+  const providerRequiresAsync = provider?.requiresAsyncDetection?.(contextForBackground) === true;
+  return {
+    providerName,
+    echo360Context,
+    shouldFetchAsync,
+    requiresAsync: shouldFetchAsync || providerRequiresAsync || result.requiresApiCall,
+  };
+}
+
+function createAsyncDetectionMessageType(echo360Context: boolean): string {
+  return echo360Context ? 'DETECT_ECHO360_VIDEOS' : 'DETECT_VIDEOS_ASYNC';
+}
+
+async function requestAsyncDetectionVideos(
+  contextForBackground: { pageUrl: string; iframes: Array<{ src: string; title?: string }> },
+  echo360Context: boolean,
+): Promise<DetectedVideo[]> {
+  console.log('[Lock-in UI] Sending async detection request', {
+    pageUrl: sanitizeUrlForLog(contextForBackground.pageUrl),
+    iframeCount: contextForBackground.iframes.length,
+    echo360Context,
+  });
+  const response = await sendToBackground<BackgroundResponse>({
+    type: createAsyncDetectionMessageType(echo360Context),
+    payload: { context: contextForBackground },
+  });
+  console.log('[Lock-in UI] Async detection response received', {
+    success: response.success,
+    videoCount: response.videos?.length,
+  });
+
+  const asyncVideos = normalizeVideoDetectionResponse(response);
+  console.log('[Lock-in UI] Async videos normalized', {
+    videoCount: asyncVideos.length,
+    providers: [...new Set(asyncVideos.map((video) => video.provider))],
+  });
+  return asyncVideos;
+}
+
+async function tryAsyncDetection(
+  result: ReturnType<typeof detectVideosSync>,
+  contextForBackground: { pageUrl: string; iframes: Array<{ src: string; title?: string }> },
+): Promise<{ videos: DetectedVideo[]; provider: string | null } | null> {
+  const info = resolveAsyncDetectionInfo(result, contextForBackground);
+  console.log('[Lock-in UI] Checking if async detection needed', {
+    requiresAsync: info.requiresAsync,
+    shouldFetchAsync: info.shouldFetchAsync,
+    echo360Context: info.echo360Context,
+    currentVideoCount: result.videos.length,
+    provider: info.providerName,
+  });
+
+  if (!info.requiresAsync) {
+    return null;
+  }
+
+  try {
+    const asyncVideos = await requestAsyncDetectionVideos(
+      contextForBackground,
+      info.echo360Context,
+    );
+    if (asyncVideos.length > 0) {
+      console.log('[Lock-in UI] Returning async videos', {
+        count: asyncVideos.length,
+      });
+      return { videos: asyncVideos, provider: info.providerName };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Async detection failed';
+    console.error('[Lock-in UI] Async detection failed:', { message });
+  }
+
+  return null;
+}
+
 // -----------------------------------------------------------------------------
 // Hook Implementation
 // -----------------------------------------------------------------------------
 
-export function useVideoDetection(): UseVideoDetectionResult {
-  const [state, setState] = useState<VideoDetectionState>(INITIAL_STATE);
-
-  /**
-   * Core detection logic with retry for delayed video players (video.js, MediaElement.js).
-   */
-  const detectVideos = useCallback(async (): Promise<{
-    videos: DetectedVideo[];
-    provider: string | null;
-  }> => {
+function useDetectVideosAction(
+  setState: DetectionStateSetter,
+): UseVideoDetectionResult['detectVideos'] {
+  return useCallback(async () => {
     const currentUrl = window.location.href;
-    console.log('[Lock-in UI] Starting video detection', { currentUrl });
-
-    // Helper to run a single detection attempt
-    const runDetection = (): {
-      result: ReturnType<typeof detectVideosSync>;
-      context: {
-        pageUrl: string;
-        iframes: Array<{ src: string; title?: string }>;
-        document: Document;
-      };
-    } => {
-      const iframes = collectIframeInfo(document);
-      const context = {
-        pageUrl: currentUrl,
-        iframes,
-        document,
-      };
-      console.log('[Lock-in UI] Detection context built', {
-        pageUrl: context.pageUrl,
-        iframeCount: context.iframes.length,
-        iframeSrcs: context.iframes.map((iframe) => iframe.src).filter(Boolean),
-      });
-
-      const result = detectVideosSync(context);
-      console.log('[Lock-in UI] Sync detection result', {
-        videoCount: result.videos.length,
-        provider: result.provider,
-        requiresApiCall: result.requiresApiCall,
-        videos: result.videos.map((v) => ({
-          id: v.id,
-          provider: v.provider,
-          title: v.title,
-          lessonId: v.echoLessonId,
-          mediaId: v.echoMediaId,
-        })),
-      });
-
-      return { result, context };
-    };
-
-    // First attempt
-    let { result, context } = runDetection();
-
-    // Retry logic for delayed video players (video.js, MediaElement.js, etc.)
-    // Some players take time to initialize the video element with proper src
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 500;
-
-    if (result.videos.length === 0 && !result.requiresApiCall) {
-      // Check if there are any video elements that might still be loading
-      const videoElements = document.querySelectorAll('video');
-      const hasUnreadyVideos = Array.from(videoElements).some((v) => {
-        const video = v as HTMLVideoElement;
-        return !video.currentSrc && !video.src && video.querySelector('source');
-      });
-
-      if (hasUnreadyVideos || videoElements.length > 0) {
-        console.log('[Lock-in UI] Retrying detection for delayed video players', {
-          videoElementCount: videoElements.length,
-          hasUnreadyVideos,
-        });
-        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-          ({ result, context } = runDetection());
-
-          if (result.videos.length > 0) {
-            console.log('[Lock-in UI] Videos detected on retry', {
-              attempt,
-              videoCount: result.videos.length,
-            });
-            break;
-          }
-        }
-      }
-    }
-
+    console.log('[Lock-in UI] Starting video detection', {
+      currentUrl: sanitizeUrlForLog(currentUrl),
+    });
+    const { result, context } = await runDetectionWithRetries(currentUrl);
     const contextForBackground = {
       pageUrl: context.pageUrl,
       iframes: context.iframes,
     };
-
-    // Check for Echo360 context and determine if async detection is needed
-    // Note: Provider registry may not be populated in content script context,
-    // so we use explicit checks for Echo360
-    const echo360Context = hasEcho360Context(contextForBackground);
-    const shouldFetchAsync = shouldFetchEcho360Async(
-      contextForBackground,
-      result.videos,
-      echo360Context,
-    );
-
-    // Also check provider registry as fallback (may work in some contexts)
-    const provider = getProviderForUrl(context.pageUrl);
-    const providerName = result.provider ?? (echo360Context ? 'echo360' : null);
-    const requiresAsync =
-      shouldFetchAsync ||
-      provider?.requiresAsyncDetection?.(contextForBackground) ||
-      result.requiresApiCall;
-
-    console.log('[Lock-in UI] Checking if async detection needed', {
-      requiresAsync,
-      shouldFetchAsync,
-      echo360Context,
-      currentVideoCount: result.videos.length,
-      provider: providerName,
-    });
-
-    if (requiresAsync) {
-      try {
-        console.log('[Lock-in UI] Sending async detection request', {
-          context: contextForBackground,
-        });
-
-        // For Echo360, use the dedicated message type
-        const messageType = echo360Context ? 'DETECT_ECHO360_VIDEOS' : 'DETECT_VIDEOS_ASYNC';
-
-        const response = await sendToBackground<BackgroundResponse>({
-          type: messageType,
-          payload: { context: contextForBackground },
-        });
-
-        console.log('[Lock-in UI] Async detection response received', {
-          success: response.success,
-          videoCount: response.videos?.length,
-        });
-
-        const asyncVideos = normalizeVideoDetectionResponse(response);
-        console.log('[Lock-in UI] Async videos normalized', {
-          videoCount: asyncVideos.length,
-          videos: asyncVideos.map((v) => ({
-            id: v.id,
-            provider: v.provider,
-            title: v.title,
-            lessonId: v.echoLessonId,
-            mediaId: v.echoMediaId,
-          })),
-        });
-
-        if (asyncVideos.length > 0) {
-          console.log('[Lock-in UI] Returning async videos', {
-            count: asyncVideos.length,
-          });
-
-          setState((prev) => ({
-            ...prev,
-            videos: asyncVideos,
-            detectionHint: null,
-          }));
-
-          return { videos: asyncVideos, provider: providerName };
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Async detection failed';
-        console.error('[Lock-in UI] Async detection failed:', {
-          message,
-          error: error instanceof Error ? error.stack : String(error),
-        });
-      }
+    const asyncResult = await tryAsyncDetection(result, contextForBackground);
+    if (asyncResult !== null) {
+      setState((prev) => ({ ...prev, videos: asyncResult.videos, detectionHint: null }));
+      return asyncResult;
     }
 
-    // Get hint when no videos found on Echo360 pages
-    const detectionHint = result.videos.length === 0 && echo360Context ? ECHO360_EMPTY_HINT : null;
-
-    console.log('[Lock-in UI] Returning sync detection videos', {
-      count: result.videos.length,
-    });
-
-    setState((prev) => ({
-      ...prev,
-      videos: result.videos,
-      detectionHint,
-    }));
-
+    const detectionHint =
+      result.videos.length === 0 && hasEcho360Context(contextForBackground)
+        ? ECHO360_EMPTY_HINT
+        : null;
+    const providerName =
+      result.provider ?? (hasEcho360Context(contextForBackground) ? 'echo360' : null);
+    console.log('[Lock-in UI] Returning sync detection videos', { count: result.videos.length });
+    setState((prev) => ({ ...prev, videos: result.videos, detectionHint }));
     return { videos: result.videos, provider: providerName };
-  }, []);
+  }, [setState]);
+}
 
-  const resetDetection = useCallback(() => {
-    setState(INITIAL_STATE);
-  }, []);
-
-  const setError = useCallback((error: string | null) => {
-    setState((prev) => ({ ...prev, error }));
-  }, []);
-
-  const setDetecting = useCallback((isDetecting: boolean) => {
-    setState((prev) => ({ ...prev, isDetecting }));
-  }, []);
-
-  const setVideos = useCallback((videos: DetectedVideo[]) => {
-    setState((prev) => ({ ...prev, videos }));
-  }, []);
+export function useVideoDetection(): UseVideoDetectionResult {
+  const [state, setState] = useState<VideoDetectionState>(INITIAL_STATE);
+  const detectVideos = useDetectVideosAction(setState);
+  const actions = useVideoDetectionStateActions(setState, INITIAL_STATE);
 
   return {
     state,
     detectVideos,
-    resetDetection,
-    setError,
-    setDetecting,
-    setVideos,
+    ...actions,
   };
 }

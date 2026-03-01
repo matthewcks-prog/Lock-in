@@ -26,7 +26,10 @@ interface TranscriptCacheProviderProps {
   children: ReactNode;
 }
 
-export function TranscriptCacheProvider({ apiClient, children }: TranscriptCacheProviderProps) {
+export function TranscriptCacheProvider({
+  apiClient,
+  children,
+}: TranscriptCacheProviderProps): JSX.Element {
   const cache = useTranscriptCache(apiClient);
 
   const value = useMemo<TranscriptCacheContextValue>(
@@ -46,7 +49,7 @@ export function TranscriptCacheProvider({ apiClient, children }: TranscriptCache
 
 export function useTranscriptCacheContext(): TranscriptCacheContextValue {
   const context = useContext(TranscriptCacheContext);
-  if (!context) {
+  if (context === null) {
     throw new Error('useTranscriptCacheContext must be used within a TranscriptCacheProvider');
   }
   return context;

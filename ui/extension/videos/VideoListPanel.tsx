@@ -12,6 +12,7 @@
 
 import type { DetectedVideo } from '@core/transcripts/types';
 import { VideoListItem } from './VideoListItem';
+import type { VideoListItemProps } from './VideoListItem';
 import type {
   VideoItemBadgeRenderer,
   VideoItemActionRenderer,
@@ -29,8 +30,6 @@ export interface VideoListPanelProps {
   isLoading: boolean;
   /** Callback when a video is selected */
   onSelectVideo: (video: DetectedVideo) => void;
-  /** Callback to close the panel */
-  onClose: () => void;
 
   // State props
   /** Error message if detection failed */
@@ -73,10 +72,16 @@ export interface VideoListPanelProps {
 /**
  * Auth required prompt for providers needing sign-in
  */
-function AuthRequiredPrompt({ provider, signInUrl }: { provider: string; signInUrl: string }) {
+function AuthRequiredPrompt({
+  provider,
+  signInUrl,
+}: {
+  provider: string;
+  signInUrl: string;
+}): JSX.Element {
   const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
 
-  const handleSignIn = () => {
+  const handleSignIn = (): void => {
     window.open(signInUrl, '_blank', 'noopener,noreferrer');
   };
 
@@ -93,6 +98,202 @@ function AuthRequiredPrompt({ provider, signInUrl }: { provider: string; signInU
   );
 }
 
+function VideoListHeader({ title }: { title: string }): JSX.Element {
+  return (
+    <div className="lockin-video-list-header">
+      <h3 className="lockin-video-list-title">{title}</h3>
+    </div>
+  );
+}
+
+function VideoListFooter({ count }: { count: number }): JSX.Element {
+  return (
+    <div className="lockin-video-list-footer">
+      <p className="lockin-video-list-info">
+        {count} video{count !== 1 ? 's' : ''} found
+      </p>
+    </div>
+  );
+}
+
+function buildVideoListItemProps({
+  video,
+  onSelectVideo,
+  selectedVideoId,
+  isVideoDisabled,
+  renderItemBadge,
+  renderItemActions,
+  renderItemStatus,
+}: {
+  video: DetectedVideo;
+  onSelectVideo: (video: DetectedVideo) => void;
+  selectedVideoId: string | null | undefined;
+  isVideoDisabled: ((video: DetectedVideo) => boolean) | undefined;
+  renderItemBadge: VideoItemBadgeRenderer | undefined;
+  renderItemActions: VideoItemActionRenderer | undefined;
+  renderItemStatus: VideoItemStatusRenderer | undefined;
+}): VideoListItemProps {
+  const itemProps: VideoListItemProps = {
+    video,
+    onSelect: () => onSelectVideo(video),
+    isSelected: selectedVideoId === video.id,
+    isDisabled: isVideoDisabled?.(video) ?? false,
+  };
+
+  if (renderItemBadge !== undefined) {
+    itemProps.renderBadge = renderItemBadge;
+  }
+  if (renderItemActions !== undefined) {
+    itemProps.renderActions = renderItemActions;
+  }
+  if (renderItemStatus !== undefined) {
+    itemProps.renderStatus = renderItemStatus;
+  }
+
+  return itemProps;
+}
+
+function VideoListLoadingState(): JSX.Element {
+  return (
+    <div className="lockin-video-list-loading">
+      <span className="lockin-inline-spinner" />
+      <span>Detecting videos...</span>
+    </div>
+  );
+}
+
+function VideoListErrorState({ error }: { error: string | undefined }): JSX.Element {
+  return (
+    <div className="lockin-video-list-error">
+      <p>{error}</p>
+    </div>
+  );
+}
+
+function VideoListEmptyState({
+  emptyMessage,
+  supportedProviders,
+  detectionHint,
+}: {
+  emptyMessage: string;
+  supportedProviders: string;
+  detectionHint: string | undefined;
+}): JSX.Element {
+  return (
+    <div className="lockin-video-list-empty">
+      <p>{emptyMessage}</p>
+      <p className="lockin-video-list-hint">{supportedProviders}</p>
+      {detectionHint !== undefined && detectionHint.length > 0 ? (
+        <p className="lockin-video-list-hint">{detectionHint}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function VideoItemsList({
+  videos,
+  onSelectVideo,
+  selectedVideoId,
+  isVideoDisabled,
+  renderItemBadge,
+  renderItemActions,
+  renderItemStatus,
+}: {
+  videos: DetectedVideo[];
+  onSelectVideo: (video: DetectedVideo) => void;
+  selectedVideoId: string | null | undefined;
+  isVideoDisabled: ((video: DetectedVideo) => boolean) | undefined;
+  renderItemBadge: VideoItemBadgeRenderer | undefined;
+  renderItemActions: VideoItemActionRenderer | undefined;
+  renderItemStatus: VideoItemStatusRenderer | undefined;
+}): JSX.Element {
+  return (
+    <div className="lockin-video-list" role="list">
+      {videos.map((video) => {
+        const itemProps = buildVideoListItemProps({
+          video,
+          onSelectVideo,
+          selectedVideoId,
+          isVideoDisabled,
+          renderItemBadge,
+          renderItemActions,
+          renderItemStatus,
+        });
+        return <VideoListItem key={`${video.provider}-${video.id}`} {...itemProps} />;
+      })}
+    </div>
+  );
+}
+
+interface VideoListBodyProps {
+  videos: DetectedVideo[];
+  isLoading: boolean;
+  error: string | undefined;
+  detectionHint: string | undefined;
+  authRequired: { provider: string; signInUrl: string } | undefined;
+  emptyMessage: string;
+  supportedProviders: string;
+  onSelectVideo: (video: DetectedVideo) => void;
+  selectedVideoId: string | null | undefined;
+  isVideoDisabled: ((video: DetectedVideo) => boolean) | undefined;
+  renderItemBadge: VideoItemBadgeRenderer | undefined;
+  renderItemActions: VideoItemActionRenderer | undefined;
+  renderItemStatus: VideoItemStatusRenderer | undefined;
+}
+
+function VideoListBody(props: VideoListBodyProps): JSX.Element {
+  const {
+    videos,
+    isLoading,
+    error,
+    detectionHint,
+    authRequired,
+    emptyMessage,
+    supportedProviders,
+    onSelectVideo,
+    selectedVideoId,
+    isVideoDisabled,
+    renderItemBadge,
+    renderItemActions,
+    renderItemStatus,
+  } = props;
+
+  const showError = Boolean(error) && videos.length === 0;
+
+  if (isLoading) {
+    return <VideoListLoadingState />;
+  }
+  if (authRequired !== undefined) {
+    return (
+      <AuthRequiredPrompt provider={authRequired.provider} signInUrl={authRequired.signInUrl} />
+    );
+  }
+  if (showError) {
+    return <VideoListErrorState error={error} />;
+  }
+  if (videos.length === 0) {
+    return (
+      <VideoListEmptyState
+        emptyMessage={emptyMessage}
+        supportedProviders={supportedProviders}
+        detectionHint={detectionHint}
+      />
+    );
+  }
+
+  return (
+    <VideoItemsList
+      videos={videos}
+      onSelectVideo={onSelectVideo}
+      selectedVideoId={selectedVideoId}
+      isVideoDisabled={isVideoDisabled}
+      renderItemBadge={renderItemBadge}
+      renderItemActions={renderItemActions}
+      renderItemStatus={renderItemStatus}
+    />
+  );
+}
+
 // -----------------------------------------------------------------------------
 // Main Component
 // -----------------------------------------------------------------------------
@@ -101,7 +302,6 @@ export function VideoListPanel({
   videos,
   isLoading,
   onSelectVideo,
-  onClose,
   error,
   detectionHint,
   authRequired,
@@ -113,69 +313,28 @@ export function VideoListPanel({
   renderItemBadge,
   renderItemActions,
   renderItemStatus,
-}: VideoListPanelProps) {
-  const showError = Boolean(error) && videos.length === 0;
-
+}: VideoListPanelProps): JSX.Element {
   return (
     <div className="lockin-video-list-panel">
-      <div className="lockin-video-list-header">
-        <h3 className="lockin-video-list-title">{title}</h3>
-        <button
-          className="lockin-video-list-close"
-          onClick={onClose}
-          aria-label="Close"
-          type="button"
-        >
-          ×
-        </button>
-      </div>
-
+      <VideoListHeader title={title} />
       <div className="lockin-video-list-body">
-        {isLoading ? (
-          <div className="lockin-video-list-loading">
-            <span className="lockin-inline-spinner" />
-            <span>Detecting videos...</span>
-          </div>
-        ) : authRequired ? (
-          <AuthRequiredPrompt provider={authRequired.provider} signInUrl={authRequired.signInUrl} />
-        ) : showError ? (
-          <div className="lockin-video-list-error">
-            <p>{error}</p>
-          </div>
-        ) : videos.length === 0 ? (
-          <div className="lockin-video-list-empty">
-            <p>{emptyMessage}</p>
-            <p className="lockin-video-list-hint">{supportedProviders}</p>
-            {detectionHint && <p className="lockin-video-list-hint">{detectionHint}</p>}
-          </div>
-        ) : (
-          <div className="lockin-video-list" role="list">
-            {videos.map((video) => {
-              const isSelected = selectedVideoId === video.id;
-              const isDisabled = isVideoDisabled?.(video) ?? false;
-
-              return (
-                <VideoListItem
-                  key={`${video.provider}-${video.id}`}
-                  video={video}
-                  onSelect={() => onSelectVideo(video)}
-                  isSelected={isSelected}
-                  isDisabled={isDisabled}
-                  renderBadge={renderItemBadge}
-                  renderActions={renderItemActions}
-                  renderStatus={renderItemStatus}
-                />
-              );
-            })}
-          </div>
-        )}
+        <VideoListBody
+          videos={videos}
+          isLoading={isLoading}
+          error={error}
+          detectionHint={detectionHint}
+          authRequired={authRequired}
+          emptyMessage={emptyMessage}
+          supportedProviders={supportedProviders}
+          onSelectVideo={onSelectVideo}
+          selectedVideoId={selectedVideoId}
+          isVideoDisabled={isVideoDisabled}
+          renderItemBadge={renderItemBadge}
+          renderItemActions={renderItemActions}
+          renderItemStatus={renderItemStatus}
+        />
       </div>
-
-      <div className="lockin-video-list-footer">
-        <p className="lockin-video-list-info">
-          {videos.length} video{videos.length !== 1 ? 's' : ''} found
-        </p>
-      </div>
+      <VideoListFooter count={videos.length} />
     </div>
   );
 }

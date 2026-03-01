@@ -15,6 +15,20 @@
 
       <div id="status-message" class="status-message"></div>
 
+      <div id="monash-notice-banner" class="context-banner hidden" role="region" aria-live="polite">
+        <p class="context-banner-title">Monash Moodle: Responsible use reminder</p>
+        <p class="context-banner-text">
+          Follow your unit's AI statement and use Lock-in for learning support, not assessment
+          submission.
+        </p>
+        <div class="context-banner-actions">
+          <button id="monash-notice-view" class="text-link" type="button">
+            View Monash AI/Integrity links
+          </button>
+          <button id="monash-notice-dismiss" class="text-link" type="button">Dismiss</button>
+        </div>
+      </div>
+
       <!-- Account Section - Collapsible -->
       <div class="settings-accordion">
         <button class="accordion-header" aria-expanded="true" data-section="account">
@@ -92,6 +106,33 @@
                     </svg>
                   </button>
                 </div>
+                <label class="signup-consent-row hidden" id="signup-consent-row">
+                  <input
+                    type="checkbox"
+                    id="signup-consent-checkbox"
+                    class="signup-consent-input"
+                  />
+                  <span class="signup-consent-text">
+                    I agree to the
+                    <a
+                      id="signup-terms-link"
+                      class="inline-policy-link"
+                      href="https://github.com/matthewcks-prog/Lock-in/blob/main/TERMS.md"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Terms of Service</a
+                    >
+                    and
+                    <a
+                      id="signup-privacy-link"
+                      class="inline-policy-link"
+                      href="https://github.com/matthewcks-prog/Lock-in/blob/main/PRIVACY.md"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      >Privacy Policy</a
+                    >.
+                  </span>
+                </label>
                 <button type="submit" class="primary-button" id="auth-submit-button">
                   <span class="btn-text">Log in</span>
                   <span class="btn-spinner" style="display: none">
@@ -149,6 +190,75 @@
         </div>
       </div>
 
+      <!-- Responsible Use Section - Collapsible -->
+      <div class="settings-accordion">
+        <button class="accordion-header" aria-expanded="false" data-section="responsible-use">
+          <span class="accordion-icon">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path
+                d="M2.5 4.5L6 8L9.5 4.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                fill="none"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+          <span class="accordion-title">Responsible use & Academic Integrity</span>
+        </button>
+        <div class="accordion-content collapsed" id="responsible-use-content">
+          <div class="responsible-use-section">
+            <ul class="responsible-use-list">
+              <li>Follow your unit AI rules from your Chief Examiner before using AI tools.</li>
+              <li>Use Lock-in for learning support, not for assessment submissions.</li>
+              <li>Acknowledge AI assistance when your unit requires it.</li>
+            </ul>
+            <div class="responsible-use-links">
+              <a
+                class="mini-link-btn"
+                data-external-link="MONASH_ACADEMIC_INTEGRITY"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Monash Academic Integrity</a
+              >
+              <a
+                class="mini-link-btn"
+                data-external-link="USING_GENAI_AT_MONASH"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Using GenAI at Monash</a
+              >
+              <a
+                class="mini-link-btn"
+                data-external-link="TEACHHQ_AI_STATEMENTS"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >TeachHQ AI statements</a
+              >
+              <a
+                class="mini-link-btn"
+                data-external-link="TEACHHQ_AI_AND_ASSESSMENT"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >TeachHQ AI and assessment</a
+              >
+              <a
+                class="mini-link-btn"
+                data-external-link="MONASH_AI_POLICIES_AND_GUIDELINES"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Monash AI policies</a
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Help & Support Section - Collapsible -->
       <div class="settings-accordion">
         <button class="accordion-header" aria-expanded="false" data-section="help">
@@ -169,7 +279,7 @@
           <div class="help-section">
             <p class="help-intro">Need help or want to share your thoughts?</p>
             <div class="help-buttons">
-              <a href="mailto:feedback@lockin.study?subject=Lock-in%20Feedback" class="help-btn">
+              <a id="send-feedback-link" class="help-btn">
                 <svg
                   width="16"
                   height="16"
@@ -183,7 +293,7 @@
                 <span>Send Feedback</span>
               </a>
               <a
-                href="https://github.com/lockin-study/lockin/issues/new"
+                href="https://github.com/matthewcks-prog/Lock-in/issues/new"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="help-btn help-btn-secondary"
@@ -247,15 +357,209 @@
         </div>
       </div>
 
+      <!-- Data Controls Section - Collapsible -->
+      <div class="settings-accordion">
+        <button class="accordion-header" aria-expanded="false" data-section="data-controls">
+          <span class="accordion-icon">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path
+                d="M2.5 4.5L6 8L9.5 4.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                fill="none"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+          <span class="accordion-title">Data Controls</span>
+        </button>
+        <div class="accordion-content collapsed" id="data-controls-content">
+          <div class="data-controls-section">
+            <p class="data-controls-intro">
+              Export your Lock-in data or clear local browser data on this device.
+            </p>
+            <div class="data-controls-actions">
+              <button
+                id="export-data-button"
+                class="secondary-button data-controls-button"
+                type="button"
+              >
+                Export Data (JSON)
+              </button>
+              <button
+                id="clear-local-data-button"
+                class="secondary-button data-controls-button"
+                type="button"
+              >
+                Clear Local Data
+              </button>
+              <button
+                id="delete-account-button"
+                class="secondary-button data-controls-button data-controls-danger"
+                type="button"
+              >
+                Delete Account
+              </button>
+            </div>
+            <p class="data-controls-scope">
+              Clear local data removes browser-stored Lock-in data only. Cloud notes, tasks, and
+              chats stay unchanged.
+            </p>
+            <p id="delete-account-fallback" class="data-controls-fallback hidden">
+              Delete account is not available in this build yet.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- About Section - Collapsible -->
+      <div class="settings-accordion">
+        <button class="accordion-header" aria-expanded="false" data-section="about">
+          <span class="accordion-icon">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path
+                d="M2.5 4.5L6 8L9.5 4.5"
+                stroke="currentColor"
+                stroke-width="1.5"
+                fill="none"
+                stroke-linecap="round"
+              />
+            </svg>
+          </span>
+          <span class="accordion-title">About</span>
+        </button>
+        <div class="accordion-content collapsed" id="about-content">
+          <div class="about-section">
+            <p id="about-version" class="about-meta">Version: -</p>
+            <p class="about-line">Not affiliated with or endorsed by Monash University.</p>
+            <p class="about-line">
+              Built independently by Matthew (Software Engineering student) as a learning project.
+            </p>
+            <div class="about-links">
+              <a
+                id="about-privacy-link"
+                href="https://github.com/matthewcks-prog/Lock-in/blob/main/PRIVACY.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-link"
+                >Privacy Policy</a
+              >
+              <a
+                id="about-terms-link"
+                href="https://github.com/matthewcks-prog/Lock-in/blob/main/TERMS.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-link"
+                >Terms of Service</a
+              >
+              <a
+                id="about-repo-link"
+                href="https://github.com/matthewcks-prog/Lock-in"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-link"
+                >Repository</a
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="footer">
         <p>Highlight text on any page to get started</p>
-        <p class="version">v1.0.0</p>
+        <p class="disclaimer">Learning support only; not for assessment submissions.</p>
+        <p class="footer-links">
+          <a
+            id="footer-privacy-link"
+            href="https://github.com/matthewcks-prog/Lock-in/blob/main/PRIVACY.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Privacy</a
+          >
+          <span>·</span>
+          <a
+            id="footer-terms-link"
+            href="https://github.com/matthewcks-prog/Lock-in/blob/main/TERMS.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Terms</a
+          >
+        </p>
+        <p class="version" id="footer-version">v-</p>
+      </div>
+    </div>
+
+    <div id="monash-links-modal" class="popup-modal hidden" role="dialog" aria-modal="true">
+      <div class="popup-modal-backdrop" data-close-modal="true"></div>
+      <div class="popup-modal-content">
+        <div class="popup-modal-header">
+          <h2>Monash AI & Integrity links</h2>
+          <button id="monash-modal-close" class="text-link" type="button">Close</button>
+        </div>
+        <div class="popup-modal-body">
+          <div class="responsible-use-links">
+            <a
+              class="mini-link-btn"
+              data-external-link="MONASH_ACADEMIC_INTEGRITY"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Monash Academic Integrity</a
+            >
+            <a
+              class="mini-link-btn"
+              data-external-link="USING_GENAI_AT_MONASH"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Using GenAI at Monash</a
+            >
+            <a
+              class="mini-link-btn"
+              data-external-link="TEACHHQ_AI_STATEMENTS"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >TeachHQ AI statements</a
+            >
+            <a
+              class="mini-link-btn"
+              data-external-link="TEACHHQ_AI_AND_ASSESSMENT"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >TeachHQ AI and assessment</a
+            >
+            <a
+              class="mini-link-btn"
+              data-external-link="MONASH_AI_POLICIES_AND_GUIDELINES"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Monash AI policies</a
+            >
+            <a
+              class="mini-link-btn"
+              data-external-link="MONASH_DATA_PROTECTION_AND_PRIVACY_PROCEDURE"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Monash data protection & privacy</a
+            >
+          </div>
+        </div>
       </div>
     </div>
 
     <script src="config.js"></script>
     <script src="dist/libs/sentry.js"></script>
     <script src="dist/libs/initApi.js"></script>
+    <script src="popupPrivacy.js"></script>
+    <script src="popupAuthUtils.js"></script>
+    <script src="popupCompliance.js"></script>
+    <script src="popupDataCloud.js"></script>
+    <script src="popupDataRepository.js"></script>
+    <script src="popupDataControls.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

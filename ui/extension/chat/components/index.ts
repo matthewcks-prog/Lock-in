@@ -8,5 +8,8 @@ export {
   type AttachmentPreviewProps,
   type PendingAttachment,
 } from './AttachmentPreview';
+export { ChatErrorBoundary } from './ChatErrorBoundary';
 export { MarkdownRenderer } from './MarkdownRenderer';
-export { ChatMessage } from './ChatMessage';
+export { MessageActionBar, type MessageAction } from './MessageActionBar';
+export { MessageBlock, type MessageBlockProps } from './MessageBlock';
+export { MessageEditor, type MessageEditorProps } from './MessageEditor';

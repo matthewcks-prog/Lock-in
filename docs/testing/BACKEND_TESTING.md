@@ -18,7 +18,7 @@ Unit test files MUST use the `.test.js` suffix:
 
 ```
 ✅ chatRepository.test.js
-✅ validation.test.js
+✅ chatAssetValidation.test.js
 ✅ assetValidation.test.js
 ✅ controllers/__tests__/assistantTitle.test.js
 ```
@@ -34,8 +34,8 @@ Unit test files MUST use the `.test.js` suffix:
 Utility/verification scripts should NEVER start with `test-`:
 
 ```
-❌ test-embeddings.js       → ✅ verify-embeddings.js
-❌ test-azure-direct.js     → ✅ verify-azure-embeddings.js
+❌ test-embeddings.js       → ✅ scripts/verify-embeddings.js
+❌ test-azure-direct.js     → ✅ scripts/verify-azure-embeddings.js
 ❌ test-setup.js            → ✅ setup-helper.js
 ```
 
@@ -49,7 +49,7 @@ Utility/verification scripts should NEVER start with `test-`:
 
 Use these prefixes for non-test scripts:
 
-- `verify-*` - Verification/validation scripts (e.g., `verify-azure-embeddings.js`)
+- `verify-*` - Verification/validation scripts (e.g., `scripts/verify-azure-embeddings.js`)
 - `check-*` - Checker scripts (e.g., `check-syntax.js`)
 - `setup-*` - Setup scripts (e.g., `setup-database.js`)
 - `migrate-*` - Migration scripts (e.g., `migrate-data.js`)
@@ -100,9 +100,9 @@ test('updateChatTitle updates the chat row for the user', async (t) => {
 Utility scripts are for manual verification and should:
 
 ```javascript
-// Example: verify-azure-embeddings.js
+// Example: scripts/verify-azure-embeddings.js
 require('dotenv').config();
-const { createEmbeddingsClient } = require('./providers/embeddingsFactory');
+const { createEmbeddingsClient } = require('../providers/embeddingsFactory');
 
 console.log('🧪 Testing Azure OpenAI embeddings...');
 
@@ -141,7 +141,7 @@ console.log('🧪 Testing Azure OpenAI embeddings...');
   "scripts": {
     "test": "node --test **/*.test.js --test-reporter=spec",
     "test:ci": "node --test **/*.test.js --test-reporter=spec",
-    "test:azure": "node verify-azure-embeddings.js"
+    "test:azure": "node scripts/verify-azure-embeddings.js"
   }
 }
 ```
@@ -191,14 +191,14 @@ $ npm test
 Rename the file from `test-*.js` to `verify-*.js` or similar:
 
 ```bash
-mv test-embeddings.js verify-embeddings.js
+mv test-embeddings.js scripts/verify-embeddings.js
 ```
 
 Update package.json:
 
 ```json
 "scripts": {
-  "test:embeddings": "node verify-embeddings.js"  // NOT "test-embeddings.js"
+  "test:embeddings": "node scripts/verify-embeddings.js"  // NOT "test-embeddings.js"
 }
 ```
 
@@ -259,14 +259,14 @@ backend/
 ├── chatRepository.js
 ├── chatRepository.test.js           ✅ Test next to code
 ├── utils/
-│   ├── validation.js
-│   └── validation.test.js           ✅ Test next to code
+│   ├── chatAssetValidation.js
+│   └── chatAssetValidation.test.js           ✅ Test next to code
 ├── controllers/
 │   └── __tests__/                   ✅ Tests in __tests__ subdirectory
 │       ├── assistantTitle.test.js
 │       └── transcriptsController.test.js
 ├── scripts/
-│   ├── verify-azure-embeddings.js   ✅ Utility with verify- prefix
+│   ├── scripts/verify-azure-embeddings.js   ✅ Utility with verify- prefix
 │   └── check-syntax.js              ✅ Utility with check- prefix
 └── package.json
 ```

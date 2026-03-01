@@ -33,11 +33,12 @@ export function getAdapterForUrl(url: string): BaseAdapter {
  * Get adapter for current page
  */
 export function getCurrentAdapter(): BaseAdapter {
-  if (typeof window === 'undefined' || !window.location) {
+  if (typeof window === 'undefined') {
     return new GenericAdapter();
   }
   return getAdapterForUrl(window.location.href);
 }
 
 // Export adapter classes for direct use if needed
-export { BaseAdapter, GenericAdapter, MoodleAdapter, EdstemAdapter };
+export type { BaseAdapter };
+export { GenericAdapter, MoodleAdapter, EdstemAdapter };

@@ -1,6 +1,38 @@
 import type { Echo360Info } from '../../types/echo360Types';
 import { extractEcho360Info } from './urlUtils';
 
+const isNonEmptyString = (value: string | null | undefined): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const NESTED_MEDIA_KEYS = ['video', 'media', 'content', 'sections'] as const;
+
+function readLowercaseId(value: unknown): string | null {
+  return typeof value === 'string' ? value.toLowerCase() : null;
+}
+
+function extractMediaIdFromMediaItem(item: unknown): string | null {
+  if (item === null || item === undefined || typeof item !== 'object') return null;
+  const record = item as Record<string, unknown>;
+  return readLowercaseId(record['id']) ?? readLowercaseId(record['mediaId']);
+}
+
+function extractMediaIdFromMediaArray(medias: unknown): string | null {
+  if (!Array.isArray(medias) || medias.length === 0) return null;
+  return extractMediaIdFromMediaItem(medias[0]);
+}
+
+function extractFromNestedKeys(record: Record<string, unknown>): string | null {
+  for (const key of NESTED_MEDIA_KEYS) {
+    const nestedValue = record[key];
+    if (nestedValue !== null && typeof nestedValue === 'object') {
+      const nestedRecord = nestedValue as Record<string, unknown>;
+      const nestedMediaId = extractMediaIdFromMediaArray(nestedRecord['medias']);
+      if (nestedMediaId !== null) return nestedMediaId;
+    }
+  }
+  return null;
+}
+
 /**
  * Extract mediaId from HTML content using multiple patterns
  */
@@ -17,8 +49,9 @@ export function extractMediaIdFromHtml(html: string): string | null {
 
   for (const pattern of jsonPatterns) {
     const match = html.match(pattern);
-    if (match?.[1]) {
-      return match[1].toLowerCase();
+    const captured = match?.[1];
+    if (isNonEmptyString(captured)) {
+      return captured.toLowerCase();
     }
   }
 
@@ -31,14 +64,16 @@ export function extractMediaIdFromHtml(html: string): string | null {
 
   for (const pattern of urlPatterns) {
     const match = html.match(pattern);
-    if (match?.[1]) {
-      return match[1].toLowerCase();
+    const captured = match?.[1];
+    if (isNonEmptyString(captured)) {
+      return captured.toLowerCase();
     }
   }
 
   const dataMatch = html.match(/data-media-id\s*=\s*["']([0-9a-f-]{36})["']/i);
-  if (dataMatch?.[1]) {
-    return dataMatch[1].toLowerCase();
+  const dataCaptured = dataMatch?.[1];
+  if (isNonEmptyString(dataCaptured)) {
+    return dataCaptured.toLowerCase();
   }
 
   return null;
@@ -48,42 +83,26 @@ export function extractMediaIdFromHtml(html: string): string | null {
  * Extract mediaId from lesson API response
  */
 export function extractMediaIdFromLessonInfo(lessonData: unknown): string | null {
-  if (!lessonData || typeof lessonData !== 'object') return null;
+  if (lessonData === null || lessonData === undefined || typeof lessonData !== 'object') {
+    return null;
+  }
 
   const data = lessonData as Record<string, unknown>;
 
-  if (Array.isArray(data.medias) && data.medias.length > 0) {
-    const firstMedia = data.medias[0] as Record<string, unknown>;
-    if (typeof firstMedia?.id === 'string') {
-      return firstMedia.id.toLowerCase();
-    }
-    if (typeof firstMedia?.mediaId === 'string') {
-      return firstMedia.mediaId.toLowerCase();
-    }
+  const fromMedias = extractMediaIdFromMediaArray(data['medias']);
+  if (fromMedias !== null) return fromMedias;
+
+  const nestedData = data['data'];
+  if (nestedData !== null && typeof nestedData === 'object') {
+    return extractMediaIdFromLessonInfo(nestedData);
   }
 
-  if (data.data && typeof data.data === 'object') {
-    return extractMediaIdFromLessonInfo(data.data);
+  const nestedLesson = data['lesson'];
+  if (nestedLesson !== null && typeof nestedLesson === 'object') {
+    return extractMediaIdFromLessonInfo(nestedLesson);
   }
 
-  if (data.lesson && typeof data.lesson === 'object') {
-    return extractMediaIdFromLessonInfo(data.lesson);
-  }
-
-  const nestedKeys = ['video', 'media', 'content', 'sections'];
-  for (const key of nestedKeys) {
-    if (data[key] && typeof data[key] === 'object') {
-      const nested = data[key] as Record<string, unknown>;
-      if (Array.isArray(nested.medias) && nested.medias.length > 0) {
-        const firstMedia = nested.medias[0] as Record<string, unknown>;
-        if (typeof firstMedia?.id === 'string') {
-          return firstMedia.id.toLowerCase();
-        }
-      }
-    }
-  }
-
-  return null;
+  return extractFromNestedKeys(data);
 }
 
 /**
@@ -93,14 +112,17 @@ export function parseEcho360InfoFromHtml(html: string, pageUrl: string): Echo360
   const baseInfo = extractEcho360Info(pageUrl);
   const mediaId = extractMediaIdFromHtml(html);
 
-  if (baseInfo) {
-    return {
-      ...baseInfo,
-      mediaId: mediaId || baseInfo.mediaId,
-    };
+  if (baseInfo !== null) {
+    if (mediaId !== null) {
+      return {
+        ...baseInfo,
+        mediaId,
+      };
+    }
+    return baseInfo;
   }
 
-  if (mediaId) {
+  if (mediaId !== null) {
     try {
       const url = new URL(pageUrl);
       return { mediaId, baseUrl: url.origin };

@@ -36,6 +36,10 @@ module.exports = [
         URLSearchParams: 'readonly',
         AbortController: 'readonly',
         AbortSignal: 'readonly',
+        // Web Streams API (Node.js 18+)
+        TextDecoder: 'readonly',
+        TextEncoder: 'readonly',
+        ReadableStream: 'readonly',
       },
     },
     rules: {

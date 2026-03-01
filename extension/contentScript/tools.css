@@ -1,0 +1,168 @@
+@layer lockin.tools {
+  #lockin-root .lockin-top-bar-right {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-study-workspace {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+  }
+
+  #lockin-root .lockin-study-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #lockin-root .lockin-study-video-control {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-study-video-label {
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-study-video-select {
+    width: min(var(--lockin-size-280), 100%);
+    max-width: 100%;
+    height: var(--lockin-size-28);
+    padding: 0 var(--lockin-size-24) 0 var(--lockin-size-8);
+    overflow: hidden;
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-sm);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-05);
+    cursor: pointer;
+    appearance: none;
+  }
+
+  #lockin-root .lockin-study-video-select-shell {
+    position: relative;
+    width: min(var(--lockin-size-280), 100%);
+    max-width: 100%;
+  }
+
+  #lockin-root .lockin-study-video-select-chevron {
+    position: absolute;
+    top: 50%;
+    right: var(--lockin-size-8);
+    color: var(--lockin-color-text-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  #lockin-root .lockin-study-video-select:hover {
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-04);
+  }
+
+  #lockin-root .lockin-study-video-select:focus {
+    border-color: var(--lockin-color-accent);
+    outline: none;
+    box-shadow: var(--lockin-shadow-04);
+  }
+
+  #lockin-root .lockin-study-video-placeholder {
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-study-header-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--lockin-size-8);
+  }
+
+  #lockin-root .lockin-study-tools-container {
+    position: relative;
+  }
+
+  #lockin-root .lockin-study-tools-btn {
+    /*
+     * Inherit natural button height and font-size from .lockin-btn-new so
+     * "Study Tools" has the exact same visual height as "+ New chat".
+     * Only the horizontal padding is wider here to fit the longer label.
+     */
+    padding: var(--lockin-size-3) var(--lockin-size-10);
+  }
+
+  #lockin-root .lockin-study-tools-chevron {
+    flex-shrink: 0;
+    color: var(--lockin-color-rgba-255-255-255-08);
+  }
+
+  #lockin-root .lockin-study-tools-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    z-index: var(--lockin-z-overlay);
+    min-width: var(--lockin-size-180);
+    margin-top: var(--lockin-size-6);
+    padding: var(--lockin-size-6);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-18);
+  }
+
+  #lockin-root .lockin-study-tools-item {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: var(--lockin-size-7) var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    font-weight: 500;
+    text-align: left;
+    color: var(--lockin-color-text-strong);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-study-tools-item:hover {
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-accent-surface);
+  }
+
+  #lockin-root .lockin-study-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--lockin-color-surface-subtle);
+  }
+
+  #lockin-root .lockin-study-tool-layout {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    padding: var(--lockin-size-10) var(--lockin-size-12) var(--lockin-size-12);
+    overflow: hidden;
+  }
+}

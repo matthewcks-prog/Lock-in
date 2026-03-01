@@ -1,0 +1,190 @@
+/*
+ * Layout Protection — UNLAYERED CSS
+ *
+ * These rules are intentionally NOT wrapped in @layer so they beat
+ * any unlayered CSS from host pages (Moodle, EdStem, Panopto, etc.)
+ * that might override the sidebar's flex layout.
+ *
+ * @layer rules always lose to unlayered CSS in the normal cascade.
+ * Host pages with global resets (e.g. `div { overflow: visible }`,
+ * Bootstrap/Tailwind frameworks, or LMS-specific styles) can silently
+ * break the nested flex chain that makes the sidebar scrollable.
+ *
+ * ONLY flex/overflow layout-critical properties belong here.
+ * Visual styling (colors, borders, fonts) stays in the layered source files.
+ *
+ * stylelint-disable no-duplicate-selectors -- intentional: these selectors
+ * duplicate layered rules to provide cascade protection.
+ */
+
+/* ── Sidebar root constraint ─────────────────────────────────────── */
+
+#lockin-sidebar {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ── Sidebar body ────────────────────────────────────────────────── */
+
+#lockin-root .lockin-sidebar-body {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-sidebar-body > * {
+  min-height: 0;
+}
+
+/* ── Study workspace ─────────────────────────────────────────────── */
+
+#lockin-root .lockin-study-workspace {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-study-body {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Selection view needs scrolling — higher specificity wins */
+#lockin-root .lockin-study-body.is-selection {
+  overflow-y: auto;
+}
+
+/* ── Study tool panel layout ─────────────────────────────────────── */
+
+#lockin-root .lockin-study-tool-layout {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-study-tool-panel-shell {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-study-tool-panels {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Base state hides inactive panels */
+#lockin-root .lockin-study-tool-panel {
+  display: none;
+}
+
+/* Active panel — full flex column with overflow containment */
+#lockin-root .lockin-study-tool-panel.is-active {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-study-tool-panel-content {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-study-tool-panel-content > * {
+  flex: 1 1 0%;
+  min-height: 0;
+}
+
+#lockin-root .lockin-study-tool-panel-actions {
+  flex-shrink: 0;
+}
+
+/* ── Transcript tool layout ──────────────────────────────────────── */
+
+#lockin-root .lockin-study-transcript-shell {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-transcript-message {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-transcript-body {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#lockin-root .lockin-transcript-para-view {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Transcript paragraph list — the actual scroll container */
+#lockin-root .lockin-transcript-para-list {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Transcript actions — always visible at bottom */
+#lockin-root .lockin-transcript-actions {
+  flex-shrink: 0;
+}
+
+/* ── Summary tool layout ─────────────────────────────────────────── */
+
+#lockin-root .lockin-study-summary-shell {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Summary controls — always visible at top */
+#lockin-root .lockin-study-summary-placeholder {
+  flex-shrink: 0;
+}
+
+/* Summary content — scrolls when content is long */
+#lockin-root .lockin-study-summary-content {
+  flex: 1 1 0%;
+  min-height: 0;
+  overflow-y: auto;
+}

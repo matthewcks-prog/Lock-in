@@ -1,4 +1,5 @@
 import type { ReactNode, PointerEvent as ReactPointerEvent } from 'react';
+import { CloseButton } from '../components/CloseButton';
 
 interface SidebarLayoutProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ export function SidebarLayout({
   headerLeft,
   headerRight,
   children,
-}: SidebarLayoutProps) {
+}: SidebarLayoutProps): JSX.Element {
   return (
     <>
       {!isOpen && (
@@ -39,11 +40,9 @@ export function SidebarLayout({
           <div className="lockin-top-bar">
             <div className="lockin-top-bar-left">{headerLeft}</div>
             <div className="lockin-top-bar-right">{headerRight}</div>
-            <button className="lockin-close-btn" onClick={onToggle} aria-label="Close sidebar">
-              x
-            </button>
+            <CloseButton onClick={onToggle} label="Close sidebar" />
           </div>
-          {children}
+          <div className="lockin-sidebar-body">{children}</div>
         </div>
       )}
     </>

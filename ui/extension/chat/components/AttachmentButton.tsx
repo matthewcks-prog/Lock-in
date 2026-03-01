@@ -35,7 +35,11 @@ const ACCEPTED_TYPES = [
 ].join(',');
 
 /** Maximum file size in bytes (10MB) */
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const BYTES_PER_KIB = 1024;
+const KIB_PER_MIB = 1024;
+const MAX_FILE_SIZE_MB = 10;
+const DEFAULT_MAX_FILES = 5;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * BYTES_PER_KIB * KIB_PER_MIB;
 
 export interface AttachmentButtonProps {
   /** Callback when files are selected */
@@ -50,13 +54,50 @@ export interface AttachmentButtonProps {
   className?: string;
 }
 
+function filterValidFiles(fileList: FileList, maxFiles: number, currentFileCount: number): File[] {
+  const remaining = maxFiles - currentFileCount;
+  return Array.from(fileList)
+    .slice(0, remaining)
+    .filter((file) => {
+      if (file.size > MAX_FILE_SIZE) {
+        console.warn(`File ${file.name} exceeds size limit`);
+        return false;
+      }
+      return true;
+    });
+}
+
+function resetInputValue(inputRef: React.RefObject<HTMLInputElement>): void {
+  if (inputRef.current !== null) {
+    inputRef.current.value = '';
+  }
+}
+
+function AttachmentIcon(): JSX.Element {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
 export function AttachmentButton({
   onFilesSelected,
   disabled = false,
-  maxFiles = 5,
+  maxFiles = DEFAULT_MAX_FILES,
   currentFileCount = 0,
   className = '',
-}: AttachmentButtonProps) {
+}: AttachmentButtonProps): JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleClick = useCallback(() => {
@@ -66,28 +107,15 @@ export function AttachmentButton({
   const handleChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const fileList = event.target.files;
-      if (!fileList || fileList.length === 0) return;
+      if (fileList === null || fileList.length === 0) return;
 
-      const files = Array.from(fileList);
-      const remaining = maxFiles - currentFileCount;
-
-      // Limit to remaining slots
-      const validFiles = files.slice(0, remaining).filter((file) => {
-        if (file.size > MAX_FILE_SIZE) {
-          console.warn(`File ${file.name} exceeds size limit`);
-          return false;
-        }
-        return true;
-      });
+      const validFiles = filterValidFiles(fileList, maxFiles, currentFileCount);
 
       if (validFiles.length > 0) {
         onFilesSelected(validFiles);
       }
 
-      // Reset input so the same file can be selected again
-      if (inputRef.current) {
-        inputRef.current.value = '';
-      }
+      resetInputValue(inputRef);
     },
     [onFilesSelected, maxFiles, currentFileCount],
   );
@@ -104,20 +132,7 @@ export function AttachmentButton({
         title={isAtLimit ? `Maximum ${maxFiles} files` : 'Attach file'}
         aria-label="Attach file"
       >
-        {/* Paperclip icon */}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-        </svg>
+        <AttachmentIcon />
       </button>
       <input
         ref={inputRef}

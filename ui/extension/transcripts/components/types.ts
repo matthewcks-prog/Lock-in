@@ -55,6 +55,8 @@ export function isAiTranscriptionBusy(status: AiTranscriptionStatus): boolean {
 
 export function getAiStatusLabel(status: AiTranscriptionStatus): string {
   switch (status) {
+    case 'idle':
+      return 'AI transcription';
     case 'starting':
       return 'Preparing AI transcription';
     case 'uploading':

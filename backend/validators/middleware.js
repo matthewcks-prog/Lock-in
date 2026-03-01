@@ -1,6 +1,7 @@
 // backend/validators/middleware.js
 
 const { z } = require('zod');
+const HTTP_STATUS = require('../constants/httpStatus');
 
 /**
  * Express middleware factory for Zod schema validation
@@ -24,7 +25,7 @@ function validate(schema) {
     } catch (error) {
       // Zod validation error
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
@@ -58,7 +59,7 @@ function validateQuery(schema) {
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
@@ -90,7 +91,7 @@ function validateParams(schema) {
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
+        return res.status(HTTP_STATUS.BAD_REQUEST).json({
           success: false,
           error: {
             code: 'VALIDATION_ERROR',

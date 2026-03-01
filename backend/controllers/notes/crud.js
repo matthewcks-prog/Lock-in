@@ -2,6 +2,8 @@
 
 const { notesService } = require('../../services/notes/notesService');
 const { extractIdempotencyKey } = require('../../utils/idempotencyKey');
+const { FIFTY, TEN } = require('../../constants/numbers');
+const HTTP_STATUS = require('../../constants/httpStatus');
 
 /**
  * Notes CRUD controller - Thin HTTP layer
@@ -16,7 +18,7 @@ async function createNote(req, res, next) {
     const userId = req.user?.id;
     const idempotencyKey = extractIdempotencyKey(req);
     const note = await notesService.createNote({ userId, payload: req.body, idempotencyKey });
-    res.status(201).json(note);
+    res.status(HTTP_STATUS.CREATED).json(note);
   } catch (err) {
     next(err);
   }
@@ -31,7 +33,7 @@ async function listNotes(req, res, next) {
       userId,
       sourceUrl,
       courseCode,
-      limit: limit ? Number(limit) : 50,
+      limit: limit ? Number(limit) : FIFTY,
     });
     res.json(notes);
   } catch (err) {
@@ -48,7 +50,7 @@ async function searchNotes(req, res, next) {
       userId,
       query: q,
       courseCode,
-      matchCount: k ? Number(k) : 10,
+      matchCount: k ? Number(k) : TEN,
     });
     res.json(matches);
   } catch (err) {
@@ -94,7 +96,7 @@ async function deleteNote(req, res, next) {
     const userId = req.user?.id;
     const { noteId } = req.params;
     await notesService.deleteNote({ userId, noteId });
-    res.status(204).send();
+    res.status(HTTP_STATUS.NO_CONTENT).send();
   } catch (err) {
     next(err);
   }

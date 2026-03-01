@@ -9,6 +9,8 @@ This folder contains all deployment and CI/CD documentation for Lock-in.
 - **[Environments](./ENVIRONMENTS.md)** - Environment strategy and configuration
 - **[Rollback](./ROLLBACK.md)** - Emergency rollback procedures
 
+**Pausing ACR/deployment (cost control):** Set repository variable `DEPLOYMENT_ENABLED` to `false` or leave unset to skip ACR push and deploy. Set to `true` when ready for staging. See [CICD.md § Pausing and resuming deployment](./CICD.md#pausing-and-resuming-deployment-acr-cost-control).
+
 ## Quick Start
 
 ### First-Time Setup

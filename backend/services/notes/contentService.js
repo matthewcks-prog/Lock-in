@@ -3,6 +3,10 @@
 const { embedText } = require('../embeddings');
 const { extractPlainTextFromLexical } = require('../../utils/lexicalUtils');
 
+const DEFAULT_MAX_TAGS = 20;
+const DEFAULT_MAX_TAG_LENGTH = 50;
+const DEFAULT_MAX_TITLE_LENGTH = 500;
+
 /**
  * Note Content Service
  *
@@ -127,7 +131,7 @@ async function generateEmbeddingForNote(plainText) {
  * @param {number} maxTagLength - Maximum length per tag
  * @returns {string[]} Normalized array of tags
  */
-function normalizeTags(tags, maxTags = 20, maxTagLength = 50) {
+function normalizeTags(tags, maxTags = DEFAULT_MAX_TAGS, maxTagLength = DEFAULT_MAX_TAG_LENGTH) {
   if (!tags) return [];
   if (Array.isArray(tags)) {
     return tags
@@ -153,7 +157,7 @@ function normalizeTags(tags, maxTags = 20, maxTagLength = 50) {
  * @param {number} maxLength - Maximum title length
  * @returns {string} Sanitized title
  */
-function validateTitle(title, maxLength = 500) {
+function validateTitle(title, maxLength = DEFAULT_MAX_TITLE_LENGTH) {
   if (!title || typeof title !== 'string') {
     return 'Untitled Note';
   }

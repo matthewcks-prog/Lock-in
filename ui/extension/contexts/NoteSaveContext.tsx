@@ -2,13 +2,13 @@
  * Note Save Context
  *
  * Provides universal access to note saving functionality across the extension.
- * Follows the ToolContext.tsx pattern for consistency.
+ * Follows the shared provider pattern used across sidebar feature contexts.
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import type { Note } from '@core/domain/Note';
 import type { NotesService } from '@core/services/notesService';
-import { useNoteSave, type SaveNoteOptions } from '../../hooks/useNoteSave';
+import { useNoteSave, type SaveNoteOptions } from '../hooks/useNoteSave';
 import type { SidebarTabId } from '../sidebar/types';
 
 // -----------------------------------------------------------------------------
@@ -48,7 +48,7 @@ export function NoteSaveProvider({
   setSelectedNoteId,
   setActiveTab,
   children,
-}: NoteSaveProviderProps) {
+}: NoteSaveProviderProps): JSX.Element {
   // Use the hook internally
   const { saveNote } = useNoteSave({
     notesService,
@@ -76,7 +76,7 @@ export function NoteSaveProvider({
 
 export function useNoteSaveContext(): NoteSaveContextValue {
   const context = useContext(NoteSaveContext);
-  if (!context) {
+  if (context === null) {
     throw new Error('useNoteSaveContext must be used within a NoteSaveProvider');
   }
   return context;

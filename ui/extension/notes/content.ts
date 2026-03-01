@@ -1,20 +1,21 @@
 import type { NoteContent } from '@core/domain/Note';
 
 export function createNoteContentFromPlainText(text: string): NoteContent {
-  const normalized = text || '';
-  const textNode = normalized
-    ? [
-        {
-          detail: 0,
-          format: 0,
-          mode: 'normal',
-          style: '',
-          text: normalized,
-          type: 'text',
-          version: 1,
-        },
-      ]
-    : [];
+  const normalized = text.length > 0 ? text : '';
+  const textNode =
+    normalized.length > 0
+      ? [
+          {
+            detail: 0,
+            format: 0,
+            mode: 'normal',
+            style: '',
+            text: normalized,
+            type: 'text',
+            version: 1,
+          },
+        ]
+      : [];
 
   return {
     version: 'lexical_v1',
