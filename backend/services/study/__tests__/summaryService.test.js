@@ -109,7 +109,11 @@ test('generateStudySummary rejects when userId is missing', async () => {
         userId: '',
         payload: createPayload(),
       }),
-    (error) => error?.status === 500,
+    (error) => {
+      assert.equal(error?.code, 'VALIDATION_ERROR');
+      assert.equal(error?.statusCode, 400);
+      return true;
+    },
   );
 });
 
@@ -126,6 +130,55 @@ test('generateStudySummary enforces daily request limits', async () => {
         userId: 'user-1',
         payload: createPayload(),
       }),
-    (error) => error?.status === 429,
+    (error) => {
+      assert.equal(error?.code, 'RATE_LIMIT');
+      assert.equal(error?.statusCode, 429);
+      return true;
+    },
+  );
+});
+
+test('generateStudySummary rejects transcripts with no usable segment text', async () => {
+  const service = createService();
+
+  await assert.rejects(
+    () =>
+      service.generateStudySummary({
+        userId: 'user-1',
+        payload: createPayload({
+          transcript: {
+            plainText: '   ',
+            segments: [{ startMs: 0, endMs: 1000, text: '   ' }],
+          },
+        }),
+      }),
+    (error) => {
+      assert.equal(error?.code, 'VALIDATION_ERROR');
+      assert.equal(error?.statusCode, 400);
+      return true;
+    },
+  );
+});
+
+test('generateStudySummary maps timeout failures to TimeoutError', async () => {
+  const service = createService({
+    llmClient: {
+      createChatCompletion: async () => {
+        throw new Error('Study summary generation timed out after 120000ms');
+      },
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      service.generateStudySummary({
+        userId: 'user-1',
+        payload: createPayload(),
+      }),
+    (error) => {
+      assert.equal(error?.code, 'TIMEOUT');
+      assert.equal(error?.statusCode, 504);
+      return true;
+    },
   );
 });

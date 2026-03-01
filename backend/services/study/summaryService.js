@@ -1,5 +1,6 @@
-﻿const { DAILY_REQUEST_LIMIT } = require('../../config');
+const { DAILY_REQUEST_LIMIT } = require('../../config');
 const { logger: baseLogger } = require('../../observability');
+const { AppError, ValidationError, RateLimitError, TimeoutError } = require('../../errors');
 const { checkDailyLimit } = require('../rateLimitService');
 const { createChatCompletion } = require('../llm/providerChain');
 const {
@@ -15,8 +16,6 @@ const {
 const { trimIncompleteMarkdownTail } = require('./summaryMarkdown');
 const { withTimeout } = require('../../utils/withTimeout');
 
-const HTTP_STATUS_INTERNAL_SERVER_ERROR = 500;
-const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
 const SUMMARY_DIRECT_CHAR_LIMIT = 90000;
 const SUMMARY_CHUNK_TARGET_CHARS = 32000;
 const SUMMARY_MAX_CHUNKS = 8;
@@ -31,16 +30,6 @@ const SUMMARY_MAX_TOKENS_BY_DEPTH = {
   detailed: 6000,
 };
 
-function createRequestError(status, message) {
-  const error = new Error(message);
-  error.status = status;
-  error.payload = {
-    success: false,
-    error: { message },
-  };
-  return error;
-}
-
 function createServices(deps = {}) {
   return {
     logger: deps.logger ?? baseLogger,
@@ -51,26 +40,23 @@ function createServices(deps = {}) {
 
 function ensureUserContext(userId) {
   if (!userId) {
-    throw createRequestError(
-      HTTP_STATUS_INTERNAL_SERVER_ERROR,
-      'User context missing for authenticated request.',
-    );
+    throw new ValidationError('User context missing for authenticated request.');
   }
 }
 
 async function ensureDailyLimitAllowed(services, userId) {
   const limitCheck = await services.rateLimitService.checkDailyLimit(userId, DAILY_REQUEST_LIMIT);
   if (!limitCheck.allowed) {
-    throw createRequestError(HTTP_STATUS_TOO_MANY_REQUESTS, 'Daily limit reached');
+    throw new RateLimitError('Daily limit reached');
   }
 }
 
 function ensureTranscriptLines(transcript) {
   const lines = buildTranscriptLines(transcript?.segments ?? []);
   if (lines.length === 0) {
-    throw createRequestError(
-      HTTP_STATUS_INTERNAL_SERVER_ERROR,
+    throw new ValidationError(
       'Transcript does not contain usable segments.',
+      'transcript.segments',
     );
   }
   const body = joinTranscriptLines(lines);
@@ -215,6 +201,20 @@ async function generateFinalSummary({ services, depth, finalPrompt }) {
   return trimIncompleteMarkdownTail(markdown);
 }
 
+function normalizeSummaryError(error) {
+  if (error instanceof AppError) {
+    return error;
+  }
+
+  const message =
+    typeof error?.message === 'string' ? error.message : 'Failed to generate study summary.';
+  if (/timed out/i.test(message)) {
+    return new TimeoutError(message);
+  }
+
+  return new AppError(message, 'INTERNAL_ERROR');
+}
+
 async function createStudySummary(services, payload) {
   const depth = resolveStudyGuideDepth(payload?.depth);
   const transcriptSource = ensureTranscriptLines(payload?.transcript);
@@ -245,11 +245,12 @@ async function generateStudySummary(services, { userId, payload } = {}) {
       data: result,
     };
   } catch (error) {
-    services.logger.error({ err: error }, 'Failed to generate study summary');
-    throw createRequestError(
-      HTTP_STATUS_INTERNAL_SERVER_ERROR,
-      error?.message || 'Failed to generate study summary.',
+    const summaryError = normalizeSummaryError(error);
+    services.logger.error(
+      { err: error, code: summaryError.code },
+      'Failed to generate study summary',
     );
+    throw summaryError;
   }
 }
 

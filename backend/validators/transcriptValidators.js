@@ -1,81 +1,102 @@
-// backend/validators/transcriptValidators.js
-
 const { z } = require('zod');
 
-/**
- * Transcript Validation Schemas
- *
- * Declarative Zod validation for transcript-related endpoints.
- * Applied via validate() middleware in routes.
- */
-
-// UUID validation helper
-const uuidSchema = z.string().uuid({ message: 'Must be a valid UUID' });
-const MAX_VIDEO_ID_LENGTH = 500;
+const MAX_FINGERPRINT_LENGTH = 255;
 const MAX_URL_LENGTH = 2000;
-const MIN_TOTAL_CHUNKS = 1;
-const MIN_SEGMENT_TIME = 0;
+const MAX_PROVIDER_LENGTH = 64;
+const MAX_LANGUAGE_HINT_LENGTH = 24;
+const MAX_CHECKSUM_LENGTH = 256;
+const MAX_TRANSCRIPT_TEXT_LENGTH = 800000;
+const MAX_TRANSCRIPT_SEGMENTS = 20000;
+const MAX_SEGMENT_TEXT_LENGTH = 5000;
+const MAX_SPEAKER_LENGTH = 120;
 
-/**
- * Schema for job ID parameter
- * Used in GET/POST/PUT /api/transcripts/jobs/:id
- */
+const uuidSchema = z.string().uuid({ message: 'Must be a valid UUID' });
+const positiveIntSchema = z.coerce.number().int().positive();
+const nonNegativeIntSchema = z.coerce.number().int().nonnegative();
+
+const fingerprintSchema = z
+  .string()
+  .trim()
+  .min(1, 'Fingerprint is required')
+  .max(MAX_FINGERPRINT_LENGTH, 'Fingerprint too long');
+
+const providerSchema = z
+  .string()
+  .trim()
+  .min(1, 'Provider is required')
+  .max(MAX_PROVIDER_LENGTH, 'Provider too long');
+
+const mediaUrlSchema = z.string().url('Invalid media URL').max(MAX_URL_LENGTH, 'URL too long');
+
 const jobIdParamSchema = z.object({
   id: uuidSchema,
 });
 
-/**
- * Schema for creating a transcript job
- * POST /api/transcripts/jobs
- */
 const createJobSchema = z.object({
-  videoId: z.string().min(1, 'Video ID is required').max(MAX_VIDEO_ID_LENGTH, 'Video ID too long'),
-  videoUrl: z.string().url('Invalid video URL').max(MAX_URL_LENGTH, 'URL too long'),
-  provider: z
-    .enum(['panopto', 'youtube', 'vimeo', 'custom'], {
-      errorMap: () => ({ message: 'Provider must be one of: panopto, youtube, vimeo, custom' }),
-    })
-    .optional()
-    .default('custom'),
-  metadata: z
-    .object({
-      title: z.string().max(MAX_VIDEO_ID_LENGTH).optional(),
-      duration: z.number().positive().optional(),
-    })
-    .passthrough()
-    .optional(),
+  fingerprint: fingerprintSchema,
+  mediaUrl: mediaUrlSchema,
+  mediaUrlNormalized: mediaUrlSchema.optional(),
+  durationMs: nonNegativeIntSchema.nullable().optional(),
+  provider: providerSchema.optional().default('unknown'),
+  expectedTotalChunks: positiveIntSchema.optional(),
 });
 
-/**
- * Schema for finalizing a transcript job
- * POST /api/transcripts/jobs/:id/finalize
- */
-const finalizeJobSchema = z.object({
-  totalChunks: z.coerce.number().int().min(MIN_TOTAL_CHUNKS, 'At least one chunk required'),
-  checksum: z.string().optional(),
+const finalizeJobSchema = z
+  .object({
+    expectedTotalChunks: positiveIntSchema.optional(),
+    totalChunks: positiveIntSchema.optional(),
+    checksum: z.string().trim().max(MAX_CHECKSUM_LENGTH).optional(),
+    languageHint: z.string().trim().min(1).max(MAX_LANGUAGE_HINT_LENGTH).optional(),
+    maxMinutes: z.coerce.number().positive().optional(),
+  })
+  .transform((data) => ({
+    expectedTotalChunks: data.expectedTotalChunks ?? data.totalChunks,
+    checksum: data.checksum,
+    languageHint: data.languageHint,
+    maxMinutes: data.maxMinutes,
+  }));
+
+const transcriptSegmentSchema = z
+  .object({
+    startMs: nonNegativeIntSchema,
+    endMs: nonNegativeIntSchema.nullable().optional(),
+    text: z.string().trim().min(1, 'Segment text is required').max(MAX_SEGMENT_TEXT_LENGTH),
+    speaker: z.string().trim().max(MAX_SPEAKER_LENGTH).optional(),
+    confidence: z.coerce.number().min(0).max(1).optional(),
+  })
+  .superRefine((segment, context) => {
+    if (segment.endMs !== null && segment.endMs !== undefined && segment.endMs < segment.startMs) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endMs'],
+        message: 'endMs must be greater than or equal to startMs',
+      });
+    }
+  });
+
+const transcriptSchema = z.object({
+  plainText: z
+    .string()
+    .trim()
+    .min(1, 'Transcript text is required')
+    .max(MAX_TRANSCRIPT_TEXT_LENGTH),
+  segments: z.array(transcriptSegmentSchema).min(1).max(MAX_TRANSCRIPT_SEGMENTS),
+  durationMs: nonNegativeIntSchema.optional(),
 });
 
-/**
- * Schema for caching a transcript
- * POST /api/transcripts/cache
- */
+const transcriptMetaSchema = z.object({
+  mediaUrl: mediaUrlSchema.optional(),
+  mediaUrlNormalized: mediaUrlSchema.optional(),
+  etag: z.string().trim().max(MAX_CHECKSUM_LENGTH).optional(),
+  lastModified: z.string().trim().max(MAX_CHECKSUM_LENGTH).optional(),
+  durationMs: nonNegativeIntSchema.nullable().optional(),
+});
+
 const cacheTranscriptSchema = z.object({
-  videoId: z.string().min(1, 'Video ID is required').max(MAX_VIDEO_ID_LENGTH),
-  videoUrl: z.string().url('Invalid video URL').max(MAX_URL_LENGTH),
-  transcript: z.object({
-    segments: z
-      .array(
-        z.object({
-          start: z.number().min(MIN_SEGMENT_TIME),
-          end: z.number().min(MIN_SEGMENT_TIME),
-          text: z.string(),
-        }),
-      )
-      .min(MIN_TOTAL_CHUNKS, 'At least one segment required'),
-    language: z.string().optional(),
-    source: z.string().optional(),
-  }),
-  provider: z.string().optional(),
+  fingerprint: fingerprintSchema,
+  provider: providerSchema,
+  transcript: transcriptSchema,
+  meta: transcriptMetaSchema.optional(),
 });
 
 module.exports = {

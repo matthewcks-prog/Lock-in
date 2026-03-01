@@ -1,5 +1,3 @@
-// backend/validators/__tests__/transcriptValidators.test.js
-
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -10,236 +8,185 @@ const {
   cacheTranscriptSchema,
 } = require('../transcriptValidators');
 
-// jobIdParamSchema tests
-test('jobIdParamSchema - valid UUID', () => {
-  const validData = {
-    id: '550e8400-e29b-41d4-a716-446655440000',
-  };
-
-  const result = jobIdParamSchema.safeParse(validData);
+test('jobIdParamSchema accepts a valid UUID', () => {
+  const result = jobIdParamSchema.safeParse({ id: '550e8400-e29b-41d4-a716-446655440000' });
   assert.equal(result.success, true);
 });
 
-test('jobIdParamSchema - reject invalid UUID', () => {
-  const invalidData = {
-    id: 'invalid-uuid',
-  };
-
-  const result = jobIdParamSchema.safeParse(invalidData);
+test('jobIdParamSchema rejects an invalid UUID', () => {
+  const result = jobIdParamSchema.safeParse({ id: 'invalid-id' });
   assert.equal(result.success, false);
 });
 
-test('jobIdParamSchema - reject missing id', () => {
-  const invalidData = {};
+test('createJobSchema accepts canonical transcript-job payload', () => {
+  const result = createJobSchema.safeParse({
+    fingerprint: 'fp-123',
+    mediaUrl: 'https://example.com/media/video.mp4',
+  });
 
-  const result = jobIdParamSchema.safeParse(invalidData);
-  assert.equal(result.success, false);
-});
-
-// createJobSchema tests
-test('createJobSchema - valid minimal job', () => {
-  const validData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
-  };
-
-  const result = createJobSchema.safeParse(validData);
   assert.equal(result.success, true);
-  assert.equal(result.data.provider, 'custom'); // Default value
+  assert.equal(result.data.provider, 'unknown');
 });
 
-test('createJobSchema - valid with provider', () => {
-  const validData = {
-    videoId: 'abc123',
-    videoUrl: 'https://panopto.example.com/video/abc123',
-    provider: 'panopto',
-  };
+test('createJobSchema accepts optional fields and coerces numbers', () => {
+  const result = createJobSchema.safeParse({
+    fingerprint: 'fp-123',
+    mediaUrl: 'https://example.com/media/video.mp4',
+    mediaUrlNormalized: 'https://example.com/media/video.mp4',
+    durationMs: '120000',
+    provider: 'html5',
+    expectedTotalChunks: '12',
+  });
 
-  const result = createJobSchema.safeParse(validData);
   assert.equal(result.success, true);
-  assert.equal(result.data.provider, 'panopto');
+  assert.equal(result.data.durationMs, 120000);
+  assert.equal(result.data.expectedTotalChunks, 12);
 });
 
-test('createJobSchema - valid with metadata', () => {
-  const validData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
-    metadata: {
-      title: 'Lecture 1: Introduction',
-      duration: 3600,
-    },
-  };
+test('createJobSchema rejects missing fingerprint', () => {
+  const result = createJobSchema.safeParse({
+    mediaUrl: 'https://example.com/media/video.mp4',
+  });
+  assert.equal(result.success, false);
+});
 
-  const result = createJobSchema.safeParse(validData);
+test('createJobSchema rejects invalid mediaUrl', () => {
+  const result = createJobSchema.safeParse({
+    fingerprint: 'fp-123',
+    mediaUrl: 'not-a-url',
+  });
+  assert.equal(result.success, false);
+});
+
+test('createJobSchema rejects invalid expectedTotalChunks', () => {
+  const result = createJobSchema.safeParse({
+    fingerprint: 'fp-123',
+    mediaUrl: 'https://example.com/media/video.mp4',
+    expectedTotalChunks: 0,
+  });
+  assert.equal(result.success, false);
+});
+
+test('createJobSchema rejects legacy payload keys', () => {
+  const result = createJobSchema.safeParse({
+    videoId: 'legacy-id',
+    videoUrl: 'https://example.com/video/legacy',
+  });
+  assert.equal(result.success, false);
+});
+
+test('finalizeJobSchema accepts expectedTotalChunks', () => {
+  const result = finalizeJobSchema.safeParse({ expectedTotalChunks: 5 });
   assert.equal(result.success, true);
+  assert.equal(result.data.expectedTotalChunks, 5);
 });
 
-test('createJobSchema - reject missing videoId', () => {
-  const invalidData = {
-    videoUrl: 'https://example.com/video/abc123',
-  };
-
-  const result = createJobSchema.safeParse(invalidData);
-  assert.equal(result.success, false);
-});
-
-test('createJobSchema - reject empty videoId', () => {
-  const invalidData = {
-    videoId: '',
-    videoUrl: 'https://example.com/video/abc123',
-  };
-
-  const result = createJobSchema.safeParse(invalidData);
-  assert.equal(result.success, false);
-});
-
-test('createJobSchema - reject invalid videoUrl', () => {
-  const invalidData = {
-    videoId: 'abc123',
-    videoUrl: 'not-a-valid-url',
-  };
-
-  const result = createJobSchema.safeParse(invalidData);
-  assert.equal(result.success, false);
-});
-
-test('createJobSchema - reject invalid provider', () => {
-  const invalidData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
-    provider: 'invalid_provider',
-  };
-
-  const result = createJobSchema.safeParse(invalidData);
-  assert.equal(result.success, false);
-});
-
-// finalizeJobSchema tests
-test('finalizeJobSchema - valid with totalChunks', () => {
-  const validData = {
-    totalChunks: 5,
-  };
-
-  const result = finalizeJobSchema.safeParse(validData);
+test('finalizeJobSchema maps legacy totalChunks to expectedTotalChunks', () => {
+  const result = finalizeJobSchema.safeParse({ totalChunks: 3 });
   assert.equal(result.success, true);
+  assert.equal(result.data.expectedTotalChunks, 3);
 });
 
-test('finalizeJobSchema - valid with checksum', () => {
-  const validData = {
-    totalChunks: 3,
-    checksum: 'abc123def456',
-  };
-
-  const result = finalizeJobSchema.safeParse(validData);
+test('finalizeJobSchema accepts languageHint and maxMinutes', () => {
+  const result = finalizeJobSchema.safeParse({
+    expectedTotalChunks: 4,
+    languageHint: 'en',
+    maxMinutes: 90,
+  });
   assert.equal(result.success, true);
+  assert.equal(result.data.languageHint, 'en');
+  assert.equal(result.data.maxMinutes, 90);
 });
 
-test('finalizeJobSchema - coerce string totalChunks', () => {
-  const validData = {
-    totalChunks: '10',
-  };
-
-  const result = finalizeJobSchema.safeParse(validData);
-  assert.equal(result.success, true);
-  assert.equal(result.data.totalChunks, 10);
-});
-
-test('finalizeJobSchema - reject zero totalChunks', () => {
-  const invalidData = {
-    totalChunks: 0,
-  };
-
-  const result = finalizeJobSchema.safeParse(invalidData);
+test('finalizeJobSchema rejects invalid chunk counts', () => {
+  const result = finalizeJobSchema.safeParse({ expectedTotalChunks: 0 });
   assert.equal(result.success, false);
 });
 
-test('finalizeJobSchema - reject negative totalChunks', () => {
-  const invalidData = {
-    totalChunks: -1,
-  };
-
-  const result = finalizeJobSchema.safeParse(invalidData);
-  assert.equal(result.success, false);
-});
-
-// cacheTranscriptSchema tests
-test('cacheTranscriptSchema - valid transcript', () => {
-  const validData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
+function buildValidCachePayload(overrides = {}) {
+  return {
+    fingerprint: 'fp-123',
+    provider: 'html5',
     transcript: {
-      segments: [
-        { start: 0, end: 5, text: 'Hello world' },
-        { start: 5, end: 10, text: 'This is a test' },
-      ],
+      plainText: 'Hello world',
+      segments: [{ startMs: 0, endMs: 1000, text: 'Hello world', speaker: 'Lecturer' }],
+      durationMs: 1000,
     },
+    ...overrides,
   };
+}
 
-  const result = cacheTranscriptSchema.safeParse(validData);
+test('cacheTranscriptSchema accepts canonical transcript cache payload', () => {
+  const result = cacheTranscriptSchema.safeParse(
+    buildValidCachePayload({
+      meta: {
+        mediaUrl: 'https://example.com/media/video.mp4',
+        mediaUrlNormalized: 'https://example.com/media/video.mp4',
+        etag: 'etag-1',
+      },
+    }),
+  );
+
   assert.equal(result.success, true);
 });
 
-test('cacheTranscriptSchema - valid with optional fields', () => {
-  const validData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
-    transcript: {
-      segments: [{ start: 0, end: 5, text: 'Hello' }],
-      language: 'en',
-      source: 'manual',
-    },
-    provider: 'youtube',
-  };
+test('cacheTranscriptSchema trims transcript text fields', () => {
+  const result = cacheTranscriptSchema.safeParse(
+    buildValidCachePayload({
+      transcript: {
+        plainText: '  Hello world  ',
+        segments: [{ startMs: 0, endMs: 1000, text: '  Hello world  ', speaker: '  Lecturer  ' }],
+      },
+    }),
+  );
 
-  const result = cacheTranscriptSchema.safeParse(validData);
   assert.equal(result.success, true);
+  assert.equal(result.data.transcript.plainText, 'Hello world');
+  assert.equal(result.data.transcript.segments[0].text, 'Hello world');
+  assert.equal(result.data.transcript.segments[0].speaker, 'Lecturer');
 });
 
-test('cacheTranscriptSchema - reject empty segments', () => {
-  const invalidData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
-    transcript: {
-      segments: [],
-    },
-  };
-
-  const result = cacheTranscriptSchema.safeParse(invalidData);
+test('cacheTranscriptSchema rejects missing fingerprint', () => {
+  const result = cacheTranscriptSchema.safeParse(
+    buildValidCachePayload({
+      fingerprint: undefined,
+    }),
+  );
   assert.equal(result.success, false);
 });
 
-test('cacheTranscriptSchema - reject missing transcript', () => {
-  const invalidData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
-  };
-
-  const result = cacheTranscriptSchema.safeParse(invalidData);
+test('cacheTranscriptSchema rejects empty segment list', () => {
+  const result = cacheTranscriptSchema.safeParse(
+    buildValidCachePayload({
+      transcript: {
+        plainText: 'Hello world',
+        segments: [],
+      },
+    }),
+  );
   assert.equal(result.success, false);
 });
 
-test('cacheTranscriptSchema - reject segment with negative start time', () => {
-  const invalidData = {
-    videoId: 'abc123',
-    videoUrl: 'https://example.com/video/abc123',
-    transcript: {
-      segments: [{ start: -1, end: 5, text: 'Hello' }],
-    },
-  };
-
-  const result = cacheTranscriptSchema.safeParse(invalidData);
+test('cacheTranscriptSchema rejects empty segment text after trim', () => {
+  const result = cacheTranscriptSchema.safeParse(
+    buildValidCachePayload({
+      transcript: {
+        plainText: 'Hello world',
+        segments: [{ startMs: 0, endMs: 1000, text: '   ' }],
+      },
+    }),
+  );
   assert.equal(result.success, false);
 });
 
-test('cacheTranscriptSchema - reject invalid videoUrl', () => {
-  const invalidData = {
-    videoId: 'abc123',
-    videoUrl: 'not-a-url',
-    transcript: {
-      segments: [{ start: 0, end: 5, text: 'Hello' }],
-    },
-  };
-
-  const result = cacheTranscriptSchema.safeParse(invalidData);
+test('cacheTranscriptSchema rejects segments where endMs < startMs', () => {
+  const result = cacheTranscriptSchema.safeParse(
+    buildValidCachePayload({
+      transcript: {
+        plainText: 'Hello world',
+        segments: [{ startMs: 1000, endMs: 999, text: 'Hello' }],
+      },
+    }),
+  );
   assert.equal(result.success, false);
 });

@@ -126,3 +126,34 @@ test('cacheExternalTranscript normalizes transcript payload and URLs', async () 
     restore();
   }
 });
+
+test('cacheExternalTranscript rejects transcripts without valid segments', async () => {
+  const repo = {
+    async upsertTranscriptCache() {
+      return null;
+    },
+  };
+  const { service, restore } = loadService(repo);
+
+  try {
+    await assert.rejects(
+      () =>
+        service.cacheExternalTranscript({
+          userId: 'user-1',
+          fingerprint: 'fp-1',
+          provider: 'html5',
+          transcript: {
+            plainText: 'Has text but no valid segments',
+            segments: [{ startMs: 'oops', text: 'invalid segment' }],
+          },
+        }),
+      (err) => {
+        assert.equal(err.code, 'VALIDATION_ERROR');
+        assert.match(err.message, /at least one valid segment/i);
+        return true;
+      },
+    );
+  } finally {
+    restore();
+  }
+});

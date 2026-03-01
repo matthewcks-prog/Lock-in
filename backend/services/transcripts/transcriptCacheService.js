@@ -1,34 +1,10 @@
 const { ValidationError } = require('../../errors');
 const { upsertTranscriptCache } = require('../../repositories/transcriptsRepository');
-
-const MAX_MEDIA_PATH_SEGMENT_LENGTH = 32;
-
-function coerceNumber(value) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-}
-
-function sanitizeMediaUrlForStorage(mediaUrl) {
-  if (!mediaUrl) return '';
-  try {
-    const url = new URL(mediaUrl);
-    url.hash = '';
-    url.search = '';
-    const segments = url.pathname.split('/').map((segment) => {
-      if (!segment) return segment;
-      if (segment.length > MAX_MEDIA_PATH_SEGMENT_LENGTH) return '[redacted]';
-      return segment;
-    });
-    url.pathname = segments.join('/');
-    return url.toString();
-  } catch {
-    return '';
-  }
-}
-
-function normalizeMediaUrlForStorage(mediaUrl) {
-  return sanitizeMediaUrlForStorage(mediaUrl);
-}
+const {
+  coerceNumber,
+  sanitizeMediaUrlForStorage,
+  normalizeMediaUrlForStorage,
+} = require('./transcriptJobUtils');
 
 function normalizeSegment(segment) {
   if (!segment || typeof segment !== 'object') return null;
@@ -69,6 +45,12 @@ function normalizeTranscript(transcript) {
 
   const segments = Array.isArray(transcript.segments) ? transcript.segments : [];
   const normalizedSegments = segments.map((segment) => normalizeSegment(segment)).filter(Boolean);
+  if (normalizedSegments.length === 0) {
+    throw new ValidationError(
+      'Transcript must include at least one valid segment',
+      'transcript.segments',
+    );
+  }
 
   const durationMs = coerceNumber(transcript.durationMs);
   const normalized = {
