@@ -20,6 +20,10 @@ interface TranscriptMessageProps {
   video: DetectedVideo;
   /** Video title for display */
   videoTitle: string;
+  /** Whether to render the transcript title row in the header */
+  showHeaderTitle?: boolean;
+  /** Optional header title override for Study context */
+  headerTitle?: string;
   /** Save note function from context */
   saveNote: (options: SaveNoteOptions) => Promise<Note | null>;
 }
@@ -32,6 +36,23 @@ function toSafeTitle(value: string): string {
 
 function buildTranscriptNoteContent(videoTitle: string, plainText: string): string {
   return `# Transcript: ${videoTitle}\n\n${plainText}`;
+}
+
+export function resolveTranscriptHeaderTitle({
+  videoTitle,
+  headerTitle,
+}: {
+  videoTitle: string;
+  headerTitle?: string | undefined;
+}): string {
+  if (headerTitle !== undefined && headerTitle.trim().length > 0) {
+    return headerTitle.trim();
+  }
+  return `Transcript: ${videoTitle}`;
+}
+
+export function shouldRenderTranscriptHeaderTitle(showHeaderTitle?: boolean): boolean {
+  return showHeaderTitle !== false;
 }
 
 function useTranscriptActions({
@@ -81,25 +102,31 @@ function useTranscriptActions({
 }
 
 export function TranscriptMessage(props: TranscriptMessageProps): JSX.Element {
-  const { transcript, videoTitle } = props;
+  const { transcript, videoTitle, headerTitle, showHeaderTitle } = props;
   const transcriptDurationMs = transcript.durationMs ?? 0;
   const { handleDownloadTxt, handleDownloadVtt, handleSaveNote } = useTranscriptActions(props);
+  const title = resolveTranscriptHeaderTitle({ videoTitle, headerTitle });
+  const showTitle = shouldRenderTranscriptHeaderTitle(showHeaderTitle);
+  const headerClassName = `lockin-transcript-header${showTitle ? '' : ' lockin-transcript-header--compact'}`;
+  const metaClassName = `lockin-transcript-meta${showTitle ? '' : ' lockin-transcript-meta--compact'}`;
 
   return (
     <div className="lockin-transcript-message">
-      <div className="lockin-transcript-header">
-        <div className="lockin-transcript-title-row">
-          <span className="lockin-transcript-icon">{TRANSCRIPT_ICON}</span>
-          <span className="lockin-transcript-title">Transcript: {videoTitle}</span>
-        </div>
-        <div className="lockin-transcript-meta">
+      <div className={headerClassName}>
+        {showTitle && (
+          <div className="lockin-transcript-title-row">
+            <span className="lockin-transcript-icon">{TRANSCRIPT_ICON}</span>
+            <span className="lockin-transcript-title">{title}</span>
+          </div>
+        )}
+        <div className={metaClassName}>
           Transcript found | {transcript.segments.length} segments |{' '}
           {formatTime(transcriptDurationMs)}
         </div>
       </div>
-
-      <TranscriptParagraphView segments={transcript.segments} />
-
+      <div className="lockin-transcript-body">
+        <TranscriptParagraphView segments={transcript.segments} />
+      </div>
       <TranscriptActions
         onDownloadTxt={handleDownloadTxt}
         onDownloadVtt={handleDownloadVtt}

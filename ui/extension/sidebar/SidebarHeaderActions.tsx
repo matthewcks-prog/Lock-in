@@ -1,4 +1,3 @@
-import { StudyToolsDropdown } from '../tools';
 import { TASKS_TAB_ID } from './constants';
 import type { SidebarTabId } from './types';
 
@@ -14,7 +13,6 @@ export function SidebarHeaderActions({
   const isTasksActive = activeTab === TASKS_TAB_ID;
   return (
     <>
-      <StudyToolsDropdown />
       <button
         type="button"
         className={`lockin-tasks-trigger-btn${isTasksActive ? ' is-active' : ''}`}

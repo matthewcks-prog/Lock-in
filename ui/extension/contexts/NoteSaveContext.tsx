@@ -2,7 +2,7 @@
  * Note Save Context
  *
  * Provides universal access to note saving functionality across the extension.
- * Follows the ToolContext.tsx pattern for consistency.
+ * Follows the shared provider pattern used across sidebar feature contexts.
  */
 
 import { createContext, useContext, useMemo, type ReactNode } from 'react';

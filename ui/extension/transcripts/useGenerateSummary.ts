@@ -1,12 +1,13 @@
 /**
  * useGenerateSummary
  *
- * Stub hook that wires the "Generate summary" call-site.
- * Real generation logic (backend call, streaming, etc.) will replace the
- * placeholder body without requiring any changes to consuming components.
+ * Opens/focuses Summary tool and triggers summary generation for
+ * the currently selected transcript context.
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
+import { useStudyWorkspace } from '../study/StudyWorkspaceContext';
+import { useStudySummary } from '../study/StudySummaryContext';
 
 export interface UseGenerateSummaryResult {
   generateSummary: () => void;
@@ -14,13 +15,13 @@ export interface UseGenerateSummaryResult {
 }
 
 export function useGenerateSummary(): UseGenerateSummaryResult {
-  // Kept as useState so that future loading state wires in without API change.
-  const [isLoading] = useState(false);
+  const { openToolTab } = useStudyWorkspace();
+  const { generateSummary: generateStudySummary, summaryState } = useStudySummary();
 
   const generateSummary = useCallback(() => {
-    // TODO: replace with real summary-generation call
-    console.log('Generate summary – coming soon');
-  }, []);
+    openToolTab('summary');
+    void generateStudySummary({ force: true });
+  }, [generateStudySummary, openToolTab]);
 
-  return { generateSummary, isLoading };
+  return { generateSummary, isLoading: summaryState.status === 'loading' };
 }

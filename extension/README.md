@@ -192,14 +192,13 @@ The extension follows best practices:
 
 ## Permissions
 
-| Permission      | Purpose                                   |
-| --------------- | ----------------------------------------- |
-| `activeTab`     | Access current tab when extension clicked |
-| `scripting`     | Inject content scripts into webpages      |
-| `storage`       | Save user settings                        |
-| `contextMenus`  | Add right-click menu items                |
-| `tabs`          | Get tab information                       |
-| `webNavigation` | Detect navigation events                  |
+| Permission      | Purpose                              |
+| --------------- | ------------------------------------ |
+| `scripting`     | Inject content scripts into webpages |
+| `storage`       | Save user settings                   |
+| `contextMenus`  | Add right-click menu items           |
+| `tabs`          | Get tab information                  |
+| `webNavigation` | Detect navigation events             |
 
 ## Browser Compatibility
 

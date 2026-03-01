@@ -13,6 +13,8 @@ const noteRoutes = require('./routes/noteRoutes');
 const taskRoutes = require('./routes/taskRoutes');
 const transcriptsRoutes = require('./routes/transcriptsRoutes');
 const feedbackRoutes = require('./routes/feedbackRoutes');
+const studyRoutes = require('./routes/studyRoutes');
+const userRoutes = require('./routes/userRoutes');
 const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { setupSentryErrorHandler } = require('./observability/sentry');
 const { createRequestLogger, sentryRequestIdMiddleware } = require('./observability/requestLogger');
@@ -66,6 +68,8 @@ function registerApiRoutes(app) {
   app.use('/api', taskRoutes);
   app.use('/api', transcriptsRoutes);
   app.use('/api', feedbackRoutes);
+  app.use('/api', studyRoutes);
+  app.use('/api', userRoutes);
 }
 
 function registerErrorHandlers(app) {

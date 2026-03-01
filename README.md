@@ -1,8 +1,30 @@
 # Lock-in 🔒📚
 
+[![Quality Gate](https://github.com/matthewcks-prog/Lock-in/actions/workflows/quality-gate.yml/badge.svg?branch=main)](https://github.com/matthewcks-prog/Lock-in/actions/workflows/quality-gate.yml)
+
 An AI-powered Chrome extension that helps students learn more efficiently.
 
 _Lock-in is an independent learning project by an aspiring software engineer. It is not affiliated with or endorsed by Monash University._
+
+## Academic Integrity And Responsible Use
+
+- "Lock-in does not provide answers intended to be submitted as assessment."
+- "Lock-in supports comprehension, summarisation, self-testing, and study planning."
+- Use Lock-in in line with your unit-level AI policy and acknowledgment requirements.
+
+## Policy Documents
+
+- [Terms of Service](TERMS.md)
+- [Privacy Policy](PRIVACY.md)
+- [Security Overview](SECURITY.md)
+- [Data Handling](docs/data-handling.md)
+- [Permissions](docs/permissions.md)
+- [Retention](docs/retention.md)
+
+## Release Readiness
+
+- [Release Checklist](docs/release-checklist.md)
+- CI quality gate: [Quality Gate workflow](https://github.com/matthewcks-prog/Lock-in/actions/workflows/quality-gate.yml)
 
 ## Features
 

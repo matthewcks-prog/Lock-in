@@ -5,9 +5,10 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 import { useTranscriptTimestampsPreference } from '../useTranscriptTimestampsPreference';
 
-const STORAGE_KEY = 'lockin_transcript_show_timestamps';
+const STORAGE_KEY = CLIENT_STORAGE_KEYS.TRANSCRIPT_SHOW_TIMESTAMPS;
 
 function makeStorageMock(): Storage {
   let store: Record<string, string> = {};

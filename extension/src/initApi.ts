@@ -10,6 +10,7 @@
 
 import { createAuthClient, type AuthClient } from '../../api/auth';
 import { createApiClient, type ApiClient } from '../../api/client';
+import { CLIENT_STORAGE_KEYS } from '../../core/storage/clientStorageKeys';
 import { chromeStorage } from './chromeStorage';
 
 const DEFAULT_TOKEN_EXPIRY_BUFFER_MS = 60000;
@@ -41,7 +42,7 @@ export function getConfig(): LockInConfig {
     sessionStorageKey:
       config.SESSION_STORAGE_KEY !== undefined && config.SESSION_STORAGE_KEY.length > 0
         ? config.SESSION_STORAGE_KEY
-        : 'lockinSupabaseSession',
+        : CLIENT_STORAGE_KEYS.SUPABASE_SESSION,
     tokenExpiryBufferMs:
       Number.isFinite(tokenExpiryBufferMs) && tokenExpiryBufferMs > 0
         ? tokenExpiryBufferMs

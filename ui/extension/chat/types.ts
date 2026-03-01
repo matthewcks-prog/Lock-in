@@ -10,6 +10,7 @@
  */
 
 import type { ApiClient } from '@api/client';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 
 // =============================================================================
 // Message Types
@@ -129,7 +130,7 @@ export interface UseSendMessageOptions {
 export const CHAT_TITLE_MAX_WORDS = 6;
 export const CHAT_TITLE_MAX_LENGTH = 80;
 export const FALLBACK_CHAT_TITLE = 'New chat';
-export const ACTIVE_CHAT_ID_KEY = 'lockin_sidebar_activeChatId';
+export const ACTIVE_CHAT_ID_KEY = CLIENT_STORAGE_KEYS.ACTIVE_CHAT_ID;
 const MS_PER_MINUTE = 60_000;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;

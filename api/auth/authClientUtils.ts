@@ -1,8 +1,9 @@
 import type { AuthSession, AuthUser } from '../../core/domain/types';
 import type { Logger } from '../../core/utils/logger';
+import { CLIENT_STORAGE_KEYS } from '../../core/storage/clientStorageKeys';
 import type { AuthStorageManager } from './authStorage';
 
-export const DEFAULT_SESSION_STORAGE_KEY = 'lockinSupabaseSession';
+export const DEFAULT_SESSION_STORAGE_KEY = CLIENT_STORAGE_KEYS.SUPABASE_SESSION;
 export const DEFAULT_TOKEN_EXPIRY_BUFFER_MS = 60000;
 
 export type SessionNotifier = {

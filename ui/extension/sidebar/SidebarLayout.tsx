@@ -42,7 +42,7 @@ export function SidebarLayout({
             <div className="lockin-top-bar-right">{headerRight}</div>
             <CloseButton onClick={onToggle} label="Close sidebar" />
           </div>
-          {children}
+          <div className="lockin-sidebar-body">{children}</div>
         </div>
       )}
     </>

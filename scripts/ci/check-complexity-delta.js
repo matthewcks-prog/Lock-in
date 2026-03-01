@@ -1,17 +1,46 @@
 import fs from 'node:fs';
 
-const input = fs.readFileSync(0, 'utf8').trim();
+const ESLINT_OUTPUT_PREVIEW_LENGTH = 120;
 
-if (!input) {
-  console.log('No ESLint JSON input provided.');
+// ---------------------------------------------------------------------------
+// Input resolution
+// Prefer a file-path argument (written by eslint --output-file) over stdin.
+// Reading from a file avoids npm lifecycle prefix lines ("\n> pkg@ver script"
+// lines that npm writes to stdout when piped) from contaminating the JSON.
+// Stdin is kept as a fallback so the script remains usable manually:
+//   eslint . --format json | node check-complexity-delta.js
+// ---------------------------------------------------------------------------
+const filePath = process.argv[2];
+
+let rawInput;
+if (filePath) {
+  if (!fs.existsSync(filePath)) {
+    console.error(`Complexity check: ESLint output file not found: ${filePath}`);
+    process.exit(1);
+  }
+  rawInput = fs.readFileSync(filePath, 'utf8').trim();
+} else {
+  rawInput = fs.readFileSync(0, 'utf8').trim();
+}
+
+if (!rawInput) {
+  console.log('Complexity check: no ESLint output — nothing to analyse.');
   process.exit(0);
 }
 
 let results;
 try {
-  results = JSON.parse(input);
-} catch (error) {
-  console.error('Invalid ESLint JSON input.');
+  results = JSON.parse(rawInput);
+} catch {
+  // Surface the first 120 chars of what we received so the problem is obvious
+  // in CI logs without needing to download any artefacts.
+  const preview = rawInput.slice(0, ESLINT_OUTPUT_PREVIEW_LENGTH).replace(/\n/g, '\\n');
+  console.error(`Complexity check: ESLint output is not valid JSON.`);
+  console.error(`  Source : ${filePath ?? 'stdin'}`);
+  console.error(`  Preview: ${preview}`);
+  console.error(`  Hint   : make sure the caller uses eslint directly (not via`);
+  console.error(`           \'npm run lint\') to avoid lifecycle prefix lines`);
+  console.error(`           contaminating the JSON stream.`);
   process.exit(1);
 }
 

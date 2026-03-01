@@ -23,7 +23,6 @@ const SCRIPT_PROTOCOL = 'java' + 'script:';
 const MIN_VIDEO_URL_LENGTH = 10;
 const URL_LOG_SAMPLE_LENGTH = 100;
 const URL_LOG_SHORT_LENGTH = 50;
-const HTML_LOG_SAMPLE_LENGTH = 500;
 const URL_KEYS_SAMPLE_SIZE = 10;
 
 function decodeEscapedUrl(value: string): string {
@@ -119,8 +118,9 @@ export function extractCaptionVttUrl(html: string): string | null {
   }
 
   logWarn('No caption URL found in embed HTML', { htmlLength: html.length });
-  logDebug('Embed HTML sample', {
-    sample: html.substring(0, HTML_LOG_SAMPLE_LENGTH).replace(/\s+/g, ' '),
+  logDebug('Embed HTML inspection summary', {
+    htmlLength: html.length,
+    containsCaptionKeyword: /caption/i.test(html),
   });
 
   return null;

@@ -49,6 +49,7 @@ export function createApiClientStub(overrides: Partial<ApiClient> = {}): ApiClie
     listFeedback: vi.fn(),
     getFeedback: vi.fn(),
     cacheTranscript: vi.fn(),
+    generateStudySummary: vi.fn(),
   };
 
   return {

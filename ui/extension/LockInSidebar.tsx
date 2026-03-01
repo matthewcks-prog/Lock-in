@@ -12,20 +12,21 @@ import { createTasksService } from '../../core/services/tasksService.ts';
 import { useNotesList } from '../hooks/useNotesList';
 import { NotesPanel } from './notes/NotesPanel';
 import { TasksPanel } from './tasks/TasksPanel';
-import { ToolProvider, useToolContext } from './tools';
 import { NoteSaveProvider } from './contexts/NoteSaveContext';
 import { TranscriptCacheProvider } from './contexts/TranscriptCacheContext';
 import { ChatQueryProvider } from './chat';
-import { FeedbackModal } from './feedback';
-import { PrivacyNotice } from './sidebar/PrivacyNotice';
+import { StudySummaryProvider, StudyWorkspace, StudyWorkspaceProvider } from './study';
 import { SidebarLayout } from './sidebar/SidebarLayout';
 import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ChatSection } from './sidebar/ChatSection';
+import { SidebarFeedback } from './sidebar/SidebarFeedback';
 import { SidebarHeaderActions } from './sidebar/SidebarHeaderActions';
-import { ToolSection } from './sidebar/ToolSection';
+import { TermsConsentGate } from './sidebar/TermsConsentGate';
 import { useResize } from './sidebar/useResize';
-import { CHAT_TAB_ID, NOTES_TAB_ID, TASKS_TAB_ID, TOOL_TAB_ID } from './sidebar/constants';
+import { CHAT_TAB_ID, NOTES_TAB_ID, STUDY_TAB_ID, TASKS_TAB_ID } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
+import type { UseTermsConsentResult } from './sidebar/termsConsent';
+import { useTermsConsent } from './sidebar/termsConsent';
 import { useSidebarState } from './sidebar/useSidebarState';
 import { useFeedbackListener } from './sidebar/hooks/useFeedbackListener';
 import type { NotesPanelHandlers, SidebarModel } from './sidebar/lockInSidebarTypes';
@@ -48,21 +49,11 @@ export interface LockInSidebarProps {
 
 function useSyncSidebarEffects({
   activeTab,
-  activeToolId,
   refreshNotes,
-  setActiveTab,
 }: {
   activeTab: ReturnType<typeof useSidebarState>['activeTab'];
-  activeToolId: string | null;
   refreshNotes: ReturnType<typeof useNotesList>['refresh'];
-  setActiveTab: ReturnType<typeof useSidebarState>['setActiveTab'];
 }): void {
-  useEffect(() => {
-    if (activeToolId !== null && activeToolId.length > 0) {
-      setActiveTab(TOOL_TAB_ID);
-    }
-  }, [activeToolId, setActiveTab]);
-
   useEffect(() => {
     if (activeTab === NOTES_TAB_ID) {
       void refreshNotes();
@@ -123,7 +114,6 @@ function useServices(apiClient: ApiClient | null): {
 }
 
 function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
-  const { activeToolId, activeToolTitle, closeTool } = useToolContext();
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const sidebarState = useSidebarState(buildSidebarStateOptions(props));
   const { notesService, tasksService } = useServices(props.apiClient);
@@ -133,18 +123,13 @@ function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
 
   useSyncSidebarEffects({
     activeTab: sidebarState.activeTab,
-    activeToolId,
     refreshNotes: notesState.refresh,
-    setActiveTab: sidebarState.setActiveTab,
   });
 
   useFeedbackListener(() => setIsFeedbackOpen(true));
 
   return {
     activeTab: sidebarState.activeTab,
-    activeToolId,
-    activeToolTitle,
-    closeTool,
     courseCode: pageValues.courseCode,
     currentWeek: pageValues.currentWeek,
     deleteNoteFromList: notesState.deleteNote,
@@ -222,28 +207,63 @@ function SidebarTabContent({
           onNoteEditingChange={model.setIsNoteEditing}
         />
       )}
-      {model.activeTab === TOOL_TAB_ID && (
-        <ToolSection activeToolId={model.activeToolId} onClose={model.closeTool} />
-      )}
+      {model.activeTab === STUDY_TAB_ID && <StudyWorkspace />}
       {model.activeTab === TASKS_TAB_ID && <TasksTabContent model={model} />}
-      <PrivacyNotice />
     </>
   );
 }
 
-function SidebarFeedback({ model }: { model: SidebarModel }): JSX.Element {
-  return (
-    <FeedbackModal
-      isOpen={model.isFeedbackOpen}
-      onClose={() => model.setIsFeedbackOpen(false)}
-      apiClient={model.apiClient}
-      pageUrl={model.pageUrl}
-      courseCode={model.courseCode}
+interface SidebarShellProps {
+  model: SidebarModel;
+  termsConsent: UseTermsConsentResult;
+  notesHandlers: NotesPanelHandlers;
+  isConsentGateActive: boolean;
+}
+
+function SidebarShell({
+  model,
+  termsConsent,
+  notesHandlers,
+  isConsentGateActive,
+}: SidebarShellProps): JSX.Element {
+  const headerLeft = isConsentGateActive ? null : (
+    <SidebarTabs activeTab={model.activeTab} onTabChange={model.handleTabChange} />
+  );
+  const headerRight = isConsentGateActive ? null : (
+    <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
+  );
+  const content = isConsentGateActive ? (
+    <TermsConsentGate
+      isOpen={model.isOpen}
+      isLoading={termsConsent.isLoading}
+      policyLinks={termsConsent.policyLinks}
+      onAccept={termsConsent.acceptConsent}
+      onDecline={model.onToggle}
     />
+  ) : (
+    <SidebarTabContent model={model} notesHandlers={notesHandlers} />
+  );
+
+  return (
+    <SidebarLayout
+      isOpen={model.isOpen}
+      onToggle={model.onToggle}
+      onResizeStart={model.handleResizeStart}
+      headerLeft={headerLeft}
+      headerRight={headerRight}
+    >
+      {content}
+    </SidebarLayout>
   );
 }
 
-function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
+function LockInSidebarView({
+  model,
+  termsConsent,
+}: {
+  model: SidebarModel;
+  termsConsent: UseTermsConsentResult;
+}): JSX.Element {
   const notesHandlers = useNotesPanelHandlers({
     deleteNoteFromList: model.deleteNoteFromList,
     refreshNotes: model.refreshNotes,
@@ -251,6 +271,8 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
     setSelectedNoteId: model.setSelectedNoteId,
     upsertNote: model.upsertNote,
   });
+  const isConsentGateActive =
+    model.isOpen && (termsConsent.isLoading || termsConsent.requiresConsent);
 
   return (
     <TranscriptCacheProvider apiClient={model.apiClient}>
@@ -262,26 +284,13 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
         setSelectedNoteId={model.setSelectedNoteId}
         setActiveTab={model.setActiveTab}
       >
-        <SidebarLayout
-          isOpen={model.isOpen}
-          onToggle={model.onToggle}
-          onResizeStart={model.handleResizeStart}
-          headerLeft={
-            <SidebarTabs
-              activeTab={model.activeTab}
-              onTabChange={model.handleTabChange}
-              activeToolId={model.activeToolId}
-              activeToolTitle={model.activeToolTitle}
-              onCloseTool={model.closeTool}
-            />
-          }
-          headerRight={
-            <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
-          }
-        >
-          <SidebarTabContent model={model} notesHandlers={notesHandlers} />
-        </SidebarLayout>
-        <SidebarFeedback model={model} />
+        <SidebarShell
+          model={model}
+          termsConsent={termsConsent}
+          notesHandlers={notesHandlers}
+          isConsentGateActive={isConsentGateActive}
+        />
+        {!isConsentGateActive && <SidebarFeedback model={model} />}
       </NoteSaveProvider>
     </TranscriptCacheProvider>
   );
@@ -289,15 +298,25 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
 
 function LockInSidebarContent(props: LockInSidebarProps): JSX.Element {
   const model = useLockInSidebarModel(props);
-  return <LockInSidebarView model={model} />;
+  const termsConsent = useTermsConsent({ isOpen: props.isOpen, storage: props.storage });
+  return <LockInSidebarView model={model} termsConsent={termsConsent} />;
 }
 
 export function LockInSidebar(props: LockInSidebarProps): JSX.Element {
+  const courseContext = props.pageContext?.courseContext;
   return (
-    <ToolProvider>
-      <ChatQueryProvider>
-        <LockInSidebarContent {...props} />
-      </ChatQueryProvider>
-    </ToolProvider>
+    <StudyWorkspaceProvider>
+      <StudySummaryProvider
+        apiClient={props.apiClient}
+        courseCode={courseContext?.courseCode ?? null}
+        courseName={courseContext?.courseName ?? null}
+        week={courseContext?.week ?? null}
+        topic={courseContext?.topic ?? null}
+      >
+        <ChatQueryProvider>
+          <LockInSidebarContent {...props} />
+        </ChatQueryProvider>
+      </StudySummaryProvider>
+    </StudyWorkspaceProvider>
   );
 }

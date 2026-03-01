@@ -5,4 +5,4 @@ export interface StorageAdapter {
   setLocal?: (key: string, value: unknown) => Promise<void>;
 }
 
-export type SidebarTabId = 'chat' | 'notes' | 'tasks' | 'tool';
+export type SidebarTabId = 'chat' | 'notes' | 'study' | 'tasks';

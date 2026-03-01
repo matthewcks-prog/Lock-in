@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Legacy IIFE surface is kept stable for background/content runtime wiring. */
 (() => {
   const root = typeof globalThis !== 'undefined' ? globalThis : self,
     NetworkRetry = root.LockInNetworkRetry || null,
@@ -26,6 +27,43 @@
     maxDelayMs: defaultConfig.maxDelayMs,
     timeoutMs: defaultConfig.timeoutMs,
   };
+
+  function sanitizeUrlForLog(rawUrl) {
+    if (typeof rawUrl !== 'string' || rawUrl.length === 0) return rawUrl;
+    try {
+      const parsed = new URL(rawUrl, 'http://placeholder.local');
+      parsed.search = '';
+      parsed.hash = '';
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(rawUrl)) {
+        return parsed.toString().replace(/\/$/, '');
+      }
+      return parsed.pathname;
+    } catch {
+      const withoutQuery = rawUrl.split('?')[0] || rawUrl;
+      return withoutQuery.split('#')[0] || withoutQuery;
+    }
+  }
+
+  function toSafeError(error) {
+    if (error instanceof Error) {
+      return {
+        name: error.name,
+        message: error.message,
+        stack: error.stack ? '[stack omitted]' : undefined,
+      };
+    }
+    if (typeof error === 'object' && error !== null) {
+      const record = error;
+      return {
+        message:
+          typeof record['message'] === 'string'
+            ? record['message']
+            : 'Unexpected network error object',
+        code: record['code'],
+      };
+    }
+    return { message: String(error) };
+  }
 
   function backoffDelay(attempt) {
     const delay = Math.min(
@@ -106,13 +144,14 @@
     const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
     try {
       console.log(
-        `[Lock-in] Fetching (attempt ${attempt + 1}/${config.maxRetries + 1}): ${url.substring(0, 100)}...`,
+        `[Lock-in] Fetching (attempt ${attempt + 1}/${config.maxRetries + 1}):`,
+        sanitizeUrlForLog(url),
       );
       const response = await fetch(url, { ...options, signal: controller.signal });
       console.log(`[Lock-in] Response status: ${response.status} ${response.statusText}`);
       return { response };
     } catch (error) {
-      console.error(`[Lock-in] Fetch error (attempt ${attempt + 1}):`, error?.message || error);
+      console.error(`[Lock-in] Fetch error (attempt ${attempt + 1}):`, toSafeError(error));
       return { error: normalizeAttemptError(error, config.timeoutMs) };
     } finally {
       clearTimeout(timeoutId);
@@ -162,12 +201,15 @@
   }
 
   async function fetchWithCredentials(url) {
-    console.log('[Lock-in] fetchWithCredentials:', url.substring(0, 100));
+    console.log('[Lock-in] fetchWithCredentials:', sanitizeUrlForLog(url));
 
     try {
       new URL(url);
     } catch (e) {
-      console.error('[Lock-in] Invalid URL:', url, e);
+      console.error('[Lock-in] Invalid URL:', {
+        url: sanitizeUrlForLog(url),
+        error: toSafeError(e),
+      });
       throw new Error('Invalid URL provided');
     }
 
@@ -198,12 +240,15 @@
   }
 
   async function fetchVttContent(url) {
-    console.log('[Lock-in] fetchVttContent:', url.substring(0, 100));
+    console.log('[Lock-in] fetchVttContent:', sanitizeUrlForLog(url));
 
     try {
       new URL(url);
     } catch (e) {
-      console.error('[Lock-in] Invalid caption URL:', url, e);
+      console.error('[Lock-in] Invalid caption URL:', {
+        url: sanitizeUrlForLog(url),
+        error: toSafeError(e),
+      });
       throw new Error('Invalid caption URL');
     }
 
@@ -234,12 +279,15 @@
   }
 
   async function fetchHtmlWithRedirectInfo(url) {
-    console.log('[Lock-in] fetchHtmlWithRedirectInfo:', url.substring(0, 100));
+    console.log('[Lock-in] fetchHtmlWithRedirectInfo:', sanitizeUrlForLog(url));
 
     try {
       new URL(url);
     } catch (e) {
-      console.error('[Lock-in] Invalid URL:', url, e);
+      console.error('[Lock-in] Invalid URL:', {
+        url: sanitizeUrlForLog(url),
+        error: toSafeError(e),
+      });
       throw new Error('Invalid URL provided');
     }
 

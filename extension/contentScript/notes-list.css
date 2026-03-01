@@ -24,21 +24,69 @@
     color: var(--lockin-color-text-secondary);
   }
 
+  #lockin-root .lockin-notes-filter-select-shell {
+    position: relative;
+  }
+
   #lockin-root .lockin-notes-filter-select {
-    padding: var(--lockin-size-7) var(--lockin-size-10);
+    height: var(--lockin-size-28);
+    padding: 0 var(--lockin-size-22) 0 var(--lockin-size-8);
+    overflow: hidden;
     font-family: inherit;
     font-size: var(--lockin-text-sm);
-    color: var(--lockin-color-text-strong);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lockin-color-text-primary);
     background: var(--lockin-color-surface);
-    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
     border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-05);
     cursor: pointer;
+    appearance: none;
+  }
+
+  #lockin-root .lockin-notes-filter-select:hover {
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-04);
   }
 
   #lockin-root .lockin-notes-filter-select:focus {
-    border-color: var(--lockin-color-accent-soft);
+    border-color: var(--lockin-color-accent);
     outline: none;
-    box-shadow: var(--lockin-shadow-02);
+    box-shadow: var(--lockin-shadow-04);
+  }
+
+  #lockin-root .lockin-notes-filter-select-chevron {
+    position: absolute;
+    top: 50%;
+    right: var(--lockin-size-6);
+    color: var(--lockin-color-text-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  #lockin-root .lockin-notes-refresh-btn {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-28);
+    height: var(--lockin-size-28);
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    box-shadow: var(--lockin-shadow-05);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-notes-refresh-btn:hover {
+    color: var(--lockin-color-text-primary);
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-04);
   }
 
   #lockin-root .lockin-notes-search-input {

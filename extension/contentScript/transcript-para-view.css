@@ -1,17 +1,13 @@
 @layer lockin.tools {
-  /* ── Paragraph view ──────────────────────────────────────────────────── */
-
   #lockin-root .lockin-transcript-para-view {
     display: flex;
+    flex: 1;
     flex-direction: column;
-    /* Grow to fill the available viewport – min keeps it usable on small panels;
-       max prevents the panel from becoming unusably tall on large screens. */
-    min-height: 260px;
-    max-height: clamp(320px, 65vh, 900px);
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
   }
-
-  /* ── Toolbar (search + timestamp toggle) ──────────────────────────────── */
 
   #lockin-root .lockin-transcript-para-toolbar {
     display: flex;
@@ -22,8 +18,6 @@
     background: var(--lockin-color-surface-muted);
     border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
   }
-
-  /* ── Compact search bar ──────────────────────────────────────────────── */
 
   #lockin-root .lockin-transcript-search-bar {
     display: flex;
@@ -62,7 +56,6 @@
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
   }
 
-  /* Browser default search-clear button – hide and replace with our own */
   #lockin-root .lockin-transcript-search-bar-input::-webkit-search-cancel-button {
     display: none;
   }
@@ -84,7 +77,6 @@
     background: var(--lockin-color-surface-subtle);
   }
 
-  /* Icon button (clear, prev, next) */
   #lockin-root .lockin-transcript-search-bar-btn {
     display: flex;
     flex-shrink: 0;
@@ -114,8 +106,6 @@
     background: var(--lockin-color-surface-subtle);
   }
 
-  /* ── Show timestamps toggle ───────────────────────────────────────────── */
-
   #lockin-root .lockin-transcript-timestamps-toggle {
     display: flex;
     flex-shrink: 0;
@@ -144,12 +134,14 @@
     color: var(--lockin-color-text-body);
   }
 
-  /* ── Paragraph list ──────────────────────────────────────────────────── */
-
   #lockin-root .lockin-transcript-para-list {
     flex: 1;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
     padding: var(--lockin-size-12) var(--lockin-size-16);
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   #lockin-root .lockin-transcript-para {
@@ -179,7 +171,7 @@
     margin-bottom: var(--lockin-size-4);
   }
 
-  #lockin-root .lockin-transcript-timestamp-btn {
+  #lockin-root .lockin-transcript-timestamp {
     padding: var(--lockin-size-1) var(--lockin-size-6);
     font-family: var(--lockin-font-family-mono, monospace);
     font-size: var(--lockin-text-xs);
@@ -189,13 +181,6 @@
     background: rgba(37, 99, 235, 0.08);
     border: var(--lockin-size-1) solid rgba(37, 99, 235, 0.2);
     border-radius: var(--lockin-radius-sm);
-    transition: background var(--lockin-duration-150) var(--lockin-ease-default);
-    cursor: pointer;
-  }
-
-  #lockin-root .lockin-transcript-timestamp-btn:hover {
-    background: rgba(37, 99, 235, 0.15);
-    border-color: var(--lockin-color-brand);
   }
 
   #lockin-root .lockin-transcript-speaker {
@@ -214,7 +199,6 @@
     color: var(--lockin-color-text-body);
   }
 
-  /* Search highlight */
   #lockin-root .lockin-transcript-highlight {
     padding: 0 1px;
     color: inherit;

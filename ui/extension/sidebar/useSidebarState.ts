@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SidebarTabId, StorageAdapter } from './types';
 import {
-  CHAT_TAB_ID,
-  NOTES_TAB_ID,
-  TOOL_TAB_ID,
   SIDEBAR_ACTIVE_TAB_KEY,
   SELECTED_NOTE_ID_KEY,
+  LEGACY_SELECTED_NOTE_ID_KEY,
   SIDEBAR_OPEN_KEY,
 } from './constants';
 import { coerceTab, isValidUUID } from './utils';
@@ -63,9 +61,7 @@ function useHydrateActiveTab(
       .get(SIDEBAR_ACTIVE_TAB_KEY)
       .then((tab) => {
         if (typeof tab !== 'string') return;
-        if (tab === CHAT_TAB_ID || tab === NOTES_TAB_ID || tab === TOOL_TAB_ID) {
-          setActiveTab(tab);
-        }
+        setActiveTab(coerceTab(tab));
       })
       .catch(() => {
         /* ignore */
@@ -90,8 +86,20 @@ function useHydrateSelectedNoteId({
 
     storage
       .get(SELECTED_NOTE_ID_KEY)
-      .then((noteId) => {
-        const storedNoteId = typeof noteId === 'string' ? noteId : null;
+      .then(async (noteId) => {
+        const canonicalNoteId = typeof noteId === 'string' ? noteId : null;
+        if (
+          canonicalNoteId !== null &&
+          canonicalNoteId.length > 0 &&
+          isValidUUID(canonicalNoteId)
+        ) {
+          setSelectedNoteId(canonicalNoteId);
+          setIsNoteIdLoaded(true);
+          return;
+        }
+
+        const legacyNoteId = await storage.get<string>(LEGACY_SELECTED_NOTE_ID_KEY);
+        const storedNoteId = typeof legacyNoteId === 'string' ? legacyNoteId : null;
         if (storedNoteId !== null && storedNoteId.length > 0 && isValidUUID(storedNoteId)) {
           setSelectedNoteId(storedNoteId);
         }
