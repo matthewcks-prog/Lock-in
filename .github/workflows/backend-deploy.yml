@@ -116,32 +116,27 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=${{ github.repositoryUrl }}
 
-      - name: Setup Trivy CLI
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        # Pinned to commit for deterministic, auditable CI behavior.
-        uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.5
-        with:
-          version: 'v0.69.1'
-          cache: true
-
       - name: Run Trivy vulnerability scanner
         # Only scan on push events (actual deployments), skip PRs
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        # Pinned to commit for supply-chain safety and reproducibility.
-        uses: aquasecurity/trivy-action@e368e328979b113139d6f9068e03accaed98a518 # 0.34.1
-        with:
-          image-ref: ${{ env.IMAGE_NAME }}:test
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-          severity: 'CRITICAL,HIGH'
-          ignore-unfixed: true # Only fail on vulnerabilities with available fixes
-          trivyignores: '.trivyignore' # Use project-level ignore file
-          exit-code: '0' # Report vulnerabilities but don't fail the build
-          skip-setup-trivy: true
+        run: |
+          # Run Trivy from official container image to avoid action setup drift.
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "${PWD}:/workspace" \
+            aquasec/trivy:0.69.1 \
+            image \
+            --format sarif \
+            --output /workspace/trivy-results.sarif \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --ignorefile /workspace/.trivyignore \
+            --exit-code 0 \
+            "${{ env.IMAGE_NAME }}:test"
         continue-on-error: false
 
       - name: Upload Trivy scan results
-        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: always() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && hashFiles('trivy-results.sarif') != ''
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: 'trivy-results.sarif'
