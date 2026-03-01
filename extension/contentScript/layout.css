@@ -1,0 +1,240 @@
+@layer lockin.layout {
+  /* === ROOT CONTAINER === */
+  #lockin-root {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 2147483647;
+    width: auto;
+    height: auto;
+    font-family: var(--lockin-font-family-base);
+    pointer-events: none;
+  }
+
+  /* Host styles on target sites can hide extension buttons; force toggle visibility. */
+  #lockin-root > #lockin-toggle-pill,
+  #lockin-root #lockin-toggle-pill {
+    display: inline-flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  /* Ensure page content is constrained to left side ONLY when sidebar is expanded */
+  html {
+    /*
+     * Sidebar width uses CSS math functions with viewport constraints.
+     * --lockin-sidebar-ideal uses max() to guarantee a usable minimum
+     * even on narrower screens (max(480px, 35vw) ensures >= 480px).
+     */
+    --lockin-sidebar-min: 420px;
+    --lockin-sidebar-max: min(1500px, 75vw);
+    --lockin-sidebar-ideal: max(560px, 35vw);
+    --lockin-sidebar-width: clamp(
+      var(--lockin-sidebar-min),
+      var(--lockin-sidebar-ideal),
+      var(--lockin-sidebar-max)
+    );
+    /*
+     * Scrollbar width is dynamically set by scrollbarWidth.js module.
+     * Default to 0 if not yet initialized.
+     */
+    --lockin-scrollbar-width: 0px;
+    /*
+     * Content width calculation accounts for scrollbar presence.
+     * JavaScript will update this to subtract scrollbar width when needed.
+     * Default: calc(100vw - sidebar width)
+     */
+    --lockin-content-width: calc(100vw - var(--lockin-sidebar-width));
+  }
+
+  /* Only apply restrictive styles when sidebar is open - avoid breaking site layouts.
+     scrollbar-gutter:stable reserves scrollbar space even when no scrollbar is
+     rendered, which keeps 100vw consistent and prevents the sidebar/page-wrapper
+     from shifting when scrollbar visibility changes (e.g. normal page → fake-fullscreen). */
+  body.lockin-sidebar-open {
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+  }
+
+  /* Page content wrapper (injected) */
+  #lockin-page-wrapper {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    /*
+     * NO transition by default. We only animate width/margin during
+     * sidebar open/close (via .lockin-sidebar-transitioning). This
+     * prevents visual "jumps" when switching tabs or resizing, because
+     * content-reflows can briefly change scrollbar visibility and
+     * trigger unwanted animated width recalculations.
+     */
+  }
+
+  /*
+   * Animate page wrapper ONLY during sidebar open/close.
+   * The class is added by applySplitLayout() and removed after 320 ms.
+   */
+  html.lockin-sidebar-transitioning #lockin-page-wrapper {
+    transition:
+      width var(--lockin-duration-300) var(--lockin-ease-standard),
+      max-width var(--lockin-duration-300) var(--lockin-ease-standard),
+      margin-right var(--lockin-duration-300) var(--lockin-ease-standard),
+      margin-inline-end var(--lockin-duration-300) var(--lockin-ease-standard);
+  }
+
+  /* When sidebar is expanded (desktop mode), page content wrapper takes remaining space */
+  body.lockin-sidebar-open #lockin-page-wrapper {
+    width: var(--lockin-content-width);
+    max-width: var(--lockin-content-width);
+    margin-right: var(--lockin-sidebar-width);
+    margin-inline-end: var(--lockin-sidebar-width);
+  }
+
+  /* Host page wrappers can re-enable overflow; keep transitions from causing horizontal jitter. */
+  html.lockin-sidebar-transitioning {
+    overflow-x: hidden !important;
+  }
+
+  /* On Monash/Moodle pages the main wrapper is centered with a fixed max width.
+   When the sidebar opens, let the wrapper stretch so there is no white gutter
+   between the content and the sidebar. */
+  body.lockin-sidebar-open #page-wrapper {
+    width: 100% !important;
+    /* Moodle layout wrappers apply fixed widths; this must win to avoid content gutters. */
+    max-width: none !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Only target Moodle-specific container wrappers - avoid breaking other sites */
+  body.lockin-sidebar-open #lockin-page-wrapper > #page-wrapper > .container-fluid,
+  body.lockin-sidebar-open #lockin-page-wrapper > #page > #page-content,
+  body.lockin-sidebar-open #lockin-page-wrapper > #region-main-box {
+    width: 100% !important;
+    /* Moodle child containers enforce max-width/padding; override to honor sidebar split. */
+    max-width: 100% !important;
+    margin-right: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* === SIDEBAR PANEL === */
+  #lockin-sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 2147483647;
+    display: flex;
+    flex-direction: column;
+    width: var(--lockin-sidebar-width);
+    min-width: var(--lockin-sidebar-min, 420px);
+    max-width: var(--lockin-sidebar-max, min(1500px, 75vw));
+    height: 100vh;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border-left: var(--lockin-size-1) solid var(--lockin-color-border);
+    box-shadow: var(--lockin-shadow-25);
+    transition: transform var(--lockin-duration-300) var(--lockin-ease-standard);
+    transform: translateX(0);
+    pointer-events: auto;
+    container-name: sidebar;
+    /*
+     * container-type: inline-size enables @container queries scoped to the
+     * sidebar width. This lets child styles adapt to narrow/wide sidebar states
+     * without relying on viewport-width media queries, which would not reflect
+     * the user-resized sidebar width.
+     */
+    container-type: inline-size;
+  }
+
+  #lockin-root .lockin-sidebar-resize-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    width: var(--lockin-size-6);
+    height: 100%;
+    background: transparent;
+    outline: none;
+    box-shadow: none;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  #lockin-root .lockin-sidebar-resize-handle:focus,
+  #lockin-root .lockin-sidebar-resize-handle:focus-visible {
+    outline: none;
+  }
+
+  #lockin-sidebar[data-state='collapsed'] {
+    transform: translateX(100%);
+  }
+
+  html.lockin-sidebar-resizing,
+  html.lockin-sidebar-resizing body {
+    /* Host pages can set competing cursors during drag; force resize cursor while active. */
+    cursor: col-resize !important;
+  }
+
+  html.lockin-sidebar-resizing body {
+    transition: none !important;
+    /* Disable selection/transition while dragging to prevent host text selection artifacts. */
+    user-select: none !important;
+  }
+
+  html.lockin-sidebar-resizing #lockin-sidebar {
+    /* Prevent transition lag while host page repaints during manual resize. */
+    transition: none !important;
+  }
+
+  /* === TOGGLE PILL (COLLAPSED STATE) === */
+  #lockin-root > #lockin-toggle-pill {
+    /* Host styles frequently target generic buttons; pin all critical presentation values. */
+    position: fixed !important;
+    top: var(--lockin-size-16) !important;
+    right: var(--lockin-size-16) !important;
+    bottom: auto !important;
+    z-index: 2147483646 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: var(--lockin-size-8) !important;
+    width: auto !important;
+    height: auto !important;
+    padding: var(--lockin-size-10) var(--lockin-size-18) !important;
+    font-size: var(--lockin-text-md) !important;
+    font-weight: 600 !important;
+    color: var(--lockin-color-surface) !important;
+    background: linear-gradient(
+      135deg,
+      var(--lockin-color-brand) 0%,
+      var(--lockin-color-7c3aed) 100%
+    ) !important;
+    border: none !important;
+    border-radius: var(--lockin-radius-full) !important;
+    box-shadow: var(--lockin-shadow-pill) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transition: all var(--lockin-duration-250) var(--lockin-ease-standard) !important;
+    transform: none !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+  }
+
+  #lockin-root > #lockin-toggle-pill:hover {
+    box-shadow: var(--lockin-shadow-pill-hover) !important;
+    transform: scale(1.05) !important;
+  }
+
+  #lockin-root > #lockin-toggle-pill:active {
+    transform: scale(0.95) !important;
+  }
+
+  #lockin-sidebar[data-state='expanded'] ~ #lockin-toggle-pill {
+    opacity: 0;
+    pointer-events: none;
+  }
+}

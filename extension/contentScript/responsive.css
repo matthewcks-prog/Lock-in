@@ -1,0 +1,155 @@
+@layer lockin.responsive {
+  /* ================================================================
+     BREAKPOINTS
+     - xs:  <=480px   (mobile phone — extension disabled)
+     - sm:  <=768px   (tablet)
+     - md:  <=1024px  (small laptop / narrow window)
+     - lg:  <=1440px  (standard laptop)
+     - xl:  >1440px   (large monitor)
+     ================================================================ */
+
+  /* --- Mobile phone (<=480px) – hide the extension entirely --- */
+  @media (max-width: 480px) {
+    #lockin-root {
+      display: none !important;
+      pointer-events: none !important;
+    }
+
+    body.lockin-sidebar-open #lockin-page-wrapper {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-right: 0 !important;
+      margin-inline-end: 0 !important;
+    }
+  }
+
+  /* --- Small laptop (<=1024px) – sidebar overlays, no page push --- */
+  @media (max-width: 1024px) {
+    body.lockin-sidebar-open #lockin-page-wrapper {
+      width: 100%;
+      max-width: 100%;
+      margin-right: 0;
+      margin-inline-end: 0;
+    }
+
+    #lockin-sidebar {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    /* Disable resize handle in overlay mode — sidebar is full-width */
+    #lockin-root .lockin-sidebar-resize-handle {
+      display: none;
+    }
+
+    /* History panel overlays on narrow viewports */
+    #lockin-root .lockin-chat-history-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: var(--lockin-z-dropdown, 10);
+      box-shadow: var(--lockin-shadow-24);
+    }
+  }
+
+  /* --- Tablet (<=768px) – tighter spacing --- */
+  @media (max-width: 768px) {
+    #lockin-root .lockin-chat-messages {
+      padding: var(--lockin-space-3) var(--lockin-space-3);
+    }
+
+    #lockin-root .lockin-top-bar {
+      padding: var(--lockin-size-6) var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-chat-bottom-section {
+      padding: var(--lockin-space-2) var(--lockin-space-3);
+    }
+
+    #lockin-root .lockin-tab-toolbar {
+      padding: var(--lockin-size-4) var(--lockin-size-8);
+    }
+
+    /* Notes context-bar compact layout */
+    #lockin-root .lockin-notes-context-bar {
+      padding: var(--lockin-size-4) var(--lockin-size-8);
+    }
+
+    #lockin-root .lockin-notes-header-actions {
+      gap: var(--lockin-size-2);
+    }
+
+    /* Ensure touch targets are at least 44px on touch devices */
+    #lockin-root .lockin-tab,
+    #lockin-root .lockin-close-btn,
+    #lockin-root .lockin-history-toggle-btn,
+    #lockin-root .lockin-msg-action-btn,
+    #lockin-root .lockin-send-btn {
+      min-width: 44px;
+      min-height: 44px;
+    }
+  }
+
+  /* --- Narrow sidebar (≤520px) — tighten the top bar so all controls fit ---
+   *
+   * Uses CSS container queries scoped to #lockin-sidebar so the compact layout
+   * triggers based on the sidebar's own width, not the viewport width.
+   * This correctly handles user-resized sidebars on large monitors.
+   */
+  @container sidebar (max-width: 520px) {
+    /* Reduce tab padding so Chat / Notes / Tool tabs all fit */
+    .lockin-tab {
+      padding: var(--lockin-size-4) var(--lockin-size-6);
+    }
+
+    /* Cap the closable tool tab width tighter on very narrow sidebars */
+    .lockin-tab-closable {
+      max-width: 6rem;
+    }
+
+    /* Collapse "Study Tools ▼" label to icon-only on very narrow sidebars */
+    .lockin-study-tools-btn-label {
+      display: none;
+    }
+
+    .lockin-study-tools-btn {
+      padding: var(--lockin-size-4);
+    }
+  }
+
+  /* --- Touch devices – always-visible interactive elements --- */
+  @media (hover: none) {
+    #lockin-root .lockin-msg-action-bar {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #lockin-root .lockin-note-card-actions {
+      opacity: 1;
+    }
+  }
+
+  /* --- Reduced motion – respect user preference --- */
+  @media (prefers-reduced-motion: reduce) {
+    #lockin-sidebar,
+    #lockin-root .lockin-chat-history-panel,
+    #lockin-toggle-pill,
+    #lockin-root .lockin-close-btn,
+    #lockin-root .lockin-confirm-backdrop,
+    #lockin-root .lockin-confirm-dialog,
+    #lockin-root .lockin-toast {
+      transition: none;
+      animation: none;
+    }
+  }
+
+  /* --- High contrast – reinforce borders & focus --- */
+  @media (forced-colors: active) {
+    #lockin-root .lockin-msg-action-btn:focus-visible,
+    #lockin-root .lockin-send-btn:focus-visible,
+    #lockin-root .lockin-tab:focus-visible {
+      outline: 2px solid CanvasText;
+    }
+  }
+}

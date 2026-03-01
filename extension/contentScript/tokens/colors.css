@@ -1,0 +1,171 @@
+@layer lockin.tokens {
+  #lockin-root {
+    /* ================================================================
+       SEMANTIC COLOR ALIASES
+       ================================================================ */
+
+    /* Surfaces */
+    --lockin-color-surface: var(--lockin-color-ffffff);
+    --lockin-color-surface-subtle: var(--lockin-color-f9fafb);
+    --lockin-color-surface-muted: var(--lockin-color-f3f4f6);
+
+    /* Text */
+    --lockin-color-text-primary: var(--lockin-color-111827);
+    --lockin-color-text-strong: var(--lockin-color-1f2937);
+    --lockin-color-text-body: var(--lockin-color-374151);
+    --lockin-color-text-emphasis: var(--lockin-color-4b5563);
+    --lockin-color-text-secondary: var(--lockin-color-6b7280);
+    --lockin-color-text-muted: var(--lockin-color-9ca3af);
+    --lockin-color-text-on-fill: var(--lockin-color-ffffff);
+
+    /* Borders */
+    --lockin-color-border: var(--lockin-color-e5e7eb);
+    --lockin-color-border-strong: var(--lockin-color-d1d5db);
+
+    /* Brand / Accent */
+    --lockin-color-brand: var(--lockin-color-2563eb);
+    --lockin-color-brand-strong: var(--lockin-color-1d4ed8);
+    --lockin-color-brand-dark: var(--lockin-color-1e3a5f);
+    --lockin-color-brand-gradient-end: var(--lockin-color-7c3aed);
+    --lockin-color-brand-purple: var(--lockin-color-6d28d9);
+    --lockin-color-brand-purple-strong: var(--lockin-color-5b21b6);
+    --lockin-color-brand-purple-dark: var(--lockin-color-4a1d96);
+    --lockin-color-accent: var(--lockin-color-6366f1);
+    --lockin-color-accent-soft: var(--lockin-color-667eea);
+    --lockin-color-accent-strong: var(--lockin-color-4f46e5);
+    --lockin-color-accent-stronger: var(--lockin-color-4338ca);
+    --lockin-color-accent-border: var(--lockin-color-c7d2fe);
+    --lockin-color-accent-text: var(--lockin-color-1e1b4b);
+    --lockin-color-accent-surface: var(--lockin-color-eef2ff);
+
+    /* Success */
+    --lockin-color-success: var(--lockin-color-16a34a);
+    --lockin-color-success-strong: var(--lockin-color-15803d);
+    --lockin-color-success-text: var(--lockin-color-065f46);
+    --lockin-color-success-surface: var(--lockin-color-f0fdf4);
+    --lockin-color-success-surface-strong: var(--lockin-color-dcfce7);
+    --lockin-color-success-border: var(--lockin-color-86efac);
+    --lockin-color-success-icon: var(--lockin-color-34d399);
+
+    /* Info */
+    --lockin-color-info: var(--lockin-color-3b82f6);
+    --lockin-color-info-surface: var(--lockin-color-eff6ff);
+    --lockin-color-info-icon: var(--lockin-color-60a5fa);
+
+    /* Warning */
+    --lockin-color-warning: var(--lockin-color-eab308);
+    --lockin-color-warning-strong: var(--lockin-color-d97706);
+    --lockin-color-warning-accent: var(--lockin-color-f59e0b);
+    --lockin-color-warning-text: var(--lockin-color-92400e);
+    --lockin-color-warning-surface: var(--lockin-color-fffbeb);
+    --lockin-color-warning-surface-strong: var(--lockin-color-fef3c7);
+    --lockin-color-warning-border: var(--lockin-color-fbbf24);
+    --lockin-color-warning-border-strong: var(--lockin-color-fde68a);
+
+    /* Danger */
+    --lockin-color-danger: var(--lockin-color-ef4444);
+    --lockin-color-danger-strong: var(--lockin-color-dc2626);
+    --lockin-color-danger-surface: var(--lockin-color-fef2f2);
+    --lockin-color-danger-border: var(--lockin-color-fecaca);
+
+    /* ================================================================
+       RAW COLOR PALETTE
+       ================================================================ */
+    --lockin-color-065f46: #065f46;
+    --lockin-color-0f172a: #0f172a;
+    --lockin-color-111827: #111827;
+    --lockin-color-15803d: #15803d;
+    --lockin-color-166534: #166534;
+    --lockin-color-16a34a: #16a34a;
+    --lockin-color-1d4ed8: #1d4ed8;
+    --lockin-color-1e1b4b: #1e1b4b;
+    --lockin-color-1e3a5f: #1e3a5f;
+    --lockin-color-1e3a8a: #1e3a8a;
+    --lockin-color-1f2937: #1f2937;
+    --lockin-color-2563eb: #2563eb;
+    --lockin-color-34d399: #34d399;
+    --lockin-color-374151: #374151;
+    --lockin-color-3b82f6: #3b82f6;
+    --lockin-color-4338ca: #4338ca;
+    --lockin-color-4a1d96: #4a1d96;
+    --lockin-color-4b5563: #4b5563;
+    --lockin-color-4f46e5: #4f46e5;
+    --lockin-color-5b21b6: #5b21b6;
+    --lockin-color-60a5fa: #60a5fa;
+    --lockin-color-6366f1: #6366f1;
+    --lockin-color-667eea: #667eea;
+    --lockin-color-6b7280: #6b7280;
+    --lockin-color-6d28d9: #6d28d9;
+    --lockin-color-7c3aed: #7c3aed;
+    --lockin-color-86efac: #86efac;
+    --lockin-color-92400e: #92400e;
+    --lockin-color-991b1b: #991b1b;
+    --lockin-color-9ca3af: #9ca3af;
+    --lockin-color-b91c1c: #b91c1c;
+    --lockin-color-c7d2fe: #c7d2fe;
+    --lockin-color-d1d5db: #d1d5db;
+    --lockin-color-d97706: #d97706;
+    --lockin-color-dbeafe: #dbeafe;
+    --lockin-color-dc2626: #dc2626;
+    --lockin-color-dcfce7: #dcfce7;
+    --lockin-color-e0e7ff: #e0e7ff;
+    --lockin-color-e2e8f0: #e2e8f0;
+    --lockin-color-e5e7eb: #e5e7eb;
+    --lockin-color-eab308: #eab308;
+    --lockin-color-ecfdf3: #ecfdf3;
+    --lockin-color-ecfeff: #ecfeff;
+    --lockin-color-edf0f2: #edf0f2;
+    --lockin-color-eef2ff: #eef2ff;
+    --lockin-color-ef4444: #ef4444;
+    --lockin-color-eff6ff: #eff6ff;
+    --lockin-color-f0f0f0: #f0f0f0;
+    --lockin-color-f0f4ff: #f0f4ff;
+    --lockin-color-f0fdf4: #f0fdf4;
+    --lockin-color-f3f4f6: #f3f4f6;
+    --lockin-color-f59e0b: #f59e0b;
+    --lockin-color-f87171: #f87171;
+    --lockin-color-f8fafc: #f8fafc;
+    --lockin-color-f8faff: #f8faff;
+    --lockin-color-f9fafb: #f9fafb;
+    --lockin-color-fafaf9: #fafaf9;
+    --lockin-color-fafafa: #fafafa;
+    --lockin-color-fafbfc: #fafbfc;
+    --lockin-color-fbbf24: #fbbf24;
+    --lockin-color-fca5a5: #fca5a5;
+    --lockin-color-fde68a: #fde68a;
+    --lockin-color-fecaca: #fecaca;
+    --lockin-color-fee2e2: #fee2e2;
+    --lockin-color-fef2f2: #fef2f2;
+    --lockin-color-fef3c7: #fef3c7;
+    --lockin-color-fff: #fff;
+    --lockin-color-fffbeb: #fffbeb;
+    --lockin-color-ffffff: #ffffff;
+    --lockin-color-rgba-0-0-0-003: rgba(0, 0, 0, 0.03);
+    --lockin-color-rgba-0-0-0-005: rgba(0, 0, 0, 0.05);
+    --lockin-color-rgba-0-0-0-006: rgba(0, 0, 0, 0.06);
+    --lockin-color-rgba-0-0-0-008: rgba(0, 0, 0, 0.08);
+    --lockin-color-rgba-0-0-0-01: rgba(0, 0, 0, 0.1);
+    --lockin-color-rgba-0-0-0-012: rgba(0, 0, 0, 0.12);
+    --lockin-color-rgba-0-0-0-015: rgba(0, 0, 0, 0.15);
+    --lockin-color-rgba-0-0-0-02: rgba(0, 0, 0, 0.2);
+    --lockin-color-rgba-0-0-0-05: rgba(0, 0, 0, 0.5);
+    --lockin-color-rgba-102-126-234-01: rgba(102, 126, 234, 0.1);
+    --lockin-color-rgba-102-126-234-012: rgba(102, 126, 234, 0.12);
+    --lockin-color-rgba-102-126-234-015: rgba(102, 126, 234, 0.15);
+    --lockin-color-rgba-102-126-234-02: rgba(102, 126, 234, 0.2);
+    --lockin-color-rgba-109-40-217-03: rgba(109, 40, 217, 0.3);
+    --lockin-color-rgba-17-24-39-004: rgba(17, 24, 39, 0.04);
+    --lockin-color-rgba-239-68-68-01: rgba(239, 68, 68, 0.1);
+    --lockin-color-rgba-255-255-255-01: rgba(255, 255, 255, 0.1);
+    --lockin-color-rgba-255-255-255-03: rgba(255, 255, 255, 0.3);
+    --lockin-color-rgba-255-255-255-065: rgba(255, 255, 255, 0.65);
+    --lockin-color-rgba-255-255-255-08: rgba(255, 255, 255, 0.8);
+    --lockin-color-rgba-37-99-235-012: rgba(37, 99, 235, 0.12);
+    --lockin-color-rgba-37-99-235-035: rgba(37, 99, 235, 0.35);
+    --lockin-color-rgba-37-99-235-045: rgba(37, 99, 235, 0.45);
+    --lockin-color-rgba-59-130-246-01: rgba(59, 130, 246, 0.1);
+    --lockin-color-rgba-99-102-241-01: rgba(99, 102, 241, 0.1);
+    --lockin-color-rgba-99-102-241-012: rgba(99, 102, 241, 0.12);
+    --lockin-color-rgba-99-102-241-02: rgba(99, 102, 241, 0.2);
+  }
+}

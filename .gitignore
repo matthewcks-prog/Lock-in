@@ -21,6 +21,7 @@ backend/package-lock.json
 # Logs
 logs
 *.log
+*.err
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -49,9 +50,6 @@ desktop.ini
 # Build outputs
 dist/
 build/
-!build/
-build/*
-!build/viteShared.ts
 extension/dist/
 extension/ui/
 extension/libs/
@@ -71,3 +69,7 @@ temp/
 # Testing
 coverage/
 .nyc_output/
+
+# Azure Container Registry (temporary diagnostic files)
+manifest.json
+metadata.json

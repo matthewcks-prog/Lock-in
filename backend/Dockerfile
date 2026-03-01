@@ -1,73 +1,97 @@
 # =============================================================================
-# Lock-in Backend - Production Dockerfile
-# Multi-stage build for optimal image size and security
+# Lock-in Backend - Multi-stage Dockerfile
 #
-# BUILD CONTEXT: Must be project root (not /backend) because config.js
-# imports ../core/config/chatLimits.json
-#
-# Build from project root:
-#   docker build -f backend/Dockerfile -t lock-in-backend .
+# Stages:
+# 1. base: Shared system dependencies
+# 2. deps: Install all dependencies (including dev)
+# 3. development: Hot-reloading setup
+# 4. production-deps: Prune devDependencies
+# 5. production: Final runtime image
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Stage 1: Builder - Install dependencies
+# Stage 1: Base - Shared system dependencies
 # -----------------------------------------------------------------------------
-FROM node:20.18-alpine AS builder
+FROM node:20.18-alpine AS base
+# Install system dependencies required for both dev and prod
+# FFmpeg: transcription fallback
+# curl: healthcheck
+# python3/make/g++: build tools for native modules (if needed)
+RUN apk add --no-cache ffmpeg curl python3 make g++
 
 WORKDIR /app
 
-# Copy root workspace files (CRITICAL for npm workspaces)
-# npm workspaces requires the root package.json and package-lock.json
-COPY package*.json ./
+# -----------------------------------------------------------------------------
+# Stage 2: Dependencies - Install ALL modules
+# -----------------------------------------------------------------------------
+FROM base AS deps
 
-# Copy backend workspace package files
+# Copy root workspace files (required for npm workspaces)
+COPY package*.json ./
 COPY backend/package*.json ./backend/
 
-# Install dependencies from root (hoisted structure)
-# This ensures all workspace dependencies are resolved correctly
-ENV NODE_ENV=production
-RUN npm ci --omit=dev --ignore-scripts && \
-    npm cache clean --force && \
+# Install ALL dependencies (including dev for nodemon)
+# We use root node_modules for hoisted dependencies
+RUN npm ci --include=dev --ignore-scripts && \
     mkdir -p backend/node_modules
 
 # -----------------------------------------------------------------------------
-# Stage 2: Production - Minimal runtime image
+# Stage 3: Development - Hot reloading
 # -----------------------------------------------------------------------------
-FROM node:20.18-alpine
+FROM base AS development
 
-# Install runtime dependencies and create non-root user
-# FFmpeg: fallback for transcription (ffmpeg-static should work, but belt-and-suspenders)
-# curl: required for health checks
-RUN apk add --no-cache ffmpeg curl && \
-    addgroup -g 1001 -S nodejs && \
+# Copy node_modules from deps
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/backend/node_modules ./backend/node_modules
+
+# Copy application code (will be mounted over in docker-compose, but good fallback)
+COPY . .
+
+# Setup development environment
+ENV NODE_ENV=development
+ENV PORT=3000
+
+# Directory for temp transcripts
+RUN mkdir -p /tmp/transcripts && chmod 777 /tmp/transcripts
+
+WORKDIR /app/backend
+CMD ["npm", "run", "dev"]
+
+# -----------------------------------------------------------------------------
+# Stage 4: Production Deps - Prune dev dependencies
+# -----------------------------------------------------------------------------
+FROM deps AS production-deps
+# Remove devDependencies to save space and reduce attack surface
+RUN npm prune --omit=dev
+
+# -----------------------------------------------------------------------------
+# Stage 5: Production - Final Image
+# -----------------------------------------------------------------------------
+FROM base AS production
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 && \
     mkdir -p /tmp/transcripts && \
     chown nodejs:nodejs /tmp/transcripts
 
-WORKDIR /app
+# Copy production node_modules
+COPY --from=production-deps --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=production-deps --chown=nodejs:nodejs /app/backend/node_modules ./backend/node_modules
 
-# Copy hoisted node_modules from builder with correct ownership
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-# Copy nested backend node_modules (if any exist)
-COPY --from=builder --chown=nodejs:nodejs /app/backend/node_modules ./backend/node_modules
-
-# Copy backend application code to /app/backend (Preserve monorepo structure)
+# Copy application code
 COPY --chown=nodejs:nodejs backend/ ./backend/
-
-# Copy required core config files
 COPY --chown=nodejs:nodejs core/config/chatLimits.json ./core/config/chatLimits.json
+
+WORKDIR /app
 
 # Switch to non-root user
 USER nodejs
 
-# Environment configuration
-# NOTE: NODE_ENV is NOT set here - it should be provided at runtime:
-#   - docker-compose.yml sets it to 'development' for local testing
-#   - Azure Container Apps sets it to 'development' (staging) or 'production'
-ENV PORT=3000 \
-    TRANSCRIPTION_TEMP_DIR=/tmp/transcripts
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV TRANSCRIPTION_TEMP_DIR=/tmp/transcripts
 
-# Expose the application port
 EXPOSE 3000
 
 # Health check - verify the app responds

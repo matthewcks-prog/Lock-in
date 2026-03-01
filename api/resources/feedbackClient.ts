@@ -1,4 +1,9 @@
 import type { ApiRequest } from '../fetcher';
+import {
+  validateFeedbackListResponse,
+  validateFeedbackResponse,
+  validateSubmitFeedbackResponse,
+} from '../validation';
 
 /**
  * Feedback type options
@@ -14,11 +19,11 @@ export type FeedbackStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
  * Context auto-captured with feedback
  */
 export interface FeedbackContext {
-  url?: string;
-  courseCode?: string;
-  extensionVersion?: string;
-  browser?: string;
-  page?: string;
+  url?: string | null | undefined;
+  courseCode?: string | null | undefined;
+  extensionVersion?: string | null | undefined;
+  browser?: string | null | undefined;
+  page?: string | null | undefined;
 }
 
 /**
@@ -71,25 +76,34 @@ export interface GetFeedbackResponse {
   data: FeedbackRecord;
 }
 
-export function createFeedbackClient(apiRequest: ApiRequest) {
+export type FeedbackClient = {
+  submitFeedback: (params: SubmitFeedbackParams) => Promise<SubmitFeedbackResponse>;
+  listFeedback: (limit?: number) => Promise<FeedbackRecord[]>;
+  getFeedback: (feedbackId: string) => Promise<FeedbackRecord>;
+};
+
+export function createFeedbackClient(apiRequest: ApiRequest): FeedbackClient {
   /**
    * Submit user feedback (bug report, feature request, question)
    */
   async function submitFeedback(params: SubmitFeedbackParams): Promise<SubmitFeedbackResponse> {
-    return apiRequest<SubmitFeedbackResponse>('/api/feedback', {
+    const raw = await apiRequest<unknown>('/api/feedback', {
       method: 'POST',
       body: JSON.stringify(params),
     });
+    return validateSubmitFeedbackResponse(raw, 'submitFeedback');
   }
 
   /**
    * List user's own feedback submissions
    */
   async function listFeedback(limit?: number): Promise<FeedbackRecord[]> {
-    const queryParams = limit ? `?limit=${limit}` : '';
-    const response = await apiRequest<ListFeedbackResponse>(`/api/feedback${queryParams}`, {
+    const queryParams =
+      typeof limit === 'number' && Number.isFinite(limit) ? `?limit=${limit}` : '';
+    const raw = await apiRequest<unknown>(`/api/feedback${queryParams}`, {
       method: 'GET',
     });
+    const response = validateFeedbackListResponse(raw, 'listFeedback');
     return response.data;
   }
 
@@ -97,12 +111,13 @@ export function createFeedbackClient(apiRequest: ApiRequest) {
    * Get a specific feedback entry
    */
   async function getFeedback(feedbackId: string): Promise<FeedbackRecord> {
-    if (!feedbackId) {
+    if (typeof feedbackId !== 'string' || feedbackId.length === 0) {
       throw new Error('feedbackId is required');
     }
-    const response = await apiRequest<GetFeedbackResponse>(`/api/feedback/${feedbackId}`, {
+    const raw = await apiRequest<unknown>(`/api/feedback/${feedbackId}`, {
       method: 'GET',
     });
+    const response = validateFeedbackResponse(raw, 'getFeedback');
     return response.data;
   }
 

@@ -5,10 +5,12 @@ interface ToolSectionProps {
   onClose: () => void;
 }
 
-export function ToolSection({ activeToolId, onClose }: ToolSectionProps) {
-  if (!activeToolId) return null;
+export function ToolSection({ activeToolId, onClose }: ToolSectionProps): JSX.Element | null {
+  if (activeToolId === null || activeToolId === undefined || activeToolId.length === 0) {
+    return null;
+  }
   const tool = getToolById(activeToolId);
-  if (!tool) return null;
+  if (tool === undefined) return null;
   const ToolComponent = tool.component;
 
   return (

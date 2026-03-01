@@ -7,6 +7,8 @@ Purpose: Quick orientation for humans/AI. For current implementation details, se
 ```
 backend/
   index.js, app.js, routes/, controllers/, middleware/, migrations/
+config/
+  vite/shared.ts (shared Vite/Vitest config helpers)
 core/
   domain/, services/, storage/, errors/, utils/, transcripts/
 api/
@@ -25,15 +27,17 @@ ui/
   extension/ (index.tsx, LockInSidebar.tsx, sidebar/, chat/, notes/, hooks/)
 shared/
   ui/components/ (Button, Card, ConfirmDialog, Toast, TextInput, Tabs)
+  test/ (setupVitest.ts, MSW handlers/server, render helpers, test stubs/factories)
 docs/
   README.md
+  backend/ (AZURE_EMBEDDINGS_SETUP.md, MIGRATION_CHECKLIST.md)
   architecture/ (ARCHITECTURE.md, REPO_MAP.md, AI_SERVICES_ARCHITECTURE.md, MONOREPO.md)
-  reference/ (CODE_OVERVIEW.md, DATABASE.md, CHANGELOG.md, CONTRIBUTING.md)
+  reference/ (CODE_OVERVIEW.md, DATABASE.md, CHANGELOG.md, CONTRIBUTING.md, code-overview/)
   tracking/ (STATUS.md, REFACTOR_PLAN.md, PROMPT_LOG.md, AI_SERVICES_REFACTOR_2026-01-19.md)
   testing/ (SMOKE_CHECKLIST.md, BACKEND_TESTING.md)
   features/
     transcripts/ (REVIEW.md, SYSTEM_MAP.md, TROUBLESHOOTING.md)
-  setup/ (LOCAL_SUPABASE_SETUP.md, CODE_FORMATTING.md)
+  setup/ (LOCAL_DEVELOPMENT.md, CODE_FORMATTING.md, TROUBLESHOOTING.md)
   deployment/ (README.md, ENVIRONMENTS.md, AZURE.md, CICD.md, CI_CHECKLIST.md, DEPLOYMENT_CHECK.md, DEPLOYMENT_REVIEW.md, FIX_DEPLOYMENT_ISSUE.md, ROLLBACK.md, AUDIT_SUMMARY.md)
   archive/ (QUALITY_AUDIT_2025-12-16.md, QUALITY_AUDIT_2026-01-19.md, QUALITY_AUDIT_2026-01-23.md, WORKFLOW_REVIEW_SUMMARY_2026-01-22.md)
 tools/
@@ -68,10 +72,12 @@ tools/
 - `npm run type-check` → `tsc --noEmit`
 
 **Note:** `extension/dist/ui/**` and `extension/dist/libs/**` are build outputs—do not hand-edit.
+**Config helper:** All Vite/Vitest configs import shared helpers from `config/vite/shared.ts`.
 
 ## Tests & Guardrails
 
 - Unit tests: `core/utils/__tests__/`, `integrations/adapters/__tests__/` (vitest, jsdom).
+- Vitest bootstrap: `shared/test/setupVitest.ts`.
 - Guardrail commands: `npm run docs:check-links`, `npm run lint`, `npm run test`, `npm run type-check`, `npm run build`, `npm run verify-build`, `npm run validate`.
 - Manual: see `docs/testing/SMOKE_CHECKLIST.md` at `../testing/SMOKE_CHECKLIST.md` (run §1 for build/load sanity).
 

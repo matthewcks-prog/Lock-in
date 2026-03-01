@@ -42,21 +42,28 @@ The backend automatically selects the correct Supabase project based on `NODE_EN
 
 ### 1.1 Database Migrations
 
-Run all migrations in order via Supabase SQL Editor:
+Push migrations to production using Supabase CLI:
 
 ```bash
-# Location: backend/migrations/
-001_note_assets.sql          # Note attachments table + RLS
-002_performance_indexes.sql  # Query performance indexes
-003_row_level_security.sql   # RLS policies for all tables
-004_vector_extension_schema.sql  # pgvector schema fix
-005_starred_notes.sql        # Starred notes feature
-006_transcripts.sql          # Transcript tables + RLS
-007_transcripts_hardening.sql    # State machine + chunk tracking
-008_transcript_privacy_hardening.sql  # Privacy: TTL + URL redaction
-009_feedback.sql             # User feedback table
-010_chat_assets.sql          # Chat message attachments
-011_chat_assets_cleanup.sql  # Orphan cleanup function
+# Link to production project (one-time)
+npx supabase link --project-ref vtuflatvllpldohhimao
+
+# Push all migrations to production
+npx supabase db push
+
+# Migrations location: supabase/migrations/
+# 001_note_assets.sql          - Note attachments table + RLS
+# 002_performance_indexes.sql  - Query performance indexes
+# 003_row_level_security.sql   - RLS policies for all tables
+# 004_vector_extension_schema.sql  - pgvector schema fix
+# 005_starred_notes.sql        - Starred notes feature
+# 006_transcripts.sql          - Transcript tables + RLS
+# 007_transcripts_hardening.sql    - State machine + chunk tracking
+# 008_transcript_privacy_hardening.sql  - Privacy: TTL + URL redaction
+# 009_feedback.sql             - User feedback table
+# 010_chat_assets.sql          - Chat message attachments
+# 011_chat_assets_cleanup.sql  - Orphan cleanup function
+# 012_transcript_storage_and_limits.sql - Transcript durability
 ```
 
 > **Note**: All migrations are idempotent and safe to re-run. They use
@@ -454,7 +461,7 @@ const API_BASE_URL =
 
 ### 5.3 Update CORS Origins (if needed)
 
-If deploying a web app frontend, update `backend/config.js`:
+If deploying a web app frontend, update `backend/config/index.js`:
 
 ```javascript
 const ALLOWED_ORIGINS = [
@@ -660,7 +667,7 @@ curl http://localhost:3000/health
 
 ### CORS Errors
 
-- Verify origin is in `ALLOWED_ORIGINS` in `backend/config.js`
+- Verify origin is in `ALLOWED_ORIGINS` in `backend/config/index.js`
 - Check browser console for exact origin being blocked
 - Rebuild and redeploy after updating CORS config
 
@@ -673,6 +680,15 @@ curl http://localhost:3000/health
 ---
 
 ## Cost Optimization
+
+### Pausing ACR and deployment
+
+To stop **Azure Container Registry** (and deploy) usage from the repo:
+
+- **Workflows:** ACR push and deploy run only when the repository variable `DEPLOYMENT_ENABLED` is set to `true`. If it is unset or `false`, the backend-deploy workflow still builds and tests but does not push to ACR or deploy; the ACR cleanup workflow does not run. See [CICD.md § Pausing and resuming deployment](./CICD.md#pausing-and-resuming-deployment-acr-cost-control).
+- **Azure billing:** Pausing workflows stops new image pushes. The ACR resource itself still incurs cost until you delete it (or change tier) in the Azure Portal. To eliminate ACR cost entirely, delete the registry when paused and recreate it when you are ready to deploy again.
+
+**Clean the registry while paused (best practice):** Prefer cleaning or deleting the registry so you don’t pay for storage. When you resume, the next pipeline run will push everything needed. See [CICD.md § Clean the registry while paused](./CICD.md#clean-the-registry-while-paused-recommended) for options (delete ACR vs one-time cleanup vs keep as is) and resume steps.
 
 ### Resource Sizing
 

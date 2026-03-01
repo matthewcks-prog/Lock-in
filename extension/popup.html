@@ -169,7 +169,7 @@
           <div class="help-section">
             <p class="help-intro">Need help or want to share your thoughts?</p>
             <div class="help-buttons">
-              <a href="mailto:feedback@lockin.study?subject=Lock-in%20Feedback" class="help-btn">
+              <a id="send-feedback-link" class="help-btn">
                 <svg
                   width="16"
                   height="16"
@@ -249,6 +249,10 @@
 
       <div class="footer">
         <p>Highlight text on any page to get started</p>
+        <p class="disclaimer">
+          Independent learning project by an aspiring software engineer. Not affiliated with or
+          endorsed by Monash University.
+        </p>
         <p class="version">v1.0.0</p>
       </div>
     </div>
@@ -256,6 +260,8 @@
     <script src="config.js"></script>
     <script src="dist/libs/sentry.js"></script>
     <script src="dist/libs/initApi.js"></script>
+    <script src="popupPrivacy.js"></script>
+    <script src="popupAuthUtils.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

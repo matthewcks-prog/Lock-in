@@ -41,7 +41,7 @@ export function VideoListItem({
   renderBadge,
   renderActions,
   renderStatus,
-}: VideoListItemProps) {
+}: VideoListItemProps): JSX.Element {
   const renderProps = { video, isSelected, isDisabled };
 
   // Default status: spinner when selected, arrow otherwise
@@ -67,7 +67,7 @@ export function VideoListItem({
           </div>
         </div>
         <div className="lockin-video-item-action">
-          {renderStatus ? renderStatus(renderProps) : defaultStatus}
+          {renderStatus !== undefined ? renderStatus(renderProps) : defaultStatus}
         </div>
       </button>
 

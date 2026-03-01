@@ -32,10 +32,11 @@ const ContentHelpers = Runtime || {};
 
 let bootstrapPromise = null;
 let hasBootstrapped = false;
+const UI_BUNDLE_WAIT_MAX_ATTEMPTS = 50;
 
 async function waitForUIBundle(attempt = 0) {
   if (window.LockInUI && window.LockInUI.createLockInSidebar) return true;
-  if (attempt > 50) {
+  if (attempt > UI_BUNDLE_WAIT_MAX_ATTEMPTS) {
     Logger.error('LockInUI not available after waiting');
     return false;
   }
@@ -43,26 +44,15 @@ async function waitForUIBundle(attempt = 0) {
   return waitForUIBundle(attempt + 1);
 }
 
-async function bootstrap() {
-  if (hasBootstrapped) {
-    Logger.debug('Skipping bootstrap: already initialized');
-    return;
-  }
-
-  if (bootstrapPromise) {
-    return bootstrapPromise;
-  }
-
-  Logger.debug('Starting content script bootstrap');
-
+function resolveBootstrapHelpers() {
   const {
     resolveAdapterContext,
     createStateStore,
     createSidebarHost,
     createSessionManager,
     createInteractionController,
+    createFakeFullscreen,
   } = ContentHelpers;
-
   if (
     !resolveAdapterContext ||
     !createStateStore ||
@@ -71,101 +61,162 @@ async function bootstrap() {
     !createInteractionController
   ) {
     Logger.error('Content helpers missing on window.LockInContent');
-    bootstrapPromise = null;
-    return;
+    return null;
   }
+  return {
+    resolveAdapterContext,
+    createStateStore,
+    createSidebarHost,
+    createSessionManager,
+    createInteractionController,
+    createFakeFullscreen,
+  };
+}
 
-  bootstrapPromise = (async () => {
-    if (!(await waitForUIBundle())) return;
+function resolveApiClient() {
+  const apiClient = window.LockInAPI;
+  if (!apiClient) {
+    Logger.error('API client not available');
+    return null;
+  }
+  if (typeof apiClient.toggleNoteStar !== 'function') {
+    Logger.error(
+      'API client is missing toggleNoteStar method. Available methods:',
+      Object.keys(apiClient),
+    );
+  }
+  return apiClient;
+}
 
-    const apiClient = window.LockInAPI;
-    if (!apiClient) {
-      Logger.error('API client not available');
-      return;
-    }
+function bindStateSync(stateStore, sidebarHost) {
+  stateStore.subscribe((snapshot) => {
+    sidebarHost.updatePropsFromState(snapshot);
+  });
+  stateStore.startSync();
+}
 
-    // Validate API client has required methods
-    if (typeof apiClient.toggleNoteStar !== 'function') {
-      Logger.error(
-        'API client is missing toggleNoteStar method. Available methods:',
-        Object.keys(apiClient),
-      );
-      // Continue anyway - the error will be caught by the notes service
-    }
-
-    const { adapter, pageContext } = resolveAdapterContext(Logger);
-    const stateStore = createStateStore({ Storage, Logger });
-    const sidebarHost = createSidebarHost({ Logger, Storage });
-    const sessionManager = createSessionManager({
-      Messaging,
-      Logger,
-      stateStore,
-      origin: window.location.origin,
-    });
-
-    const updateSidebarFromState = (snapshot) => {
-      sidebarHost.updatePropsFromState(snapshot);
-    };
-
-    stateStore.subscribe(updateSidebarFromState);
-    stateStore.startSync();
-
-    const handleSidebarToggle = async () => {
-      const snapshot = stateStore.getSnapshot();
-      await stateStore.setSidebarOpen(!snapshot.isSidebarOpen);
-    };
-
-    const initialState = await stateStore.loadInitial();
-    sidebarHost.renderSidebar({
-      apiClient,
-      adapter,
-      pageContext,
-      state: initialState,
-      onToggle: handleSidebarToggle,
-      onClearPrefill: stateStore.clearPendingPrefill,
-    });
-
-    await sessionManager.getTabId();
-    await sessionManager.restoreSession();
-
-    const closeSidebar = async () => {
-      const snapshot = stateStore.getSnapshot();
-      if (snapshot.isSidebarOpen) {
-        await stateStore.setSidebarOpen(false);
-      }
-    };
-
-    const interactionController = createInteractionController({
-      stateStore,
-      onCloseSidebar: closeSidebar,
-      logger: Logger,
-    });
-
-    interactionController.bind();
-
-    if (Messaging && typeof Messaging.onMessage === 'function') {
-      Messaging.onMessage((message) => {
-        if (message?.type === 'PREFILL_CHAT_INPUT') {
-          const text = typeof message.payload?.text === 'string' ? message.payload.text : '';
-          if (!text.trim()) return undefined;
-          stateStore.setPendingPrefill(text);
-          stateStore.setActiveTab('chat');
-          if (!stateStore.getSnapshot().isSidebarOpen) {
-            stateStore.setSidebarOpen(true).catch((error) => {
-              Logger.warn('Failed to open sidebar for prefill:', error);
-            });
-          }
-        }
-        return undefined;
+function registerPrefillMessaging(stateStore) {
+  if (!Messaging || typeof Messaging.onMessage !== 'function') return;
+  Messaging.onMessage((message) => {
+    if (message?.type !== 'PREFILL_CHAT_INPUT') return undefined;
+    const text = typeof message.payload?.text === 'string' ? message.payload.text : '';
+    if (!text.trim()) return undefined;
+    stateStore.setPendingPrefill(text);
+    stateStore.setActiveTab('chat');
+    if (!stateStore.getSnapshot().isSidebarOpen) {
+      stateStore.setSidebarOpen(true).catch((error) => {
+        Logger.warn('Failed to open sidebar for prefill:', error);
       });
     }
+    return undefined;
+  });
+}
 
-    // Set up message handler for media fetch requests (for AI transcription)
-    setupMediaFetchHandler();
+function bindInteractions(createInteractionController, stateStore) {
+  const closeSidebar = async () => {
+    const snapshot = stateStore.getSnapshot();
+    if (snapshot.isSidebarOpen) {
+      await stateStore.setSidebarOpen(false);
+    }
+  };
+  createInteractionController({
+    stateStore,
+    onCloseSidebar: closeSidebar,
+    logger: Logger,
+  }).bind();
+}
 
-    hasBootstrapped = true;
-  })();
+async function restorePersistedSidebarWidth() {
+  const runtimeStorage = Runtime.storage;
+  if (!runtimeStorage || typeof runtimeStorage.getLocal !== 'function') {
+    return;
+  }
+  try {
+    const data = await runtimeStorage.getLocal('lockin_sidebar_width');
+    const width = data?.lockin_sidebar_width;
+    if (typeof width === 'number' && width > 0) {
+      document.documentElement.style.setProperty('--lockin-sidebar-width', `${width}px`);
+    }
+  } catch (error) {
+    Logger.warn('Failed to restore sidebar width from storage:', error);
+  }
+}
 
+async function renderSidebar({ apiClient, pageContext, stateStore, sidebarHost }) {
+  const handleSidebarToggle = async () => {
+    const snapshot = stateStore.getSnapshot();
+    await stateStore.setSidebarOpen(!snapshot.isSidebarOpen);
+  };
+  const initialState = await stateStore.loadInitial();
+  sidebarHost.renderSidebar({
+    apiClient,
+    pageContext,
+    state: initialState,
+    onToggle: handleSidebarToggle,
+    onClearPrefill: stateStore.clearPendingPrefill,
+  });
+}
+
+function initFakeFullscreen(createFakeFullscreen, stateStore) {
+  if (typeof createFakeFullscreen !== 'function') {
+    return;
+  }
+  try {
+    const fakeFullscreen = createFakeFullscreen({
+      Logger,
+      stateStore,
+      scrollbarManager:
+        window.LockInContent && window.LockInContent.scrollbarManager
+          ? window.LockInContent.scrollbarManager
+          : null,
+    });
+    if (fakeFullscreen && typeof fakeFullscreen.init === 'function') {
+      fakeFullscreen.init();
+      Logger.debug('[Lock-in] Fake fullscreen initialized');
+    }
+  } catch (error) {
+    Logger.error('[Lock-in] Failed to initialize fake fullscreen:', error);
+  }
+}
+
+async function runBootstrapTask(helpers) {
+  if (!(await waitForUIBundle())) return;
+  const apiClient = resolveApiClient();
+  if (!apiClient) return;
+
+  const { pageContext } = helpers.resolveAdapterContext(Logger);
+  const stateStore = helpers.createStateStore({ Storage, Logger });
+  const sidebarHost = helpers.createSidebarHost({ Logger, Storage });
+  const sessionManager = helpers.createSessionManager({
+    Messaging,
+    Logger,
+    stateStore,
+    origin: window.location.origin,
+  });
+  bindStateSync(stateStore, sidebarHost);
+  await restorePersistedSidebarWidth();
+  await renderSidebar({ apiClient, pageContext, stateStore, sidebarHost });
+  await sessionManager.getTabId();
+  await sessionManager.restoreSession();
+  bindInteractions(helpers.createInteractionController, stateStore);
+  initFakeFullscreen(helpers.createFakeFullscreen, stateStore);
+  registerPrefillMessaging(stateStore);
+  setupMediaFetchHandler();
+  hasBootstrapped = true;
+}
+
+async function bootstrap() {
+  if (hasBootstrapped) {
+    Logger.debug('Skipping bootstrap: already initialized');
+    return;
+  }
+  if (bootstrapPromise) {
+    return bootstrapPromise;
+  }
+  Logger.debug('Starting content script bootstrap');
+  const helpers = resolveBootstrapHelpers();
+  if (!helpers) return;
+  bootstrapPromise = runBootstrapTask(helpers);
   try {
     await bootstrapPromise;
   } finally {

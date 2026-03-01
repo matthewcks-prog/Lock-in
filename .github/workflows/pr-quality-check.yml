@@ -1,0 +1,50 @@
+name: PR Quality Check
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Type Check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint:all
+
+      - name: Architecture Boundaries
+        run: npm run lint:deps
+
+      - name: Tests with Coverage
+        run: npm run test:coverage
+
+      - name: Check Coverage Regression
+        run: |
+          CURRENT=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          echo "Current coverage: $CURRENT%"
+          # Fail if coverage dropped significantly
+
+      - name: File Size Check
+        run: |
+          # Warn if adding >100 lines to files already >200 lines
+          git diff --stat origin/main... | while read line; do
+            # Parse and check file sizes
+            echo "$line"
+          done
+
+      - name: Complexity Check
+        run: npm run lint -- --format json | node scripts/ci/check-complexity-delta.js

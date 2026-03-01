@@ -1,0 +1,262 @@
+@layer lockin.dialogs {
+  /* === CONFIRM DIALOG === */
+  #lockin-root .lockin-confirm-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: var(--lockin-z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-16);
+    background: var(--lockin-color-rgba-0-0-0-05);
+    animation: lockin-fade-in var(--lockin-duration-150) var(--lockin-ease-default);
+  }
+
+  @keyframes lockin-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  #lockin-root .lockin-confirm-dialog {
+    width: 100%;
+    max-width: var(--lockin-size-400);
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+    border-radius: var(--lockin-radius-2xl);
+    box-shadow: var(--lockin-shadow-13);
+    animation: lockin-slide-up var(--lockin-duration-200) var(--lockin-ease-default);
+  }
+
+  @keyframes lockin-slide-up {
+    from {
+      opacity: 0;
+      transform: translateY(var(--lockin-size-10)) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  #lockin-root .lockin-confirm-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: var(--lockin-size-20) var(--lockin-size-20) 0;
+  }
+
+  #lockin-root .lockin-confirm-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-40);
+    height: var(--lockin-size-40);
+    color: var(--lockin-color-warning-strong);
+    background: var(--lockin-color-warning-surface-strong);
+    border-radius: 50%;
+  }
+
+  #lockin-root .lockin-confirm-icon.is-danger {
+    color: var(--lockin-color-danger-strong);
+    background: var(--lockin-color-danger-surface);
+  }
+
+  #lockin-root .lockin-confirm-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-4);
+    color: var(--lockin-color-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-confirm-close:hover {
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-confirm-close:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-confirm-content {
+    padding: var(--lockin-size-16) var(--lockin-size-20);
+  }
+
+  #lockin-root .lockin-confirm-title {
+    margin: 0 0 var(--lockin-size-8);
+    font-size: var(--lockin-text-xl);
+    font-weight: 600;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-confirm-description {
+    margin: 0;
+    font-size: var(--lockin-text-md);
+    line-height: 1.5;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--lockin-size-12);
+    padding: var(--lockin-size-16) var(--lockin-size-20) var(--lockin-size-20);
+  }
+
+  #lockin-root .lockin-confirm-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--lockin-size-8);
+    min-width: var(--lockin-size-80);
+    padding: var(--lockin-size-10) var(--lockin-size-20);
+    font-size: var(--lockin-text-md);
+    font-weight: 500;
+    border: var(--lockin-size-1) solid transparent;
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-confirm-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-confirm-btn-cancel {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+    border-color: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-confirm-btn-cancel:hover:not(:disabled) {
+    background: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-confirm-btn-primary {
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-accent);
+  }
+
+  #lockin-root .lockin-confirm-btn-primary:hover:not(:disabled) {
+    background: var(--lockin-color-accent-strong);
+  }
+
+  #lockin-root .lockin-confirm-btn-danger {
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-danger-strong);
+  }
+
+  #lockin-root .lockin-confirm-btn-danger:hover:not(:disabled) {
+    background: var(--lockin-color-danger-strong);
+  }
+
+  #lockin-root .lockin-confirm-spinner {
+    width: var(--lockin-size-14);
+    height: var(--lockin-size-14);
+    border: var(--lockin-size-2) solid var(--lockin-color-rgba-255-255-255-03);
+    border-radius: 50%;
+    animation: lockin-spin var(--lockin-duration-800) var(--lockin-ease-linear) infinite;
+    border-top-color: var(--lockin-color-surface);
+  }
+
+  /* === TOAST NOTIFICATIONS === */
+  #lockin-root .lockin-toast {
+    position: fixed;
+    bottom: var(--lockin-size-24);
+    left: 50%;
+    z-index: var(--lockin-z-toast);
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-10);
+    max-width: 90%;
+    padding: var(--lockin-size-12) var(--lockin-size-16);
+    font-size: var(--lockin-text-md);
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-text-strong);
+    border-radius: var(--lockin-radius-xl);
+    box-shadow: var(--lockin-shadow-11);
+    animation: lockin-toast-in var(--lockin-duration-300) var(--lockin-ease-default);
+    transform: translateX(-50%);
+  }
+
+  @keyframes lockin-toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(var(--lockin-size-20));
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  #lockin-root .lockin-toast.is-leaving {
+    animation: lockin-toast-out var(--lockin-duration-200) var(--lockin-ease-default) forwards;
+  }
+
+  @keyframes lockin-toast-out {
+    from {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-50%) translateY(var(--lockin-size-20));
+    }
+  }
+
+  #lockin-root .lockin-toast-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+  }
+  #lockin-root .lockin-toast-success .lockin-toast-icon {
+    color: var(--lockin-color-success-icon);
+  }
+  #lockin-root .lockin-toast-error .lockin-toast-icon {
+    color: var(--lockin-color-danger);
+  }
+  #lockin-root .lockin-toast-info .lockin-toast-icon {
+    color: var(--lockin-color-info-icon);
+  }
+  #lockin-root .lockin-toast-star .lockin-toast-icon {
+    color: var(--lockin-color-warning-border);
+  }
+
+  #lockin-root .lockin-toast-message {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-toast-dismiss {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    padding: var(--lockin-size-4);
+    color: var(--lockin-color-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-sm);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-toast-dismiss:hover {
+    color: var(--lockin-color-surface);
+    background: var(--lockin-color-rgba-255-255-255-01);
+  }
+}

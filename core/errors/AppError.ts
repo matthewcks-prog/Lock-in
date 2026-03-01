@@ -47,6 +47,30 @@ export const ErrorCodes = {
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
+const HTTP_STATUS_UNAUTHORIZED = 401;
+const FALLBACK_UNEXPECTED_MESSAGE = 'An unexpected error occurred';
+
+const DEFAULT_USER_MESSAGES: Partial<Record<ErrorCode, string>> = {
+  [ErrorCodes.AUTH_REQUIRED]: 'Please sign in to continue',
+  [ErrorCodes.INVALID_TOKEN]: 'Your session is invalid. Please sign in again.',
+  [ErrorCodes.SESSION_EXPIRED]: 'Your session has expired. Please sign in again.',
+  [ErrorCodes.VALIDATION_ERROR]: 'Some information is missing or invalid. Please check your input.',
+  [ErrorCodes.INVALID_INPUT]: 'Some information is missing or invalid. Please check your input.',
+  [ErrorCodes.MISSING_REQUIRED_FIELD]:
+    'Some information is missing or invalid. Please check your input.',
+  [ErrorCodes.ALREADY_EXISTS]: 'That item already exists.',
+  [ErrorCodes.CONFLICT]: 'Another change occurred. Please refresh and try again.',
+  [ErrorCodes.NETWORK_ERROR]: 'Unable to connect. Please check your internet connection.',
+  [ErrorCodes.TIMEOUT]: 'The request timed out. Please try again.',
+  [ErrorCodes.INTERNAL_ERROR]: 'An unexpected error occurred. Please try again.',
+  [ErrorCodes.BAD_GATEWAY]: 'The server is unavailable. Please try again later.',
+  [ErrorCodes.ABORTED]: 'The request was cancelled. Please try again.',
+  [ErrorCodes.PARSE_ERROR]: 'We could not read the response. Please try again.',
+  [ErrorCodes.RATE_LIMIT]: 'Too many requests. Please wait a moment and try again.',
+  [ErrorCodes.SERVICE_UNAVAILABLE]: 'Service temporarily unavailable. Please try again later.',
+  [ErrorCodes.NOT_FOUND]: 'The requested resource was not found',
+};
+
 /**
  * Base application error class
  * Extends Error with additional properties for better error handling
@@ -71,8 +95,12 @@ export class AppError extends Error {
     super(message);
     this.name = 'AppError';
     this.code = code;
-    this.status = options?.status;
-    this.details = options?.details;
+    if (options?.status !== undefined) {
+      this.status = options.status;
+    }
+    if (options?.details !== undefined) {
+      this.details = options.details;
+    }
     this.isRetryable = options?.isRetryable ?? false;
     this.timestamp = new Date().toISOString();
 
@@ -85,7 +113,7 @@ export class AppError extends Error {
     }
 
     // Set cause if provided (for error chaining)
-    if (options?.cause) {
+    if (options?.cause !== undefined) {
       (this as Error & { cause?: Error }).cause = options.cause;
     }
   }
@@ -109,22 +137,11 @@ export class AppError extends Error {
    * Get a user-friendly message for display
    */
   getUserMessage(): string {
-    switch (this.code) {
-      case ErrorCodes.AUTH_REQUIRED:
-        return 'Please sign in to continue';
-      case ErrorCodes.SESSION_EXPIRED:
-        return 'Your session has expired. Please sign in again.';
-      case ErrorCodes.NETWORK_ERROR:
-        return 'Unable to connect. Please check your internet connection.';
-      case ErrorCodes.RATE_LIMIT:
-        return 'Too many requests. Please wait a moment and try again.';
-      case ErrorCodes.SERVICE_UNAVAILABLE:
-        return 'Service temporarily unavailable. Please try again later.';
-      case ErrorCodes.NOT_FOUND:
-        return 'The requested resource was not found';
-      default:
-        return this.message || 'An unexpected error occurred';
+    const mapped = DEFAULT_USER_MESSAGES[this.code];
+    if (mapped !== undefined) {
+      return mapped;
     }
+    return this.message.length > 0 ? this.message : FALLBACK_UNEXPECTED_MESSAGE;
   }
 }
 
@@ -137,7 +154,11 @@ export class AuthError extends AppError {
     code: ErrorCode = ErrorCodes.AUTH_REQUIRED,
     options?: { status?: number; details?: Record<string, unknown>; cause?: Error },
   ) {
-    super(message, code, { ...options, status: options?.status ?? 401, isRetryable: false });
+    super(message, code, {
+      ...options,
+      status: options?.status ?? HTTP_STATUS_UNAUTHORIZED,
+      isRetryable: false,
+    });
     this.name = 'AuthError';
   }
 }
@@ -155,7 +176,9 @@ export class ValidationError extends AppError {
   ) {
     super(message, ErrorCodes.VALIDATION_ERROR, { ...options, status: 400, isRetryable: false });
     this.name = 'ValidationError';
-    this.field = field;
+    if (field !== undefined) {
+      this.field = field;
+    }
   }
 }
 
@@ -166,6 +189,31 @@ export class NetworkError extends AppError {
   constructor(message: string = 'Network request failed', options?: { cause?: Error }) {
     super(message, ErrorCodes.NETWORK_ERROR, { ...options, isRetryable: true });
     this.name = 'NetworkError';
+  }
+}
+
+/**
+ * Timeout error
+ */
+export class TimeoutError extends AppError {
+  readonly operationName: string;
+  readonly timeoutMs: number;
+
+  constructor(
+    operationName: string,
+    timeoutMs: number,
+    message?: string,
+    options?: { cause?: Error },
+  ) {
+    const fallback = `Operation '${operationName}' timed out after ${timeoutMs}ms`;
+    super(message ?? fallback, ErrorCodes.TIMEOUT, {
+      ...options,
+      status: 504,
+      isRetryable: true,
+    });
+    this.name = 'TimeoutError';
+    this.operationName = operationName;
+    this.timeoutMs = timeoutMs;
   }
 }
 
@@ -184,8 +232,12 @@ export class NotFoundError extends AppError {
   ) {
     super(message, ErrorCodes.NOT_FOUND, { ...options, status: 404, isRetryable: false });
     this.name = 'NotFoundError';
-    this.resourceType = resourceType;
-    this.resourceId = resourceId;
+    if (resourceType !== undefined) {
+      this.resourceType = resourceType;
+    }
+    if (resourceId !== undefined) {
+      this.resourceId = resourceId;
+    }
   }
 }
 
@@ -202,7 +254,9 @@ export class ConflictError extends AppError {
   ) {
     super(message, ErrorCodes.CONFLICT, { ...options, status: 409, isRetryable: true });
     this.name = 'ConflictError';
-    this.serverVersion = serverVersion;
+    if (serverVersion !== undefined) {
+      this.serverVersion = serverVersion;
+    }
   }
 }
 
@@ -217,14 +271,20 @@ export class RateLimitError extends AppError {
     retryAfterMs?: number,
     options?: { cause?: Error },
   ) {
-    super(message, ErrorCodes.RATE_LIMIT, {
-      ...options,
-      status: 429,
-      isRetryable: true,
-      details: retryAfterMs ? { retryAfterMs } : undefined,
-    });
+    const rateLimitOptions: {
+      status?: number;
+      details?: Record<string, unknown>;
+      isRetryable?: boolean;
+      cause?: Error;
+    } = { status: 429, isRetryable: true, ...options };
+    if (retryAfterMs !== undefined) {
+      rateLimitOptions.details = { retryAfterMs };
+    }
+    super(message, ErrorCodes.RATE_LIMIT, rateLimitOptions);
     this.name = 'RateLimitError';
-    this.retryAfterMs = retryAfterMs;
+    if (retryAfterMs !== undefined) {
+      this.retryAfterMs = retryAfterMs;
+    }
   }
 }
 
@@ -249,22 +309,31 @@ export function wrapError(error: unknown, fallbackMessage?: string): AppError {
     const code = typeof errorMeta.code === 'string' ? (errorMeta.code as ErrorCode) : undefined;
     const status = typeof errorMeta.status === 'number' ? errorMeta.status : undefined;
 
-    if (code && Object.values(ErrorCodes).includes(code)) {
-      return new AppError(error.message, code, { status, cause: error });
+    if (code !== undefined && Object.values(ErrorCodes).includes(code)) {
+      const options: { status?: number; cause?: Error } = { cause: error };
+      if (status !== undefined) {
+        options.status = status;
+      }
+      return new AppError(error.message, code, options);
     }
 
-    return new AppError(
-      error.message || fallbackMessage || 'An error occurred',
-      ErrorCodes.INTERNAL_ERROR,
-      {
-        cause: error,
-      },
-    );
+    const fallback =
+      typeof fallbackMessage === 'string' && fallbackMessage.length > 0
+        ? fallbackMessage
+        : 'An error occurred';
+    const message = error.message.length > 0 ? error.message : fallback;
+    return new AppError(message, ErrorCodes.INTERNAL_ERROR, {
+      cause: error,
+    });
   }
 
   if (typeof error === 'string') {
     return new AppError(error, ErrorCodes.INTERNAL_ERROR);
   }
 
-  return new AppError(fallbackMessage || 'An unexpected error occurred', ErrorCodes.INTERNAL_ERROR);
+  const finalMessage =
+    typeof fallbackMessage === 'string' && fallbackMessage.length > 0
+      ? fallbackMessage
+      : 'An unexpected error occurred';
+  return new AppError(finalMessage, ErrorCodes.INTERNAL_ERROR);
 }

@@ -28,6 +28,37 @@ declare global {
     LockInStorage?: Storage;
     LockInAuth?: AuthClient;
     LockInAPI?: ApiClient;
+    LockInNetworkRetry?: {
+      fetchWithRetry: (
+        url: string,
+        options?: RequestInit,
+        config?: {
+          maxRetries?: number;
+          baseDelayMs?: number;
+          maxDelayMs?: number;
+          timeoutMs?: number;
+          retryableStatuses?: number[];
+          retryOnServerError?: boolean;
+          retryOnNetworkError?: boolean;
+          retryOnTimeout?: boolean;
+          context?: string;
+        },
+      ) => Promise<Response>;
+      DEFAULT_RETRY_CONFIG?: {
+        maxRetries: number;
+        baseDelayMs: number;
+        maxDelayMs: number;
+        timeoutMs: number;
+      };
+    };
+    LockInMessageSchemas?: {
+      createMessageValidators: () => Record<
+        string,
+        (
+          message: unknown,
+        ) => { ok: true; payload?: Record<string, unknown> } | { ok: false; error: string }
+      >;
+    };
     authClient?: AuthClient;
     apiClient?: ApiClient;
   }

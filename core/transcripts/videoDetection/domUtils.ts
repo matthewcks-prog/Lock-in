@@ -1,36 +1,45 @@
-export function isElementVisible(element: Element | null): boolean {
-  if (!element) return false;
-  if (element.hasAttribute('hidden')) return false;
-  if (element.closest('[hidden]')) return false;
-  if (element.getAttribute('aria-hidden') === 'true') return false;
-  if (element.closest('[aria-hidden="true"]')) return false;
+function isHiddenByAttributes(element: Element): boolean {
+  if (element.hasAttribute('hidden')) return true;
+  if (element.closest('[hidden]') !== null) return true;
+  if (element.getAttribute('aria-hidden') === 'true') return true;
+  if (element.closest('[aria-hidden="true"]') !== null) return true;
+  return false;
+}
 
+function isHiddenByDetails(element: Element): boolean {
   const details = element.closest('details');
-  if (details && !details.hasAttribute('open')) {
-    const summary = element.closest('summary');
-    if (!summary || summary.parentElement !== details) {
-      return false;
-    }
+  if (details === null || details.hasAttribute('open')) {
+    return false;
   }
+  const summary = element.closest('summary');
+  return summary === null || summary.parentElement !== details;
+}
 
-  const inlineStyle = (element as HTMLElement).style;
-  if (inlineStyle) {
-    if (inlineStyle.display === 'none') return false;
-    if (inlineStyle.visibility === 'hidden' || inlineStyle.visibility === 'collapse') return false;
-    const opacity = Number.parseFloat(inlineStyle.opacity || '1');
-    if (Number.isFinite(opacity) && opacity <= 0) return false;
-  }
+function isHiddenByStyle(style: CSSStyleDeclaration | null): boolean {
+  if (style === null) return false;
+  if (style.display === 'none') return true;
+  if (style.visibility === 'hidden' || style.visibility === 'collapse') return true;
+  const opacitySource = style.opacity.length > 0 ? style.opacity : '1';
+  const opacity = Number.parseFloat(opacitySource);
+  return Number.isFinite(opacity) && opacity <= 0;
+}
 
+function isHiddenByInlineStyle(element: Element): boolean {
+  return isHiddenByStyle((element as HTMLElement).style);
+}
+
+function isHiddenByComputedStyle(element: Element): boolean {
   const view = element.ownerDocument?.defaultView;
-  if (view && typeof view.getComputedStyle === 'function') {
-    const style = view.getComputedStyle(element);
-    if (style) {
-      if (style.display === 'none') return false;
-      if (style.visibility === 'hidden' || style.visibility === 'collapse') return false;
-      const opacity = Number.parseFloat(style.opacity || '1');
-      if (Number.isFinite(opacity) && opacity <= 0) return false;
-    }
-  }
+  if (view === null || typeof view.getComputedStyle !== 'function') return false;
+  const style = view.getComputedStyle(element);
+  return isHiddenByStyle(style);
+}
 
+export function isElementVisible(element: Element | null): boolean {
+  if (element === null) return false;
+  if (isHiddenByAttributes(element)) return false;
+  if (isHiddenByDetails(element)) return false;
+  if (isHiddenByInlineStyle(element)) return false;
+  if (isHiddenByComputedStyle(element)) return false;
   return true;
 }

@@ -1,0 +1,237 @@
+@layer lockin.tools {
+  /* ── Paragraph view ──────────────────────────────────────────────────── */
+
+  #lockin-root .lockin-transcript-para-view {
+    display: flex;
+    flex-direction: column;
+    /* Grow to fill the available viewport – min keeps it usable on small panels;
+       max prevents the panel from becoming unusably tall on large screens. */
+    min-height: 260px;
+    max-height: clamp(320px, 65vh, 900px);
+    overflow: hidden;
+  }
+
+  /* ── Toolbar (search + timestamp toggle) ──────────────────────────────── */
+
+  #lockin-root .lockin-transcript-para-toolbar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-6) var(--lockin-size-10);
+    background: var(--lockin-color-surface-muted);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  /* ── Compact search bar ──────────────────────────────────────────────── */
+
+  #lockin-root .lockin-transcript-search-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-2);
+  }
+
+  #lockin-root .lockin-transcript-para-toolbar .lockin-transcript-search-bar {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-transcript-search-bar-icon {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--lockin-color-text-muted);
+  }
+
+  #lockin-root .lockin-transcript-search-bar-input {
+    flex: 1;
+    min-width: 0;
+    padding: var(--lockin-size-4) var(--lockin-size-6);
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-sm);
+    outline: none;
+  }
+
+  #lockin-root .lockin-transcript-search-bar-input:focus {
+    border-color: var(--lockin-color-brand);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  }
+
+  /* Browser default search-clear button – hide and replace with our own */
+  #lockin-root .lockin-transcript-search-bar-input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  #lockin-root .lockin-transcript-search-bar-count {
+    flex-shrink: 0;
+    padding: var(--lockin-size-1) var(--lockin-size-5);
+    font-size: var(--lockin-text-xs);
+    font-weight: 500;
+    line-height: 1.6;
+    white-space: nowrap;
+    color: var(--lockin-color-brand);
+    background: rgba(37, 99, 235, 0.08);
+    border-radius: var(--lockin-radius-full);
+  }
+
+  #lockin-root .lockin-transcript-search-bar-count--none {
+    color: var(--lockin-color-text-muted);
+    background: var(--lockin-color-surface-subtle);
+  }
+
+  /* Icon button (clear, prev, next) */
+  #lockin-root .lockin-transcript-search-bar-btn {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-22);
+    height: var(--lockin-size-22);
+    padding: 0;
+    color: var(--lockin-color-text-muted);
+    background: none;
+    border: var(--lockin-size-1) solid transparent;
+    border-radius: var(--lockin-radius-sm);
+    transition:
+      color var(--lockin-duration-150) var(--lockin-ease-default),
+      background var(--lockin-duration-150) var(--lockin-ease-default),
+      border-color var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-search-bar-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-transcript-search-bar-btn:active {
+    background: var(--lockin-color-surface-subtle);
+  }
+
+  /* ── Show timestamps toggle ───────────────────────────────────────────── */
+
+  #lockin-root .lockin-transcript-timestamps-toggle {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--lockin-size-4);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  #lockin-root .lockin-transcript-timestamps-toggle-input {
+    width: var(--lockin-size-18);
+    height: var(--lockin-size-10);
+    margin: 0;
+    cursor: pointer;
+    accent-color: var(--lockin-color-brand);
+  }
+
+  #lockin-root .lockin-transcript-timestamps-toggle-label {
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root
+    .lockin-transcript-timestamps-toggle:hover
+    .lockin-transcript-timestamps-toggle-label {
+    color: var(--lockin-color-text-body);
+  }
+
+  /* ── Paragraph list ──────────────────────────────────────────────────── */
+
+  #lockin-root .lockin-transcript-para-list {
+    flex: 1;
+    padding: var(--lockin-size-12) var(--lockin-size-16);
+    overflow-y: auto;
+  }
+
+  #lockin-root .lockin-transcript-para {
+    margin-bottom: var(--lockin-size-16);
+    padding-bottom: var(--lockin-size-12);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-transcript-para:last-child {
+    margin-bottom: 0;
+    border-bottom: none;
+  }
+
+  #lockin-root .lockin-transcript-para--active {
+    margin-right: calc(var(--lockin-size-10) * -1);
+    margin-left: calc(var(--lockin-size-10) * -1);
+    padding: var(--lockin-size-8) var(--lockin-size-10);
+    background: var(--lockin-color-f8fafc);
+    border-bottom: none;
+    border-radius: var(--lockin-radius-md);
+  }
+
+  #lockin-root .lockin-transcript-para-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    margin-bottom: var(--lockin-size-4);
+  }
+
+  #lockin-root .lockin-transcript-timestamp-btn {
+    padding: var(--lockin-size-1) var(--lockin-size-6);
+    font-family: var(--lockin-font-family-mono, monospace);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    line-height: 1.4;
+    color: var(--lockin-color-brand);
+    background: rgba(37, 99, 235, 0.08);
+    border: var(--lockin-size-1) solid rgba(37, 99, 235, 0.2);
+    border-radius: var(--lockin-radius-sm);
+    transition: background var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-transcript-timestamp-btn:hover {
+    background: rgba(37, 99, 235, 0.15);
+    border-color: var(--lockin-color-brand);
+  }
+
+  #lockin-root .lockin-transcript-speaker {
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-transcript-para-text {
+    margin: 0;
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-base);
+    line-height: 1.65;
+    color: var(--lockin-color-text-body);
+  }
+
+  /* Search highlight */
+  #lockin-root .lockin-transcript-highlight {
+    padding: 0 1px;
+    color: inherit;
+    background: rgba(234, 179, 8, 0.35);
+    border-radius: 2px;
+  }
+
+  #lockin-root .lockin-transcript-para--active .lockin-transcript-highlight {
+    background: rgba(234, 179, 8, 0.6);
+    outline: 1px solid rgba(234, 179, 8, 0.8);
+  }
+
+  #lockin-root .lockin-transcript-para-empty {
+    margin: 0;
+    padding: var(--lockin-size-24) var(--lockin-size-16);
+    font-size: var(--lockin-text-sm);
+    text-align: center;
+    color: var(--lockin-color-text-muted);
+  }
+}

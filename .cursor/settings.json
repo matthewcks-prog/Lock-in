@@ -1,0 +1,13 @@
+{
+  "plugins": {
+    "sentry": {
+      "enabled": true
+    },
+    "supabase": {
+      "enabled": true
+    },
+    "compound-engineering": {
+      "enabled": true
+    }
+  }
+}

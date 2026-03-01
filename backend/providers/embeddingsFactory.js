@@ -10,6 +10,17 @@
 
 const { createAzureEmbeddingsClient } = require('./azureEmbeddingsClient');
 const OpenAI = require('openai');
+const { TWO, TEN } = require('../constants/numbers');
+
+const KIBIBYTE = Math.pow(TWO, TEN);
+const DEFAULT_BATCH_SIZE = KIBIBYTE * TWO;
+const FALLBACK_REASONS = [
+  'quota exceeded',
+  'rate limited',
+  'authentication failed',
+  'service error',
+  'timeout',
+];
 
 /**
  * Embeddings provider types
@@ -22,31 +33,84 @@ const EmbeddingsProvider = {
 /**
  * Create OpenAI embeddings client
  */
-function createOpenAIEmbeddingsClient(apiKey, model) {
+function createOpenAIEmbeddingsClient(apiKey) {
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is required for embeddings');
   }
-  return { client: new OpenAI({ apiKey }), model };
+  return new OpenAI({ apiKey });
+}
+
+function createProviderConfig({ client, provider, model }) {
+  return { client, provider, model };
+}
+
+function createAzureProvider(config) {
+  const { azureApiKey, azureEndpoint, azureApiVersion, azureDeployment } = config;
+
+  if (!azureApiKey || !azureEndpoint || !azureDeployment) {
+    return null;
+  }
+
+  try {
+    return createProviderConfig({
+      client: createAzureEmbeddingsClient(
+        azureApiKey,
+        azureEndpoint,
+        azureApiVersion,
+        azureDeployment,
+      ),
+      provider: EmbeddingsProvider.AZURE_OPENAI,
+      model: azureDeployment,
+    });
+  } catch (error) {
+    console.warn('Failed to create Azure embeddings client:', error.message);
+    return null;
+  }
+}
+
+function createOpenAIProvider(config) {
+  const { openaiApiKey, openaiModel } = config;
+
+  if (!openaiApiKey || !openaiModel) {
+    return null;
+  }
+
+  try {
+    return createProviderConfig({
+      client: createOpenAIEmbeddingsClient(openaiApiKey),
+      provider: EmbeddingsProvider.OPENAI,
+      model: openaiModel,
+    });
+  } catch (error) {
+    console.warn('Failed to create OpenAI embeddings client:', error.message);
+    return null;
+  }
+}
+
+function resolveProviders(config) {
+  const azureProvider = createAzureProvider(config);
+  const openaiProvider = createOpenAIProvider(config);
+
+  if (azureProvider) {
+    return { primary: azureProvider, fallback: openaiProvider };
+  }
+
+  return { primary: openaiProvider, fallback: null };
 }
 
 /**
  * Unified embeddings interface
  */
 class EmbeddingsClient {
-  constructor(
-    primaryClient,
-    primaryProvider,
-    primaryModel,
-    fallbackClient,
-    fallbackProvider,
-    fallbackModel,
-  ) {
-    this.primaryClient = primaryClient;
-    this.primaryProvider = primaryProvider;
-    this.primaryModel = primaryModel;
-    this.fallbackClient = fallbackClient;
-    this.fallbackProvider = fallbackProvider;
-    this.fallbackModel = fallbackModel;
+  constructor({ primary, fallback }) {
+    this.primary = primary;
+    this.fallback = fallback;
+    this.primaryClient = primary?.client ?? null;
+    this.primaryProvider = primary?.provider ?? null;
+    this.primaryModel = primary?.model ?? null;
+    this.fallbackClient = fallback?.client ?? null;
+    this.fallbackProvider = fallback?.provider ?? null;
+    this.fallbackModel = fallback?.model ?? null;
   }
 
   /**
@@ -59,13 +123,7 @@ class EmbeddingsClient {
   async createEmbeddings(input, options = {}) {
     try {
       // Try primary provider
-      const result = await this.generateEmbeddings(
-        this.primaryClient,
-        this.primaryProvider,
-        this.primaryModel,
-        input,
-        options,
-      );
+      const result = await this.generateEmbeddings(this.primary, input, options);
       return {
         ...result,
         provider: this.primaryProvider,
@@ -74,13 +132,7 @@ class EmbeddingsClient {
       // Try fallback if available
       if (this.fallbackClient && this.shouldFallback(primaryError)) {
         try {
-          const result = await this.generateEmbeddings(
-            this.fallbackClient,
-            this.fallbackProvider,
-            this.fallbackModel,
-            input,
-            options,
-          );
+          const result = await this.generateEmbeddings(this.fallback, input, options);
           return {
             ...result,
             provider: this.fallbackProvider,
@@ -102,14 +154,18 @@ class EmbeddingsClient {
   /**
    * Generate embeddings using specific provider
    */
-  async generateEmbeddings(client, provider, model, input, options) {
-    if (provider === EmbeddingsProvider.AZURE_OPENAI) {
-      return await client.createEmbeddings(input, options);
+  async generateEmbeddings(providerConfig, input, options) {
+    if (!providerConfig) {
+      throw new Error('Embeddings provider is not configured');
+    }
+
+    if (providerConfig.provider === EmbeddingsProvider.AZURE_OPENAI) {
+      return await providerConfig.client.createEmbeddings(input, options);
     }
 
     // OpenAI provider
-    const response = await client.client.embeddings.create({
-      model: model,
+    const response = await providerConfig.client.embeddings.create({
+      model: providerConfig.model,
       input: input,
       ...options,
     });
@@ -133,7 +189,7 @@ class EmbeddingsClient {
    * Generate embeddings in batches
    */
   async batchEmbed(texts, options = {}) {
-    const batchSize = options.batchSize || 2048;
+    const batchSize = options.batchSize || DEFAULT_BATCH_SIZE;
     const embeddings = [];
 
     for (let i = 0; i < texts.length; i += batchSize) {
@@ -149,16 +205,8 @@ class EmbeddingsClient {
    * Determine if fallback should be used
    */
   shouldFallback(error) {
-    const fallbackReasons = [
-      'quota exceeded',
-      'rate limited',
-      'authentication failed',
-      'service error',
-      'timeout',
-    ];
-
-    const errorMessage = error.message.toLowerCase();
-    return fallbackReasons.some((reason) => errorMessage.includes(reason));
+    const errorMessage = typeof error?.message === 'string' ? error.message.toLowerCase() : '';
+    return FALLBACK_REASONS.some((reason) => errorMessage.includes(reason));
   }
 }
 
@@ -166,73 +214,15 @@ class EmbeddingsClient {
  * Create embeddings client with configuration
  */
 function createEmbeddingsClient(config) {
-  const {
-    azureApiKey,
-    azureEndpoint,
-    azureApiVersion,
-    azureDeployment,
-    openaiApiKey,
-    openaiModel,
-  } = config;
+  const { primary, fallback } = resolveProviders(config);
 
-  let primaryClient = null;
-  let primaryProvider = null;
-  let primaryModel = null;
-  let fallbackClient = null;
-  let fallbackProvider = null;
-  let fallbackModel = null;
-
-  // Try to create Azure embeddings client (primary)
-  if (azureApiKey && azureEndpoint && azureDeployment) {
-    try {
-      primaryClient = createAzureEmbeddingsClient(
-        azureApiKey,
-        azureEndpoint,
-        azureApiVersion,
-        azureDeployment,
-      );
-      primaryProvider = EmbeddingsProvider.AZURE_OPENAI;
-      primaryModel = azureDeployment;
-    } catch (error) {
-      console.warn('Failed to create Azure embeddings client:', error.message);
-    }
-  }
-
-  // Create OpenAI embeddings client (fallback or primary if Azure unavailable)
-  if (openaiApiKey && openaiModel) {
-    try {
-      const openaiClient = createOpenAIEmbeddingsClient(openaiApiKey, openaiModel);
-
-      if (primaryClient) {
-        // Use as fallback
-        fallbackClient = openaiClient;
-        fallbackProvider = EmbeddingsProvider.OPENAI;
-        fallbackModel = openaiModel;
-      } else {
-        // Use as primary
-        primaryClient = openaiClient;
-        primaryProvider = EmbeddingsProvider.OPENAI;
-        primaryModel = openaiModel;
-      }
-    } catch (error) {
-      console.warn('Failed to create OpenAI embeddings client:', error.message);
-    }
-  }
-
-  if (!primaryClient) {
+  if (!primary) {
     throw new Error(
       'No embeddings provider available. Configure either Azure OpenAI or OpenAI embeddings.',
     );
   }
 
-  return new EmbeddingsClient(
-    primaryClient,
-    primaryProvider,
-    primaryModel,
-    fallbackClient,
-    fallbackProvider,
-    fallbackModel,
-  );
+  return new EmbeddingsClient({ primary, fallback });
 }
 
 module.exports = {

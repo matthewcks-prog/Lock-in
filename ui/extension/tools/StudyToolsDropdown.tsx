@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { TOOLS } from './registry';
 import { useToolContext } from './ToolContext';
 
@@ -13,19 +14,47 @@ function formatTypeTag(typeTag: string): string {
   return typeTag.charAt(0).toUpperCase() + typeTag.slice(1);
 }
 
-export function StudyToolsDropdown() {
-  const [isOpen, setIsOpen] = useState(false);
-  const { openTool } = useToolContext();
-
-  // Close dropdown when clicking outside
+function useCloseOnOutsideClick(isOpen: boolean, setIsOpen: (isOpen: boolean) => void): void {
   useEffect(() => {
     if (!isOpen) return;
-    const handler = () => setIsOpen(false);
+    const handler = (): void => setIsOpen(false);
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
-  }, [isOpen]);
+  }, [isOpen, setIsOpen]);
+}
 
-  const handleToggle = useCallback(() => {
+function StudyToolMenu({
+  onSelect,
+}: {
+  onSelect: (toolId: string, enabled: boolean) => void;
+}): JSX.Element {
+  return (
+    <div className="lockin-study-tools-menu" role="listbox">
+      {TOOLS.map((tool) => (
+        <button
+          key={tool.id}
+          className={`lockin-study-tools-item ${!tool.enabled ? 'lockin-study-tools-item-disabled' : ''}`}
+          onClick={() => onSelect(tool.id, tool.enabled)}
+          disabled={!tool.enabled}
+          role="option"
+          aria-disabled={!tool.enabled}
+        >
+          <span>
+            {tool.label} ({formatTypeTag(tool.typeTag)})
+          </span>
+          {!tool.enabled && <span className="lockin-coming-soon">Coming soon</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function StudyToolsDropdown(): JSX.Element {
+  const [isOpen, setIsOpen] = useState(false);
+  const { openTool } = useToolContext();
+  useCloseOnOutsideClick(isOpen, setIsOpen);
+
+  const handleToggle = useCallback((): void => {
     setIsOpen((prev) => !prev);
   }, []);
 
@@ -40,37 +69,22 @@ export function StudyToolsDropdown() {
   );
 
   return (
-    <div className="lockin-study-tools-container" onClick={(e) => e.stopPropagation()}>
+    <div className="lockin-study-tools-container" onClick={(event) => event.stopPropagation()}>
       <button
         className="lockin-study-tools-btn"
         onClick={handleToggle}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span>Study Tools</span>
-        <span className="lockin-study-tools-chevron" aria-hidden="true">
-          ▼
-        </span>
+        <span className="lockin-study-tools-btn-label">Study Tools</span>
+        <ChevronDown
+          size={12}
+          strokeWidth={2}
+          className="lockin-study-tools-chevron"
+          aria-hidden="true"
+        />
       </button>
-      {isOpen && (
-        <div className="lockin-study-tools-menu" role="listbox">
-          {TOOLS.map((tool) => (
-            <button
-              key={tool.id}
-              className={`lockin-study-tools-item ${!tool.enabled ? 'lockin-study-tools-item-disabled' : ''}`}
-              onClick={() => handleToolSelect(tool.id, tool.enabled)}
-              disabled={!tool.enabled}
-              role="option"
-              aria-disabled={!tool.enabled}
-            >
-              <span>
-                {tool.label} ({formatTypeTag(tool.typeTag)})
-              </span>
-              {!tool.enabled && <span className="lockin-coming-soon">Coming soon</span>}
-            </button>
-          ))}
-        </div>
-      )}
+      {isOpen && <StudyToolMenu onSelect={handleToolSelect} />}
     </div>
   );
 }

@@ -1,0 +1,313 @@
+@layer lockin.chrome {
+  /* === MINIMAL TOP BAR === */
+  #lockin-root .lockin-top-bar {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-8) var(--lockin-size-12);
+    background: var(--lockin-color-surface);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-top-bar-left {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-tabs-wrapper {
+    display: flex;
+    gap: var(--lockin-size-2);
+    /* Prevent the tab strip from overflowing its flex parent at narrow sidebar widths */
+    min-width: 0;
+    padding: var(--lockin-size-2);
+    overflow: hidden;
+    background: var(--lockin-color-surface-muted);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-2xl);
+  }
+
+  #lockin-root .lockin-tab {
+    /*
+     * Shared base for ALL tab elements in the tab strip:
+     *   - Chat tab   <button class="lockin-tab">
+     *   - Notes tab  <button class="lockin-tab">
+     *   - Tool tabs  <button class="lockin-tab"> inside a wrapper div
+     *                (see .lockin-tab-closable-wrapper in tools.css)
+     *
+     * Using a genuine <button> for every label guarantees an identical CSS
+     * cascade path across all three tabs. Host-page resets (Normalize, EdStem,
+     * Moodle, …) target `button` elements explicitly, so all tab labels receive
+     * the same computed font regardless of the host stylesheet. This is the
+     * structural fix that no amount of CSS-only cascade manipulation can
+     * replicate reliably.
+     *
+     * display:inline-flex + align-items:center centres text and icons
+     * vertically without requiring a line-height hack.
+     */
+    display: inline-flex;
+    align-items: center;
+    padding: var(--lockin-size-5) var(--lockin-size-10);
+    font-family: var(--lockin-font-family-base);
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    line-height: var(--lockin-leading-snug);
+    white-space: nowrap;
+    color: var(--lockin-color-text-secondary);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-tab:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-rgba-0-0-0-005);
+  }
+
+  #lockin-root .lockin-tab.lockin-tab-active {
+    color: var(--lockin-color-text-primary);
+    background: var(--lockin-color-surface);
+    box-shadow: var(--lockin-shadow-sm);
+  }
+
+  #lockin-root .lockin-close-btn {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-24);
+    height: var(--lockin-size-24);
+    padding: var(--lockin-size-4);
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-text-secondary);
+    background: none;
+    border: none;
+    border-radius: var(--lockin-radius-md);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-close-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+  }
+
+  /* === CHAT CONTAINER (History Panel + Main Chat) === */
+  #lockin-root .lockin-chat-container {
+    display: grid;
+    flex: 1;
+    gap: 0;
+    grid-template-columns: var(--lockin-size-260) 1fr;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-chat-container[data-history-state='closed'] {
+    grid-template-columns: 0 1fr;
+  }
+
+  /* === CHAT HISTORY PANEL (Left Side) === */
+  #lockin-root .lockin-chat-history-panel {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    width: var(--lockin-size-260);
+    min-width: var(--lockin-size-240);
+    max-width: var(--lockin-size-280);
+    overflow: hidden;
+    background: var(--lockin-color-surface-subtle);
+    border-right: var(--lockin-size-1) solid var(--lockin-color-border);
+    transition:
+      transform var(--lockin-duration-240) var(--lockin-ease-standard),
+      opacity var(--lockin-duration-240) var(--lockin-ease-default);
+  }
+
+  #lockin-root .lockin-chat-history-panel[data-state='closed'] {
+    width: 0;
+    min-width: 0;
+    border-right: none;
+    opacity: 0;
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+
+  #lockin-root .lockin-chat-history-panel[data-state='open'] {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* + New chat button inherits .lockin-btn-new from notes-shell.css */
+  #lockin-root .lockin-new-chat-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-history-list {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--lockin-size-6);
+    min-height: 0;
+    padding: var(--lockin-size-12);
+    overflow-y: auto;
+  }
+
+  #lockin-root .lockin-history-item {
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-10);
+    font-size: var(--lockin-text-sm);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-history-item:hover {
+    border-color: var(--lockin-color-accent-border);
+    box-shadow: var(--lockin-shadow-10);
+  }
+
+  #lockin-root .lockin-history-item.active {
+    background: var(--lockin-color-accent-surface);
+    border-color: var(--lockin-color-accent);
+    box-shadow: var(--lockin-shadow-01);
+  }
+
+  #lockin-root .lockin-history-item-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--lockin-size-4);
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-history-title {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lockin-color-text-strong);
+  }
+
+  #lockin-root .lockin-history-meta {
+    font-size: var(--lockin-text-xs);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-history-empty {
+    padding: var(--lockin-size-16);
+    font-size: var(--lockin-text-sm);
+    text-align: center;
+    color: var(--lockin-color-text-muted);
+  }
+
+  /* === CHAT MAIN AREA === */
+  #lockin-root .lockin-chat-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--lockin-color-surface);
+  }
+
+  /* Shared toolbar layout used by Chat and Notes. */
+  #lockin-root .lockin-tab-toolbar {
+    display: grid;
+    align-items: center;
+    gap: var(--lockin-size-6);
+    grid-template-columns: 1fr auto 1fr;
+    padding: var(--lockin-size-6) var(--lockin-size-12);
+    background: var(--lockin-color-surface);
+    border-bottom: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-tab-toolbar-start {
+    display: flex;
+    align-items: center;
+  }
+
+  #lockin-root .lockin-tab-toolbar-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #lockin-root .lockin-tab-toolbar-end {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  #lockin-root .lockin-history-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    /* Keep the same control height as the notes toggle button. */
+    height: var(--lockin-size-28);
+    padding: var(--lockin-size-6);
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+    transition: all var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-history-toggle-btn:hover {
+    background: var(--lockin-color-border);
+    border-color: var(--lockin-color-border-strong);
+  }
+
+  #lockin-root .lockin-history-toggle-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--lockin-size-3);
+  }
+
+  #lockin-root .lockin-history-toggle-line {
+    display: block;
+    width: var(--lockin-size-12);
+    height: var(--lockin-size-2);
+    background: var(--lockin-color-text-primary);
+    border-radius: var(--lockin-radius-full);
+  }
+
+  #lockin-root .lockin-chat-content {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-chat-messages-wrapper {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #lockin-root .lockin-chat-messages {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--lockin-size-12);
+    min-height: 0;
+    padding: var(--lockin-size-16);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}

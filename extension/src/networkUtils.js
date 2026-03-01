@@ -1,19 +1,32 @@
 (() => {
-  // Network utilities shared by background helpers.
+  const root = typeof globalThis !== 'undefined' ? globalThis : self,
+    NetworkRetry = root.LockInNetworkRetry || null,
+    HTTP_STATUS_TOO_MANY_REQUESTS = 429,
+    HTTP_STATUS_UNAUTHORIZED = 401,
+    HTTP_STATUS_FORBIDDEN = 403,
+    HTTP_STATUS_NOT_FOUND = 404,
+    HTTP_STATUS_SERVER_ERROR_MIN = 500;
 
-  /** Default retry configuration */
-  const RETRY_CONFIG = {
+  const fallbackDefaults = {
     maxRetries: 3,
     baseDelayMs: 500,
     maxDelayMs: 5000,
-    timeoutMs: 30000, // 30 second timeout
+    timeoutMs: 30000,
+    retryableStatuses: [HTTP_STATUS_TOO_MANY_REQUESTS],
+    retryOnServerError: true,
+    retryOnNetworkError: true,
+    retryOnTimeout: true,
   };
 
-  /**
-   * Delay for exponential backoff
-   * @param {number} attempt - Current attempt (0-based)
-   * @returns {Promise<void>}
-   */
+  const defaultConfig = NetworkRetry?.DEFAULT_RETRY_CONFIG || fallbackDefaults;
+
+  const RETRY_CONFIG = {
+    maxRetries: defaultConfig.maxRetries,
+    baseDelayMs: defaultConfig.baseDelayMs,
+    maxDelayMs: defaultConfig.maxDelayMs,
+    timeoutMs: defaultConfig.timeoutMs,
+  };
+
   function backoffDelay(attempt) {
     const delay = Math.min(
       RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt),
@@ -22,105 +35,107 @@
     return new Promise((resolve) => setTimeout(resolve, delay));
   }
 
-  /**
-   * Determine if an error is retryable
-   * @param {Error} error - The error to check
-   * @param {Response} response - The response object if available
-   * @returns {boolean}
-   */
   function isRetryableError(error, response) {
-    // Don't retry auth errors - user needs to sign in
-    if (response && (response.status === 401 || response.status === 403)) {
+    if (
+      response &&
+      (response.status === HTTP_STATUS_UNAUTHORIZED || response.status === HTTP_STATUS_FORBIDDEN)
+    ) {
       return false;
     }
-    // Don't retry 404 - resource doesn't exist
-    if (response && response.status === 404) {
+    if (response && response.status === HTTP_STATUS_NOT_FOUND) {
       return false;
     }
-    // Retry network errors and 5xx server errors
-    if (!response || response.status >= 500) {
+    if (!response || response.status >= HTTP_STATUS_SERVER_ERROR_MIN) {
       return true;
     }
-    // Retry rate limiting (429)
-    if (response.status === 429) {
+    if (response.status === HTTP_STATUS_TOO_MANY_REQUESTS) {
       return true;
     }
     return false;
   }
 
-  /**
-   * Fetch with retry and exponential backoff
-   * @param {string} url - URL to fetch
-   * @param {RequestInit} options - Fetch options
-   * @param {number} maxRetries - Maximum retry attempts (default from config)
-   * @param {number} timeoutMs - Request timeout in milliseconds (default from config)
-   * @returns {Promise<Response>}
-   */
-  async function fetchWithRetry(
-    url,
-    options = {},
-    maxRetries = RETRY_CONFIG.maxRetries,
-    timeoutMs = RETRY_CONFIG.timeoutMs,
-  ) {
+  function normalizeRetryConfig(maxRetriesOrConfig, timeoutMs, overrides) {
+    if (maxRetriesOrConfig && typeof maxRetriesOrConfig === 'object') {
+      return { ...defaultConfig, ...maxRetriesOrConfig };
+    }
+    const merged = { ...defaultConfig, ...(overrides || {}) };
+    if (typeof maxRetriesOrConfig === 'number') {
+      merged.maxRetries = maxRetriesOrConfig;
+    }
+    if (typeof timeoutMs === 'number') {
+      merged.timeoutMs = timeoutMs;
+    }
+    return merged;
+  }
+
+  function parseFetchWithRetryArgs(args) {
+    const [url, options = {}, maxRetriesOrConfig, timeoutMs, overrides] = args;
+    return {
+      url,
+      options,
+      config: normalizeRetryConfig(maxRetriesOrConfig, timeoutMs, overrides),
+    };
+  }
+
+  function createOnRetry(config) {
+    return (
+      config.onRetry ||
+      ((info) => {
+        console.log(
+          `[Lock-in] Retry attempt ${info.attempt}/${config.maxRetries} after ${info.delayMs}ms`,
+        );
+      })
+    );
+  }
+
+  function normalizeAttemptError(error, timeoutMs) {
+    if (error?.name === 'AbortError') {
+      console.warn(`[Lock-in] Request timeout after ${timeoutMs}ms`);
+      return new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    if (error?.message === 'Failed to fetch') {
+      console.warn(
+        '[Lock-in] Network error: Failed to fetch. Possible causes: CORS, DNS, or network connectivity',
+      );
+    }
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  async function performFetchAttempt(url, options, config, attempt) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+    try {
+      console.log(
+        `[Lock-in] Fetching (attempt ${attempt + 1}/${config.maxRetries + 1}): ${url.substring(0, 100)}...`,
+      );
+      const response = await fetch(url, { ...options, signal: controller.signal });
+      console.log(`[Lock-in] Response status: ${response.status} ${response.statusText}`);
+      return { response };
+    } catch (error) {
+      console.error(`[Lock-in] Fetch error (attempt ${attempt + 1}):`, error?.message || error);
+      return { error: normalizeAttemptError(error, config.timeoutMs) };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async function fetchWithLocalRetry(url, options, config) {
     let lastError;
     let lastResponse;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        // Create AbortController for timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-        // Merge abort signal with existing options
-        const fetchOptions = {
-          ...options,
-          signal: controller.signal,
-        };
-
-        console.log(
-          `[Lock-in] Fetching (attempt ${attempt + 1}/${
-            maxRetries + 1
-          }): ${url.substring(0, 100)}...`,
-        );
-        const response = await fetch(url, fetchOptions);
-        clearTimeout(timeoutId);
-        lastResponse = response;
-
-        console.log(`[Lock-in] Response status: ${response.status} ${response.statusText}`);
-
-        // If successful or non-retryable error, return
-        if (response.ok || !isRetryableError(null, response)) {
-          return response;
+    for (let attempt = 0; attempt <= config.maxRetries; attempt += 1) {
+      const result = await performFetchAttempt(url, options, config, attempt);
+      if (result.response) {
+        lastResponse = result.response;
+        if (result.response.ok || !isRetryableError(null, result.response)) {
+          return result.response;
         }
-
-        // Retryable error
-        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
-      } catch (error) {
-        lastError = error;
-        console.error(`[Lock-in] Fetch error (attempt ${attempt + 1}):`, error.message || error);
-
-        // Specific error handling for better debugging
-        if (error.name === 'AbortError') {
-          console.warn(`[Lock-in] Request timeout after ${timeoutMs}ms`);
-          lastError = new Error(`Request timeout after ${timeoutMs}ms`);
-        } else if (error.message === 'Failed to fetch') {
-          console.warn(
-            '[Lock-in] Network error: Failed to fetch. Possible causes: CORS, DNS, or network connectivity',
-          );
-        }
-
-        // Network errors are retryable
-        if (attempt < maxRetries) {
-          console.log(
-            `[Lock-in] Retrying in ${RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt)}ms...`,
-          );
-          await backoffDelay(attempt);
-          continue;
-        }
+        lastError = new Error(`HTTP ${result.response.status}: ${result.response.statusText}`);
+      } else {
+        lastError = result.error;
       }
 
-      // If this wasn't the last attempt, wait and retry
-      if (attempt < maxRetries && isRetryableError(lastError, lastResponse)) {
+      if (attempt < config.maxRetries && isRetryableError(lastError, lastResponse)) {
         console.log(
           `[Lock-in] Retrying in ${RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt)}ms...`,
         );
@@ -128,22 +143,27 @@
       }
     }
 
-    // Return last response if we have one, otherwise throw
     if (lastResponse) {
       return lastResponse;
     }
     throw lastError;
   }
 
-  /**
-   * Fetch HTML with credentials (with retry)
-   * @param {string} url - URL to fetch
-   * @returns {Promise<string>} HTML content
-   */
+  async function fetchWithRetry(...args) {
+    const { url, options, config } = parseFetchWithRetryArgs(args);
+    if (NetworkRetry?.fetchWithRetry) {
+      return NetworkRetry.fetchWithRetry(url, options, {
+        ...config,
+        context: config.context || 'fetch',
+        onRetry: createOnRetry(config),
+      });
+    }
+    return fetchWithLocalRetry(url, options, config);
+  }
+
   async function fetchWithCredentials(url) {
     console.log('[Lock-in] fetchWithCredentials:', url.substring(0, 100));
 
-    // Validate URL
     try {
       new URL(url);
     } catch (e) {
@@ -154,7 +174,7 @@
     const response = await fetchWithRetry(url, {
       method: 'GET',
       credentials: 'include',
-      mode: 'cors', // Explicitly set CORS mode
+      mode: 'cors',
       headers: {
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'User-Agent': 'Mozilla/5.0 (Chrome Extension)',
@@ -163,7 +183,10 @@
 
     if (!response.ok) {
       console.error(`[Lock-in] Response not OK: ${response.status} ${response.statusText}`);
-      if (response.status === 401 || response.status === 403) {
+      if (
+        response.status === HTTP_STATUS_UNAUTHORIZED ||
+        response.status === HTTP_STATUS_FORBIDDEN
+      ) {
         throw new Error('AUTH_REQUIRED');
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -174,15 +197,9 @@
     return text;
   }
 
-  /**
-   * Fetch VTT content (with retry)
-   * @param {string} url - Caption VTT URL
-   * @returns {Promise<string>} VTT content
-   */
   async function fetchVttContent(url) {
     console.log('[Lock-in] fetchVttContent:', url.substring(0, 100));
 
-    // Validate URL
     try {
       new URL(url);
     } catch (e) {
@@ -193,7 +210,7 @@
     const response = await fetchWithRetry(url, {
       method: 'GET',
       credentials: 'include',
-      mode: 'cors', // Explicitly set CORS mode
+      mode: 'cors',
       headers: {
         Accept: 'text/vtt,text/plain,*/*',
         'User-Agent': 'Mozilla/5.0 (Chrome Extension)',
@@ -202,7 +219,10 @@
 
     if (!response.ok) {
       console.error(`[Lock-in] VTT fetch failed: ${response.status} ${response.statusText}`);
-      if (response.status === 401 || response.status === 403) {
+      if (
+        response.status === HTTP_STATUS_UNAUTHORIZED ||
+        response.status === HTTP_STATUS_FORBIDDEN
+      ) {
         throw new Error('AUTH_REQUIRED');
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -235,7 +255,10 @@
 
     if (!response.ok) {
       console.error(`[Lock-in] Response not OK: ${response.status} ${response.statusText}`);
-      if (response.status === 401 || response.status === 403) {
+      if (
+        response.status === HTTP_STATUS_UNAUTHORIZED ||
+        response.status === HTTP_STATUS_FORBIDDEN
+      ) {
         throw new Error('AUTH_REQUIRED');
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

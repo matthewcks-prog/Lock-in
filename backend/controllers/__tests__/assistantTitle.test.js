@@ -17,7 +17,7 @@ const {
   extractFirstUserMessage,
   coerceGeneratedTitle,
 } = require('../../utils/chatTitle');
-const { updateChatTitle } = require('../../chatRepository');
+const { updateChatTitle } = require('../../repositories/chatRepository');
 
 test('buildInitialChatTitle creates fallback title from first user message', () => {
   const title = buildInitialChatTitle('What is an array data structure?');
@@ -48,7 +48,7 @@ test('coerceGeneratedTitle validates and clamps generated titles', () => {
 });
 
 test('updateChatTitle persists title to database', async (t) => {
-  const { supabase } = require('../../supabaseClient');
+  const { supabase } = require('../../db/supabaseClient');
   const calls = [];
   const originalFrom = supabase.from;
 

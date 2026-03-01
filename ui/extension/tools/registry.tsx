@@ -11,7 +11,7 @@ import { TranscriptToolContent } from './TranscriptToolContent';
 import type { ToolDefinition, ToolContentProps } from './types';
 
 // Placeholder component for disabled tools
-function PlaceholderTool(_props: ToolContentProps) {
+function PlaceholderTool(_props: ToolContentProps): JSX.Element {
   return (
     <div className="lockin-tool-placeholder">
       <p>This tool is coming soon!</p>

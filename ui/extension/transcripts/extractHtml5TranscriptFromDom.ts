@@ -11,8 +11,17 @@ import type {
 const CUE_WAIT_TIMEOUT_MS = 1500;
 const CUE_POLL_INTERVAL_MS = 100;
 
+function firstNonEmptyString(values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (value !== null && value !== undefined && value.length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
 function resolveDomUrl(candidate: string | null | undefined): string | null {
-  if (!candidate) return null;
+  if (candidate === null || candidate === undefined || candidate.length === 0) return null;
   try {
     return new URL(candidate, document.baseURI).toString();
   } catch {
@@ -21,31 +30,37 @@ function resolveDomUrl(candidate: string | null | undefined): string | null {
 }
 
 function getCandidateMediaUrl(videoEl: HTMLVideoElement): string | null {
-  const candidate =
-    videoEl.currentSrc ||
-    videoEl.getAttribute('src') ||
-    videoEl.src ||
-    videoEl.querySelector('source')?.getAttribute('src') ||
-    videoEl.querySelector('source')?.src;
+  const source = videoEl.querySelector('source');
+  const candidate = firstNonEmptyString([
+    videoEl.currentSrc,
+    videoEl.getAttribute('src'),
+    videoEl.src,
+    source?.getAttribute('src') ?? null,
+    source?.src ?? null,
+  ]);
   return resolveDomUrl(candidate);
 }
 
 function findHtml5VideoElement(video: DetectedVideo): HTMLVideoElement | null {
-  if (video.domId) {
+  if (video.domId !== null && video.domId !== undefined && video.domId.length > 0) {
     const byId = document.getElementById(video.domId);
     if (byId instanceof HTMLVideoElement) return byId;
   }
 
-  if (video.domSelector) {
+  if (
+    video.domSelector !== null &&
+    video.domSelector !== undefined &&
+    video.domSelector.length > 0
+  ) {
     const bySelector = document.querySelector(video.domSelector);
     if (bySelector instanceof HTMLVideoElement) return bySelector;
   }
 
-  if (video.mediaUrl) {
+  if (video.mediaUrl !== null && video.mediaUrl !== undefined && video.mediaUrl.length > 0) {
     const candidates = Array.from(document.querySelectorAll('video')) as HTMLVideoElement[];
     for (const candidate of candidates) {
       const candidateUrl = getCandidateMediaUrl(candidate);
-      if (candidateUrl && candidateUrl === video.mediaUrl) {
+      if (candidateUrl !== null && candidateUrl === video.mediaUrl) {
         return candidate;
       }
     }
@@ -71,7 +86,7 @@ function buildTranscriptFromCues(
 
   for (const cue of Array.from(cues)) {
     const text = getCueText(cue).trim();
-    if (!text) continue;
+    if (text.length === 0) continue;
 
     segments.push({
       startMs: Math.round(cue.startTime * 1000),
@@ -84,6 +99,7 @@ function buildTranscriptFromCues(
   if (segments.length === 0) return null;
 
   const lastSegment = segments[segments.length - 1];
+  if (lastSegment === undefined) return null;
   const fallbackDurationMs =
     typeof lastSegment.endMs === 'number' ? lastSegment.endMs : lastSegment.startMs;
   const durationMs =
@@ -106,26 +122,51 @@ async function waitForTrackCues(
 
   while (Date.now() < deadline) {
     const cues = track.cues;
-    if (cues && cues.length > 0) {
+    if (cues !== null && cues.length > 0) {
       return cues;
     }
     await new Promise((resolve) => setTimeout(resolve, CUE_POLL_INTERVAL_MS));
   }
 
   const cues = track.cues;
-  if (cues && cues.length > 0) return cues;
+  if (cues !== null && cues.length > 0) return cues;
   return null;
+}
+
+function enableTrackIfDisabled(track: TextTrack): () => void {
+  const previousMode = track.mode;
+  if (track.mode === 'disabled') {
+    track.mode = 'hidden';
+  }
+  return () => {
+    if (previousMode === 'disabled') {
+      track.mode = previousMode;
+    }
+  };
+}
+
+async function extractTrackTranscript(
+  track: TextTrack,
+  deadline: number,
+  duration: number,
+): Promise<TranscriptResult | null> {
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) return null;
+
+  const cues = await waitForTrackCues(track, remainingMs);
+  if (cues === null || cues.length === 0) return null;
+  return buildTranscriptFromCues(cues, duration);
 }
 
 export async function extractHtml5TranscriptFromDom(
   video: DetectedVideo,
 ): Promise<TranscriptExtractionResult | null> {
   const videoEl = findHtml5VideoElement(video);
-  if (!videoEl) {
+  if (videoEl === null) {
     return null;
   }
 
-  const captionTracks = Array.from(videoEl.textTracks || []).filter(
+  const captionTracks = Array.from(videoEl.textTracks).filter(
     (track) => track.kind === 'captions' || track.kind === 'subtitles',
   );
 
@@ -136,26 +177,14 @@ export async function extractHtml5TranscriptFromDom(
   const deadline = Date.now() + CUE_WAIT_TIMEOUT_MS;
 
   for (const track of captionTracks) {
-    const previousMode = track.mode;
-    if (track.mode === 'disabled') {
-      track.mode = 'hidden';
-    }
-
+    const restoreTrackMode = enableTrackIfDisabled(track);
     try {
-      const remainingMs = deadline - Date.now();
-      if (remainingMs <= 0) break;
-
-      const cues = await waitForTrackCues(track, remainingMs);
-      if (!cues || cues.length === 0) continue;
-
-      const transcript = buildTranscriptFromCues(cues, videoEl.duration);
-      if (transcript) {
+      const transcript = await extractTrackTranscript(track, deadline, videoEl.duration);
+      if (transcript !== null) {
         return { success: true, transcript };
       }
     } finally {
-      if (previousMode === 'disabled') {
-        track.mode = previousMode;
-      }
+      restoreTrackMode();
     }
   }
 

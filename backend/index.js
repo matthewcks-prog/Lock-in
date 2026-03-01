@@ -28,7 +28,7 @@ const { initApplicationInsights, disposeApplicationInsights, logger } = require(
 initApplicationInsights();
 
 // Initialize Sentry after App Insights
-const { initSentry } = require('./sentry');
+const { initSentry } = require('./observability/sentry');
 initSentry();
 
 // Now import everything else - both App Insights and Sentry will instrument these
@@ -37,7 +37,7 @@ const { PORT, isAzureEnabled, isOpenAIEnabled, isOpenAIFallbackEnabled } = requi
 const {
   startTranscriptJobReaper,
   stopTranscriptJobReaper,
-} = require('./services/transcriptsService');
+} = require('./services/transcripts/transcriptsService');
 
 // =============================================================================
 // Application Startup
@@ -84,6 +84,7 @@ server.on('error', (err) => {
 // Ensures clean container termination in Azure Container Apps
 // =============================================================================
 let isShuttingDown = false;
+const SHUTDOWN_TIMEOUT_MS = 30000;
 
 const gracefulShutdown = async (signal) => {
   // Prevent multiple shutdown attempts
@@ -124,7 +125,7 @@ const gracefulShutdown = async (signal) => {
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
-  }, 30000);
+  }, SHUTDOWN_TIMEOUT_MS);
 };
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

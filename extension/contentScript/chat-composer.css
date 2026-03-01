@@ -1,0 +1,188 @@
+@layer lockin.chat {
+  #lockin-root .lockin-msg-block--editing .lockin-msg-body {
+    max-width: 85%;
+  }
+
+  /* Content safety warning */
+  #lockin-root .lockin-safety-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--lockin-size-8);
+    margin-bottom: var(--lockin-size-8);
+    padding: var(--lockin-size-10) var(--lockin-size-12);
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-warning-text);
+    background: var(--lockin-color-warning-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-warning-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-safety-warning-icon {
+    flex-shrink: 0;
+    font-size: var(--lockin-text-lg);
+  }
+
+  #lockin-root .lockin-safety-warning-text {
+    flex: 1;
+    line-height: 1.4;
+  }
+
+  #lockin-root .lockin-safety-dismiss-btn {
+    padding: var(--lockin-size-2) var(--lockin-size-6);
+    font-size: var(--lockin-text-sm);
+    font-weight: 600;
+    color: var(--lockin-color-warning-text);
+    background: none;
+    border: none;
+    border-radius: var(--lockin-radius-sm);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-safety-dismiss-btn:hover {
+    background: var(--lockin-color-warning-surface-strong);
+  }
+
+  #lockin-root .lockin-chat-attachment-thumb-img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Attachment composer preview */
+  #lockin-root .lockin-chat-attachment-preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--lockin-size-8);
+    padding: var(--lockin-size-8);
+    background: var(--lockin-color-surface-subtle);
+    border-top: var(--lockin-size-1) solid var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-chat-attachment-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--lockin-size-10);
+    padding: var(--lockin-size-8);
+    background: var(--lockin-color-surface-muted);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-xl);
+  }
+
+  #lockin-root .lockin-chat-attachment-item.is-error {
+    background: var(--lockin-color-danger-surface);
+    border-color: var(--lockin-color-danger-border);
+  }
+
+  #lockin-root .lockin-chat-attachment-item.is-uploading {
+    opacity: 0.7;
+  }
+
+  #lockin-root .lockin-chat-attachment-item .lockin-chat-attachment-thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-40);
+    height: var(--lockin-size-40);
+    overflow: hidden;
+    background: var(--lockin-color-border);
+    border-radius: var(--lockin-radius-lg);
+  }
+
+  #lockin-root .lockin-chat-attachment-doc-icon {
+    color: var(--lockin-color-danger);
+  }
+
+  #lockin-root .lockin-chat-attachment-extension {
+    font-size: var(--lockin-text-xs);
+    font-weight: 600;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-chat-attachment-meta {
+    flex: 1;
+    min-width: 0;
+  }
+
+  #lockin-root .lockin-chat-attachment-name {
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--lockin-text-base);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-chat-attachment-size {
+    margin: var(--lockin-size-2) 0 0;
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-chat-attachment-error {
+    color: var(--lockin-color-danger-strong);
+  }
+
+  #lockin-root .lockin-chat-attachment-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-28);
+    height: var(--lockin-size-28);
+    color: var(--lockin-color-text-muted);
+    background: transparent;
+    border: none;
+    border-radius: var(--lockin-radius-full);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-chat-attachment-remove:hover {
+    color: var(--lockin-color-text-emphasis);
+    background: var(--lockin-color-border);
+  }
+
+  #lockin-root .lockin-chat-attachment-remove:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #lockin-root .lockin-chat-attachment-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--lockin-color-rgba-255-255-255-065);
+    border-radius: var(--lockin-radius-xl);
+  }
+
+  /* Attachment button */
+  #lockin-root .lockin-chat-attach-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--lockin-size-32);
+    height: var(--lockin-size-32);
+    color: var(--lockin-color-text-secondary);
+    background: var(--lockin-color-surface-subtle);
+    border: var(--lockin-size-1) solid var(--lockin-color-border-strong);
+    border-radius: var(--lockin-radius-lg);
+    transition:
+      background var(--lockin-duration-150) var(--lockin-ease-default),
+      color var(--lockin-duration-150) var(--lockin-ease-default),
+      border-color var(--lockin-duration-150) var(--lockin-ease-default);
+    cursor: pointer;
+  }
+
+  #lockin-root .lockin-chat-attach-btn:hover {
+    color: var(--lockin-color-text-body);
+    background: var(--lockin-color-surface-muted);
+  }
+
+  #lockin-root .lockin-chat-attach-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

@@ -1,0 +1,32 @@
+import type { RetryConfig } from './types';
+
+export const HTTP_STATUS = {
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  REQUEST_TIMEOUT: 408,
+  CONFLICT: 409,
+  TOO_MANY_REQUESTS: 429,
+  NO_CONTENT: 204,
+  INTERNAL_SERVER_ERROR: 500,
+  BAD_GATEWAY: 502,
+  SERVICE_UNAVAILABLE: 503,
+  GATEWAY_TIMEOUT: 504,
+} as const;
+
+export const RETRY_JITTER_RATIO = 0.3;
+
+export const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelayMs: 500,
+  maxDelayMs: 5000,
+  retryableStatuses: [
+    HTTP_STATUS.TOO_MANY_REQUESTS,
+    HTTP_STATUS.BAD_GATEWAY,
+    HTTP_STATUS.SERVICE_UNAVAILABLE,
+    HTTP_STATUS.GATEWAY_TIMEOUT,
+  ],
+};
+
+export const DEFAULT_TIMEOUT_MS = 30000;

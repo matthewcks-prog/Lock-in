@@ -9,109 +9,89 @@
  */
 
 export interface Messaging {
-  /**
-   * Send a message to the background script
-   */
   sendToBackground: <T = unknown>(message: unknown) => Promise<T>;
-
-  /**
-   * Listen for messages from background or other parts of extension
-   */
   onMessage: (
     callback: (
       message: unknown,
       sender: chrome.runtime.MessageSender,
     ) => unknown | Promise<unknown>,
   ) => () => void;
-
-  /**
-   * Send message to a specific tab
-   */
   sendToTab: <T = unknown>(tabId: number, message: unknown) => Promise<T>;
 }
 
-/**
- * Create the messaging wrapper
- */
-function createMessaging(): Messaging {
-  return {
-    sendToBackground<T = unknown>(message: unknown): Promise<T> {
-      return new Promise((resolve, reject) => {
-        try {
-          chrome.runtime.sendMessage(message, (response: T) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve(response);
-            }
-          });
-        } catch (err) {
-          reject(err);
+type MessageCallback = (
+  message: unknown,
+  sender: chrome.runtime.MessageSender,
+) => unknown | Promise<unknown>;
+
+async function withRuntimeResponse<T>(executor: (done: (response: T) => void) => void): Promise<T> {
+  return await new Promise((resolve, reject) => {
+    try {
+      executor((response) => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError !== undefined && lastError !== null) {
+          reject(new Error(lastError.message));
+          return;
         }
+        resolve(response);
       });
-    },
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 
-    onMessage(
-      callback: (
-        message: unknown,
-        sender: chrome.runtime.MessageSender,
-      ) => unknown | Promise<unknown>,
-    ): () => void {
-      const listener = (
-        message: unknown,
-        sender: chrome.runtime.MessageSender,
-        sendResponse: (response?: unknown) => void,
-      ): boolean | void => {
-        try {
-          const result = callback(message, sender);
-
-          if (result instanceof Promise) {
-            result.then(sendResponse).catch((err: Error) => {
-              console.error('[Lock-in] Message handler error:', err);
-              sendResponse({ error: err.message });
-            });
-            return true; // Keep channel open for async response
-          }
-
-          if (result !== undefined) {
-            sendResponse(result);
-          }
-        } catch (err) {
+function createOnMessageListener(callback: MessageCallback) {
+  return (
+    message: unknown,
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: unknown) => void,
+  ): boolean | void => {
+    try {
+      const result = callback(message, sender);
+      if (result instanceof Promise) {
+        result.then(sendResponse).catch((err: Error) => {
           console.error('[Lock-in] Message handler error:', err);
-          sendResponse({ error: err instanceof Error ? err.message : 'Unknown error' });
-        }
-      };
-
-      chrome.runtime.onMessage.addListener(listener);
-
-      // Return unsubscribe function
-      return () => {
-        chrome.runtime.onMessage.removeListener(listener);
-      };
-    },
-
-    sendToTab<T = unknown>(tabId: number, message: unknown): Promise<T> {
-      return new Promise((resolve, reject) => {
-        try {
-          chrome.tabs.sendMessage(tabId, message, (response: T) => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message));
-            } else {
-              resolve(response);
-            }
-          });
-        } catch (err) {
-          reject(err);
-        }
-      });
-    },
+          sendResponse({ error: err.message });
+        });
+        return true;
+      }
+      if (result !== undefined) {
+        sendResponse(result);
+      }
+      return undefined;
+    } catch (err) {
+      console.error('[Lock-in] Message handler error:', err);
+      sendResponse({ error: err instanceof Error ? err.message : 'Unknown error' });
+      return undefined;
+    }
   };
 }
 
-// Create and expose messaging
+function createMessaging(): Messaging {
+  const sendToBackground = async <T = unknown>(message: unknown): Promise<T> =>
+    withRuntimeResponse((done) => {
+      chrome.runtime.sendMessage(message, done);
+    });
+
+  const sendToTab = async <T = unknown>(tabId: number, message: unknown): Promise<T> =>
+    withRuntimeResponse((done) => {
+      chrome.tabs.sendMessage(tabId, message, done);
+    });
+
+  const onMessage = (callback: MessageCallback): (() => void) => {
+    const listener = createOnMessageListener(callback);
+    chrome.runtime.onMessage.addListener(listener);
+    return () => {
+      chrome.runtime.onMessage.removeListener(listener);
+    };
+  };
+
+  return { sendToBackground, onMessage, sendToTab };
+}
+
 const messaging = createMessaging();
 
-// Expose globally for content scripts
 if (typeof window !== 'undefined') {
   window.LockInMessaging = messaging;
 }

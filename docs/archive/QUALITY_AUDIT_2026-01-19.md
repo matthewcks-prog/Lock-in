@@ -1,4 +1,6 @@
-# Quality Audit — 2026-19-01
+﻿# Quality Audit â€” 2026-19-01
+
+Note (2026-01-29): Backend path references updated to current layout (`services/transcripts/transcriptsService.js`, `observability/sentry.js`).
 
 ## Executive summary (top 5 risks)
 
@@ -9,7 +11,7 @@
    - **Confidence:** HIGH.
 
 2. **Oversized UI/editor modules and transcript providers**
-   - **Evidence:** Large files in `ui/extension/notes` and `core/transcripts/providers` exceed 500–1100 lines.
+   - **Evidence:** Large files in `ui/extension/notes` and `core/transcripts/providers` exceed 500â€“1100 lines.
    - **Impact:** High coupling, difficult code review, higher regression risk.
    - **Recommended fix:** Split into focused submodules (toolbar/plugins/hooks, detection/extraction/parser helpers).
    - **Confidence:** MED.
@@ -27,7 +29,7 @@
    - **Confidence:** HIGH.
 
 5. **Observability uses ad-hoc console logging**
-   - **Evidence:** `backend/services/transcriptsService.js` and `backend/sentry.js` use `console.log` directly.
+   - **Evidence:** `backend/services/transcripts/transcriptsService.js` and `backend/observability/sentry.js` use `console.log` directly.
    - **Impact:** Unstructured logs, noisy output, reduced ability to filter/trace in production.
    - **Recommended fix:** Route logs through a structured logger with levels and metadata.
    - **Confidence:** HIGH.
@@ -43,21 +45,21 @@
 
 ## Repo map (observed)
 
-- **`extension/`** — Chrome extension runtime (manifest, background, content orchestration, popup), plus build outputs under `extension/dist/`.
-- **`ui/`** — React UI source for the extension sidebar (extension-specific).
-- **`core/`** — Domain logic, transcript providers, shared utilities (Chrome-free).
-- **`api/`** — API client, auth, fetcher.
-- **`integrations/`** — Site adapters.
-- **`backend/`** — API server, controllers, services, observability, migrations.
-- **`shared/`** — Optional shared UI and utilities.
-- **`docs/`** — Architecture, tracking, testing, and feature documentation.
-- **`scripts/` / `tools/` / `build/`** — Build and tooling utilities.
+- **`extension/`** â€” Chrome extension runtime (manifest, background, content orchestration, popup), plus build outputs under `extension/dist/`.
+- **`ui/`** â€” React UI source for the extension sidebar (extension-specific).
+- **`core/`** â€” Domain logic, transcript providers, shared utilities (Chrome-free).
+- **`api/`** â€” API client, auth, fetcher.
+- **`integrations/`** â€” Site adapters.
+- **`backend/`** â€” API server, controllers, services, observability, migrations.
+- **`shared/`** â€” Optional shared UI and utilities.
+- **`docs/`** â€” Architecture, tracking, testing, and feature documentation.
+- **`scripts/` / `tools/` / `build/`** â€” Build and tooling utilities.
 
 ---
 
 ## Current issues (prioritized)
 
-### P0 — Safety/Correctness
+### P0 â€” Safety/Correctness
 
 - **Hardcoded Supabase anon keys in extension config**
   - **Evidence:** `extension/config.js` contains prod + dev anon keys.
@@ -77,7 +79,7 @@
   - **Fix:** Replace with generics and explicit change record shapes.
   - **Confidence:** HIGH.
 
-### P1 — Structure/Scalability
+### P1 â€” Structure/Scalability
 
 - **Oversized UI/editor files**
   - **Evidence:** `ui/extension/notes/NoteEditor.tsx` (~1140 lines), `ui/hooks/useNoteEditor.ts` (~703 lines), `ui/extension/notes/NotesPanel.tsx` (~556 lines).
@@ -91,7 +93,7 @@
   - **Fix:** Split detection/extraction/parsing helpers and keep providers as composition layers.
   - **Confidence:** MED.
 
-### P2 — Quality/Testing/Observability
+### P2 â€” Quality/Testing/Observability
 
 - **No coverage thresholds configured**
   - **Evidence:** `vitest.config.ts` defines tests but no `coverage` thresholds.
@@ -100,7 +102,7 @@
   - **Confidence:** HIGH.
 
 - **Ad-hoc console logging in backend**
-  - **Evidence:** `backend/services/transcriptsService.js`, `backend/sentry.js` use `console.log`.
+  - **Evidence:** `backend/services/transcripts/transcriptsService.js`, `backend/observability/sentry.js` use `console.log`.
   - **Impact:** Harder to filter/trace logs in production.
   - **Fix:** Switch to structured logger utilities.
   - **Confidence:** HIGH.
@@ -117,11 +119,11 @@
 
 ---
 
-## “Do not refactor yet” list (DEFERRED)
+## â€œDo not refactor yetâ€ list (DEFERRED)
 
-- **OpenAI provider plumbing finalization** — dependent on deployment and credential availability.
-- **Deployment/infra cleanup** — finalize Azure URLs and deployment scripts once infra targets are locked.
-- **Major dependency upgrades** — Lexical/Tailwind/react type upgrades should be scheduled after core refactors.
+- **OpenAI provider plumbing finalization** â€” dependent on deployment and credential availability.
+- **Deployment/infra cleanup** â€” finalize Azure URLs and deployment scripts once infra targets are locked.
+- **Major dependency upgrades** â€” Lexical/Tailwind/react type upgrades should be scheduled after core refactors.
 
 ---
 

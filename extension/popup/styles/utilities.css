@@ -1,0 +1,30 @@
+.hidden {
+  display: none !important;
+}
+
+body::-webkit-scrollbar {
+  width: 6px;
+}
+
+body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body::-webkit-scrollbar-thumb {
+  background: var(--popup-color-border-strong);
+  border-radius: var(--popup-radius-sm);
+}
+
+body::-webkit-scrollbar-thumb:hover {
+  background: var(--popup-color-text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

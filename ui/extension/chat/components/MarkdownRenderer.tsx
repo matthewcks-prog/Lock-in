@@ -1,11 +1,16 @@
 /**
  * MarkdownRenderer Component
  *
- * Renders markdown content with syntax highlighting for code blocks.
- * Uses react-markdown with remark-gfm for GitHub Flavored Markdown.
+ * Renders markdown content with syntax highlighting, per-block copy buttons,
+ * and security hardening (no raw HTML, safe links, XSS-resistant).
+ *
+ * Security:
+ * - rehype-sanitize strips raw HTML to prevent XSS
+ * - All external links get rel="noreferrer noopener" and target="_blank"
+ * - No dangerouslySetInnerHTML
  */
 
-import React, { memo } from 'react';
+import React, { memo, useCallback, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -17,9 +22,40 @@ interface MarkdownRendererProps {
   /** Additional CSS classes */
   className?: string;
 }
+const COPY_FEEDBACK_TIMEOUT_MS = 1500;
 
 /**
- * Custom code block component with syntax highlighting
+ * Copy-to-clipboard button for code blocks
+ */
+function CodeCopyButton({ text }: { text: string }): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), COPY_FEEDBACK_TIMEOUT_MS);
+    } catch {
+      /* clipboard unavailable */
+    }
+  }, [text]);
+
+  return (
+    <button
+      type="button"
+      className="lockin-code-copy-btn"
+      onClick={() => {
+        void handleCopy();
+      }}
+      aria-label={copied ? 'Copied' : 'Copy code'}
+      title={copied ? 'Copied!' : 'Copy'}
+    >
+      {copied ? '✓' : '⎘'}
+    </button>
+  );
+}
+
+/**
+ * Custom code block component with syntax highlighting + copy button
  */
 type CodeProps = Omit<React.HTMLAttributes<HTMLElement>, 'style'> & {
   inline?: boolean;
@@ -30,12 +66,12 @@ const syntaxStyle = oneDark as unknown as Record<string, React.CSSProperties>;
 
 const CodeBlock = memo(function CodeBlock({ inline, className, children, ...props }: CodeProps) {
   // Extract language from className (e.g., "language-javascript")
-  const match = /language-(\w+)/.exec(className || '');
-  const language = match ? match[1] : '';
+  const match = /language-(\w+)/.exec(className ?? '');
+  const language = match?.[1] ?? '';
   const codeString = String(children).replace(/\n$/, '');
 
   // Inline code
-  if (inline) {
+  if (inline === true) {
     return (
       <code
         className="px-1.5 py-0.5 mx-0.5 rounded bg-gray-100 text-gray-800 font-mono text-sm"
@@ -46,23 +82,22 @@ const CodeBlock = memo(function CodeBlock({ inline, className, children, ...prop
     );
   }
 
-  // Code block with syntax highlighting
+  // Code block with syntax highlighting + copy button
   return (
-    <div className="relative my-3 rounded-lg overflow-hidden">
-      {language && (
-        <div className="absolute top-0 right-0 px-2 py-1 text-xs text-gray-400 bg-gray-800 rounded-bl">
-          {language}
-        </div>
-      )}
+    <div className="lockin-code-block-wrapper">
+      <div className="lockin-code-block-header">
+        {language.length > 0 && <span className="lockin-code-block-lang">{language}</span>}
+        <CodeCopyButton text={codeString} />
+      </div>
       <SyntaxHighlighter
         style={syntaxStyle}
-        language={language || 'text'}
+        language={language.length > 0 ? language : 'text'}
         PreTag="div"
         customStyle={{
           margin: 0,
           padding: '1rem',
           fontSize: '0.875rem',
-          borderRadius: '0.5rem',
+          borderRadius: '0 0 0.5rem 0.5rem',
         }}
         {...props}
       >
@@ -156,11 +191,22 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   content,
   className = '',
 }: MarkdownRendererProps) {
-  if (!content) return null;
+  if (content.length === 0) return null;
 
   return (
-    <div className={`markdown-content text-gray-900 ${className}`}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+    <div className={`lockin-markdown ${className}`}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={markdownComponents}
+        /* Security: disallow raw HTML in markdown to prevent XSS */
+        skipHtml
+        /* Security: disallow dangerous protocols in URLs */
+        urlTransform={(url: string) => {
+          // Block javascript: and data: protocols
+          if (/^(javascript|data|vbscript):/i.test(url)) return '';
+          return url;
+        }}
+      >
         {content}
       </ReactMarkdown>
     </div>

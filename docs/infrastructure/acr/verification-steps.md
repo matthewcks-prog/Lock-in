@@ -35,9 +35,8 @@ The image size remains at 843MB because:
 **Changes pushed**:
 
 - `.dockerignore` - Enhanced exclusions
-- `.github/workflows/acr-cleanup.yml` - New automated cleanup workflow
-- `.github/workflows/ACR-CLEANUP-GUIDE.md` - Comprehensive documentation
-- `.github/workflows/backend-deploy.yml` - New environment-specific tagging
+- `.github/workflows/acr-cleanup.yml` - Automated cleanup workflow (runs only when `DEPLOYMENT_ENABLED` is true; see [CICD.md](../../deployment/CICD.md))
+- `.github/workflows/backend-deploy.yml` - Environment-specific tagging
 - `backend/Dockerfile` - Optimized layers
 - `scripts/cleanup-acr.ps1` - Manual cleanup script
 - `scripts/monitor-acr-usage.ps1` - Cost monitoring script
@@ -46,50 +45,18 @@ The image size remains at 843MB because:
 
 ## 🔄 Pending Steps
 
-### Step 3a: Wait for Workflow Sync (5-10 minutes)
+### Step 3: ACR cleanup (when deployment is paused)
 
-GitHub needs time to index the new workflow file. You can check if it's ready:
-
-```powershell
-# Check if ACR Cleanup workflow is available
-gh workflow list
-```
-
-Once you see "ACR Cleanup" in the list, proceed to Step 3b.
-
-### Step 3b: Trigger ACR Cleanup Workflow (Dry Run)
-
-**Option 1: Using GitHub CLI**
+To clean ACR images while deployment is paused, use the **local script** (the ACR Cleanup workflow runs only when `DEPLOYMENT_ENABLED` is `true`). See [CICD.md § One-time: log in and clean ACR images](../../deployment/CICD.md#one-time-log-in-and-clean-acr-images-option-b):
 
 ```powershell
-gh workflow run acr-cleanup.yml `
-  --field dry_run=true `
-  --field staging_retention_days=14 `
-  --field production_retention_days=90
+az login
+$env:AZURE_CONTAINER_REGISTRY = "your-acr-name"
+.\scripts\cleanup-acr.ps1 -DryRun $true
+.\scripts\cleanup-acr.ps1 -StagingRetentionDays 0 -ProductionRetentionDays 0 -DryRun $false
 ```
 
-**Option 2: Using GitHub Web UI**
-
-1. Go to: https://github.com/matthewcks-prog/Lock-in/actions
-2. Click on "ACR Cleanup" in the left sidebar
-3. Click "Run workflow" button
-4. Set parameters:
-   - `dry_run`: `true`
-   - `staging_retention_days`: `14`
-   - `production_retention_days`: `90`
-5. Click "Run workflow"
-
-**After triggering**:
-
-```powershell
-# Wait a moment, then check the run status
-gh run list --workflow=acr-cleanup.yml
-
-# View the logs (use the run ID from above)
-gh run view <RUN_ID> --log
-```
-
-**Expected result**: The workflow should complete successfully and show which images would be deleted (without actually deleting them since dry_run=true).
+For automated cleanup and full options, see [docs/infrastructure/acr/cleanup-guide.md](cleanup-guide.md).
 
 ---
 
@@ -224,14 +191,14 @@ The deployment should:
 
 ## 🎯 Expected Timeline
 
-| Step                  | Duration     | Status     |
-| --------------------- | ------------ | ---------- |
-| Docker build test     | Complete     | ✅         |
-| Git commit & push     | Complete     | ✅         |
-| Workflow sync         | 5-10 minutes | 🔄 Waiting |
-| Cleanup workflow test | 2-3 minutes  | ⏳ Pending |
-| Container Apps update | 5-10 minutes | ⏳ Pending |
-| Verification          | 5-10 minutes | ⏳ Pending |
+| Step                                                | Duration     | Status      |
+| --------------------------------------------------- | ------------ | ----------- |
+| Docker build test                                   | Complete     | ✅          |
+| Git commit & push                                   | Complete     | ✅          |
+| Workflow sync                                       | 5-10 minutes | 🔄 Waiting  |
+| ACR cleanup (local script or workflow when enabled) | 2-3 minutes  | ⏳ Optional |
+| Container Apps update                               | 5-10 minutes | ⏳ Pending  |
+| Verification                                        | 5-10 minutes | ⏳ Pending  |
 
 **Total time remaining**: ~20-30 minutes
 
@@ -241,7 +208,7 @@ The deployment should:
 
 You'll know everything is working when:
 
-1. ✅ ACR cleanup workflow runs successfully in dry-run mode
+1. ✅ ACR cleanup (local script or workflow when `DEPLOYMENT_ENABLED=true`) runs successfully in dry-run mode
 2. ✅ Container Apps are updated to use `*-latest` tags
 3. ✅ Next deployment to `develop` completes successfully
 4. ✅ Staging health check passes
@@ -307,19 +274,13 @@ Once all verification steps are complete:
    - Run `monitor-acr-usage.ps1` monthly
    - Review ACR costs in Azure Portal
 
-3. **Enable automated cleanup**:
-   - The weekly schedule is already active
-   - Review cleanup reports in GitHub Actions artifacts
+3. **Automated cleanup**: When `DEPLOYMENT_ENABLED` is `true`, `.github/workflows/acr-cleanup.yml` runs weekly. See [CICD.md](../../deployment/CICD.md) and [cleanup-guide.md](cleanup-guide.md).
 
-4. **Update documentation**:
-   - Add ACR optimization notes to your project README
-   - Document the new tagging strategy for your team
+4. **Update documentation**: Add ACR optimization notes to your project README and document the tagging strategy for your team.
 
 ---
 
 ## 📞 Support
 
-- **Cleanup Guide**: `.github/workflows/ACR-CLEANUP-GUIDE.md`
-- **Implementation Plan**: See artifacts
-- **Walkthrough**: See artifacts
+- **Cleanup and cost control**: [CICD.md § Pausing and Clean the registry](../../deployment/CICD.md#clean-the-registry-while-paused-recommended) and [cleanup-guide.md](cleanup-guide.md)
 - **Azure ACR Docs**: https://learn.microsoft.com/en-us/azure/container-registry/

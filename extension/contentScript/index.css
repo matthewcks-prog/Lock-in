@@ -1,0 +1,40 @@
+/* Layer order declaration - this is the only place order matters */
+@layer lockin.tokens, lockin.base, lockin.layout, lockin.chrome, lockin.chat, lockin.notes, lockin.tasks, lockin.components, lockin.dialogs, lockin.tools, lockin.responsive;
+
+/* Tokens — split by domain for scalability */
+@import './tokens/typography.css';
+@import './tokens/spacing.css';
+@import './tokens/colors.css';
+@import './tokens/effects.css';
+
+@import './reset.css';
+@import './layout.css';
+@import './chrome.css';
+@import './chat-base.css';
+@import './chat-actions.css';
+@import './chat-composer.css';
+@import './chat-input.css';
+@import './notes-shell.css';
+@import './notes-toolbar.css';
+@import './notes-content.css';
+@import './notes-images.css';
+@import './notes-list.css';
+@import './notes-actions.css';
+@import './tasks-shell.css';
+@import './tasks-list.css';
+@import './tasks-list-support.css';
+@import './tasks-modal.css';
+@import './tasks-board.css';
+@import './tasks-edit.css';
+@import './utilities.css';
+@import './dialogs.css';
+@import './transcript-list.css';
+@import './transcript-ai.css';
+@import './transcript-message.css';
+@import './transcript-para-view.css';
+@import './tools.css';
+@import './feedback-modal.css';
+@import './feedback-form.css';
+@import './privacy.css';
+@import './fake-fullscreen.css';
+@import './responsive.css';

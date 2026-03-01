@@ -1,4 +1,5 @@
-import { DecoratorNode, LexicalNode, NodeKey } from 'lexical';
+import type { LexicalNode, NodeKey } from 'lexical';
+import { DecoratorNode } from 'lexical';
 
 export type SerializedAttachmentNode = {
   type: 'attachment';
@@ -9,7 +10,14 @@ export type SerializedAttachmentNode = {
   assetId?: string | null;
 };
 
-function PaperclipIcon() {
+interface AttachmentNodeParams {
+  href: string;
+  fileName: string;
+  mimeType?: string | null | undefined;
+  assetId?: string | null | undefined;
+}
+
+function PaperclipIcon(): JSX.Element {
   return (
     <svg
       aria-hidden="true"
@@ -31,47 +39,43 @@ function PaperclipIcon() {
 export class AttachmentNode extends DecoratorNode<JSX.Element> {
   __href: string;
   __fileName: string;
-  __mimeType?: string | null;
-  __assetId?: string | null;
+  __mimeType: string | null;
+  __assetId: string | null;
 
-  static getType(): string {
+  static override getType(): string {
     return 'attachment';
   }
 
-  static clone(node: AttachmentNode): AttachmentNode {
+  static override clone(node: AttachmentNode): AttachmentNode {
     return new AttachmentNode(
-      node.__href,
-      node.__fileName,
-      node.__mimeType,
-      node.__assetId,
+      {
+        href: node.__href,
+        fileName: node.__fileName,
+        mimeType: node.__mimeType,
+        assetId: node.__assetId,
+      },
       node.getKey(),
     );
   }
 
-  static importJSON(serializedNode: SerializedAttachmentNode): AttachmentNode {
+  static override importJSON(serializedNode: SerializedAttachmentNode): AttachmentNode {
     const { href, fileName, mimeType, assetId } = serializedNode;
-    return new AttachmentNode(href, fileName, mimeType, assetId);
+    return new AttachmentNode({ href, fileName, mimeType, assetId });
   }
 
-  constructor(
-    href: string,
-    fileName: string,
-    mimeType?: string | null,
-    assetId?: string | null,
-    key?: NodeKey,
-  ) {
+  constructor(params: AttachmentNodeParams, key?: NodeKey) {
     super(key);
-    this.__href = href;
-    this.__fileName = fileName;
-    this.__mimeType = mimeType;
-    this.__assetId = assetId;
+    this.__href = params.href;
+    this.__fileName = params.fileName;
+    this.__mimeType = params.mimeType ?? null;
+    this.__assetId = params.assetId ?? null;
   }
 
-  getAssetId(): string | null | undefined {
+  getAssetId(): string | null {
     return this.__assetId;
   }
 
-  exportJSON(): SerializedAttachmentNode {
+  override exportJSON(): SerializedAttachmentNode {
     return {
       type: 'attachment',
       version: 1,
@@ -82,17 +86,21 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
     };
   }
 
-  createDOM(): HTMLElement {
+  override createDOM(): HTMLElement {
     const container = document.createElement('span');
     container.className = 'lockin-note-attachment-wrapper';
     return container;
   }
 
-  updateDOM(): false {
+  override updateDOM(): false {
     return false;
   }
 
-  decorate(): JSX.Element {
+  override decorate(): JSX.Element {
+    const resolvedFileName = this.__fileName.length > 0 ? this.__fileName : 'Attachment';
+    const hasMimeType =
+      this.__mimeType !== null && this.__mimeType !== undefined && this.__mimeType.length > 0;
+
     return (
       <a
         href={this.__href}
@@ -103,8 +111,8 @@ export class AttachmentNode extends DecoratorNode<JSX.Element> {
         <span className="lockin-note-attachment-chip-icon">
           <PaperclipIcon />
         </span>
-        <span className="lockin-note-attachment-name">{this.__fileName || 'Attachment'}</span>
-        {this.__mimeType ? (
+        <span className="lockin-note-attachment-name">{resolvedFileName}</span>
+        {hasMimeType ? (
           <span className="lockin-note-attachment-meta">{this.__mimeType}</span>
         ) : null}
       </a>
@@ -118,7 +126,7 @@ export function $createAttachmentNode(params: {
   mimeType?: string | null;
   assetId?: string | null;
 }): AttachmentNode {
-  return new AttachmentNode(params.href, params.fileName, params.mimeType, params.assetId ?? null);
+  return new AttachmentNode(params);
 }
 
 export function $isAttachmentNode(node: LexicalNode | null | undefined): node is AttachmentNode {

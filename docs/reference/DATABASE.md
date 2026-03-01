@@ -19,10 +19,25 @@ Lock-in uses **two separate Supabase projects** for environment isolation:
 
 **Schema Sync Strategy:**
 
-- Schema migrations are version-controlled in `backend/migrations/`
+> **Single Source of Truth**: All migrations live in `supabase/migrations/` - this is the authoritative schema definition.
+
+- Schema migrations are version-controlled in `supabase/migrations/`
+- **Local dev**: Use `npm run db:reset` to apply migrations + seed data
+- **Cloud sync**: Use `npm run db:push` to deploy to staging/production
 - Apply migrations to dev first, test, then apply to prod
-- Use Supabase CLI (`supabase db push`) for migration sync
-- See [docs/setup/LOCAL_SUPABASE_SETUP.md](/docs/setup/LOCAL_SUPABASE_SETUP.md) for local development
+- See [docs/setup/LOCAL_DEVELOPMENT.md](/docs/setup/LOCAL_DEVELOPMENT.md) for local development setup
+
+**Available Database Scripts** (from root package.json):
+
+| Command             | Description                                |
+| ------------------- | ------------------------------------------ |
+| `npm run db:start`  | Start local Supabase containers            |
+| `npm run db:stop`   | Stop local Supabase containers             |
+| `npm run db:reset`  | Reset local DB with migrations + seed data |
+| `npm run db:pull`   | Pull remote schema changes to local        |
+| `npm run db:push`   | Push local migrations to remote Supabase   |
+| `npm run db:status` | Show local Supabase status                 |
+| `npm run db:keys`   | Output connection credentials (for .env)   |
 
 ---
 
@@ -71,7 +86,7 @@ ALTER ROLE authenticated SET search_path = public, extensions;
 ALTER ROLE service_role SET search_path = public, extensions;
 ```
 
-See `backend/migrations/004_vector_extension_schema.sql` for full migration details.
+See `supabase/migrations/004_vector_extension_schema.sql` for full migration details.
 
 ---
 
@@ -632,7 +647,7 @@ auth.users (Supabase)
 
 ## Indexes (Applied)
 
-These indexes are in place for performance at scale (thousands of users). Migration applied December 2024 via `backend/migrations/002_performance_indexes.sql`.
+These indexes are in place for performance at scale (thousands of users). All indexes are defined in the migration that creates their table.
 
 ```sql
 -- Notes: Primary listing (user + date)
@@ -688,11 +703,11 @@ CREATE INDEX idx_transcripts_media_url_norm ON public.transcripts(media_url_norm
 
 ## Row Level Security (RLS) - Applied
 
-All tables have RLS policies ensuring users can only access their own data. Base policies applied December 2024 via `backend/migrations/003_row_level_security.sql`. Additional table-specific RLS policies are defined in their respective migration files.
+All tables have RLS policies ensuring users can only access their own data. RLS policies are defined in the same migration that creates each table, ensuring self-contained, atomic migrations.
 
 **Critical**: RLS provides defense-in-depth security. Even if application code has bugs, users cannot access each other's data.
 
-**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `chat_message_assets`, `folders`, `ai_requests`, `feedback`, `transcripts`, `transcript_jobs`, `transcript_job_chunks`
+**Tables with RLS enabled**: `chats`, `chat_messages`, `notes`, `note_assets`, `chat_message_assets`, `folders`, `ai_requests`, `feedback`, `transcripts`, `transcript_jobs`, `transcript_job_chunks`, `transcript_upload_windows`, `idempotency_keys`
 
 ```sql
 -- Enable RLS on all tables
@@ -720,19 +735,21 @@ CREATE POLICY "Users can delete own notes"
 
 **RLS Policy Sources by Table:**
 
-| Table                   | Migration Source                                    | Operations                     |
-| ----------------------- | --------------------------------------------------- | ------------------------------ |
-| `chats`                 | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
-| `chat_messages`         | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
-| `notes`                 | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
-| `note_assets`           | `001_note_assets.sql`, `003_row_level_security.sql` | SELECT, INSERT, DELETE         |
-| `chat_message_assets`   | `010_chat_assets.sql`                               | SELECT, INSERT, DELETE         |
-| `folders`               | `003_row_level_security.sql`                        | SELECT, INSERT, UPDATE, DELETE |
-| `ai_requests`           | `003_row_level_security.sql`                        | SELECT, INSERT (append-only)   |
-| `feedback`              | `009_feedback.sql`                                  | SELECT, INSERT                 |
-| `transcripts`           | `007_transcripts_hardening.sql`                     | SELECT, INSERT, UPDATE, DELETE |
-| `transcript_jobs`       | `006_transcripts.sql`                               | SELECT, INSERT, UPDATE, DELETE |
-| `transcript_job_chunks` | `007_transcripts_hardening.sql`                     | SELECT (via parent job)        |
+| Table                       | Migration Source                         | Operations                     |
+| --------------------------- | ---------------------------------------- | ------------------------------ |
+| `chats`                     | `20260101000000_foundation.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `chat_messages`             | `20260101000000_foundation.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `notes`                     | `20260101000000_foundation.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `folders`                   | `20260101000000_foundation.sql`          | SELECT, INSERT, UPDATE, DELETE |
+| `ai_requests`               | `20260101000000_foundation.sql`          | SELECT, INSERT (append-only)   |
+| `note_assets`               | `20260101000001_note_assets.sql`         | SELECT, INSERT, DELETE         |
+| `chat_message_assets`       | `20260101000002_chat_message_assets.sql` | SELECT, INSERT, DELETE         |
+| `feedback`                  | `20260101000003_feedback.sql`            | SELECT, INSERT                 |
+| `transcripts`               | `20260101000004_transcripts.sql`         | SELECT, INSERT, UPDATE, DELETE |
+| `transcript_jobs`           | `20260101000004_transcripts.sql`         | SELECT, INSERT, UPDATE, DELETE |
+| `transcript_job_chunks`     | `20260101000004_transcripts.sql`         | SELECT (via parent job)        |
+| `transcript_upload_windows` | `20260101000004_transcripts.sql`         | SELECT, INSERT, UPDATE         |
+| `idempotency_keys`          | `20260101000005_idempotency.sql`         | SELECT, INSERT, UPDATE         |
 
 ---
 
@@ -741,24 +758,39 @@ CREATE POLICY "Users can delete own notes"
 - **No breaking changes**: All fields are nullable or have defaults where appropriate
 - **Future additions**: Consider adding `folder_id` to `notes` for explicit folder relationships
 - **Embeddings**: `embedding` field uses pgvector extension for semantic search
-- **pgvector schema** (Dec 2024): The `vector` extension was moved to `extensions` schema. See `backend/migrations/004_vector_extension_schema.sql` for required `search_path` configuration.
+- **pgvector schema**: The `vector` extension lives in `extensions` schema. The foundation migration sets `search_path = public, extensions` for all roles.
+
+### Migration Architecture
+
+Migrations follow a consolidated, dependency-ordered structure using timestamp prefixes (`YYYYMMDDHHMMSS_name.sql`). Each migration is self-contained with its tables, indexes, RLS policies, and helper functions.
+
+**Key Design Principles:**
+
+1. **Foundation First**: `20260101000000_foundation.sql` creates all core tables that other migrations depend on
+2. **Idempotent**: All migrations use `IF NOT EXISTS` and `DROP POLICY IF EXISTS` for safe re-runs
+3. **Complete RLS**: Each table's RLS policies are defined in the same migration that creates the table
+4. **Cleanup Functions**: Scheduled cleanup functions are defined alongside the tables they clean
 
 ### Applied Migrations
 
-| Migration                               | Date     | Description                                                      |
-| --------------------------------------- | -------- | ---------------------------------------------------------------- |
-| `001_note_assets.sql`                   | Dec 2024 | Note assets table for file attachments                           |
-| `002_performance_indexes.sql`           | Dec 2024 | Performance indexes for all tables                               |
-| `003_row_level_security.sql`            | Dec 2024 | RLS policies for data isolation                                  |
-| `004_vector_extension_schema.sql`       | Dec 2024 | Fix pgvector after moving to extensions schema                   |
-| `005_starred_notes.sql`                 | Dec 2024 | Add is_starred column for favoriting notes                       |
-| `006_transcripts.sql`                   | Dec 2025 | Transcript jobs + transcript cache tables                        |
-| `007_transcripts_hardening.sql`         | Jan 2026 | Transcript job state + cache hardening                           |
-| `008_transcript_privacy_hardening.sql`  | Jan 2026 | Privacy: URL redaction, 90-day TTL, consent tracking             |
-| `009_feedback.sql`                      | Jan 2026 | User feedback table for bug reports/feature requests             |
-| `010_chat_assets.sql`                   | Jan 2026 | Chat message attachments table and storage bucket                |
-| `011_chat_assets_cleanup.sql`           | Feb 2026 | Cleanup function for orphaned chat assets                        |
-| `012_transcript_storage_and_limits.sql` | Feb 2026 | Transcript processing metadata, upload windows, idempotency keys |
+| Migration                                | Description                                                                                                                                                 |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20260101000000_foundation.sql`          | Core tables (chats, chat_messages, notes, folders, ai_requests), pgvector extension, semantic search, all performance indexes and RLS for foundation tables |
+| `20260101000001_note_assets.sql`         | Note file attachments table with RLS                                                                                                                        |
+| `20260101000002_chat_message_assets.sql` | Chat message attachments table with RLS and orphan cleanup                                                                                                  |
+| `20260101000003_feedback.sql`            | User feedback table (bug reports, feature requests) with RLS                                                                                                |
+| `20260101000004_transcripts.sql`         | Transcript cache, jobs, chunks, upload rate limiting, storage policies                                                                                      |
+| `20260101000005_idempotency.sql`         | Request deduplication keys with TTL and cleanup function                                                                                                    |
+
+### Running Migrations
+
+```bash
+# Reset local database with all migrations + seed data
+npm run db:reset
+
+# Push migrations to remote Supabase
+npm run db:push
+```
 
 ---
 

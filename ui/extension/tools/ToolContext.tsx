@@ -38,13 +38,13 @@ interface ToolProviderProps {
   children: ReactNode;
 }
 
-export function ToolProvider({ children }: ToolProviderProps) {
+export function ToolProvider({ children }: ToolProviderProps): JSX.Element {
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [activeToolTitle, setActiveToolTitle] = useState<string | null>(null);
 
   const openTool = useCallback((toolId: string) => {
     const tool = getToolById(toolId);
-    if (tool && tool.enabled) {
+    if (tool !== undefined && tool.enabled === true) {
       setActiveToolId(toolId);
       setActiveToolTitle(tool.label);
     }
@@ -75,7 +75,7 @@ export function ToolProvider({ children }: ToolProviderProps) {
 
 export function useToolContext(): ToolContextValue {
   const context = useContext(ToolContext);
-  if (!context) {
+  if (context === null) {
     throw new Error('useToolContext must be used within a ToolProvider');
   }
   return context;

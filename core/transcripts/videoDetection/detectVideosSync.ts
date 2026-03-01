@@ -6,14 +6,14 @@ import { detectHtml5Videos } from './html5Detection';
 /**
  * Result of synchronous video detection
  */
-export interface VideoDetectionResult {
+export type VideoDetectionResult = {
   /** Detected videos (may be empty if API call required) */
   videos: DetectedVideo[];
   /** Which provider was detected */
   provider: VideoProvider | null;
   /** Whether an API call is required to get full video list */
   requiresApiCall: boolean;
-}
+};
 
 /**
  * Detect videos synchronously from page context.

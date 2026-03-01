@@ -10,77 +10,176 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
-import { RateLimitError } from '@core/errors';
+import type { MutableRefObject } from 'react';
+import { useTranscriptCache } from '../../transcripts/hooks/useTranscriptCache';
+import type { ChatApiResponse, UseSendMessageOptions } from '../types';
+import { buildIdempotencyKey, type SendMessageMutationParams } from './sendMessageUtils';
+import { sendMessageMutation } from './sendMessageMutation';
 import {
-  useTranscriptCache,
-  type TranscriptCacheInput,
-} from '../../transcripts/hooks/useTranscriptCache';
-import type {
-  ChatMessage,
-  SendMessageParams,
-  ChatApiResponse,
-  UseSendMessageOptions,
-} from '../types';
-import { isValidUUID } from '../types';
-import { chatMessagesKeys } from './useChatMessages';
+  createSendMessageHandlers,
+  type MutationContext,
+  type MutationHandlerDeps,
+} from './sendMessageHandlers';
 
-interface MutationContext {
-  previousMessages: ChatMessage[];
-  pendingMessageId: string;
-  provisionalChatId: string;
+interface UseSendMessageResult {
+  sendMessage: (params: SendMessageMutationParams) => void;
+  sendMessageAsync: (
+    params: SendMessageMutationParams,
+  ) => Promise<(ChatApiResponse & { resolvedChatId: string }) | undefined>;
+  isSending: boolean;
+  isError: boolean;
+  error: Error | null;
+  reset: () => void;
+  cancelPending: () => void;
 }
 
-/** Extended params that include attachments */
-interface SendMessageWithAttachmentsParams extends SendMessageParams {
-  /** Array of uploaded asset IDs to include */
-  attachmentIds?: string[];
-  /** Override selection payload sent to the API */
-  selectionOverride?: string;
-  /** Override user message payload sent to the API */
-  userMessageOverride?: string;
-  /** Idempotency key for de-duplication */
-  idempotencyKey?: string;
-  /** Optional transcript context to cache before sending */
-  transcriptContext?: TranscriptCacheInput;
+type SendMutationResponse = ChatApiResponse & { resolvedChatId: string };
+
+interface SendMutationState {
+  mutate: (params: SendMessageMutationParams) => void;
+  mutateAsync: (params: SendMessageMutationParams) => Promise<SendMutationResponse>;
+  reset: () => void;
+  isPending: boolean;
+  isError: boolean;
+  error: Error | null;
 }
 
-type SendMessageMutationParams = SendMessageWithAttachmentsParams & {
-  currentMessages: ChatMessage[];
-  activeChatId: string | null;
-};
+function useAbortControllerCleanup(
+  abortControllerRef: MutableRefObject<AbortController | null>,
+): void {
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, [abortControllerRef]);
+}
 
-type ChatHistoryEntry = { role: ChatMessage['role']; content: string };
-
-const IDEMPOTENCY_BUCKET_MS = 5000;
-
-function hashString(value: string): string {
-  let hash = 0;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
+function createMutationHandlerDeps({
+  queryClient,
+  onSuccess,
+  onError,
+}: {
+  queryClient: ReturnType<typeof useQueryClient>;
+  onSuccess?: UseSendMessageOptions['onSuccess'];
+  onError?: UseSendMessageOptions['onError'];
+}): MutationHandlerDeps {
+  const handlerDeps: MutationHandlerDeps = { queryClient };
+  if (onSuccess !== undefined) {
+    handlerDeps.onSuccess = onSuccess;
   }
-  return Math.abs(hash).toString(36);
+  if (onError !== undefined) {
+    handlerDeps.onError = onError;
+  }
+  return handlerDeps;
 }
 
-function buildIdempotencyKey(params: SendMessageWithAttachmentsParams): string {
-  const bucket = Math.floor(Date.now() / IDEMPOTENCY_BUCKET_MS);
-  const attachmentKey = (params.attachmentIds || []).join(',');
-  const chatKey = params.chatId || '';
-  const payloadKey = params.selectionOverride ?? params.message;
-  const seed = `${chatKey}|${payloadKey}|${attachmentKey}|${bucket}`;
-  return `lockin-${hashString(seed)}`;
+function prepareMutationParams({
+  params,
+  pendingSendKeyRef,
+}: {
+  params: SendMessageMutationParams;
+  pendingSendKeyRef: MutableRefObject<string | null>;
+}): SendMessageMutationParams | null {
+  const idempotencyKey =
+    params.idempotencyKey !== undefined && params.idempotencyKey.length > 0
+      ? params.idempotencyKey
+      : buildIdempotencyKey(params);
+  if (pendingSendKeyRef.current === idempotencyKey) {
+    return null;
+  }
+  pendingSendKeyRef.current = idempotencyKey;
+  return { ...params, idempotencyKey };
 }
 
-function formatSendError(error: Error): string {
-  if (error instanceof RateLimitError) {
-    const retryAfterMs = error.retryAfterMs;
-    if (retryAfterMs && retryAfterMs > 0) {
-      const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
-      return `You're sending too fast - try again in ${seconds}s.`;
+function useSendMessageMutation({
+  apiClient,
+  pageUrl,
+  courseCode,
+  cacheTranscript,
+  abortControllerRef,
+  pendingSendKeyRef,
+  handlerDeps,
+}: {
+  apiClient: UseSendMessageOptions['apiClient'];
+  pageUrl: string;
+  courseCode: string | null;
+  cacheTranscript: ReturnType<typeof useTranscriptCache>['cacheTranscript'];
+  abortControllerRef: MutableRefObject<AbortController | null>;
+  pendingSendKeyRef: MutableRefObject<string | null>;
+  handlerDeps: MutationHandlerDeps;
+}): SendMutationState {
+  const {
+    onMutate,
+    onError: handleError,
+    onSuccess: handleSuccess,
+  } = createSendMessageHandlers(handlerDeps);
+
+  return useMutation<SendMutationResponse, Error, SendMessageMutationParams, MutationContext>({
+    retry: false,
+    mutationFn: async (params) => {
+      return sendMessageMutation(params, {
+        apiClient,
+        pageUrl,
+        courseCode,
+        cacheTranscript,
+        abortControllerRef,
+      });
+    },
+    onMutate,
+    onError: handleError,
+    onSuccess: handleSuccess,
+    onSettled: () => {
+      abortControllerRef.current = null;
+      pendingSendKeyRef.current = null;
+    },
+  });
+}
+
+function useSendActions({
+  mutation,
+  pendingSendKeyRef,
+}: {
+  mutation: SendMutationState;
+  pendingSendKeyRef: MutableRefObject<string | null>;
+}): Pick<UseSendMessageResult, 'sendMessage' | 'sendMessageAsync'> {
+  const sendMessage = useCallback(
+    (params: SendMessageMutationParams) => {
+      const prepared = prepareMutationParams({ params, pendingSendKeyRef });
+      if (prepared === null) return;
+      mutation.mutate(prepared);
+    },
+    [mutation, pendingSendKeyRef],
+  );
+
+  const sendMessageAsync = useCallback(
+    async (params: SendMessageMutationParams) => {
+      const prepared = prepareMutationParams({ params, pendingSendKeyRef });
+      if (prepared === null) return undefined;
+      return mutation.mutateAsync(prepared);
+    },
+    [mutation, pendingSendKeyRef],
+  );
+
+  return { sendMessage, sendMessageAsync };
+}
+
+function useCancelPending({
+  abortControllerRef,
+  pendingSendKeyRef,
+  mutation,
+}: {
+  abortControllerRef: MutableRefObject<AbortController | null>;
+  pendingSendKeyRef: MutableRefObject<string | null>;
+  mutation: Pick<SendMutationState, 'reset'>;
+}): UseSendMessageResult['cancelPending'] {
+  return useCallback(() => {
+    if (abortControllerRef.current !== null) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
-    return "You're sending too fast - try again in a moment.";
-  }
-  return error?.message || 'We could not process this request. Try again in a moment.';
+    pendingSendKeyRef.current = null;
+    mutation.reset();
+  }, [abortControllerRef, mutation, pendingSendKeyRef]);
 }
 
 /**
@@ -92,203 +191,30 @@ function formatSendError(error: Error): string {
  * - Rollback on error
  * - Returns chatId and chatTitle from response
  */
-export function useSendMessage(options: UseSendMessageOptions) {
+export function useSendMessage(options: UseSendMessageOptions): UseSendMessageResult {
   const { apiClient, pageUrl, courseCode, onSuccess, onError } = options;
   const queryClient = useQueryClient();
   const abortControllerRef = useRef<AbortController | null>(null);
   const pendingSendKeyRef = useRef<string | null>(null);
   const { cacheTranscript } = useTranscriptCache(apiClient);
+  useAbortControllerCleanup(abortControllerRef);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, []);
-
-  const mutation = useMutation<
-    ChatApiResponse & { resolvedChatId: string },
-    Error,
-    SendMessageMutationParams,
-    MutationContext
-  >({
-    retry: false,
-    mutationFn: async (params) => {
-      // Cancel any previous pending request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      abortControllerRef.current = new AbortController();
-
-      if (!apiClient?.processText) {
-        throw new Error('API client not available');
-      }
-
-      if (params.transcriptContext) {
-        cacheTranscript(params.transcriptContext).catch((error) => {
-          console.warn('[Lock-in] Failed to cache transcript for chat:', error);
-        });
-      }
-
-      const baseHistorySource = params.chatHistory ?? params.currentMessages;
-      const baseHistory: ChatHistoryEntry[] = baseHistorySource.map((msg) => ({
-        role: msg.role === 'assistant' ? 'assistant' : 'user',
-        content: msg.content,
-      }));
-
-      const apiChatId =
-        typeof params.chatId === 'string' && isValidUUID(params.chatId) ? params.chatId : undefined;
-      const selectionPayload =
-        params.selectionOverride !== undefined ? params.selectionOverride : params.message;
-      const userMessagePayload =
-        params.source === 'followup' ? (params.userMessageOverride ?? params.message) : undefined;
-      const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
-
-      const response = await apiClient.processText({
-        selection: selectionPayload,
-        mode: params.mode,
-        chatHistory: baseHistory,
-        newUserMessage: userMessagePayload,
-        chatId: apiChatId,
-        pageUrl: params.pageUrl || pageUrl,
-        courseCode: params.courseCode ?? courseCode ?? undefined,
-        attachments: params.attachmentIds,
-        idempotencyKey,
-      });
-
-      const explanation = response?.data?.explanation || `(${params.mode}) ${params.message}`;
-      const resolvedChatId = response?.chatId || params.chatId || `chat-${Date.now()}`;
-
-      return {
-        explanation,
-        chatId: response?.chatId,
-        chatTitle: response?.chatTitle,
-        resolvedChatId,
-      };
-    },
-
-    onMutate: async (params): Promise<MutationContext> => {
-      // Cancel outgoing refetches
-      const chatId = params.activeChatId;
-      if (chatId) {
-        await queryClient.cancelQueries({ queryKey: chatMessagesKeys.byId(chatId) });
-      }
-
-      // Get current messages for rollback
-      const previousMessages = chatId
-        ? queryClient.getQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId)) || []
-        : params.currentMessages;
-
-      const pendingMessageId = `assistant-${Date.now()}`;
-      const provisionalChatId = chatId || `chat-${Date.now()}`;
-
-      // Optimistically add pending message
-      const pendingMessage: ChatMessage = {
-        id: pendingMessageId,
-        role: 'assistant',
-        content: 'Thinking...',
-        timestamp: new Date().toISOString(),
-        mode: params.mode,
-        isPending: true,
-      };
-
-      const updatedMessages = [...params.currentMessages, pendingMessage];
-
-      if (chatId) {
-        queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), updatedMessages);
-      }
-
-      return {
-        previousMessages,
-        pendingMessageId,
-        provisionalChatId,
-      };
-    },
-
-    onError: (error, params, context) => {
-      const message = formatSendError(error);
-      // Rollback on error - update the pending message to show error state
-      if (context) {
-        const chatId = params.activeChatId;
-        if (chatId) {
-          // Update the pending message with error
-          queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), (old = []) =>
-            old.map((msg) =>
-              msg.id === context.pendingMessageId
-                ? {
-                    ...msg,
-                    content: message,
-                    isPending: false,
-                    isError: true,
-                  }
-                : msg,
-            ),
-          );
-        }
-      }
-      onError?.(message === error.message ? error : new Error(message));
-    },
-
-    onSuccess: (data, params, context) => {
-      if (context) {
-        const chatId = params.activeChatId || data.resolvedChatId;
-
-        // Update the pending message with response
-        queryClient.setQueryData<ChatMessage[]>(chatMessagesKeys.byId(chatId), (old = []) =>
-          old.map((msg) =>
-            msg.id === context.pendingMessageId
-              ? { ...msg, content: data.explanation, isPending: false }
-              : msg,
-          ),
-        );
-
-        // Notify parent with resolved data
-        onSuccess?.(data, data.resolvedChatId);
-      }
-    },
-
-    onSettled: () => {
-      abortControllerRef.current = null;
-      pendingSendKeyRef.current = null;
-    },
+  const handlerDeps = createMutationHandlerDeps({ queryClient, onSuccess, onError });
+  const mutation = useSendMessageMutation({
+    apiClient,
+    pageUrl,
+    courseCode,
+    cacheTranscript,
+    abortControllerRef,
+    pendingSendKeyRef,
+    handlerDeps,
   });
-
-  /**
-   * Cancel any pending request.
-   * Useful when user navigates away or closes chat.
-   */
-  const cancelPending = useCallback(() => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    pendingSendKeyRef.current = null;
-    mutation.reset();
-  }, [mutation]);
+  const { sendMessage, sendMessageAsync } = useSendActions({ mutation, pendingSendKeyRef });
+  const cancelPending = useCancelPending({ abortControllerRef, pendingSendKeyRef, mutation });
 
   return {
-    sendMessage: useCallback(
-      (params: SendMessageMutationParams) => {
-        const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
-        if (pendingSendKeyRef.current === idempotencyKey) {
-          return;
-        }
-        pendingSendKeyRef.current = idempotencyKey;
-        mutation.mutate({ ...params, idempotencyKey });
-      },
-      [mutation],
-    ),
-    sendMessageAsync: useCallback(
-      async (params: SendMessageMutationParams) => {
-        const idempotencyKey = params.idempotencyKey || buildIdempotencyKey(params);
-        if (pendingSendKeyRef.current === idempotencyKey) {
-          return undefined;
-        }
-        pendingSendKeyRef.current = idempotencyKey;
-        return mutation.mutateAsync({ ...params, idempotencyKey });
-      },
-      [mutation],
-    ),
+    sendMessage,
+    sendMessageAsync,
     isSending: mutation.isPending,
     isError: mutation.isError,
     error: mutation.error,

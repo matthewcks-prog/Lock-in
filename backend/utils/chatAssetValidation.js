@@ -11,6 +11,10 @@ const {
   CHAT_ASSET_MIME_GROUPS,
   MIME_EXTENSION_MAP,
 } = require('../config');
+const { TWO, TEN } = require('../constants/numbers');
+
+const BYTES_PER_KIBIBYTE = TWO ** TEN;
+const BYTES_PER_MEBIBYTE = BYTES_PER_KIBIBYTE ** TWO;
 
 /**
  * Infer asset type from MIME type
@@ -74,7 +78,7 @@ async function validateChatAssetFile(file) {
   }
 
   if (file.size > CHAT_ASSETS_MAX_BYTES) {
-    const maxMB = Math.round(CHAT_ASSETS_MAX_BYTES / (1024 * 1024));
+    const maxMB = Math.round(CHAT_ASSETS_MAX_BYTES / BYTES_PER_MEBIBYTE);
     return {
       valid: false,
       reason: `File exceeds maximum size of ${maxMB}MB`,

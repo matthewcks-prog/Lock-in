@@ -2,16 +2,24 @@ import { describe, expect, it } from 'vitest';
 
 import manifestJson from '../../manifest.json';
 
+interface ManifestContentScript {
+  js?: string[];
+}
+
+interface ExtensionManifest {
+  content_scripts?: ManifestContentScript[];
+}
+
 describe('manifest content_scripts order', () => {
-  const manifest = JSON.parse(JSON.stringify(manifestJson));
+  const manifest = manifestJson as ExtensionManifest;
 
   it('keeps the content_scripts js list stable and ordered', () => {
-    const contentScripts = manifest.content_scripts;
+    const contentScripts = manifest.content_scripts ?? [];
 
     expect(Array.isArray(contentScripts)).toBe(true);
     expect(contentScripts.length).toBeGreaterThan(0);
 
-    const scripts = contentScripts[0]?.js;
+    const scripts = contentScripts[0]?.js ?? [];
 
     expect(Array.isArray(scripts)).toBe(true);
     expect(scripts.length).toBeGreaterThan(0);
@@ -22,9 +30,14 @@ describe('manifest content_scripts order', () => {
       'dist/libs/initApi.js',
       'dist/libs/contentLibs.js',
       'content/stateStore.js',
+      'content/scrollbarWidth.js',
       'content/sidebarHost.js',
       'content/sessionManager.js',
       'content/interactions.js',
+      'content/fakeFullscreenHelpers.js',
+      'content/fakeFullscreenExitButton.js',
+      'content/fakeFullscreen.js',
+      'src/networkRetry.js',
       'content/mediaFetcher.js',
       'dist/ui/index.js',
       'contentScript-react.js',

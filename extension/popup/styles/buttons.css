@@ -1,0 +1,116 @@
+.primary-button,
+.secondary-button {
+  width: 100%;
+  padding: var(--popup-space-3) var(--popup-space-4);
+  border-radius: var(--popup-radius-lg);
+  font-size: var(--popup-text-lg);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition:
+    background var(--popup-transition-base),
+    transform 0.1s ease,
+    box-shadow var(--popup-transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--popup-space-2);
+  position: relative;
+}
+
+.primary-button {
+  background: var(--popup-gradient-brand);
+  color: var(--popup-color-text-on-fill);
+  min-height: 44px;
+}
+
+.primary-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--popup-shadow-md);
+}
+
+.primary-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.primary-button:focus-visible {
+  outline: 2px solid var(--popup-color-accent-soft);
+  outline-offset: 2px;
+}
+
+.primary-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.primary-button.loading {
+  pointer-events: none;
+}
+
+.btn-text {
+  transition: opacity var(--popup-transition-fast);
+}
+
+.btn-spinner {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner-icon {
+  animation: popup-spin 0.8s linear infinite;
+}
+
+.secondary-button {
+  background: var(--popup-color-surface-muted);
+  color: var(--popup-color-text-primary);
+  border: 1px solid var(--popup-color-border);
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: var(--popup-color-border);
+}
+
+.secondary-button:focus-visible {
+  outline: 2px solid var(--popup-color-accent-soft);
+  outline-offset: 2px;
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.text-link {
+  background: none;
+  border: none;
+  color: var(--popup-color-accent-soft);
+  font-size: var(--popup-text-md);
+  font-weight: 500;
+  cursor: pointer;
+  padding: var(--popup-space-1) var(--popup-space-2);
+  border-radius: var(--popup-radius-sm);
+  transition:
+    background var(--popup-transition-fast),
+    color var(--popup-transition-fast);
+}
+
+.text-link:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: #5563c1;
+}
+
+.text-link:focus-visible {
+  outline: 2px solid var(--popup-color-accent-soft);
+  outline-offset: 1px;
+}
+
+@keyframes popup-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

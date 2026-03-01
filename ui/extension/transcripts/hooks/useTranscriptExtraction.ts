@@ -5,7 +5,7 @@
  * Handles both background script extraction and DOM-based extraction for HTML5 videos.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, type Dispatch, type SetStateAction } from 'react';
 import type { DetectedVideo, TranscriptResult } from '@core/transcripts/types';
 import { extractHtml5TranscriptFromDom } from '../extractHtml5TranscriptFromDom';
 import {
@@ -14,6 +14,7 @@ import {
   type TranscriptResponseData,
   type BackgroundResponse,
 } from './types';
+import { useTranscriptStateActions } from './transcriptExtractionStateActions';
 
 // -----------------------------------------------------------------------------
 // Types
@@ -64,181 +65,224 @@ const INITIAL_STATE: TranscriptExtractionState = {
   lastTranscript: null,
 };
 
+type TranscriptStateSetter = Dispatch<SetStateAction<TranscriptExtractionState>>;
+
+function createNoCaptionsResult(video: DetectedVideo): {
+  transcript: null;
+  result: TranscriptResponseData;
+} {
+  return {
+    transcript: null,
+    result: {
+      success: false,
+      error: 'No captions available for this video',
+      errorCode: 'NO_CAPTIONS',
+      aiTranscriptionAvailable: Boolean(video.mediaUrl),
+    },
+  };
+}
+
+function createMissingTranscriptResult(video: DetectedVideo): {
+  transcript: null;
+  result: TranscriptResponseData;
+} {
+  return {
+    transcript: null,
+    result: {
+      success: false,
+      error: 'Transcript payload missing',
+      errorCode: 'INVALID_RESPONSE',
+      aiTranscriptionAvailable: Boolean(video.mediaUrl),
+    },
+  };
+}
+
+async function extractFromHtml5Dom(video: DetectedVideo): Promise<{
+  transcript: TranscriptResult | null;
+  result: TranscriptResponseData;
+}> {
+  const domResult = await extractHtml5TranscriptFromDom(video);
+  if (domResult === null) {
+    return createNoCaptionsResult(video);
+  }
+  if (domResult.transcript === undefined) {
+    return createMissingTranscriptResult(video);
+  }
+  return {
+    transcript: domResult.transcript,
+    result: { success: true, transcript: domResult.transcript },
+  };
+}
+
+function useBackgroundTranscriptFetcher(): (
+  video: DetectedVideo,
+) => Promise<TranscriptResponseData> {
+  return useCallback(async (video: DetectedVideo): Promise<TranscriptResponseData> => {
+    const response = await sendToBackground<BackgroundResponse>({
+      type: 'EXTRACT_TRANSCRIPT',
+      payload: { video },
+    });
+    return normalizeTranscriptResponse(response);
+  }, []);
+}
+
+function useTranscriptDomFallbackExtractor(
+  fetchBackgroundTranscript: (video: DetectedVideo) => Promise<TranscriptResponseData>,
+): UseTranscriptExtractionResult['extractTranscriptWithDomFallback'] {
+  return useCallback(
+    async (video: DetectedVideo) => {
+      if (video.provider === 'html5') {
+        return extractFromHtml5Dom(video);
+      }
+      const result = await fetchBackgroundTranscript(video);
+      return { transcript: result.transcript ?? null, result };
+    },
+    [fetchBackgroundTranscript],
+  );
+}
+
+function beginExtraction(setState: TranscriptStateSetter, videoId: string): void {
+  setState((prev) => {
+    const nextExtractions = { ...prev.extractionsByVideoId };
+    delete nextExtractions[videoId];
+    return {
+      ...prev,
+      isExtracting: true,
+      extractingVideoId: videoId,
+      extractionsByVideoId: nextExtractions,
+    };
+  });
+}
+
+function completeExtractionSuccess(
+  setState: TranscriptStateSetter,
+  video: DetectedVideo,
+  transcript: TranscriptResult,
+  result: TranscriptResponseData,
+): void {
+  setState((prev) => ({
+    ...prev,
+    isExtracting: false,
+    extractingVideoId: null,
+    lastTranscript: { video, transcript },
+    extractionsByVideoId: {
+      ...prev.extractionsByVideoId,
+      [video.id]: result,
+    },
+  }));
+}
+
+function completeExtractionFailure(
+  setState: TranscriptStateSetter,
+  videoId: string,
+  result: TranscriptResponseData,
+): void {
+  setState((prev) => ({
+    ...prev,
+    isExtracting: false,
+    extractingVideoId: null,
+    extractionsByVideoId: {
+      ...prev.extractionsByVideoId,
+      [videoId]: {
+        ...result,
+        error: result.error ?? 'Failed to extract transcript',
+      },
+    },
+  }));
+}
+
+function completeExtractionError(
+  setState: TranscriptStateSetter,
+  videoId: string,
+  error: unknown,
+): void {
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  setState((prev) => ({
+    ...prev,
+    isExtracting: false,
+    extractingVideoId: null,
+    extractionsByVideoId: {
+      ...prev.extractionsByVideoId,
+      [videoId]: {
+        success: false,
+        error: errorMessage,
+      },
+    },
+  }));
+}
+
+async function runExtraction({
+  video,
+  isExtracting,
+  extractTranscriptWithDomFallback,
+  setState,
+}: {
+  video: DetectedVideo;
+  isExtracting: boolean;
+  extractTranscriptWithDomFallback: UseTranscriptExtractionResult['extractTranscriptWithDomFallback'];
+  setState: TranscriptStateSetter;
+}): Promise<TranscriptResult | null> {
+  if (isExtracting) {
+    return null;
+  }
+
+  beginExtraction(setState, video.id);
+
+  try {
+    const { transcript, result } = await extractTranscriptWithDomFallback(video);
+    if (result.success && transcript !== null) {
+      completeExtractionSuccess(setState, video, transcript, result);
+      return transcript;
+    }
+    completeExtractionFailure(setState, video.id, result);
+    return null;
+  } catch (error) {
+    completeExtractionError(setState, video.id, error);
+    return null;
+  }
+}
+
+function useExtractTranscriptAction({
+  isExtracting,
+  setState,
+  extractTranscriptWithDomFallback,
+}: {
+  isExtracting: boolean;
+  setState: TranscriptStateSetter;
+  extractTranscriptWithDomFallback: UseTranscriptExtractionResult['extractTranscriptWithDomFallback'];
+}): UseTranscriptExtractionResult['extractTranscript'] {
+  return useCallback(
+    async (video: DetectedVideo): Promise<TranscriptResult | null> =>
+      runExtraction({
+        video,
+        isExtracting,
+        extractTranscriptWithDomFallback,
+        setState,
+      }),
+    [extractTranscriptWithDomFallback, isExtracting, setState],
+  );
+}
+
 // -----------------------------------------------------------------------------
 // Hook Implementation
 // -----------------------------------------------------------------------------
 
 export function useTranscriptExtraction(): UseTranscriptExtractionResult {
   const [state, setState] = useState<TranscriptExtractionState>(INITIAL_STATE);
-
-  /**
-   * Fetch transcript from background script
-   */
-  const fetchBackgroundTranscript = useCallback(
-    async (video: DetectedVideo): Promise<TranscriptResponseData> => {
-      const response = await sendToBackground<BackgroundResponse>({
-        type: 'EXTRACT_TRANSCRIPT',
-        payload: { video },
-      });
-
-      return normalizeTranscriptResponse(response);
-    },
-    [],
-  );
-
-  /**
-   * Extract transcript with DOM fallback for HTML5 videos
-   */
-  const extractTranscriptWithDomFallback = useCallback(
-    async (
-      video: DetectedVideo,
-    ): Promise<{ transcript: TranscriptResult | null; result: TranscriptResponseData }> => {
-      if (video.provider === 'html5') {
-        const domResult = await extractHtml5TranscriptFromDom(video);
-        // Handle null result (no video element found or no captions available)
-        if (!domResult) {
-          return {
-            transcript: null,
-            result: {
-              success: false,
-              error: 'No captions available for this video',
-              errorCode: 'NO_CAPTIONS',
-              aiTranscriptionAvailable: Boolean(video.mediaUrl),
-            },
-          };
-        }
-        return {
-          transcript: domResult.transcript ?? null,
-          result: { success: true, transcript: domResult.transcript },
-        };
-      }
-
-      const result = await fetchBackgroundTranscript(video);
-      return { transcript: result.transcript || null, result };
-    },
-    [fetchBackgroundTranscript],
-  );
-
-  /**
-   * Extract transcript for a video
-   */
-  const extractTranscript = useCallback(
-    async (video: DetectedVideo): Promise<TranscriptResult | null> => {
-      if (state.isExtracting) {
-        return null;
-      }
-
-      setState((prev) => {
-        const nextExtractions = { ...prev.extractionsByVideoId };
-        delete nextExtractions[video.id];
-        return {
-          ...prev,
-          isExtracting: true,
-          extractingVideoId: video.id,
-          extractionsByVideoId: nextExtractions,
-        };
-      });
-
-      try {
-        const { transcript, result } = await extractTranscriptWithDomFallback(video);
-
-        if (result.success && transcript) {
-          setState((prev) => ({
-            ...prev,
-            isExtracting: false,
-            extractingVideoId: null,
-            lastTranscript: { video, transcript },
-            extractionsByVideoId: {
-              ...prev.extractionsByVideoId,
-              [video.id]: result,
-            },
-          }));
-
-          return transcript;
-        }
-
-        setState((prev) => ({
-          ...prev,
-          isExtracting: false,
-          extractingVideoId: null,
-          extractionsByVideoId: {
-            ...prev.extractionsByVideoId,
-            [video.id]: {
-              ...result,
-              error: result.error || 'Failed to extract transcript',
-            },
-          },
-        }));
-
-        return null;
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        setState((prev) => ({
-          ...prev,
-          isExtracting: false,
-          extractingVideoId: null,
-          extractionsByVideoId: {
-            ...prev.extractionsByVideoId,
-            [video.id]: {
-              success: false,
-              error: errorMessage,
-            },
-          },
-        }));
-        return null;
-      }
-    },
-    [extractTranscriptWithDomFallback, state.isExtracting],
-  );
-
-  const resetExtraction = useCallback(() => {
-    setState(INITIAL_STATE);
-  }, []);
-
-  const setExtracting = useCallback((isExtracting: boolean, videoId?: string | null) => {
-    setState((prev) => ({
-      ...prev,
-      isExtracting,
-      extractingVideoId: videoId ?? null,
-    }));
-  }, []);
-
-  const setExtractionResult = useCallback((videoId: string, result: TranscriptResponseData) => {
-    setState((prev) => ({
-      ...prev,
-      extractionsByVideoId: {
-        ...prev.extractionsByVideoId,
-        [videoId]: result,
-      },
-    }));
-  }, []);
-
-  const setLastTranscript = useCallback((video: DetectedVideo, transcript: TranscriptResult) => {
-    setState((prev) => ({
-      ...prev,
-      lastTranscript: { video, transcript },
-    }));
-  }, []);
-
-  const clearExtractionForVideo = useCallback((videoId: string) => {
-    setState((prev) => {
-      const nextExtractions = { ...prev.extractionsByVideoId };
-      delete nextExtractions[videoId];
-      return {
-        ...prev,
-        extractionsByVideoId: nextExtractions,
-      };
-    });
-  }, []);
+  const fetchBackgroundTranscript = useBackgroundTranscriptFetcher();
+  const extractTranscriptWithDomFallback =
+    useTranscriptDomFallbackExtractor(fetchBackgroundTranscript);
+  const extractTranscript = useExtractTranscriptAction({
+    isExtracting: state.isExtracting,
+    setState,
+    extractTranscriptWithDomFallback,
+  });
+  const actions = useTranscriptStateActions(setState, INITIAL_STATE);
 
   return {
     state,
     extractTranscript,
     extractTranscriptWithDomFallback,
-    resetExtraction,
-    setExtracting,
-    setExtractionResult,
-    setLastTranscript,
-    clearExtractionForVideo,
+    ...actions,
   };
 }

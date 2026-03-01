@@ -37,6 +37,105 @@ interface UseChatInputReturn {
   syncHeight: (target?: HTMLTextAreaElement | null) => void;
 }
 
+interface UseChatInputHandlersReturn {
+  handleChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  handleKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  handleSend: () => void;
+  clear: () => void;
+}
+
+function useSendTrigger({
+  value,
+  canSend,
+  isSending,
+  onSend,
+  syncHeight,
+  setValue,
+}: {
+  value: string;
+  canSend: boolean;
+  isSending: boolean;
+  onSend: ((value: string) => boolean | void | Promise<boolean | void>) | undefined;
+  syncHeight: (target?: HTMLTextAreaElement | null) => void;
+  setValue: (value: string) => void;
+}): () => Promise<void> {
+  return useCallback(async () => {
+    const trimmed = value.trim();
+    const shouldSend = trimmed.length > 0 || canSend;
+    if (!shouldSend || isSending) return;
+    try {
+      const shouldClear = await onSend?.(trimmed);
+      if (shouldClear === false) return;
+      setValue('');
+      requestAnimationFrame(() => syncHeight());
+    } catch {
+      // Swallow errors so the UI stays responsive
+    }
+  }, [value, isSending, canSend, onSend, syncHeight, setValue]);
+}
+
+function useInputLayoutEffects({
+  value,
+  syncHeight,
+  shouldFocus,
+  inputRef,
+}: {
+  value: string;
+  syncHeight: (target?: HTMLTextAreaElement | null) => void;
+  shouldFocus: boolean;
+  inputRef: React.RefObject<HTMLTextAreaElement>;
+}): void {
+  useLayoutEffect(() => {
+    syncHeight();
+  }, [value, syncHeight]);
+
+  useLayoutEffect(() => {
+    if (!shouldFocus) return;
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+  }, [shouldFocus, inputRef]);
+}
+
+function useChatInputHandlers({
+  setValue,
+  syncHeight,
+  triggerSend,
+}: {
+  setValue: (value: string) => void;
+  syncHeight: (target?: HTMLTextAreaElement | null) => void;
+  triggerSend: () => Promise<void>;
+}): UseChatInputHandlersReturn {
+  const handleChange = useCallback(
+    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setValue(event.target.value);
+      syncHeight(event.currentTarget);
+    },
+    [setValue, syncHeight],
+  );
+
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        void triggerSend();
+      }
+    },
+    [triggerSend],
+  );
+
+  const handleSend = useCallback(() => {
+    void triggerSend();
+  }, [triggerSend]);
+
+  const clear = useCallback(() => {
+    setValue('');
+    requestAnimationFrame(() => syncHeight());
+  }, [setValue, syncHeight]);
+
+  return { handleChange, handleKeyDown, handleSend, clear };
+}
+
 /**
  * Hook for managing chat input state and behavior.
  *
@@ -58,14 +157,14 @@ export function useChatInput(options: UseChatInputOptions = {}): UseChatInputRet
   const syncHeight = useCallback((target?: HTMLTextAreaElement | null) => {
     if (typeof window === 'undefined') return;
     const input = target ?? inputRef.current;
-    if (!input) return;
+    if (input === null) return;
 
     input.style.height = 'auto';
     const maxHeightValue = window.getComputedStyle(input).maxHeight;
     const maxHeight = maxHeightValue === 'none' ? 0 : Number.parseFloat(maxHeightValue);
     const nextHeight = input.scrollHeight;
 
-    if (!maxHeight || Number.isNaN(maxHeight)) {
+    if (maxHeight <= 0 || Number.isNaN(maxHeight)) {
       input.style.height = `${nextHeight}px`;
       input.style.overflowY = 'hidden';
       return;
@@ -75,73 +174,22 @@ export function useChatInput(options: UseChatInputOptions = {}): UseChatInputRet
     input.style.overflowY = nextHeight > maxHeight ? 'auto' : 'hidden';
   }, []);
 
-  /**
-   * Handle input change with auto-resize.
-   */
-  const handleChange = useCallback(
-    (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setValue(event.target.value);
-      syncHeight(event.currentTarget);
-    },
-    [syncHeight],
-  );
+  const triggerSend = useSendTrigger({
+    value,
+    canSend,
+    isSending,
+    onSend,
+    syncHeight,
+    setValue,
+  });
 
-  /**
-   * Handle keyboard events.
-   * Enter to send, Shift+Enter for newline.
-   */
-  const triggerSend = useCallback(async () => {
-    const trimmed = value.trim();
-    const shouldSend = trimmed.length > 0 || canSend;
-    if (!shouldSend || isSending) return;
-    try {
-      const shouldClear = await onSend?.(trimmed);
-      if (shouldClear === false) return;
-      setValue('');
-      requestAnimationFrame(() => syncHeight());
-    } catch {
-      // Swallow errors so the UI stays responsive
-    }
-  }, [value, isSending, canSend, onSend, syncHeight]);
+  const { handleChange, handleKeyDown, handleSend, clear } = useChatInputHandlers({
+    setValue,
+    syncHeight,
+    triggerSend,
+  });
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault();
-        void triggerSend();
-      }
-    },
-    [triggerSend],
-  );
-
-  /**
-   * Trigger send action programmatically.
-   */
-  const handleSend = useCallback(() => {
-    void triggerSend();
-  }, [triggerSend]);
-
-  /**
-   * Clear input value.
-   */
-  const clear = useCallback(() => {
-    setValue('');
-    requestAnimationFrame(() => syncHeight());
-  }, [syncHeight]);
-
-  // Auto-resize on value change
-  useLayoutEffect(() => {
-    syncHeight();
-  }, [value, syncHeight]);
-
-  // Focus management
-  useLayoutEffect(() => {
-    if (shouldFocus) {
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
-    }
-  }, [shouldFocus]);
+  useInputLayoutEffects({ value, syncHeight, shouldFocus, inputRef });
 
   return {
     value,

@@ -8,6 +8,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useMemo, type ReactNode } from 'react';
 
+const SECONDS_PER_MINUTE = 60;
+const MS_PER_SECOND = 1000;
+const STALE_TIME_MINUTES = 5;
+const GC_TIME_MINUTES = 30;
+const QUERY_RETRY_BASE_DELAY_MS = 500;
+const QUERY_RETRY_MAX_DELAY_MS = 5000;
+const MUTATION_RETRY_DELAY_MS = 500;
+
 interface ChatQueryProviderProps {
   children: ReactNode;
 }
@@ -22,16 +30,17 @@ function createChatQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 5 * 60 * 1000, // 5 minutes
-        gcTime: 30 * 60 * 1000, // 30 minutes (formerly cacheTime)
+        staleTime: STALE_TIME_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND,
+        gcTime: GC_TIME_MINUTES * SECONDS_PER_MINUTE * MS_PER_SECOND,
         retry: 2,
-        retryDelay: (attemptIndex) => Math.min(500 * 2 ** attemptIndex, 5000),
+        retryDelay: (attemptIndex) =>
+          Math.min(QUERY_RETRY_BASE_DELAY_MS * 2 ** attemptIndex, QUERY_RETRY_MAX_DELAY_MS),
         refetchOnWindowFocus: false,
         refetchOnReconnect: true,
       },
       mutations: {
         retry: 1,
-        retryDelay: 500,
+        retryDelay: MUTATION_RETRY_DELAY_MS,
       },
     },
   });
@@ -41,7 +50,7 @@ function createChatQueryClient(): QueryClient {
  * Provider component that wraps children with QueryClientProvider.
  * Creates a stable QueryClient instance per component lifecycle.
  */
-export function ChatQueryProvider({ children }: ChatQueryProviderProps) {
+export function ChatQueryProvider({ children }: ChatQueryProviderProps): JSX.Element {
   const queryClient = useMemo(() => createChatQueryClient(), []);
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext';
 import { COMMAND_PRIORITY_LOW, KEY_DOWN_COMMAND } from 'lexical';
 
-export function ShortcutsPlugin({ onSaveNow }: { onSaveNow?: () => void }) {
+export function ShortcutsPlugin({ onSaveNow }: { onSaveNow?: () => void }): null {
   const [editor] = useLexicalComposerContext();
 
   useEffect(() => {

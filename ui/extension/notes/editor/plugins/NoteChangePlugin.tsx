@@ -9,7 +9,7 @@ export function NoteChangePlugin({
 }: {
   onChange: (content: NoteContent) => void;
   isHydrating: boolean;
-}) {
+}): JSX.Element {
   const isFirstChangeRef = useRef(true);
 
   // Reset on mount (when editor remounts for a new note)

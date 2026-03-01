@@ -60,7 +60,7 @@ export class GenericAdapter implements BaseAdapter {
 
   getTopic(dom: Document): string | null {
     const heading = dom.querySelector('h1, h2')?.textContent?.trim();
-    return heading || null;
+    return heading !== undefined && heading.length > 0 ? heading : null;
   }
 
   getCourseContext(_dom: Document, url: string): CourseContext {
@@ -71,7 +71,9 @@ export class GenericAdapter implements BaseAdapter {
   }
 
   getPageContext(dom: Document, url: string): PageContext {
-    const heading = dom.querySelector('h1, h2')?.textContent?.trim() || dom.title;
+    const headingCandidate = dom.querySelector('h1, h2')?.textContent?.trim();
+    const heading =
+      headingCandidate !== undefined && headingCandidate.length > 0 ? headingCandidate : dom.title;
     return {
       url,
       title: dom.title,

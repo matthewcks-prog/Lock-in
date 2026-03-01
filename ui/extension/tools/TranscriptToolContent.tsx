@@ -3,112 +3,222 @@
  *
  * Wraps existing Transcript UI for use in the Study Tools framework.
  * Reuses useTranscripts hook and TranscriptVideoListPanel - no duplication of logic.
- *
  */
 
-import { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useTranscripts } from '../transcripts/useTranscripts';
 import { TranscriptVideoListPanel } from '../transcripts/components';
 import { TranscriptMessage } from '../transcripts/TranscriptMessage';
 import { useNoteSaveContext } from '../contexts/NoteSaveContext';
 
-export function TranscriptToolContent() {
+type TranscriptToolState = ReturnType<typeof useTranscripts>['state'];
+type LastTranscript = TranscriptToolState['lastTranscript'];
+
+interface PanelOptionalProps {
+  error?: string;
+  detectionHint?: string;
+  authRequired?: { provider: string; signInUrl: string };
+}
+
+function buildPanelOptionalProps(state: TranscriptToolState): PanelOptionalProps {
+  const props: PanelOptionalProps = {};
+  if (state.error !== null && state.error.length > 0) {
+    props.error = state.error;
+  }
+  if (state.detectionHint !== null && state.detectionHint.length > 0) {
+    props.detectionHint = state.detectionHint;
+  }
+  if (state.authRequired !== undefined) {
+    props.authRequired = state.authRequired;
+  }
+  return props;
+}
+
+function hasTranscript(
+  lastTranscript: LastTranscript,
+): lastTranscript is NonNullable<LastTranscript> {
+  return lastTranscript !== null && lastTranscript !== undefined;
+}
+
+function useAutoDetectOnMount({
+  videoCount,
+  hasLastTranscript,
+  detectAndAutoExtract,
+}: {
+  videoCount: number;
+  hasLastTranscript: boolean;
+  detectAndAutoExtract: () => void;
+}): void {
+  useEffect(() => {
+    if (videoCount === 0 && !hasLastTranscript) {
+      void detectAndAutoExtract();
+    }
+  }, []);
+}
+
+function shouldShowVideoList(state: TranscriptToolState, hasLastTranscript: boolean): boolean {
+  return (
+    state.isVideoListOpen || (!hasLastTranscript && state.videos.length > 0) || state.isDetecting
+  );
+}
+
+function LastTranscriptSection({
+  lastTranscript,
+  videoCount,
+  showVideoList,
+  saveNote,
+  detectAndAutoExtract,
+}: {
+  lastTranscript: LastTranscript;
+  videoCount: number;
+  showVideoList: boolean;
+  saveNote: ReturnType<typeof useNoteSaveContext>['saveNote'];
+  detectAndAutoExtract: () => void;
+}): JSX.Element | null {
+  if (!hasTranscript(lastTranscript)) {
+    return null;
+  }
+
+  return (
+    <>
+      <TranscriptMessage
+        transcript={lastTranscript.transcript}
+        video={lastTranscript.video}
+        videoTitle={lastTranscript.video.title.length > 0 ? lastTranscript.video.title : 'Video'}
+        saveNote={saveNote}
+      />
+      {videoCount > 1 && !showVideoList && (
+        <div className="lockin-transcript-change-video">
+          <button
+            className="lockin-transcript-change-video-btn"
+            onClick={() => {
+              void detectAndAutoExtract();
+            }}
+            type="button"
+          >
+            Change video ({videoCount} available)
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function VideoListSection({
+  showVideoList,
+  state,
+  panelOptionalProps,
+  extractTranscript,
+  transcribeWithAI,
+  cancelAiTranscription,
+}: {
+  showVideoList: boolean;
+  state: TranscriptToolState;
+  panelOptionalProps: PanelOptionalProps;
+  extractTranscript: ReturnType<typeof useTranscripts>['extractTranscript'];
+  transcribeWithAI: ReturnType<typeof useTranscripts>['transcribeWithAI'];
+  cancelAiTranscription: ReturnType<typeof useTranscripts>['cancelAiTranscription'];
+}): JSX.Element | null {
+  if (!showVideoList) {
+    return null;
+  }
+
+  return (
+    <TranscriptVideoListPanel
+      videos={state.videos}
+      isLoading={state.isDetecting}
+      isExtracting={state.isExtracting}
+      extractingVideoId={state.extractingVideoId}
+      onSelectVideo={(video) => {
+        void extractTranscript(video);
+      }}
+      {...panelOptionalProps}
+      extractionResults={state.extractionsByVideoId}
+      aiTranscription={state.aiTranscription}
+      onTranscribeWithAI={(video) => {
+        void transcribeWithAI(video);
+      }}
+      onCancelAi={() => {
+        void cancelAiTranscription();
+      }}
+    />
+  );
+}
+
+function EmptyStateSection({
+  showVideoList,
+  hasLastTranscript,
+  isDetecting,
+  detectAndAutoExtract,
+}: {
+  showVideoList: boolean;
+  hasLastTranscript: boolean;
+  isDetecting: boolean;
+  detectAndAutoExtract: () => void;
+}): JSX.Element | null {
+  if (showVideoList || hasLastTranscript || isDetecting) {
+    return null;
+  }
+
+  return (
+    <div className="lockin-transcript-empty">
+      <p>No videos detected on this page.</p>
+      <button
+        className="lockin-transcript-retry-btn"
+        onClick={() => {
+          void detectAndAutoExtract();
+        }}
+        type="button"
+      >
+        Scan again
+      </button>
+    </div>
+  );
+}
+
+export function TranscriptToolContent(): JSX.Element {
   const { saveNote } = useNoteSaveContext();
   const {
     state: transcriptState,
     detectAndAutoExtract,
-    closeVideoList,
     extractTranscript,
     transcribeWithAI,
     cancelAiTranscription,
-    clearError,
   } = useTranscripts();
+  const lastTranscript = transcriptState.lastTranscript;
+  const hasLastTranscript = hasTranscript(lastTranscript);
+  const showVideoList = shouldShowVideoList(transcriptState, hasLastTranscript);
+  const panelOptionalProps = buildPanelOptionalProps(transcriptState);
 
-  // Auto-detect videos when tool opens
-  useEffect(() => {
-    // Only detect if we don't already have videos or a transcript
-    if (transcriptState.videos.length === 0 && !transcriptState.lastTranscript) {
-      detectAndAutoExtract();
-    }
-    // Run once on mount - intentionally omitting dependencies
-  }, []);
-
-  const handlePanelClose = useCallback(() => {
-    closeVideoList();
-    clearError();
-  }, [closeVideoList, clearError]);
-
-  // Determine if we should show the video list
-  // Show list if: it's open, OR we have no transcript yet, OR we have videos but no extraction yet
-  const showVideoList =
-    transcriptState.isVideoListOpen ||
-    (!transcriptState.lastTranscript && transcriptState.videos.length > 0) ||
-    transcriptState.isDetecting;
+  useAutoDetectOnMount({
+    videoCount: transcriptState.videos.length,
+    hasLastTranscript,
+    detectAndAutoExtract,
+  });
 
   return (
     <div className="lockin-tool-content lockin-transcript-tool">
-      {/* Show last extracted transcript */}
-      {transcriptState.lastTranscript && (
-        <>
-          <TranscriptMessage
-            transcript={transcriptState.lastTranscript.transcript}
-            video={transcriptState.lastTranscript.video}
-            videoTitle={transcriptState.lastTranscript.video.title || 'Video'}
-            saveNote={saveNote}
-          />
-          {/* Button to change video if multiple videos exist */}
-          {transcriptState.videos.length > 1 && !showVideoList && (
-            <div className="lockin-transcript-change-video">
-              <button
-                className="lockin-transcript-change-video-btn"
-                onClick={() => detectAndAutoExtract()}
-                type="button"
-              >
-                Change video ({transcriptState.videos.length} available)
-              </button>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Show video list for selection */}
-      {showVideoList && (
-        <TranscriptVideoListPanel
-          videos={transcriptState.videos}
-          isLoading={transcriptState.isDetecting}
-          isExtracting={transcriptState.isExtracting}
-          extractingVideoId={transcriptState.extractingVideoId}
-          onSelectVideo={(video) => {
-            void extractTranscript(video);
-          }}
-          onClose={handlePanelClose}
-          error={transcriptState.error || undefined}
-          detectionHint={transcriptState.detectionHint || undefined}
-          authRequired={transcriptState.authRequired}
-          extractionResults={transcriptState.extractionsByVideoId}
-          aiTranscription={transcriptState.aiTranscription}
-          onTranscribeWithAI={(video) => {
-            void transcribeWithAI(video);
-          }}
-          onCancelAi={() => {
-            void cancelAiTranscription();
-          }}
-        />
-      )}
-
-      {/* Empty state when no videos detected */}
-      {!showVideoList && !transcriptState.lastTranscript && !transcriptState.isDetecting && (
-        <div className="lockin-transcript-empty">
-          <p>No videos detected on this page.</p>
-          <button
-            className="lockin-transcript-retry-btn"
-            onClick={() => detectAndAutoExtract()}
-            type="button"
-          >
-            Scan again
-          </button>
-        </div>
-      )}
+      <LastTranscriptSection
+        lastTranscript={lastTranscript}
+        videoCount={transcriptState.videos.length}
+        showVideoList={showVideoList}
+        saveNote={saveNote}
+        detectAndAutoExtract={detectAndAutoExtract}
+      />
+      <VideoListSection
+        showVideoList={showVideoList}
+        state={transcriptState}
+        panelOptionalProps={panelOptionalProps}
+        extractTranscript={extractTranscript}
+        transcribeWithAI={transcribeWithAI}
+        cancelAiTranscription={cancelAiTranscription}
+      />
+      <EmptyStateSection
+        showVideoList={showVideoList}
+        hasLastTranscript={hasLastTranscript}
+        isDetecting={transcriptState.isDetecting}
+        detectAndAutoExtract={detectAndAutoExtract}
+      />
     </div>
   );
 }

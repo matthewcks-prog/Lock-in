@@ -5,403 +5,543 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createNotesService } from '../notesService';
-import type { ApiClient } from '../../../api/client';
+import { createNotesService, type NotesApiClient } from '../notesService';
 import type { NoteContent, NoteAsset } from '../../domain/Note';
 
-describe('NotesService', () => {
-  let mockApiClient: ApiClient;
+const DEFAULT_LIMIT = 50;
+const DEFAULT_TIMESTAMP = '2024-01-01T00:00:00Z';
+const DEFAULT_TIMESTAMP_2 = '2024-01-02T00:00:00Z';
+const LEXICAL_VERSION = 'lexical_v1';
+
+const createMockApiClient = (): NotesApiClient => ({
+  apiRequest: vi.fn(),
+  createNote: vi.fn(),
+  updateNote: vi.fn(),
+  deleteNote: vi.fn(),
+  toggleNoteStar: vi.fn(),
+  setNoteStar: vi.fn(),
+  listNotes: vi.fn(),
+  uploadNoteAsset: vi.fn(),
+  listNoteAssets: vi.fn(),
+  deleteNoteAsset: vi.fn(),
+});
+
+const setupNotesService = (): {
+  mockApiClient: NotesApiClient;
+  notesService: ReturnType<typeof createNotesService>;
+} => {
+  const mockApiClient = createMockApiClient();
+  return { mockApiClient, notesService: createNotesService(mockApiClient) };
+};
+
+const createLexicalContent = (plainText: string): NoteContent => ({
+  version: LEXICAL_VERSION,
+  editorState: { root: { children: [] } },
+  plainText,
+});
+
+const createLexicalContentWithParagraph = (plainText: string): NoteContent => ({
+  version: LEXICAL_VERSION,
+  editorState: { root: { children: [{ type: 'paragraph', children: [] }] } },
+  plainText,
+});
+
+const createMockNote = (overrides: Record<string, unknown>): Record<string, unknown> => ({
+  id: 'note-1',
+  title: 'Test Note',
+  content_json: { root: { children: [] } },
+  editor_version: LEXICAL_VERSION,
+  created_at: DEFAULT_TIMESTAMP,
+  updated_at: DEFAULT_TIMESTAMP,
+  ...overrides,
+});
+
+describe('NotesService createNote (lexical)', () => {
+  let mockApiClient: NotesApiClient;
   let notesService: ReturnType<typeof createNotesService>;
 
   beforeEach(() => {
-    // Create a mock API client
-    mockApiClient = {
-      apiRequest: vi.fn(),
-      getBackendUrl: vi.fn(() => 'https://api.example.com'),
-      processText: vi.fn(),
-      getRecentChats: vi.fn(),
-      getChatMessages: vi.fn(),
-      deleteChat: vi.fn(),
-      createNote: vi.fn(),
-      updateNote: vi.fn(),
-      deleteNote: vi.fn(),
-      toggleNoteStar: vi.fn(),
-      setNoteStar: vi.fn(),
-      listNotes: vi.fn(),
-      searchNotes: vi.fn(),
-      chatWithNotes: vi.fn(),
-      uploadNoteAsset: vi.fn(),
-      listNoteAssets: vi.fn(),
-      deleteNoteAsset: vi.fn(),
-    } as unknown as ApiClient;
-
-    notesService = createNotesService(mockApiClient);
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('createNote', () => {
-    it('should create a note with Lexical content', async () => {
-      const mockNote = {
-        id: 'note-1',
+  it('should create a note with Lexical content', async () => {
+    const mockNote = createMockNote({ content_text: 'Test content' });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    const input = {
+      title: 'Test Note',
+      content: createLexicalContent('Test content'),
+    };
+
+    const result = await notesService.createNote(input);
+
+    expect(mockApiClient.createNote).toHaveBeenCalledWith(
+      expect.objectContaining({
         title: 'Test Note',
         content_json: { root: { children: [] } },
-        editor_version: 'lexical_v1',
-        content_text: 'Test content',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
-      };
+        editor_version: LEXICAL_VERSION,
+      }),
+      undefined,
+    );
+    expect(result.title).toBe('Test Note');
+    expect(result.content.version).toBe(LEXICAL_VERSION);
+  });
+});
 
-      vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+describe('NotesService createNote (metadata)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
 
-      const input = {
-        title: 'Test Note',
-        content: {
-          version: 'lexical_v1',
-          editorState: { root: { children: [] } },
-          plainText: 'Test content',
-        } as NoteContent,
-      };
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
 
-      const result = await notesService.createNote(input);
-
-      expect(mockApiClient.createNote).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Test Note',
-          content_json: { root: { children: [] } },
-          editor_version: 'lexical_v1',
-        }),
-        undefined,
-      );
-      expect(result.title).toBe('Test Note');
-      expect(result.content.version).toBe('lexical_v1');
+  it('should include course code and source URL', async () => {
+    const mockNote = createMockNote({
+      course_code: 'FIT1045',
+      source_url: 'https://example.com',
     });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
 
-    it('should include course code and source URL', async () => {
-      const mockNote = {
-        id: 'note-1',
-        title: 'Test Note',
-        content_json: { root: { children: [] } },
-        editor_version: 'lexical_v1',
+    const input = {
+      title: 'Test Note',
+      content: createLexicalContent(''),
+      courseCode: 'FIT1045',
+      sourceUrl: 'https://example.com/page',
+    };
+
+    const result = await notesService.createNote(input);
+
+    expect(mockApiClient.createNote).toHaveBeenCalledWith(
+      expect.objectContaining({
+        courseCode: 'FIT1045',
         course_code: 'FIT1045',
-        source_url: 'https://example.com',
-        created_at: '2024-01-01T00:00:00Z',
-        updated_at: '2024-01-01T00:00:00Z',
-      };
-
-      vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
-
-      const input = {
-        title: 'Test Note',
-        content: {
-          version: 'lexical_v1',
-          editorState: { root: { children: [] } },
-          plainText: '',
-        } as NoteContent,
-        courseCode: 'FIT1045',
         sourceUrl: 'https://example.com/page',
-      };
+        source_url: 'https://example.com/page',
+      }),
+      undefined,
+    );
+    expect(result.courseCode).toBe('FIT1045');
+    expect(result.sourceUrl).toBe('https://example.com');
+  });
+});
 
-      const result = await notesService.createNote(input);
+describe('NotesService createNote (errors)', () => {
+  it('should throw error when API client is null', async () => {
+    const service = createNotesService(null);
+    await expect(
+      service.createNote({
+        title: 'Test',
+        content: { version: LEXICAL_VERSION, editorState: null, plainText: '' },
+      }),
+    ).rejects.toThrow('Notes service requires an ApiClient instance');
+  });
+});
 
-      // Note: URL is sanitized (query params stripped, normalized)
-      expect(mockApiClient.createNote).toHaveBeenCalledWith(
-        expect.objectContaining({
-          courseCode: 'FIT1045',
-          course_code: 'FIT1045',
-          sourceUrl: 'https://example.com/page',
-          source_url: 'https://example.com/page',
-        }),
-        undefined,
-      );
-      expect(result.courseCode).toBe('FIT1045');
-      expect(result.sourceUrl).toBe('https://example.com');
-    });
+describe('NotesService updateNote', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
 
-    it('should throw error when API client is null', async () => {
-      const service = createNotesService(null);
-      await expect(
-        service.createNote({
-          title: 'Test',
-          content: { version: 'lexical_v1', editorState: null, plainText: '' },
-        }),
-      ).rejects.toThrow('Notes service requires an ApiClient instance');
-    });
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('updateNote', () => {
-    it('should update note title', async () => {
-      const mockNote = {
-        id: 'note-1',
-        title: 'Updated Title',
-        content_json: { root: { children: [] } },
-        editor_version: 'lexical_v1',
-        updated_at: '2024-01-01T00:00:00Z',
-      };
+  it('should update note title', async () => {
+    const mockNote = createMockNote({ title: 'Updated Title' });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
 
-      vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
+    const result = await notesService.updateNote('note-1', { title: 'Updated Title' });
 
-      const result = await notesService.updateNote('note-1', {
-        title: 'Updated Title',
-      });
-
-      expect(mockApiClient.updateNote).toHaveBeenCalledWith(
-        'note-1',
-        expect.objectContaining({
-          title: 'Updated Title',
-        }),
-        undefined,
-      );
-      expect(result.title).toBe('Updated Title');
-    });
-
-    it('should update note content', async () => {
-      const mockNote = {
-        id: 'note-1',
-        title: 'Test Note',
-        content_json: { root: { children: [{ type: 'paragraph', children: [] }] } },
-        editor_version: 'lexical_v1',
-        content_text: 'Updated content',
-        updated_at: '2024-01-01T00:00:00Z',
-      };
-
-      vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
-
-      const newContent: NoteContent = {
-        version: 'lexical_v1',
-        editorState: { root: { children: [{ type: 'paragraph', children: [] }] } },
-        plainText: 'Updated content',
-      };
-
-      const result = await notesService.updateNote('note-1', {
-        content: newContent,
-      });
-
-      expect(mockApiClient.updateNote).toHaveBeenCalledWith(
-        'note-1',
-        expect.objectContaining({
-          content_json: expect.any(Object),
-          editor_version: 'lexical_v1',
-        }),
-        undefined,
-      );
-      expect(result.content.plainText).toBe('Updated content');
-    });
+    expect(mockApiClient.updateNote).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({ title: 'Updated Title' }),
+      undefined,
+    );
+    expect(result.title).toBe('Updated Title');
   });
 
-  describe('listNotes', () => {
-    it('should list notes with default limit', async () => {
-      const mockNotes = [
-        {
-          id: 'note-1',
-          title: 'Note 1',
-          content_json: { root: { children: [] } },
-          editor_version: 'lexical_v1',
-          created_at: '2024-01-01T00:00:00Z',
-        },
-        {
-          id: 'note-2',
-          title: 'Note 2',
-          content_json: { root: { children: [] } },
-          editor_version: 'lexical_v1',
-          created_at: '2024-01-02T00:00:00Z',
-        },
-      ];
-
-      vi.mocked(mockApiClient.listNotes).mockResolvedValue(mockNotes);
-
-      const result = await notesService.listNotes();
-
-      expect(mockApiClient.listNotes).toHaveBeenCalledWith({
-        limit: 50,
-      });
-      expect(result).toHaveLength(2);
-      expect(result[0].id).toBe('note-1');
+  it('should update note content', async () => {
+    const mockNote = createMockNote({
+      content_json: { root: { children: [{ type: 'paragraph', children: [] }] } },
+      content_text: 'Updated content',
     });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
 
-    it('should filter by course code', async () => {
-      const mockNotes = [
-        {
-          id: 'note-1',
-          title: 'Note 1',
-          course_code: 'FIT1045',
-          content_json: { root: { children: [] } },
-          editor_version: 'lexical_v1',
-          created_at: '2024-01-01T00:00:00Z',
-        },
-      ];
+    const newContent = createLexicalContentWithParagraph('Updated content');
+    const result = await notesService.updateNote('note-1', { content: newContent });
 
-      vi.mocked(mockApiClient.listNotes).mockResolvedValue(mockNotes);
+    const contentJsonExpectation: unknown = expect.any(Object);
+    expect(mockApiClient.updateNote).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({
+        content_json: contentJsonExpectation,
+        editor_version: LEXICAL_VERSION,
+      }),
+      undefined,
+    );
+    expect(result.content.plainText).toBe('Updated content');
+  });
+});
 
-      const result = await notesService.listNotes({ courseCode: 'FIT1045' });
+describe('NotesService listNotes (filters)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
 
-      expect(mockApiClient.listNotes).toHaveBeenCalledWith({
-        courseCode: 'FIT1045',
-        limit: 50,
-      });
-      expect(result[0].courseCode).toBe('FIT1045');
-    });
-
-    it('should migrate legacy notes without content_json', async () => {
-      const legacyNote = {
-        id: 'note-1',
-        title: 'Legacy Note',
-        content: '<p>Legacy HTML content</p>',
-        created_at: '2024-01-01T00:00:00Z',
-      };
-
-      const migratedNote = {
-        id: 'note-1',
-        title: 'Legacy Note',
-        content_json: { root: { children: [] } },
-        editor_version: 'lexical_v1',
-        content_text: 'Legacy HTML content',
-        created_at: '2024-01-01T00:00:00Z',
-      };
-
-      vi.mocked(mockApiClient.listNotes).mockResolvedValue([legacyNote]);
-      vi.mocked(mockApiClient.updateNote).mockResolvedValue(migratedNote);
-
-      const result = await notesService.listNotes();
-
-      expect(result).toHaveLength(1);
-      expect(result[0].content.version).toBe('lexical_v1');
-      expect(result[0].content.plainText).toContain('Legacy HTML content');
-    });
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('getNote', () => {
-    it('should get a note by ID', async () => {
-      const mockNote = {
-        id: 'note-1',
-        title: 'Test Note',
-        content_json: { root: { children: [] } },
-        editor_version: 'lexical_v1',
-        created_at: '2024-01-01T00:00:00Z',
-      };
+  it('should list notes with default limit', async () => {
+    const mockNotes = [
+      createMockNote({ title: 'Note 1' }),
+      createMockNote({ id: 'note-2', title: 'Note 2', created_at: DEFAULT_TIMESTAMP_2 }),
+    ];
 
-      vi.mocked(mockApiClient.apiRequest).mockResolvedValue(mockNote);
+    vi.mocked(mockApiClient.listNotes).mockResolvedValue(mockNotes);
 
-      const result = await notesService.getNote('note-1');
+    const result = await notesService.listNotes();
 
-      expect(mockApiClient.apiRequest).toHaveBeenCalledWith('/api/notes/note-1', { method: 'GET' });
-      expect(result.id).toBe('note-1');
-      expect(result.title).toBe('Test Note');
-    });
+    expect(mockApiClient.listNotes).toHaveBeenCalledWith({ limit: DEFAULT_LIMIT });
+    expect(result).toHaveLength(2);
+    const [firstNote] = result;
+    expect(firstNote).toBeDefined();
+    expect(firstNote?.id).toBe('note-1');
   });
 
-  describe('deleteNote', () => {
-    it('should delete a note', async () => {
-      vi.mocked(mockApiClient.deleteNote).mockResolvedValue(undefined);
+  it('should filter by course code', async () => {
+    const mockNotes = [createMockNote({ title: 'Note 1', course_code: 'FIT1045' })];
 
-      await notesService.deleteNote('note-1');
+    vi.mocked(mockApiClient.listNotes).mockResolvedValue(mockNotes);
 
-      expect(mockApiClient.deleteNote).toHaveBeenCalledWith('note-1');
+    const result = await notesService.listNotes({ courseCode: 'FIT1045' });
+
+    expect(mockApiClient.listNotes).toHaveBeenCalledWith({
+      courseCode: 'FIT1045',
+      limit: DEFAULT_LIMIT,
     });
+    const [firstNote] = result;
+    expect(firstNote).toBeDefined();
+    expect(firstNote?.courseCode).toBe('FIT1045');
+  });
+});
+
+describe('NotesService listNotes (migration)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('toggleStar', () => {
-    it('should toggle star status', async () => {
-      const mockNote = {
-        id: 'note-1',
-        title: 'Test Note',
-        is_starred: true,
-        content_json: { root: { children: [] } },
-        editor_version: 'lexical_v1',
-        created_at: '2024-01-01T00:00:00Z',
-      };
+  it('should migrate legacy notes without content_json', async () => {
+    const legacyNote = {
+      id: 'note-1',
+      title: 'Legacy Note',
+      content: '<p>Legacy HTML content</p>',
+      created_at: DEFAULT_TIMESTAMP,
+    };
 
-      vi.mocked(mockApiClient.toggleNoteStar).mockResolvedValue(mockNote);
-
-      const result = await notesService.toggleStar('note-1');
-
-      expect(mockApiClient.toggleNoteStar).toHaveBeenCalledWith('note-1');
-      expect(result.isStarred).toBe(true);
+    const migratedNote = createMockNote({
+      title: 'Legacy Note',
+      content_text: 'Legacy HTML content',
     });
 
-    it('should throw error when noteId is missing', async () => {
-      await expect(notesService.toggleStar('')).rejects.toThrow('Note ID is required');
-    });
+    vi.mocked(mockApiClient.listNotes).mockResolvedValue([legacyNote]);
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(migratedNote);
+
+    const result = await notesService.listNotes();
+
+    expect(result).toHaveLength(1);
+    const [firstNote] = result;
+    expect(firstNote).toBeDefined();
+    expect(firstNote?.content.version).toBe(LEXICAL_VERSION);
+    expect(firstNote?.content.plainText).toContain('Legacy HTML content');
+  });
+});
+
+describe('NotesService getNote', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('setStar', () => {
-    it('should set star status to true', async () => {
-      const mockNote = {
-        id: 'note-1',
-        title: 'Test Note',
-        is_starred: true,
-        content_json: { root: { children: [] } },
-        editor_version: 'lexical_v1',
-        created_at: '2024-01-01T00:00:00Z',
-      };
+  it('should get a note by ID', async () => {
+    const mockNote = createMockNote({});
+    vi.mocked(mockApiClient.apiRequest).mockResolvedValue(mockNote);
 
-      vi.mocked(mockApiClient.setNoteStar).mockResolvedValue(mockNote);
+    const result = await notesService.getNote('note-1');
 
-      const result = await notesService.setStar('note-1', true);
+    expect(mockApiClient.apiRequest).toHaveBeenCalledWith('/api/notes/note-1', { method: 'GET' });
+    expect(result.id).toBe('note-1');
+    expect(result.title).toBe('Test Note');
+  });
+});
 
-      expect(mockApiClient.setNoteStar).toHaveBeenCalledWith('note-1', true);
-      expect(result.isStarred).toBe(true);
-    });
+describe('NotesService deleteNote', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('listAssets', () => {
-    it('should list assets for a note', async () => {
-      const mockAssets: NoteAsset[] = [
-        {
-          id: 'asset-1',
-          noteId: 'note-1',
-          userId: 'user-1',
-          type: 'image',
-          mimeType: 'image/png',
-          storagePath: 'path/to/asset.png',
-          createdAt: '2024-01-01T00:00:00Z',
-          url: 'https://example.com/asset.png',
-          fileName: 'image.png',
-        },
-      ];
+  it('should delete a note', async () => {
+    vi.mocked(mockApiClient.deleteNote).mockResolvedValue(undefined);
 
-      vi.mocked(mockApiClient.listNoteAssets).mockResolvedValue(mockAssets);
+    await notesService.deleteNote('note-1');
 
-      const result = await notesService.listAssets('note-1');
+    expect(mockApiClient.deleteNote).toHaveBeenCalledWith('note-1');
+  });
+});
 
-      expect(mockApiClient.listNoteAssets).toHaveBeenCalledWith({ noteId: 'note-1' });
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('asset-1');
-    });
+describe('NotesService toggleStar', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('uploadAsset', () => {
-    it('should upload an asset', async () => {
-      const mockAsset: NoteAsset = {
+  it('should toggle star status', async () => {
+    const mockNote = createMockNote({ is_starred: true });
+    vi.mocked(mockApiClient.toggleNoteStar).mockResolvedValue(mockNote);
+
+    const result = await notesService.toggleStar('note-1');
+
+    expect(mockApiClient.toggleNoteStar).toHaveBeenCalledWith('note-1');
+    expect(result.isStarred).toBe(true);
+  });
+
+  it('should throw error when noteId is missing', async () => {
+    await expect(notesService.toggleStar('')).rejects.toThrow('Note ID is required');
+  });
+});
+
+describe('NotesService setStar', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('should set star status to true', async () => {
+    const mockNote = createMockNote({ is_starred: true });
+    vi.mocked(mockApiClient.setNoteStar).mockResolvedValue(mockNote);
+
+    const result = await notesService.setStar('note-1', true);
+
+    expect(mockApiClient.setNoteStar).toHaveBeenCalledWith('note-1', true);
+    expect(result.isStarred).toBe(true);
+  });
+});
+
+describe('NotesService listAssets', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('should list assets for a note', async () => {
+    const mockAssets: NoteAsset[] = [
+      {
         id: 'asset-1',
         noteId: 'note-1',
         userId: 'user-1',
         type: 'image',
         mimeType: 'image/png',
         storagePath: 'path/to/asset.png',
-        createdAt: '2024-01-01T00:00:00Z',
+        createdAt: DEFAULT_TIMESTAMP,
         url: 'https://example.com/asset.png',
         fileName: 'image.png',
-      };
+      },
+    ];
 
-      const file = new File(['content'], 'image.png', { type: 'image/png' });
-      vi.mocked(mockApiClient.uploadNoteAsset).mockResolvedValue(mockAsset);
+    vi.mocked(mockApiClient.listNoteAssets).mockResolvedValue(mockAssets);
 
-      const result = await notesService.uploadAsset('note-1', file);
+    const result = await notesService.listAssets('note-1');
 
-      expect(mockApiClient.uploadNoteAsset).toHaveBeenCalledWith({
-        noteId: 'note-1',
-        file,
-      });
-      expect(result.id).toBe('asset-1');
-    });
+    expect(mockApiClient.listNoteAssets).toHaveBeenCalledWith({ noteId: 'note-1' });
+    expect(result).toHaveLength(1);
+    const [firstAsset] = result;
+    expect(firstAsset).toBeDefined();
+    expect(firstAsset?.id).toBe('asset-1');
+  });
+});
+
+describe('NotesService uploadAsset', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
   });
 
-  describe('deleteAsset', () => {
-    it('should delete an asset', async () => {
-      vi.mocked(mockApiClient.deleteNoteAsset).mockResolvedValue(undefined);
+  it('should upload an asset', async () => {
+    const mockAsset: NoteAsset = {
+      id: 'asset-1',
+      noteId: 'note-1',
+      userId: 'user-1',
+      type: 'image',
+      mimeType: 'image/png',
+      storagePath: 'path/to/asset.png',
+      createdAt: DEFAULT_TIMESTAMP,
+      url: 'https://example.com/asset.png',
+      fileName: 'image.png',
+    };
 
-      await notesService.deleteAsset('asset-1');
+    const file = new File(['content'], 'image.png', { type: 'image/png' });
+    vi.mocked(mockApiClient.uploadNoteAsset).mockResolvedValue(mockAsset);
 
-      expect(mockApiClient.deleteNoteAsset).toHaveBeenCalledWith({ assetId: 'asset-1' });
+    const result = await notesService.uploadAsset('note-1', file);
+
+    expect(mockApiClient.uploadNoteAsset).toHaveBeenCalledWith({ noteId: 'note-1', file });
+    expect(result.id).toBe('asset-1');
+  });
+});
+
+describe('NotesService deleteAsset', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('should delete an asset', async () => {
+    vi.mocked(mockApiClient.deleteNoteAsset).mockResolvedValue(undefined);
+
+    await notesService.deleteAsset('asset-1');
+
+    expect(mockApiClient.deleteNoteAsset).toHaveBeenCalledWith({ assetId: 'asset-1' });
+  });
+});
+
+// Regression tests: week field persistence
+describe('NotesService createNote (week field)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('should include week in the API payload when provided', async () => {
+    const mockNote = createMockNote({ week: 5 });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    await notesService.createNote({
+      title: 'Week test',
+      content: createLexicalContent('content'),
+      week: 5,
     });
+
+    expect(mockApiClient.createNote).toHaveBeenCalledWith(
+      expect.objectContaining({ week: 5 }),
+      undefined,
+    );
+  });
+
+  it('should return week from API response in the domain note', async () => {
+    const mockNote = createMockNote({ week: 3 });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    const result = await notesService.createNote({
+      title: 'Week test',
+      content: createLexicalContent('content'),
+      week: 3,
+    });
+
+    expect(result.week).toBe(3);
+  });
+
+  it('should return week: null when week is absent from API response', async () => {
+    const mockNote = createMockNote({});
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    const result = await notesService.createNote({
+      title: 'No week test',
+      content: createLexicalContent('content'),
+    });
+
+    expect(result.week).toBeNull();
+  });
+
+  it('should return week: null when week is out of range (0)', async () => {
+    const mockNote = createMockNote({ week: 0 });
+    vi.mocked(mockApiClient.createNote).mockResolvedValue(mockNote);
+
+    const result = await notesService.createNote({
+      title: 'Out of range test',
+      content: createLexicalContent('content'),
+    });
+
+    // toDomainNote should sanitize out-of-range values to null
+    expect(result.week).toBeNull();
+  });
+});
+
+describe('NotesService updateNote (week field)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('should include week in the update payload when provided', async () => {
+    const mockNote = createMockNote({ week: 7 });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
+
+    await notesService.updateNote('note-1', { week: 7 });
+
+    expect(mockApiClient.updateNote).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({ week: 7 }),
+      undefined,
+    );
+  });
+
+  it('should allow clearing week by passing null', async () => {
+    const mockNote = createMockNote({ week: null });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
+
+    await notesService.updateNote('note-1', { week: null });
+
+    expect(mockApiClient.updateNote).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({ week: null }),
+      undefined,
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────
+// Regression: sourceUrl immutability
+// sourceUrl must only be set at creation time and must never
+// be included in update payloads.
+// ─────────────────────────────────────────────────────────────
+
+describe('NotesService updateNote (sourceUrl immutability)', () => {
+  let mockApiClient: NotesApiClient;
+  let notesService: ReturnType<typeof createNotesService>;
+
+  beforeEach(() => {
+    ({ mockApiClient, notesService } = setupNotesService());
+  });
+
+  it('does not send sourceUrl or source_url in the update API payload', async () => {
+    const mockNote = createMockNote({ source_url: 'https://original.edu/page' });
+    vi.mocked(mockApiClient.updateNote).mockResolvedValue(mockNote);
+
+    await notesService.updateNote('note-1', { title: 'Updated title' });
+
+    const [, payload] = vi.mocked(mockApiClient.updateNote).mock.calls[0]!;
+    expect(payload).not.toHaveProperty('sourceUrl');
+    expect(payload).not.toHaveProperty('source_url');
   });
 });

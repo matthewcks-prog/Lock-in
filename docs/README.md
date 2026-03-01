@@ -23,7 +23,8 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 
 ### Reference (`docs/reference/`)
 
-- `CODE_OVERVIEW.md` - Living snapshot of implementation details
+- `CODE_OVERVIEW.md` - Ownership index for implementation snapshots
+- `code-overview/` - Section-owned implementation snapshots (extension/backend/cross-layer/operations)
 - `DATABASE.md` - Canonical schema, RLS, and migration notes
 - `CHANGELOG.md` - Versioned change history
 - `CONTRIBUTING.md` - Contribution workflow and guardrails
@@ -37,13 +38,18 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 - `ROLLBACK.md` - Rollback and recovery procedures
 - `README.md` - Deployment index
 
+### Backend (`docs/backend/`)
+
+- `AZURE_EMBEDDINGS_SETUP.md` - Azure embeddings setup and verification
+- `MIGRATION_CHECKLIST.md` - Backend migration checklist
+
 ### Features (`docs/features/`)
 
 - `transcripts/` - Transcript system docs and troubleshooting
 
 ### Setup (`docs/setup/`)
 
-- `LOCAL_SUPABASE_SETUP.md` - Local Supabase CLI workflow
+- `LOCAL_DEVELOPMENT.md` - Complete local development setup (primary)
 - `CODE_FORMATTING.md` - Formatting conventions
 - Environment configuration: see `docs/deployment/ENVIRONMENTS.md`
 

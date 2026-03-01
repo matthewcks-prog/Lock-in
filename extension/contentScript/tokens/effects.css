@@ -1,0 +1,83 @@
+@layer lockin.tokens {
+  #lockin-root {
+    /* ================================================================
+       SEMANTIC SHADOWS
+       ================================================================ */
+    --lockin-shadow-card: var(--lockin-shadow-02);
+
+    /* ================================================================
+       RAW SHADOWS
+       ================================================================ */
+    --lockin-shadow-01: 0 0 0 var(--lockin-size-1) var(--lockin-color-rgba-99-102-241-02);
+    --lockin-shadow-02: 0 0 0 var(--lockin-size-2) var(--lockin-color-rgba-102-126-234-01);
+    --lockin-shadow-03: 0 0 0 var(--lockin-size-2) var(--lockin-color-rgba-102-126-234-02);
+    --lockin-shadow-04: 0 0 0 var(--lockin-size-2) var(--lockin-color-rgba-37-99-235-012);
+    --lockin-shadow-05: 0 var(--lockin-size-1) var(--lockin-size-2)
+      var(--lockin-color-rgba-0-0-0-005);
+    --lockin-shadow-06: 0 var(--lockin-size-1) var(--lockin-size-3)
+      var(--lockin-color-rgba-0-0-0-005);
+    --lockin-shadow-07: 0 var(--lockin-size-1) var(--lockin-size-3)
+      var(--lockin-color-rgba-0-0-0-005);
+    --lockin-shadow-08: 0 var(--lockin-size-1) var(--lockin-size-3)
+      var(--lockin-color-rgba-0-0-0-008);
+    --lockin-shadow-09: 0 var(--lockin-size-1) var(--lockin-size-3)
+      var(--lockin-color-rgba-0-0-0-015);
+    --lockin-shadow-10: 0 var(--lockin-size-1) var(--lockin-size-3)
+      var(--lockin-color-rgba-102-126-234-015);
+    --lockin-shadow-11: 0 var(--lockin-size-10) var(--lockin-size-25)
+      var(--lockin-color-rgba-0-0-0-02);
+    --lockin-shadow-12: 0 var(--lockin-size-2) var(--lockin-size-8)
+      var(--lockin-color-rgba-99-102-241-01);
+    --lockin-shadow-13: 0 var(--lockin-size-20) var(--lockin-size-40)
+      var(--lockin-color-rgba-0-0-0-015);
+    --lockin-shadow-14: 0 var(--lockin-size-3) var(--lockin-size-10)
+      var(--lockin-color-rgba-99-102-241-012);
+    --lockin-shadow-15: 0 var(--lockin-size-4) var(--lockin-size-12)
+      var(--lockin-color-rgba-0-0-0-01);
+    --lockin-shadow-16: 0 var(--lockin-size-4) var(--lockin-size-12)
+      var(--lockin-color-rgba-109-40-217-03);
+    --lockin-shadow-17:
+      0 var(--lockin-size-4) var(--lockin-size-14) var(--lockin-color-rgba-37-99-235-035),
+      0 var(--lockin-size-2) var(--lockin-size-6) var(--lockin-color-rgba-0-0-0-008);
+    --lockin-shadow-18: 0 var(--lockin-size-4) var(--lockin-size-16)
+      var(--lockin-color-rgba-0-0-0-01);
+    --lockin-shadow-19: 0 var(--lockin-size-6) var(--lockin-size-14)
+      var(--lockin-color-rgba-0-0-0-006);
+    --lockin-shadow-20: 0 var(--lockin-size-6) var(--lockin-size-20)
+      var(--lockin-color-rgba-17-24-39-004);
+    --lockin-shadow-21:
+      0 var(--lockin-size-6) var(--lockin-size-20) var(--lockin-color-rgba-37-99-235-045),
+      0 var(--lockin-size-3) var(--lockin-size-8) var(--lockin-color-rgba-0-0-0-012);
+    --lockin-shadow-22: 0 var(--lockin-size-8) var(--lockin-size-18)
+      var(--lockin-color-rgba-102-126-234-012);
+    --lockin-shadow-23: 0 var(--lockin-size-8) var(--lockin-size-20)
+      var(--lockin-color-rgba-0-0-0-008);
+    --lockin-shadow-24: var(--lockin-size-2) 0 var(--lockin-size-8)
+      var(--lockin-color-rgba-0-0-0-01);
+    --lockin-shadow-25: var(--lockin-size-neg-4) 0 var(--lockin-size-24)
+      var(--lockin-color-rgba-0-0-0-012);
+
+    /* Semantic shadow aliases — use these instead of numbered shadows */
+    --lockin-shadow-xs: var(--lockin-shadow-06);
+    --lockin-shadow-sm: var(--lockin-shadow-08);
+    --lockin-shadow-md: var(--lockin-shadow-15);
+    --lockin-shadow-lg: var(--lockin-shadow-11);
+    --lockin-shadow-xl: var(--lockin-shadow-13);
+    --lockin-shadow-focus: var(--lockin-shadow-02);
+    --lockin-shadow-focus-accent: var(--lockin-shadow-03);
+    --lockin-shadow-sidebar: var(--lockin-shadow-25);
+    --lockin-shadow-dropdown: var(--lockin-shadow-20);
+    --lockin-shadow-dialog: var(--lockin-shadow-13);
+    --lockin-shadow-toast: var(--lockin-shadow-11);
+    --lockin-shadow-pill: var(--lockin-shadow-17);
+    --lockin-shadow-pill-hover: var(--lockin-shadow-21);
+
+    /* ================================================================
+       TRANSITION PRESETS
+       ================================================================ */
+    --lockin-transition-fast: var(--lockin-duration-120) var(--lockin-ease-default);
+    --lockin-transition-base: var(--lockin-duration-150) var(--lockin-ease-default);
+    --lockin-transition-smooth: var(--lockin-duration-200) var(--lockin-ease-standard);
+    --lockin-transition-slow: var(--lockin-duration-300) var(--lockin-ease-standard);
+  }
+}

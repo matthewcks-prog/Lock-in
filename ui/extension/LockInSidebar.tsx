@@ -3,13 +3,15 @@
  *
  * Main sidebar orchestrator for the Lock-in extension.
  */
-import { useEffect, useMemo, useState } from 'react';
-import type { PageContext, StudyMode } from '../../core/domain/types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { PageContext } from '../../core/domain/types';
+import type { Note } from '../../core/domain/Note';
 import type { ApiClient } from '../../api/client';
 import { createNotesService } from '../../core/services/notesService.ts';
-import type { NotesService } from '../../core/services/notesService.ts';
+import { createTasksService } from '../../core/services/tasksService.ts';
 import { useNotesList } from '../hooks/useNotesList';
 import { NotesPanel } from './notes/NotesPanel';
+import { TasksPanel } from './tasks/TasksPanel';
 import { ToolProvider, useToolContext } from './tools';
 import { NoteSaveProvider } from './contexts/NoteSaveContext';
 import { TranscriptCacheProvider } from './contexts/TranscriptCacheContext';
@@ -22,186 +24,275 @@ import { ChatSection } from './sidebar/ChatSection';
 import { SidebarHeaderActions } from './sidebar/SidebarHeaderActions';
 import { ToolSection } from './sidebar/ToolSection';
 import { useResize } from './sidebar/useResize';
-import {
-  CHAT_TAB_ID,
-  NOTES_TAB_ID,
-  TOOL_TAB_ID,
-  SIDEBAR_WIDTH_KEY,
-  SIDEBAR_MIN_WIDTH,
-  SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MAX_VW,
-} from './sidebar/constants';
+import { CHAT_TAB_ID, NOTES_TAB_ID, TASKS_TAB_ID, TOOL_TAB_ID } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
 import { useSidebarState } from './sidebar/useSidebarState';
-import type { BaseAdapter } from '../../integrations/adapters/baseAdapter';
+import { useFeedbackListener } from './sidebar/hooks/useFeedbackListener';
+import type { NotesPanelHandlers, SidebarModel } from './sidebar/lockInSidebarTypes';
+import {
+  buildSidebarStateOptions,
+  buildResizeOptions,
+  getPageContextValues,
+} from './sidebar/lockInSidebarHelpers';
+
 export interface LockInSidebarProps {
   apiClient: ApiClient | null;
   isOpen: boolean;
   onToggle: () => void;
-  currentMode: StudyMode;
   pendingPrefill?: string;
   onClearPrefill?: () => void;
   pageContext?: PageContext;
-  adapter?: BaseAdapter;
   storage?: StorageAdapter;
   activeTabExternal?: string;
 }
-function LockInSidebarContent({
-  apiClient,
-  isOpen,
-  onToggle,
-  currentMode,
-  pendingPrefill,
-  onClearPrefill,
-  pageContext,
-  storage,
-  activeTabExternal,
-}: LockInSidebarProps) {
-  const { activeToolId, activeToolTitle, closeTool } = useToolContext();
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
-  const {
-    activeTab,
-    setActiveTab,
-    handleTabChange,
-    mode,
-    selectedNoteId,
-    setSelectedNoteId,
-    setIsNoteEditing,
-  } = useSidebarState({
-    activeTabExternal,
-    currentMode,
-    storage,
-    isOpen,
-    onToggle,
-  });
-
-  const notesService: NotesService | null = useMemo(
-    () => (apiClient ? createNotesService(apiClient) : null),
-    [apiClient],
-  );
-
-  const {
-    notes,
-    isLoading: notesLoading,
-    refresh: refreshNotes,
-    upsertNote,
-    deleteNote: deleteNoteFromList,
-    toggleStar: toggleNoteStar,
-  } = useNotesList({
-    notesService,
-    limit: 50,
-  });
-
-  const { handleResizeStart } = useResize({
-    storage,
-    minWidth: SIDEBAR_MIN_WIDTH,
-    maxWidth: SIDEBAR_MAX_WIDTH,
-    maxVw: SIDEBAR_MAX_VW,
-    storageKey: SIDEBAR_WIDTH_KEY,
-  });
-
-  const courseCode = pageContext?.courseContext.courseCode || null;
-  const pageUrl = pageContext?.url || (typeof window !== 'undefined' ? window.location.href : '');
-
+function useSyncSidebarEffects({
+  activeTab,
+  activeToolId,
+  refreshNotes,
+  setActiveTab,
+}: {
+  activeTab: ReturnType<typeof useSidebarState>['activeTab'];
+  activeToolId: string | null;
+  refreshNotes: ReturnType<typeof useNotesList>['refresh'];
+  setActiveTab: ReturnType<typeof useSidebarState>['setActiveTab'];
+}): void {
   useEffect(() => {
-    if (activeToolId) {
+    if (activeToolId !== null && activeToolId.length > 0) {
       setActiveTab(TOOL_TAB_ID);
     }
   }, [activeToolId, setActiveTab]);
 
   useEffect(() => {
     if (activeTab === NOTES_TAB_ID) {
-      refreshNotes();
+      void refreshNotes();
     }
   }, [activeTab, refreshNotes]);
+}
+
+function useNotesPanelHandlers({
+  deleteNoteFromList,
+  refreshNotes,
+  selectedNoteId,
+  setSelectedNoteId,
+  upsertNote,
+}: {
+  deleteNoteFromList: (noteId: string) => Promise<void>;
+  refreshNotes: ReturnType<typeof useNotesList>['refresh'];
+  selectedNoteId: string | null;
+  setSelectedNoteId: ReturnType<typeof useSidebarState>['setSelectedNoteId'];
+  upsertNote: ReturnType<typeof useNotesList>['upsertNote'];
+}): NotesPanelHandlers {
+  const onRefreshNotes = useCallback(() => {
+    void refreshNotes();
+  }, [refreshNotes]);
+
+  const onNoteSaved = useCallback(
+    (note: Note) => {
+      upsertNote(note);
+      setSelectedNoteId(note.id);
+    },
+    [setSelectedNoteId, upsertNote],
+  );
+
+  const onDeleteNote = useCallback(
+    async (noteId: string) => {
+      await deleteNoteFromList(noteId);
+      if (selectedNoteId === noteId) setSelectedNoteId(null);
+    },
+    [deleteNoteFromList, selectedNoteId, setSelectedNoteId],
+  );
+
+  return { onDeleteNote, onNoteSaved, onRefreshNotes };
+}
+
+function useServices(apiClient: ApiClient | null): {
+  notesService: ReturnType<typeof createNotesService> | null;
+  tasksService: ReturnType<typeof createTasksService> | null;
+} {
+  return useMemo(
+    () =>
+      apiClient !== null
+        ? {
+            notesService: createNotesService(apiClient),
+            tasksService: createTasksService(apiClient),
+          }
+        : { notesService: null, tasksService: null },
+    [apiClient],
+  );
+}
+
+function useLockInSidebarModel(props: LockInSidebarProps): SidebarModel {
+  const { activeToolId, activeToolTitle, closeTool } = useToolContext();
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const sidebarState = useSidebarState(buildSidebarStateOptions(props));
+  const { notesService, tasksService } = useServices(props.apiClient);
+  const notesState = useNotesList({ notesService, limit: 50 });
+  const { handleResizeStart } = useResize(buildResizeOptions(props.storage));
+  const pageValues = getPageContextValues(props.pageContext);
+
+  useSyncSidebarEffects({
+    activeTab: sidebarState.activeTab,
+    activeToolId,
+    refreshNotes: notesState.refresh,
+    setActiveTab: sidebarState.setActiveTab,
+  });
+
+  useFeedbackListener(() => setIsFeedbackOpen(true));
+
+  return {
+    activeTab: sidebarState.activeTab,
+    activeToolId,
+    activeToolTitle,
+    closeTool,
+    courseCode: pageValues.courseCode,
+    currentWeek: pageValues.currentWeek,
+    deleteNoteFromList: notesState.deleteNote,
+    handleResizeStart,
+    handleTabChange: sidebarState.handleTabChange,
+    isFeedbackOpen,
+    notes: notesState.notes,
+    notesLoading: notesState.isLoading,
+    notesService,
+    onClearPrefill: props.onClearPrefill,
+    onToggle: props.onToggle,
+    pageUrl: pageValues.pageUrl,
+    pendingPrefill: props.pendingPrefill,
+    refreshNotes: notesState.refresh,
+    selectedNoteId: sidebarState.selectedNoteId,
+    setActiveTab: sidebarState.setActiveTab,
+    setIsFeedbackOpen,
+    setIsNoteEditing: sidebarState.setIsNoteEditing,
+    setSelectedNoteId: sidebarState.setSelectedNoteId,
+    storage: props.storage,
+    tasksService,
+    toggleNoteStar: notesState.toggleStar,
+    upsertNote: notesState.upsertNote,
+    isOpen: props.isOpen,
+    apiClient: props.apiClient,
+  };
+}
+
+function TasksTabContent({ model }: { model: SidebarModel }): JSX.Element {
+  return (
+    <TasksPanel
+      tasksService={model.tasksService}
+      courseCode={model.courseCode}
+      pageUrl={model.pageUrl}
+      currentWeek={model.currentWeek}
+    />
+  );
+}
+
+function SidebarTabContent({
+  model,
+  notesHandlers,
+}: {
+  model: SidebarModel;
+  notesHandlers: NotesPanelHandlers;
+}): JSX.Element {
+  return (
+    <>
+      {model.activeTab === CHAT_TAB_ID && (
+        <ChatSection
+          apiClient={model.apiClient}
+          {...(model.storage !== undefined ? { storage: model.storage } : {})}
+          pageUrl={model.pageUrl}
+          courseCode={model.courseCode}
+          {...(model.pendingPrefill !== undefined ? { pendingPrefill: model.pendingPrefill } : {})}
+          {...(model.onClearPrefill !== undefined ? { onClearPrefill: model.onClearPrefill } : {})}
+          isOpen={model.isOpen}
+          isActive={model.activeTab === CHAT_TAB_ID}
+        />
+      )}
+      {model.activeTab === NOTES_TAB_ID && (
+        <NotesPanel
+          notesService={model.notesService}
+          notes={model.notes}
+          notesLoading={model.notesLoading}
+          onRefreshNotes={notesHandlers.onRefreshNotes}
+          onNoteSaved={notesHandlers.onNoteSaved}
+          onDeleteNote={notesHandlers.onDeleteNote}
+          onToggleStar={model.toggleNoteStar}
+          activeNoteId={model.selectedNoteId}
+          onSelectNote={model.setSelectedNoteId}
+          courseCode={model.courseCode}
+          pageUrl={model.pageUrl}
+          currentWeek={model.currentWeek}
+          onNoteEditingChange={model.setIsNoteEditing}
+        />
+      )}
+      {model.activeTab === TOOL_TAB_ID && (
+        <ToolSection activeToolId={model.activeToolId} onClose={model.closeTool} />
+      )}
+      {model.activeTab === TASKS_TAB_ID && <TasksTabContent model={model} />}
+      <PrivacyNotice />
+    </>
+  );
+}
+
+function SidebarFeedback({ model }: { model: SidebarModel }): JSX.Element {
+  return (
+    <FeedbackModal
+      isOpen={model.isFeedbackOpen}
+      onClose={() => model.setIsFeedbackOpen(false)}
+      apiClient={model.apiClient}
+      pageUrl={model.pageUrl}
+      courseCode={model.courseCode}
+    />
+  );
+}
+
+function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
+  const notesHandlers = useNotesPanelHandlers({
+    deleteNoteFromList: model.deleteNoteFromList,
+    refreshNotes: model.refreshNotes,
+    selectedNoteId: model.selectedNoteId,
+    setSelectedNoteId: model.setSelectedNoteId,
+    upsertNote: model.upsertNote,
+  });
 
   return (
-    <TranscriptCacheProvider apiClient={apiClient}>
+    <TranscriptCacheProvider apiClient={model.apiClient}>
       <NoteSaveProvider
-        notesService={notesService}
-        pageUrl={pageUrl}
-        courseCode={courseCode}
-        upsertNote={upsertNote}
-        setSelectedNoteId={setSelectedNoteId}
-        setActiveTab={setActiveTab}
+        notesService={model.notesService}
+        pageUrl={model.pageUrl}
+        courseCode={model.courseCode}
+        upsertNote={model.upsertNote}
+        setSelectedNoteId={model.setSelectedNoteId}
+        setActiveTab={model.setActiveTab}
       >
         <SidebarLayout
-          isOpen={isOpen}
-          onToggle={onToggle}
-          onResizeStart={handleResizeStart}
+          isOpen={model.isOpen}
+          onToggle={model.onToggle}
+          onResizeStart={model.handleResizeStart}
           headerLeft={
             <SidebarTabs
-              activeTab={activeTab}
-              onTabChange={handleTabChange}
-              activeToolId={activeToolId}
-              activeToolTitle={activeToolTitle}
-              onCloseTool={closeTool}
+              activeTab={model.activeTab}
+              onTabChange={model.handleTabChange}
+              activeToolId={model.activeToolId}
+              activeToolTitle={model.activeToolTitle}
+              onCloseTool={model.closeTool}
             />
           }
-          headerRight={<SidebarHeaderActions onOpenFeedback={() => setIsFeedbackOpen(true)} />}
+          headerRight={
+            <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
+          }
         >
-          {activeTab === CHAT_TAB_ID && (
-            <ChatSection
-              apiClient={apiClient}
-              storage={storage}
-              mode={mode}
-              pageUrl={pageUrl}
-              courseCode={courseCode}
-              pendingPrefill={pendingPrefill}
-              onClearPrefill={onClearPrefill}
-              isOpen={isOpen}
-              isActive={activeTab === CHAT_TAB_ID}
-            />
-          )}
-
-          {activeTab === NOTES_TAB_ID && (
-            <NotesPanel
-              notesService={notesService}
-              notes={notes}
-              notesLoading={notesLoading}
-              onRefreshNotes={refreshNotes}
-              onNoteSaved={(note) => {
-                upsertNote(note);
-                setSelectedNoteId(note.id);
-              }}
-              onDeleteNote={async (noteId) => {
-                await deleteNoteFromList(noteId);
-                if (selectedNoteId === noteId) {
-                  setSelectedNoteId(null);
-                }
-              }}
-              onToggleStar={toggleNoteStar}
-              activeNoteId={selectedNoteId}
-              onSelectNote={(noteId) => setSelectedNoteId(noteId)}
-              courseCode={courseCode}
-              pageUrl={pageUrl}
-              currentWeek={pageContext?.courseContext?.week}
-              onNoteEditingChange={setIsNoteEditing}
-            />
-          )}
-
-          {activeTab === TOOL_TAB_ID && (
-            <ToolSection activeToolId={activeToolId} onClose={closeTool} />
-          )}
-
-          {/* Privacy disclosure notice - shown on first use */}
-          <PrivacyNotice />
+          <SidebarTabContent model={model} notesHandlers={notesHandlers} />
         </SidebarLayout>
-
-        <FeedbackModal
-          isOpen={isFeedbackOpen}
-          onClose={() => setIsFeedbackOpen(false)}
-          apiClient={apiClient}
-          pageUrl={pageUrl}
-          courseCode={courseCode}
-        />
+        <SidebarFeedback model={model} />
       </NoteSaveProvider>
     </TranscriptCacheProvider>
   );
 }
 
-export function LockInSidebar(props: LockInSidebarProps) {
+function LockInSidebarContent(props: LockInSidebarProps): JSX.Element {
+  const model = useLockInSidebarModel(props);
+  return <LockInSidebarView model={model} />;
+}
+
+export function LockInSidebar(props: LockInSidebarProps): JSX.Element {
   return (
     <ToolProvider>
       <ChatQueryProvider>

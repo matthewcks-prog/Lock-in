@@ -2,9 +2,12 @@
 
 const notesRepo = require('../../repositories/notesRepository');
 const { embedText } = require('../embeddings');
-const { chatWithModel } = require('../../openaiClient');
+const { chatWithModel } = require('../llmClient');
 const { extractPlainTextFromLexical } = require('../../utils/lexicalUtils');
 const { CHAT_WITH_NOTES_SYSTEM_PROMPT } = require('../../config/prompts');
+const DEFAULT_MATCH_COUNT = 8;
+const NO_MATCHES_ANSWER =
+  "I couldn't find any relevant notes to answer your question. Try creating some notes first!";
 
 /**
  * Chat with Notes Service
@@ -20,11 +23,10 @@ const { CHAT_WITH_NOTES_SYSTEM_PROMPT } = require('../../config/prompts');
  * @param {string} params.userId - User ID
  * @param {string} params.query - User's question
  * @param {string} [params.courseCode] - Optional course code filter
- * @param {number} [params.matchCount=8] - Number of notes to retrieve
+ * @param {number} [params.matchCount=DEFAULT_MATCH_COUNT] - Number of notes to retrieve
  * @returns {Promise<{answer: string, usedNotes: Array}>}
  */
-async function chatWithNotes({ userId, query, courseCode, matchCount = 8 }) {
-  // Generate embedding for search query
+async function generateQueryEmbedding(query) {
   let queryEmbedding;
   try {
     queryEmbedding = await embedText(query.trim());
@@ -32,61 +34,81 @@ async function chatWithNotes({ userId, query, courseCode, matchCount = 8 }) {
     console.error('Failed to generate query embedding:', embedError);
     throw new Error('Failed to process search query');
   }
+  return queryEmbedding;
+}
 
-  // Search notes by embedding similarity
-  let matches = await notesRepo.searchNotesByEmbedding({
-    userId,
-    queryEmbedding,
-    matchCount,
-  });
-
-  // Optional filter by course code
+function filterMatchesByCourse(matches, courseCode) {
   if (courseCode) {
-    matches = matches.filter((n) => n.course_code === courseCode);
+    return matches.filter((n) => n.course_code === courseCode);
   }
+  return matches;
+}
 
-  // If no notes found, return early
-  if (matches.length === 0) {
-    return {
-      answer:
-        "I couldn't find any relevant notes to answer your question. Try creating some notes first!",
-      usedNotes: [],
-    };
-  }
+function getNoteText(note) {
+  return (
+    note.content_plain ||
+    (note.content_json ? extractPlainTextFromLexical(note.content_json) : '') ||
+    ''
+  );
+}
 
-  // Build context from matched notes
-  const contextBlocks = matches.map((n, i) => {
-    const courseInfo = n.course_code ? ` (course: ${n.course_code})` : '';
-    // Use content_plain if available, otherwise extract from content_json
-    const noteText =
-      n.content_plain || (n.content_json ? extractPlainTextFromLexical(n.content_json) : '') || '';
-    return `Note ${i + 1}${courseInfo}:\n${noteText}`;
+function buildContextBlocks(matches) {
+  return matches.map((note, index) => {
+    const courseInfo = note.course_code ? ` (course: ${note.course_code})` : '';
+    return `Note ${index + 1}${courseInfo}:\n${getNoteText(note)}`;
   });
+}
 
-  const messages = [
+function buildMessages(query, contextBlocks) {
+  return [
     { role: 'system', content: CHAT_WITH_NOTES_SYSTEM_PROMPT },
     {
       role: 'user',
       content: `Here are my notes:\n\n${contextBlocks.join('\n\n')}\n\nMy question: ${query.trim()}`,
     },
   ];
+}
 
-  // Generate answer using OpenAI chat
-  let answer;
+async function generateChatAnswer(messages) {
   try {
-    answer = await chatWithModel({ messages });
+    return await chatWithModel({ messages });
   } catch (chatError) {
     console.error('Failed to generate chat response:', chatError);
     throw new Error('Failed to generate answer');
   }
+}
+
+function mapUsedNotes(matches) {
+  return matches.map((note) => ({
+    id: note.id,
+    title: note.title || 'Untitled Note',
+    courseCode: note.course_code || null,
+  }));
+}
+
+function createNoMatchesResponse() {
+  return { answer: NO_MATCHES_ANSWER, usedNotes: [] };
+}
+
+async function chatWithNotes({ userId, query, courseCode, matchCount = DEFAULT_MATCH_COUNT }) {
+  const queryEmbedding = await generateQueryEmbedding(query);
+  let matches = await notesRepo.searchNotesByEmbedding({
+    userId,
+    queryEmbedding,
+    matchCount,
+  });
+  matches = filterMatchesByCourse(matches, courseCode);
+
+  if (matches.length === 0) {
+    return createNoMatchesResponse();
+  }
+
+  const messages = buildMessages(query, buildContextBlocks(matches));
+  const answer = await generateChatAnswer(messages);
 
   return {
     answer,
-    usedNotes: matches.map((n) => ({
-      id: n.id,
-      title: n.title || 'Untitled Note',
-      courseCode: n.course_code || null,
-    })),
+    usedNotes: mapUsedNotes(matches),
   };
 }
 

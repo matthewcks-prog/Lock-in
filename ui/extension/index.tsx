@@ -5,14 +5,16 @@
  * The actual sidebar implementation lives in `LockInSidebar.tsx`.
  */
 
-import { createRoot, Root } from 'react-dom/client';
+import type { Root } from 'react-dom/client';
+import { createRoot } from 'react-dom/client';
 import { LockInSidebar } from './LockInSidebar';
 import type { LockInSidebarProps } from './LockInSidebar';
-import { initSentry } from '../../extension/src/sentry';
 
 // Initialize Sentry for error tracking (sidebar surface)
 // This runs early before the React app renders to catch all errors
-initSentry('sidebar');
+if (typeof window !== 'undefined') {
+  void window.LockInSentry?.initSentry?.('sidebar');
+}
 
 export interface SidebarInstance {
   root: Root;
@@ -22,6 +24,9 @@ export interface SidebarInstance {
 
 declare global {
   interface Window {
+    LockInSentry?: {
+      initSentry?: (surface: string) => Promise<boolean>;
+    };
     LockInUI?: {
       createLockInSidebar: typeof createLockInSidebar;
       LockInSidebar: typeof LockInSidebar;
@@ -31,7 +36,7 @@ declare global {
 
 export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance {
   let container = document.getElementById('lockin-root');
-  if (!container) {
+  if (container === null) {
     container = document.createElement('div');
     container.id = 'lockin-root';
     document.body.appendChild(container);
@@ -40,8 +45,8 @@ export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance 
   let currentProps: LockInSidebarProps | null = { ...props };
   const root = createRoot(container);
 
-  const render = () => {
-    if (currentProps) {
+  const render = (): void => {
+    if (currentProps !== null) {
       root.render(<LockInSidebar {...currentProps} />);
     }
   };
@@ -56,7 +61,7 @@ export function createLockInSidebar(props: LockInSidebarProps): SidebarInstance 
       currentProps = null;
     },
     updateProps: (newProps: Partial<LockInSidebarProps>) => {
-      if (currentProps) {
+      if (currentProps !== null) {
         currentProps = { ...currentProps, ...newProps };
         render();
       }

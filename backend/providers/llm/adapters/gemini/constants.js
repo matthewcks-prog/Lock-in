@@ -1,0 +1,21 @@
+const DEFAULT_MODEL = 'gemini-2.0-flash';
+const UPGRADED_MODEL = 'gemini-2.5-flash';
+const PREMIUM_MODEL = 'gemini-2.5-pro';
+const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const REQUEST_TIMEOUT_MS = 60000;
+const LONG_INPUT_THRESHOLD = 3000;
+const DEFAULT_TEMPERATURE = 0.7;
+const DEFAULT_MAX_OUTPUT_TOKENS = 1024;
+const ERROR_DETAILS_MAX_LENGTH = 200;
+
+module.exports = {
+  DEFAULT_MODEL,
+  UPGRADED_MODEL,
+  PREMIUM_MODEL,
+  BASE_URL,
+  REQUEST_TIMEOUT_MS,
+  LONG_INPUT_THRESHOLD,
+  DEFAULT_TEMPERATURE,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  ERROR_DETAILS_MAX_LENGTH,
+};
