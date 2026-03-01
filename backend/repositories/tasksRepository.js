@@ -232,20 +232,17 @@ async function deleteTask({ userId, taskId }) {
  */
 async function reorderTasks({ userId, taskOrders }) {
   // taskOrders is an array of { taskId, sortOrder }
-  const updates = taskOrders.map(({ taskId, sortOrder }) =>
-    supabase
+  // Sequential execution so we fail fast on the first error and minimise partial mutations.
+  // True atomicity (full rollback) would require a DB-level transaction/RPC.
+  for (const { taskId, sortOrder } of taskOrders) {
+    const { error } = await supabase
       .from('tasks')
       .update({ sort_order: sortOrder })
       .eq('id', taskId)
       .eq('user_id', userId)
       .select('id')
-      .single(),
-  );
-
-  const results = await Promise.all(updates);
-  const errors = results.map((r) => r.error).filter(Boolean);
-  if (errors.length > 0) {
-    throw errors[0];
+      .single();
+    if (error) throw error;
   }
 
   return true;
