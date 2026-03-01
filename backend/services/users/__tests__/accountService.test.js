@@ -35,3 +35,24 @@ test('deleteMyAccount rejects when userId is missing', async () => {
     },
   );
 });
+
+test('deleteMyAccount maps repository failures to internal error response', async () => {
+  const service = createAccountService({
+    accountRepository: {
+      async deleteUserAccount() {
+        throw new Error('db failure');
+      },
+    },
+  });
+
+  await assert.rejects(
+    async () => {
+      await service.deleteMyAccount({ userId: 'user-123' });
+    },
+    (error) => {
+      assert.equal(error.code, 'INTERNAL_ERROR');
+      assert.equal(error.message, 'Failed to delete account');
+      return true;
+    },
+  );
+});

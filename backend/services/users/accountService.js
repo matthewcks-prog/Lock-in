@@ -8,7 +8,14 @@ function createAccountService(deps = {}) {
     if (typeof userId !== 'string' || userId.length === 0) {
       throw new AppError('Authenticated user is required', 'AUTH_REQUIRED');
     }
-    await repository.deleteUserAccount(userId);
+    try {
+      await repository.deleteUserAccount(userId);
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError('Failed to delete account', 'INTERNAL_ERROR');
+    }
   }
 
   return {

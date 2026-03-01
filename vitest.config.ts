@@ -39,13 +39,7 @@ export default defineConfig({
     testTimeout: 60000,
     // CI/CD optimizations
     pool: 'threads',
-    poolOptions: {
-      threads: {
-        maxThreads: 8,
-        minThreads: 2,
-        useAtomics: true,
-      },
-    },
+    maxWorkers: 8,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html', 'json-summary'],

@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 
+const ESLINT_OUTPUT_PREVIEW_LENGTH = 120;
+
 // ---------------------------------------------------------------------------
 // Input resolution
 // Prefer a file-path argument (written by eslint --output-file) over stdin.
@@ -32,7 +34,7 @@ try {
 } catch {
   // Surface the first 120 chars of what we received so the problem is obvious
   // in CI logs without needing to download any artefacts.
-  const preview = rawInput.slice(0, 120).replace(/\n/g, '\\n');
+  const preview = rawInput.slice(0, ESLINT_OUTPUT_PREVIEW_LENGTH).replace(/\n/g, '\\n');
   console.error(`Complexity check: ESLint output is not valid JSON.`);
   console.error(`  Source : ${filePath ?? 'stdin'}`);
   console.error(`  Preview: ${preview}`);

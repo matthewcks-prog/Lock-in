@@ -1,4 +1,4 @@
-const { DAILY_REQUEST_LIMIT } = require('../../config');
+﻿const { DAILY_REQUEST_LIMIT } = require('../../config');
 const { logger: baseLogger } = require('../../observability');
 const { checkDailyLimit } = require('../rateLimitService');
 const { createChatCompletion } = require('../llm/providerChain');
@@ -12,6 +12,8 @@ const {
   joinTranscriptLines,
   splitTranscriptLines,
 } = require('./transcriptPromptSource');
+const { trimIncompleteMarkdownTail } = require('./summaryMarkdown');
+const { withTimeout } = require('../../utils/withTimeout');
 
 const HTTP_STATUS_INTERNAL_SERVER_ERROR = 500;
 const HTTP_STATUS_TOO_MANY_REQUESTS = 429;
@@ -29,74 +31,6 @@ const SUMMARY_MAX_TOKENS_BY_DEPTH = {
   detailed: 6000,
 };
 
-/**
- * Silently trims any incomplete trailing content from LLM-generated markdown.
- *
- * When a model hits its output token limit the response is cut at an arbitrary
- * character boundary, leaving the user with a half-sentence or dangling list
- * item. Rather than exposing implementation details ("max tokens reached") we
- * simply remove the incomplete fragment so the summary ends cleanly.
- *
- * Strategy (line-by-line from the end):
- *  - Skip blank lines.
- *  - Any line ending with sentence-closing punctuation or recognised markdown
- *    delimiters (closing paren, bracket, table pipe, quote) is treated as the
- *    natural end of the document.
- *  - A heading line with no body content following it is treated as a
- *    truncation point (the section was opened but cut before content was
- *    written) and is removed, unless it is the only meaningful content.
- *  - If no clearly "complete" line is found the original text is returned
- *    unchanged, allowing naturally-terse summaries to pass through intact.
- *
- * @param {string} text - Raw markdown from the LLM
- * @returns {string}
- */
-function trimIncompleteMarkdownTail(text) {
-  if (!text || text.length === 0) return text;
-
-  const lines = text.split('\n');
-  // Sentence-ending punctuation and closing delimiters common in structured
-  // markdown (evidence citations end with `)`, table rows end with `|`, etc.)
-  const endsComplete = /[.!?)\]|"'>][\s*_`]*$/;
-
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const trimmed = lines[i].trimEnd();
-    if (trimmed === '') continue; // skip blank separator lines
-
-    if (trimmed.startsWith('#')) {
-      // A heading with body content below it is a valid stopping point.
-      const hasBodyBelow = lines.slice(i + 1).some((l) => l.trim() !== '');
-      if (hasBodyBelow) {
-        return lines
-          .slice(0, i + 1)
-          .join('\n')
-          .trim();
-      }
-      // A heading with no body below it is an orphaned section header —
-      // the content was truncated. Remove it, unless this heading is the
-      // only meaningful line in the entire output (edge case / short summary).
-      const hasContentAbove = lines.slice(0, i).some((l) => l.trim() !== '');
-      if (hasContentAbove) {
-        return lines.slice(0, i).join('\n').trim();
-      }
-      // Only content is this heading — return it as-is.
-      return trimmed;
-    }
-
-    if (endsComplete.test(trimmed)) {
-      return lines
-        .slice(0, i + 1)
-        .join('\n')
-        .trim();
-    }
-
-    // This line does not end cleanly — discard it and keep scanning upward.
-  }
-
-  // No clean ending found; return the original rather than an empty string.
-  return text.trim();
-}
-
 function createRequestError(status, message) {
   const error = new Error(message);
   error.status = status;
@@ -113,17 +47,6 @@ function createServices(deps = {}) {
     llmClient: deps.llmClient ?? { createChatCompletion },
     rateLimitService: deps.rateLimitService ?? { checkDailyLimit },
   };
-}
-
-function withTimeout(promise, timeoutMs, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-    }),
-  ]);
 }
 
 function ensureUserContext(userId) {
