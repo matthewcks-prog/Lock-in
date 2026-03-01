@@ -1,0 +1,63 @@
+@layer lockin.dialogs {
+  #lockin-root .lockin-consent-overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: var(--lockin-size-24);
+    background: var(--lockin-color-rgba-0-0-0-04);
+  }
+
+  #lockin-root .lockin-consent-modal {
+    width: 100%;
+    max-width: var(--lockin-size-520);
+    padding: var(--lockin-size-24);
+    background: var(--lockin-color-surface);
+    border: var(--lockin-size-1) solid var(--lockin-color-border);
+    border-radius: var(--lockin-radius-xl);
+    box-shadow: var(--lockin-shadow-dialog);
+  }
+
+  #lockin-root .lockin-consent-title {
+    margin: 0 0 var(--lockin-size-12);
+    font-size: var(--lockin-text-2xl);
+    font-weight: 700;
+    color: var(--lockin-color-text-primary);
+  }
+
+  #lockin-root .lockin-consent-body {
+    margin: 0;
+    font-size: var(--lockin-text-md);
+    line-height: 1.6;
+    color: var(--lockin-color-text-secondary);
+  }
+
+  #lockin-root .lockin-consent-link {
+    font-weight: 600;
+    text-decoration: underline;
+    color: var(--lockin-color-accent);
+  }
+
+  #lockin-root .lockin-consent-link:hover {
+    color: var(--lockin-color-accent-strong);
+  }
+
+  #lockin-root .lockin-consent-error {
+    margin: var(--lockin-size-12) 0 0;
+    font-size: var(--lockin-text-sm);
+    color: var(--lockin-color-danger-strong);
+  }
+
+  #lockin-root .lockin-consent-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--lockin-size-10);
+    margin-top: var(--lockin-size-20);
+  }
+
+  #lockin-root .lockin-consent-btn-primary,
+  #lockin-root .lockin-consent-btn-secondary {
+    min-width: var(--lockin-size-100);
+  }
+}

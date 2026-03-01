@@ -22,6 +22,32 @@
   const HTTP_STATUS_FORBIDDEN = 403;
 
   const NetworkRetry = typeof window !== 'undefined' ? window.LockInNetworkRetry : null;
+  const Logger =
+    typeof window !== 'undefined' && window.LockInLogger
+      ? window.LockInLogger
+      : {
+          debug: (...args) => (console.debug || console.log)(...args),
+          info: (...args) => (console.info || console.log)(...args),
+          warn: (...args) => console.warn(...args),
+          error: (...args) => console.error(...args),
+        };
+
+  function logInfo(message, meta) {
+    if (meta === undefined) {
+      Logger.info(message);
+      return;
+    }
+    Logger.info(message, meta);
+  }
+
+  function logError(message, meta) {
+    if (meta === undefined) {
+      Logger.error(message);
+      return;
+    }
+    Logger.error(message, meta);
+  }
+
   const MEDIA_FETCH_RETRY_CONFIG = {
     maxRetries: 2,
     timeoutMs: 20000,
@@ -74,7 +100,7 @@
   }
 
   async function handleInitialFetch(mediaUrl, signal) {
-    console.log('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
+    logInfo('[Lock-in MediaFetcher] Fetching with credentials + manual redirect');
     const response = await fetchWithRetry(mediaUrl, {
       method: 'GET',
       credentials: 'include',
@@ -82,13 +108,16 @@
       signal,
     });
 
-    console.log('[Lock-in MediaFetcher] Initial response:', response.status, response.type);
+    logInfo('[Lock-in MediaFetcher] Initial response', {
+      status: response.status,
+      type: response.type,
+    });
     return response;
   }
 
   async function followLocationRedirect(location, signal) {
     if (isSsoRedirect(location)) {
-      console.log('[Lock-in MediaFetcher] SSO redirect detected - session expired');
+      logInfo('[Lock-in MediaFetcher] SSO redirect detected - session expired');
       return {
         error: 'Your session has expired. Please refresh the page and log in again.',
         errorCode: 'SESSION_EXPIRED',
@@ -96,21 +125,22 @@
     }
 
     const useCredentials = !isCdnUrl(location);
-    console.log(
-      `[Lock-in MediaFetcher] Following redirect to: ${location} with credentials: ${useCredentials}`,
-    );
+    logInfo('[Lock-in MediaFetcher] Following redirect', { location, useCredentials });
 
     const response = await fetchWithRetry(location, {
       method: 'GET',
       credentials: useCredentials ? 'include' : 'omit',
       signal,
     });
-    console.log('[Lock-in MediaFetcher] Redirect response:', response.status, response.statusText);
+    logInfo('[Lock-in MediaFetcher] Redirect response', {
+      status: response.status,
+      statusText: response.statusText,
+    });
     return { response };
   }
 
   async function handleCrossOriginRedirect(mediaUrl, signal) {
-    console.log(
+    logInfo(
       '[Lock-in MediaFetcher] No location header (cross-origin redirect), trying with same-origin credentials',
     );
     try {
@@ -119,14 +149,15 @@
         credentials: 'same-origin',
         signal,
       });
-      console.log(
-        '[Lock-in MediaFetcher] Same-origin credentials fetch succeeded:',
-        response.status,
-      );
+      logInfo('[Lock-in MediaFetcher] Same-origin credentials fetch succeeded', {
+        status: response.status,
+      });
       return { response };
     } catch (sameOriginError) {
-      console.log('[Lock-in MediaFetcher] Same-origin fetch failed:', sameOriginError.message);
-      console.log('[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)');
+      logInfo('[Lock-in MediaFetcher] Same-origin fetch failed', {
+        message: sameOriginError?.message || String(sameOriginError),
+      });
+      logInfo('[Lock-in MediaFetcher] Retrying without credentials (CDN may have cached auth)');
       const response = await fetchWithRetry(mediaUrl, {
         method: 'GET',
         credentials: 'omit',
@@ -144,7 +175,7 @@
     }
 
     const location = response.headers.get('location');
-    console.log('[Lock-in MediaFetcher] Redirect detected, location:', location);
+    logInfo('[Lock-in MediaFetcher] Redirect detected', { location });
 
     if (location) {
       return followLocationRedirect(location, signal);
@@ -155,8 +186,11 @@
 
   async function sendFinalChunk(buffer, chunkIndex, onChunk) {
     const hasBuffer = buffer.length > 0;
-    console.log(
-      `[Lock-in MediaFetcher] ${hasBuffer ? `Sending final chunk: ${chunkIndex} size: ${buffer.length}` : 'Buffer empty at end (exact chunk boundary), sending completion signal'}`,
+    logInfo(
+      hasBuffer
+        ? '[Lock-in MediaFetcher] Sending final chunk'
+        : '[Lock-in MediaFetcher] Buffer empty at end (exact chunk boundary), sending completion signal',
+      hasBuffer ? { chunkIndex, size: buffer.length } : undefined,
     );
     await onChunk(hasBuffer ? buffer : null, chunkIndex, true);
   }
@@ -169,7 +203,7 @@
       const chunk = remainingBuffer.slice(0, CHUNK_SIZE);
       remainingBuffer = remainingBuffer.slice(CHUNK_SIZE);
 
-      console.log('[Lock-in MediaFetcher] Sending chunk:', index, 'size:', chunk.length);
+      logInfo('[Lock-in MediaFetcher] Sending chunk', { index, size: chunk.length });
       await onChunk(chunk, index, false);
       index++;
     }
@@ -233,7 +267,7 @@
   function parseContentLength(response) {
     const contentLength = response.headers.get('content-length');
     const totalBytes = contentLength ? parseInt(contentLength, 10) : null;
-    console.log('[Lock-in MediaFetcher] Content-Length:', totalBytes);
+    logInfo('[Lock-in MediaFetcher] Content-Length', { totalBytes });
     return totalBytes;
   }
 
@@ -249,7 +283,7 @@
     parseContentLength(response);
     const { totalBytesRead, chunksCount } = await streamResponseAsChunks(response, onChunk);
 
-    console.log('[Lock-in MediaFetcher] Fetch complete. Total bytes:', totalBytesRead);
+    logInfo('[Lock-in MediaFetcher] Fetch complete', { totalBytesRead, chunksCount });
     return {
       success: true,
       totalBytes: totalBytesRead,
@@ -281,7 +315,7 @@
   }
 
   async function fetchMediaAsChunks(mediaUrl, onChunk, signal) {
-    console.log('[Lock-in MediaFetcher] Starting media fetch:', mediaUrl);
+    logInfo('[Lock-in MediaFetcher] Starting media fetch', { mediaUrl });
 
     try {
       const resolved = await fetchWithRedirectHandling(mediaUrl, signal);
@@ -302,7 +336,7 @@
 
       return processSuccessfulResponse(response, onChunk);
     } catch (error) {
-      console.error('[Lock-in MediaFetcher] Fetch error:', error);
+      logError('[Lock-in MediaFetcher] Fetch error', error);
       return createErrorResult(error);
     }
   }
@@ -310,7 +344,7 @@
   async function handleMediaFetchRequest(payload, sendChunk) {
     const { mediaUrl, jobId, requestId } = payload;
 
-    console.log('[Lock-in MediaFetcher] Handling fetch request:', {
+    logInfo('[Lock-in MediaFetcher] Handling fetch request', {
       mediaUrl,
       jobId,
       requestId,

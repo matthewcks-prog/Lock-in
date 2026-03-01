@@ -7,8 +7,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { TasksViewMode } from '@core/domain/Task';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 
-const STORAGE_KEY = 'lockin_tasks_viewMode';
+const STORAGE_KEY = CLIENT_STORAGE_KEYS.TASKS_VIEW_MODE;
 
 interface UseTasksViewModeOptions {
   storage?:

@@ -6,5 +6,7 @@
 @import url('./popup/styles/buttons.css');
 @import url('./popup/styles/help.css');
 @import url('./popup/styles/privacy.css');
+@import url('./popup/styles/dataControls.css');
+@import url('./popup/styles/compliance.css');
 @import url('./popup/styles/footer.css');
 @import url('./popup/styles/utilities.css');

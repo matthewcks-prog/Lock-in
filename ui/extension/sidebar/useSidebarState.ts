@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SidebarTabId, StorageAdapter } from './types';
-import { SIDEBAR_ACTIVE_TAB_KEY, SELECTED_NOTE_ID_KEY, SIDEBAR_OPEN_KEY } from './constants';
+import {
+  SIDEBAR_ACTIVE_TAB_KEY,
+  SELECTED_NOTE_ID_KEY,
+  LEGACY_SELECTED_NOTE_ID_KEY,
+  SIDEBAR_OPEN_KEY,
+} from './constants';
 import { coerceTab, isValidUUID } from './utils';
 
 const LAYOUT_TRANSITION_MS = 320;
@@ -81,8 +86,20 @@ function useHydrateSelectedNoteId({
 
     storage
       .get(SELECTED_NOTE_ID_KEY)
-      .then((noteId) => {
-        const storedNoteId = typeof noteId === 'string' ? noteId : null;
+      .then(async (noteId) => {
+        const canonicalNoteId = typeof noteId === 'string' ? noteId : null;
+        if (
+          canonicalNoteId !== null &&
+          canonicalNoteId.length > 0 &&
+          isValidUUID(canonicalNoteId)
+        ) {
+          setSelectedNoteId(canonicalNoteId);
+          setIsNoteIdLoaded(true);
+          return;
+        }
+
+        const legacyNoteId = await storage.get<string>(LEGACY_SELECTED_NOTE_ID_KEY);
+        const storedNoteId = typeof legacyNoteId === 'string' ? legacyNoteId : null;
         if (storedNoteId !== null && storedNoteId.length > 0 && isValidUUID(storedNoteId)) {
           setSelectedNoteId(storedNoteId);
         }

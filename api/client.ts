@@ -66,6 +66,7 @@ import {
   type GenerateStudySummaryParams,
   type StudyClient,
 } from './resources/studyClient';
+import { createUsersClient } from './resources/usersClient';
 import type { StudySummaryDepth, StudySummaryResponse } from './validationStudy';
 
 type FetcherClient = ReturnType<typeof createFetcher>;
@@ -78,6 +79,7 @@ type ChatAssetsClient = ReturnType<typeof createChatAssetsClient>;
 type FeedbackClient = ReturnType<typeof createFeedbackClient>;
 type TranscriptsClient = ReturnType<typeof createTranscriptsClient>;
 type StudyClientResource = ReturnType<typeof createStudyClient>;
+type UsersClient = ReturnType<typeof createUsersClient>;
 type ResourceClients = LockinClient &
   ChatsClient &
   NotesClient &
@@ -86,7 +88,8 @@ type ResourceClients = LockinClient &
   ChatAssetsClient &
   FeedbackClient &
   TranscriptsClient &
-  StudyClientResource;
+  StudyClientResource &
+  UsersClient;
 
 export type ApiClient = FetcherClient &
   LockinClient &
@@ -97,7 +100,8 @@ export type ApiClient = FetcherClient &
   ChatAssetsClient &
   FeedbackClient &
   TranscriptsClient &
-  StudyClientResource;
+  StudyClientResource &
+  UsersClient;
 
 export type ApiClientConfig = {
   backendUrl: string;
@@ -135,6 +139,7 @@ function createResourceClients(
   const feedback = createFeedbackClient(apiRequest);
   const transcripts = createTranscriptsClient(apiRequest);
   const study = createStudyClient(apiRequest);
+  const users = createUsersClient(apiRequest);
 
   return {
     ...lockin,
@@ -146,6 +151,7 @@ function createResourceClients(
     ...feedback,
     ...transcripts,
     ...study,
+    ...users,
   };
 }
 

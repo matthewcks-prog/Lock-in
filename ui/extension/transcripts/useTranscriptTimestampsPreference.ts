@@ -7,8 +7,9 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 
-const STORAGE_KEY = 'lockin_transcript_show_timestamps';
+const STORAGE_KEY = CLIENT_STORAGE_KEYS.TRANSCRIPT_SHOW_TIMESTAMPS;
 const DEFAULT = true;
 
 function readStored(): boolean {
@@ -34,7 +35,7 @@ function writeStored(value: boolean): void {
 
 /**
  * Returns [showTimestamps, setShowTimestamps].
- * Preference is persisted to localStorage under lockin_transcript_show_timestamps.
+ * Preference is persisted to localStorage under the canonical transcript timestamp key.
  * Default is true (timestamps visible). Syncs across tabs via storage events.
  */
 export function useTranscriptTimestampsPreference(): [

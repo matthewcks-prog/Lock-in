@@ -5,6 +5,7 @@ import {
   type MutableRefObject,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 import type { StorageAdapter } from './types';
 
 interface UseResizeOptions {
@@ -302,7 +303,7 @@ export function useResize({
   maxWidth = DEFAULT_MAX_WIDTH,
   maxVw = DEFAULT_MAX_VIEWPORT_WIDTH_RATIO,
   defaultWidth = DEFAULT_WIDTH,
-  storageKey = 'lockin_sidebar_width',
+  storageKey = CLIENT_STORAGE_KEYS.SIDEBAR_WIDTH,
 }: UseResizeOptions): UseResizeReturn {
   const refs = useResizeRefs();
   const { applySidebarWidth } = useSidebarWidthHelpers({

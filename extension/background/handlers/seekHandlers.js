@@ -44,7 +44,8 @@
     const LOG = '[Lock-in seek-bg]';
     const LOG_URL_LEN = 80;
     const url = window.location.href;
-    const urlShort = url.slice(0, LOG_URL_LEN);
+    const urlWithoutQuery = (url.split('?')[0] || url).split('#')[0] || url;
+    const urlShort = urlWithoutQuery.slice(0, LOG_URL_LEN);
 
     if (!/panopto/i.test(url) && !/echo360/i.test(url)) {
       return { sought: false, reason: 'not-media-frame' };

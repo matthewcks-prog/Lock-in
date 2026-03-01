@@ -1,6 +1,5 @@
-if (typeof window !== 'undefined' && window.LockInSentry) {
-  window.LockInSentry.initSentry('popup');
-}
+/* eslint-disable max-lines -- Popup script coordinates auth, compliance, privacy, and data controls in one load-order sensitive entrypoint. */
+if (typeof window !== 'undefined' && window.LockInSentry) window.LockInSentry.initSentry('popup');
 
 const statusMessage = document.getElementById('status-message'),
   authForm = document.getElementById('auth-form'),
@@ -21,6 +20,7 @@ const statusMessage = document.getElementById('status-message'),
   accordionHeaders = document.querySelectorAll('.accordion-header');
 
 let currentAuthMode = 'login';
+let isAuthLoading = false;
 
 const { showStatus, setAuthMessage, getFriendlyAuthError, isSupabaseConfigured } =
   window.LockInPopupUtils;
@@ -28,6 +28,41 @@ const { showStatus, setAuthMessage, getFriendlyAuthError, isSupabaseConfigured }
 window.LockInPopup = window.LockInPopup || {};
 window.LockInPopup.showStatus = showStatus;
 
+function toSafeErrorLog(error) {
+  if (error instanceof Error) {
+    const typedError = error;
+    return {
+      name: typedError.name,
+      message: typedError.message,
+      stack: typedError.stack ? '[stack omitted]' : undefined,
+    };
+  }
+  if (typeof error === 'object' && error !== null) {
+    const record = error;
+    return {
+      message:
+        typeof record['message'] === 'string' ? record['message'] : 'Unexpected popup error object',
+      code: record['code'],
+    };
+  }
+  return { message: String(error) };
+}
+
+function logPopupError(message, error) {
+  console.error(message, toSafeErrorLog(error));
+}
+
+function isSignupConsentSatisfied() {
+  if (currentAuthMode !== 'signup') {
+    return true;
+  }
+  return window.LockInPopupCompliance?.isSignupConsentChecked?.() === true;
+}
+
+function updateAuthSubmitAvailability() {
+  if (!authSubmitButton) return;
+  authSubmitButton.disabled = isAuthLoading || !isSignupConsentSatisfied();
+}
 function updateAuthModeUI() {
   authTabs.forEach((tab) => {
     const mode = tab.getAttribute('data-mode');
@@ -54,24 +89,27 @@ function updateAuthModeUI() {
     if (btnText) btnText.textContent = 'Create account';
     authModeHint.textContent = 'Choose a password you will remember.';
   }
+
+  window.LockInPopupCompliance?.setAuthMode?.(currentAuthMode);
+  updateAuthSubmitAvailability();
 }
 function setAuthLoading(isLoading) {
   if (!authSubmitButton) return;
+  isAuthLoading = isLoading;
 
   const btnText = authSubmitButton.querySelector('.btn-text');
   const btnSpinner = authSubmitButton.querySelector('.btn-spinner');
 
   if (isLoading) {
-    authSubmitButton.disabled = true;
     authSubmitButton.classList.add('loading');
     if (btnText) btnText.style.opacity = '0';
     if (btnSpinner) btnSpinner.style.display = 'flex';
   } else {
-    authSubmitButton.disabled = false;
     authSubmitButton.classList.remove('loading');
     if (btnText) btnText.style.opacity = '1';
     if (btnSpinner) btnSpinner.style.display = 'none';
   }
+  updateAuthSubmitAvailability();
 }
 async function refreshAuthView() {
   if (!window.LockInAuth || !loggedInView || !loggedOutView) {
@@ -79,7 +117,8 @@ async function refreshAuthView() {
   }
 
   const session = await window.LockInAuth.getSession();
-  if (session?.accessToken) {
+  const hasSession = Boolean(session?.accessToken);
+  if (hasSession) {
     loggedOutView.classList.add('hidden');
     loggedInView.classList.remove('hidden');
     const email = session.user?.email || 'Signed in';
@@ -90,7 +129,6 @@ async function refreshAuthView() {
       accountStatus.textContent = email;
       accountStatus.classList.add('signed-in');
     }
-    setAuthMessage('Signed in', 'success');
   } else {
     loggedOutView.classList.remove('hidden');
     loggedInView.classList.add('hidden');
@@ -98,8 +136,9 @@ async function refreshAuthView() {
       accountStatus.textContent = 'Not signed in';
       accountStatus.classList.remove('signed-in');
     }
-    setAuthMessage('', '');
   }
+  window.LockInPopupDataControls?.setSignedInState?.(hasSession);
+  setAuthMessage(hasSession ? 'Signed in' : '', hasSession ? 'success' : '');
 }
 function disableAuthInputs() {
   if (authForm) {
@@ -111,6 +150,7 @@ function disableAuthInputs() {
     logoutButton.disabled = true;
   }
 }
+
 function enableAuthInputs() {
   if (authForm) {
     Array.from(authForm.elements).forEach((el) => {
@@ -121,7 +161,6 @@ function enableAuthInputs() {
     logoutButton.disabled = false;
   }
 }
-
 function initAccordions() {
   accordionHeaders.forEach((header) => {
     header.addEventListener('click', () => {
@@ -129,7 +168,6 @@ function initAccordions() {
       const content = document.getElementById(`${section}-content`);
       const isExpanded = header.getAttribute('aria-expanded') === 'true';
 
-      // Toggle current section
       header.setAttribute('aria-expanded', !isExpanded);
       if (content) {
         content.classList.toggle('collapsed', isExpanded);
@@ -181,7 +219,7 @@ function initForgotPassword() {
       await window.LockInAuth.resetPassword(email);
       setAuthMessage('Check your email for a password reset link.', 'success');
     } catch (error) {
-      console.error('Password reset error:', error);
+      logPopupError('Password reset error:', error);
       setAuthMessage(error?.message || 'Failed to send reset email. Try again.', 'error');
     } finally {
       enableAuthInputs();
@@ -200,7 +238,12 @@ function bindAuthModeTabs() {
 }
 
 function validateAuthInputs(email, password) {
-  return !email ? 'Email is required' : !password ? 'Password is required' : null;
+  if (!email) return 'Email is required';
+  if (!password) return 'Password is required';
+  if (!isSignupConsentSatisfied()) {
+    return 'You must agree to the Terms of Service and Privacy Policy to create an account.';
+  }
+  return null;
 }
 
 async function submitAuthCredentials(email, password) {
@@ -232,7 +275,7 @@ function createAuthSubmitHandler() {
       if (authPasswordInput) authPasswordInput.value = '';
       refreshAuthView();
     } catch (error) {
-      console.error('Lock-in auth sign-in error:', error);
+      logPopupError('Lock-in auth sign-in error:', error);
       setAuthMessage(getFriendlyAuthError(error), 'error');
     } finally {
       enableAuthInputs();
@@ -249,7 +292,7 @@ function createLogoutHandler() {
       setAuthMessage('Signed out', 'success');
       refreshAuthView();
     } catch (error) {
-      console.error('Lock-in auth sign-out error:', error);
+      logPopupError('Lock-in auth sign-out error:', error);
       setAuthMessage('Failed to sign out', 'error');
     } finally {
       enableAuthInputs();
@@ -276,11 +319,9 @@ function initAuthSection() {
   if (logoutButton) {
     logoutButton.addEventListener('click', createLogoutHandler());
   }
-
   window.LockInAuth.onSessionChanged(() => {
     refreshAuthView();
   });
-
   refreshAuthView();
 }
 
@@ -293,10 +334,10 @@ function initHelpSection() {
     if (tab?.id) {
       chrome.tabs.sendMessage(tab.id, { type: 'OPEN_FEEDBACK' }, (response) => {
         if (chrome.runtime.lastError) {
-          console.error('[Lock-in] Failed to send OPEN_FEEDBACK:', chrome.runtime.lastError);
+          logPopupError('[Lock-in] Failed to send OPEN_FEEDBACK:', chrome.runtime.lastError);
           showStatus('Could not open feedback form. Please ensure the page is loaded.', 'error');
         } else if (response?.success) {
-          window.close(); // Close popup after success
+          window.close();
         }
       });
     }
@@ -304,6 +345,13 @@ function initHelpSection() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  window.LockInPopupCompliance?.initComplianceSection?.({
+    onSignupConsentChanged: updateAuthSubmitAvailability,
+  });
+  void window.LockInPopupDataControls?.initDataControlsSection?.({
+    showStatus,
+    getSession: () => window.LockInAuth?.getSession?.(),
+  });
   initAccordions();
   initPasswordToggle();
   initForgotPassword();

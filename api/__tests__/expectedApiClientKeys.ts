@@ -7,6 +7,7 @@ export const API_CLIENT_EXPECTED_KEYS = [
   'createTask',
   'deleteChat',
   'deleteChatAsset',
+  'deleteMyAccount',
   'deleteNote',
   'deleteNoteAsset',
   'deleteTask',

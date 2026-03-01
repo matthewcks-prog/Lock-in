@@ -27,6 +27,21 @@ const ECHO360_SECTION_REGEX =
   /\/section\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 const ECHO360_EMPTY_HINT = 'Echo360 tip: open a lesson page or the syllabus list to load videos.';
 
+function sanitizeUrlForLog(value: string): string {
+  try {
+    const parsed = new URL(value, 'http://placeholder.local');
+    parsed.search = '';
+    parsed.hash = '';
+    if (/^[a-z][a-z0-9+.-]*:\/\//i.test(value)) {
+      return parsed.toString().replace(/\/$/, '');
+    }
+    return parsed.pathname;
+  } catch {
+    const withoutQuery = value.split('?')[0] ?? value;
+    return withoutQuery.split('#')[0] ?? withoutQuery;
+  }
+}
+
 function hasEcho360Hint(value: string | null | undefined): boolean {
   return typeof value === 'string' && value.toLowerCase().includes('echo360');
 }
@@ -129,9 +144,8 @@ function buildDetectionContext(currentUrl: string): {
     document,
   };
   console.log('[Lock-in UI] Detection context built', {
-    pageUrl: context.pageUrl,
+    pageUrl: sanitizeUrlForLog(context.pageUrl),
     iframeCount: context.iframes.length,
-    iframeSrcs: context.iframes.map((iframe) => iframe.src).filter(Boolean),
   });
   return context;
 }
@@ -146,13 +160,7 @@ function runDetectionAttempt(currentUrl: string): {
     videoCount: result.videos.length,
     provider: result.provider,
     requiresApiCall: result.requiresApiCall,
-    videos: result.videos.map((v) => ({
-      id: v.id,
-      provider: v.provider,
-      title: v.title,
-      lessonId: v.echoLessonId,
-      mediaId: v.echoMediaId,
-    })),
+    providers: [...new Set(result.videos.map((video) => video.provider))],
   });
   return { result, context };
 }
@@ -250,7 +258,9 @@ async function requestAsyncDetectionVideos(
   echo360Context: boolean,
 ): Promise<DetectedVideo[]> {
   console.log('[Lock-in UI] Sending async detection request', {
-    context: contextForBackground,
+    pageUrl: sanitizeUrlForLog(contextForBackground.pageUrl),
+    iframeCount: contextForBackground.iframes.length,
+    echo360Context,
   });
   const response = await sendToBackground<BackgroundResponse>({
     type: createAsyncDetectionMessageType(echo360Context),
@@ -264,13 +274,7 @@ async function requestAsyncDetectionVideos(
   const asyncVideos = normalizeVideoDetectionResponse(response);
   console.log('[Lock-in UI] Async videos normalized', {
     videoCount: asyncVideos.length,
-    videos: asyncVideos.map((v) => ({
-      id: v.id,
-      provider: v.provider,
-      title: v.title,
-      lessonId: v.echoLessonId,
-      mediaId: v.echoMediaId,
-    })),
+    providers: [...new Set(asyncVideos.map((video) => video.provider))],
   });
   return asyncVideos;
 }
@@ -305,10 +309,7 @@ async function tryAsyncDetection(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Async detection failed';
-    console.error('[Lock-in UI] Async detection failed:', {
-      message,
-      error: error instanceof Error ? error.stack : String(error),
-    });
+    console.error('[Lock-in UI] Async detection failed:', { message });
   }
 
   return null;
@@ -323,7 +324,9 @@ function useDetectVideosAction(
 ): UseVideoDetectionResult['detectVideos'] {
   return useCallback(async () => {
     const currentUrl = window.location.href;
-    console.log('[Lock-in UI] Starting video detection', { currentUrl });
+    console.log('[Lock-in UI] Starting video detection', {
+      currentUrl: sanitizeUrlForLog(currentUrl),
+    });
     const { result, context } = await runDetectionWithRetries(currentUrl);
     const contextForBackground = {
       pageUrl: context.pageUrl,

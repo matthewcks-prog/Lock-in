@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_CLIENT_EXPECTED_KEYS } from '@api/__tests__/expectedApiClientKeys';
 import type { AuthClient } from '@api/auth';
 import type { ApiClient } from '@api/client';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 
 const AUTH_CLIENT_EXPECTED_KEYS = [
   'signUpWithEmail',
@@ -70,7 +71,7 @@ describe('initApi global surface', () => {
       BACKEND_URL: 'http://example.test',
       SUPABASE_URL: 'https://supabase.test',
       SUPABASE_ANON_KEY: 'anon-key',
-      SESSION_STORAGE_KEY: 'lockinSupabaseSession',
+      SESSION_STORAGE_KEY: CLIENT_STORAGE_KEYS.SUPABASE_SESSION,
       TOKEN_EXPIRY_BUFFER_MS: 60000,
     };
 

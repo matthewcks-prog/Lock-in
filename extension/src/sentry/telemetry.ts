@@ -1,6 +1,7 @@
 import type { ChromeLike } from './chromeTypes';
+import { CLIENT_STORAGE_KEYS } from '@core/storage/clientStorageKeys';
 
-const TELEMETRY_OPT_OUT_KEY = 'lockin_telemetry_disabled';
+const TELEMETRY_OPT_OUT_KEY = CLIENT_STORAGE_KEYS.TELEMETRY_DISABLED;
 
 export async function isTelemetryEnabled(chrome: ChromeLike | undefined): Promise<boolean> {
   try {

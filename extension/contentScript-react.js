@@ -29,6 +29,7 @@ const Logger = Runtime.logger ||
 const Storage = Runtime.storage || window.LockInStorage || null;
 const Messaging = Runtime.messaging || window.LockInMessaging || null;
 const ContentHelpers = Runtime || {};
+const DEFAULT_SIDEBAR_WIDTH_STORAGE_KEY = 'lockin_sidebar_width';
 
 let bootstrapPromise = null;
 let hasBootstrapped = false;
@@ -95,18 +96,61 @@ function bindStateSync(stateStore, sidebarHost) {
   stateStore.startSync();
 }
 
+function normalizeStorageKeys(rawKeys) {
+  return Array.isArray(rawKeys) ? rawKeys.filter((key) => typeof key === 'string' && key) : [];
+}
+
+function collectLocalStorageKeys(rawKeys) {
+  const keys = normalizeStorageKeys(rawKeys);
+  const values = {};
+  keys.forEach((key) => {
+    try {
+      values[key] = localStorage.getItem(key);
+    } catch {
+      values[key] = null;
+    }
+  });
+  return values;
+}
+
+function clearLocalStorageKeys(rawKeys) {
+  const keys = normalizeStorageKeys(rawKeys);
+  keys.forEach((key) => {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // Ignore localStorage failures in restricted contexts.
+    }
+  });
+  return keys.length;
+}
+
 function registerPrefillMessaging(stateStore) {
   if (!Messaging || typeof Messaging.onMessage !== 'function') return;
   Messaging.onMessage((message) => {
-    if (message?.type !== 'PREFILL_CHAT_INPUT') return undefined;
-    const text = typeof message.payload?.text === 'string' ? message.payload.text : '';
-    if (!text.trim()) return undefined;
-    stateStore.setPendingPrefill(text);
-    stateStore.setActiveTab('chat');
-    if (!stateStore.getSnapshot().isSidebarOpen) {
-      stateStore.setSidebarOpen(true).catch((error) => {
-        Logger.warn('Failed to open sidebar for prefill:', error);
-      });
+    if (message?.type === 'PREFILL_CHAT_INPUT') {
+      const text = typeof message.payload?.text === 'string' ? message.payload.text : '';
+      if (!text.trim()) return undefined;
+      stateStore.setPendingPrefill(text);
+      stateStore.setActiveTab('chat');
+      if (!stateStore.getSnapshot().isSidebarOpen) {
+        stateStore.setSidebarOpen(true).catch((error) => {
+          Logger.warn('Failed to open sidebar for prefill:', error);
+        });
+      }
+      return undefined;
+    }
+    if (message?.type === 'LOCKIN_COLLECT_LOCAL_STORAGE_KEYS') {
+      return {
+        ok: true,
+        data: collectLocalStorageKeys(message.payload?.keys),
+      };
+    }
+    if (message?.type === 'LOCKIN_CLEAR_LOCAL_STORAGE_KEYS') {
+      return {
+        ok: true,
+        clearedCount: clearLocalStorageKeys(message.payload?.keys),
+      };
     }
     return undefined;
   });
@@ -131,9 +175,11 @@ async function restorePersistedSidebarWidth() {
   if (!runtimeStorage || typeof runtimeStorage.getLocal !== 'function') {
     return;
   }
+  const sidebarWidthKey =
+    runtimeStorage.STORAGE_KEYS?.SIDEBAR_WIDTH || DEFAULT_SIDEBAR_WIDTH_STORAGE_KEY;
   try {
-    const data = await runtimeStorage.getLocal('lockin_sidebar_width');
-    const width = data?.lockin_sidebar_width;
+    const data = await runtimeStorage.getLocal(sidebarWidthKey);
+    const width = data?.[sidebarWidthKey];
     if (typeof width === 'number' && width > 0) {
       document.documentElement.style.setProperty('--lockin-sidebar-width', `${width}px`);
     }

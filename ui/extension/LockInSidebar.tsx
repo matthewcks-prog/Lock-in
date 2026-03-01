@@ -15,15 +15,18 @@ import { TasksPanel } from './tasks/TasksPanel';
 import { NoteSaveProvider } from './contexts/NoteSaveContext';
 import { TranscriptCacheProvider } from './contexts/TranscriptCacheContext';
 import { ChatQueryProvider } from './chat';
-import { FeedbackModal } from './feedback';
 import { StudySummaryProvider, StudyWorkspace, StudyWorkspaceProvider } from './study';
 import { SidebarLayout } from './sidebar/SidebarLayout';
 import { SidebarTabs } from './sidebar/SidebarTabs';
 import { ChatSection } from './sidebar/ChatSection';
+import { SidebarFeedback } from './sidebar/SidebarFeedback';
 import { SidebarHeaderActions } from './sidebar/SidebarHeaderActions';
+import { TermsConsentGate } from './sidebar/TermsConsentGate';
 import { useResize } from './sidebar/useResize';
 import { CHAT_TAB_ID, NOTES_TAB_ID, STUDY_TAB_ID, TASKS_TAB_ID } from './sidebar/constants';
 import type { StorageAdapter } from './sidebar/types';
+import type { UseTermsConsentResult } from './sidebar/termsConsent';
+import { useTermsConsent } from './sidebar/termsConsent';
 import { useSidebarState } from './sidebar/useSidebarState';
 import { useFeedbackListener } from './sidebar/hooks/useFeedbackListener';
 import type { NotesPanelHandlers, SidebarModel } from './sidebar/lockInSidebarTypes';
@@ -210,19 +213,57 @@ function SidebarTabContent({
   );
 }
 
-function SidebarFeedback({ model }: { model: SidebarModel }): JSX.Element {
-  return (
-    <FeedbackModal
-      isOpen={model.isFeedbackOpen}
-      onClose={() => model.setIsFeedbackOpen(false)}
-      apiClient={model.apiClient}
-      pageUrl={model.pageUrl}
-      courseCode={model.courseCode}
+interface SidebarShellProps {
+  model: SidebarModel;
+  termsConsent: UseTermsConsentResult;
+  notesHandlers: NotesPanelHandlers;
+  isConsentGateActive: boolean;
+}
+
+function SidebarShell({
+  model,
+  termsConsent,
+  notesHandlers,
+  isConsentGateActive,
+}: SidebarShellProps): JSX.Element {
+  const headerLeft = isConsentGateActive ? null : (
+    <SidebarTabs activeTab={model.activeTab} onTabChange={model.handleTabChange} />
+  );
+  const headerRight = isConsentGateActive ? null : (
+    <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
+  );
+  const content = isConsentGateActive ? (
+    <TermsConsentGate
+      isOpen={model.isOpen}
+      isLoading={termsConsent.isLoading}
+      policyLinks={termsConsent.policyLinks}
+      onAccept={termsConsent.acceptConsent}
+      onDecline={model.onToggle}
     />
+  ) : (
+    <SidebarTabContent model={model} notesHandlers={notesHandlers} />
+  );
+
+  return (
+    <SidebarLayout
+      isOpen={model.isOpen}
+      onToggle={model.onToggle}
+      onResizeStart={model.handleResizeStart}
+      headerLeft={headerLeft}
+      headerRight={headerRight}
+    >
+      {content}
+    </SidebarLayout>
   );
 }
 
-function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
+function LockInSidebarView({
+  model,
+  termsConsent,
+}: {
+  model: SidebarModel;
+  termsConsent: UseTermsConsentResult;
+}): JSX.Element {
   const notesHandlers = useNotesPanelHandlers({
     deleteNoteFromList: model.deleteNoteFromList,
     refreshNotes: model.refreshNotes,
@@ -230,6 +271,8 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
     setSelectedNoteId: model.setSelectedNoteId,
     upsertNote: model.upsertNote,
   });
+  const isConsentGateActive =
+    model.isOpen && (termsConsent.isLoading || termsConsent.requiresConsent);
 
   return (
     <TranscriptCacheProvider apiClient={model.apiClient}>
@@ -241,20 +284,13 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
         setSelectedNoteId={model.setSelectedNoteId}
         setActiveTab={model.setActiveTab}
       >
-        <SidebarLayout
-          isOpen={model.isOpen}
-          onToggle={model.onToggle}
-          onResizeStart={model.handleResizeStart}
-          headerLeft={
-            <SidebarTabs activeTab={model.activeTab} onTabChange={model.handleTabChange} />
-          }
-          headerRight={
-            <SidebarHeaderActions activeTab={model.activeTab} onTabChange={model.handleTabChange} />
-          }
-        >
-          <SidebarTabContent model={model} notesHandlers={notesHandlers} />
-        </SidebarLayout>
-        <SidebarFeedback model={model} />
+        <SidebarShell
+          model={model}
+          termsConsent={termsConsent}
+          notesHandlers={notesHandlers}
+          isConsentGateActive={isConsentGateActive}
+        />
+        {!isConsentGateActive && <SidebarFeedback model={model} />}
       </NoteSaveProvider>
     </TranscriptCacheProvider>
   );
@@ -262,7 +298,8 @@ function LockInSidebarView({ model }: { model: SidebarModel }): JSX.Element {
 
 function LockInSidebarContent(props: LockInSidebarProps): JSX.Element {
   const model = useLockInSidebarModel(props);
-  return <LockInSidebarView model={model} />;
+  const termsConsent = useTermsConsent({ isOpen: props.isOpen, storage: props.storage });
+  return <LockInSidebarView model={model} termsConsent={termsConsent} />;
 }
 
 export function LockInSidebar(props: LockInSidebarProps): JSX.Element {

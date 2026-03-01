@@ -108,7 +108,7 @@ function buildSentryViteConfig(mode: string): UserConfig {
       emptyOutDir: false,
     },
     resolve: {
-      alias: createAliases({ includeCore: false }),
+      alias: createAliases({ includeCore: true }),
     },
   };
 }

@@ -12,6 +12,15 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 - Phased refactor plan: `docs/tracking/REFACTOR_PLAN.md`
 - Refactor prompt log: `docs/tracking/PROMPT_LOG.md`
 
+## Compliance And Policy
+
+- `PRIVACY.md` - Privacy policy for extension, backend, and provider usage
+- `TERMS.md` - Terms of service and academic integrity boundaries
+- `SECURITY.md` - Security controls and disclosure guidance
+- `docs/data-handling.md` - End-to-end data flow and AI provider disclosure
+- `docs/permissions.md` - Manifest permissions mapped to callsites
+- `docs/retention.md` - Retention windows and cleanup paths
+
 ## Folder Structure
 
 ### Architecture (`docs/architecture/`)
@@ -57,6 +66,7 @@ All project documentation lives under `docs/`, with three root exceptions: `AGEN
 
 - `BACKEND_TESTING.md` - Backend testing standards and patterns
 - `SMOKE_CHECKLIST.md` - Manual smoke tests and validation checklist
+- `release-checklist.md` - Release-readiness manual checks for compliance features
 
 ### Tracking (`docs/tracking/`)
 
