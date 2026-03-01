@@ -1,4 +1,4 @@
-﻿@layer lockin.tools {
+@layer lockin.tools {
   #lockin-root .lockin-study-tool-tabs {
     display: flex;
     flex-shrink: 0;

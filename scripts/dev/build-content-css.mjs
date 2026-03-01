@@ -3,10 +3,10 @@
  * Content-script CSS build pipeline
  *
  * Steps:
- *   1. Inline all @import statements from index.css (flat, one-level)
- *   2. Detect duplicate @keyframes names → fail the build
- *   3. Run PostCSS: autoprefixer + cssnano (lightweight minification)
- *   4. Write the final bundle to extension/contentScript.css
+ * 1. Inline all @import statements from index.css (flat, one-level)
+ * 2. Detect duplicate @keyframes names and fail the build
+ * 3. Run PostCSS: autoprefixer + cssnano
+ * 4. Write the final bundle to extension/contentScript.css
  *
  * Usage: node scripts/dev/build-content-css.mjs [--no-minify]
  */
@@ -21,8 +21,18 @@ const entryPath = resolve(projectRoot, 'extension/contentScript/index.css');
 const outputPath = resolve(projectRoot, 'extension/contentScript.css');
 const noMinify = process.argv.includes('--no-minify');
 const BYTES_PER_KILOBYTE = 1024;
+const BOM_CHAR = '\uFEFF';
 
-// ── Step 1: Inline @import statements ──────────────────────────────
+function sanitizeCssSource(source, filePath) {
+  if (!source.includes(BOM_CHAR)) {
+    return source;
+  }
+
+  const sanitized = source.replaceAll(BOM_CHAR, '');
+  const removedCount = source.length - sanitized.length;
+  console.warn(`WARN: Removed ${removedCount} BOM character(s) from ${filePath}`);
+  return sanitized;
+}
 
 function inlineImports(filePath, seen = new Set()) {
   const normalized = resolve(filePath);
@@ -32,7 +42,7 @@ function inlineImports(filePath, seen = new Set()) {
 
   seen.add(normalized);
   const dir = dirname(normalized);
-  const source = readFileSync(normalized, 'utf8');
+  const source = sanitizeCssSource(readFileSync(normalized, 'utf8'), normalized);
   const lines = source.split(/\r?\n/);
   const out = [];
 
@@ -44,7 +54,7 @@ function inlineImports(filePath, seen = new Set()) {
     }
 
     const importPath = resolve(dir, importMatch[1]);
-    out.push(`/* ── inlined: ${importMatch[1]} ── */`);
+    out.push(`/* inlined: ${importMatch[1]} */`);
     out.push(inlineImports(importPath, seen));
   }
 
@@ -52,41 +62,38 @@ function inlineImports(filePath, seen = new Set()) {
   return out.join('\n').trimEnd();
 }
 
-// ── Step 2: Detect duplicate @keyframes ────────────────────────────
-
 function detectDuplicateKeyframes(css) {
-  const keyframeNames = new Map(); // name → [lines]
+  const keyframeNames = new Map();
   const lines = css.split('\n');
 
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = 0; i < lines.length; i += 1) {
     const match = lines[i].match(/@keyframes\s+([\w-]+)/);
-    if (match) {
-      const name = match[1];
-      if (!keyframeNames.has(name)) {
-        keyframeNames.set(name, []);
-      }
-      keyframeNames.set(name, [...keyframeNames.get(name), i + 1]);
+    if (!match) {
+      continue;
     }
+    const name = match[1];
+    if (!keyframeNames.has(name)) {
+      keyframeNames.set(name, []);
+    }
+    keyframeNames.set(name, [...keyframeNames.get(name), i + 1]);
   }
 
   const duplicates = [];
   for (const [name, lineNums] of keyframeNames) {
     if (lineNums.length > 1) {
       duplicates.push(
-        `  @keyframes ${name} — defined ${lineNums.length}× at lines: ${lineNums.join(', ')}`,
+        `  @keyframes ${name} - defined ${lineNums.length} times at lines: ${lineNums.join(', ')}`,
       );
     }
   }
 
   if (duplicates.length > 0) {
-    console.error('\n❌ BUILD FAILED: Duplicate @keyframes detected!\n');
+    console.error('\nERROR: Duplicate @keyframes detected.\n');
     console.error(duplicates.join('\n'));
-    console.error('\nConsolidate all shared keyframes into utilities.css.\n');
+    console.error('\nConsolidate shared keyframes into utilities.css.\n');
     process.exit(1);
   }
 }
-
-// ── Step 3 & 4: PostCSS + Write ────────────────────────────────────
 
 async function build() {
   const inlined = inlineImports(entryPath);
@@ -99,12 +106,9 @@ async function build() {
         preset: [
           'default',
           {
-            // Keep @layer, custom properties, and keyframe names intact
             cssDeclarationSorter: false,
             discardComments: { removeAll: true },
-            // Don't mangle keyframe names — they're referenced by class
             reduceIdents: false,
-            // Don't merge @layer rules
             mergeRules: false,
           },
         ],
@@ -117,9 +121,8 @@ async function build() {
     to: outputPath,
   });
 
-  // Report any PostCSS warnings
   for (const warning of result.warnings()) {
-    console.warn(`⚠️  PostCSS: ${warning.text}`);
+    console.warn(`WARN: PostCSS: ${warning.text}`);
   }
 
   const header = [
@@ -137,10 +140,12 @@ async function build() {
   writeFileSync(outputPath, `${header}${result.css}\n`, 'utf8');
 
   const sizeKb = (Buffer.byteLength(result.css, 'utf8') / BYTES_PER_KILOBYTE).toFixed(1);
-  console.log(`✅ Built CSS bundle: ${outputPath} (${sizeKb} KB${noMinify ? ', unminified' : ''})`);
+  console.log(
+    `OK: Built CSS bundle: ${outputPath} (${sizeKb} KB${noMinify ? ', unminified' : ''})`,
+  );
 }
 
 build().catch((err) => {
-  console.error('❌ CSS build failed:', err.message);
+  console.error('ERROR: CSS build failed:', err.message);
   process.exit(1);
 });

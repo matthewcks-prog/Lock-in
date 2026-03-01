@@ -1,4 +1,4 @@
-﻿@layer lockin.tools {
+@layer lockin.tools {
   #lockin-root .lockin-top-bar-right {
     display: flex;
     flex-shrink: 0;

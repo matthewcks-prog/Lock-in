@@ -1,4 +1,4 @@
-﻿@layer lockin.chrome {
+@layer lockin.chrome {
   /* === MINIMAL TOP BAR === */
   #lockin-root .lockin-top-bar {
     display: flex;
