@@ -6,6 +6,10 @@ An AI-powered Chrome extension that helps students learn more efficiently.
 
 _Lock-in is an independent learning project by an aspiring software engineer. It is not affiliated with or endorsed by Monash University._
 
+### See it in action
+
+**[Watch the demo video](https://drive.google.com/file/d/1BxJfHWy5cRs7nm8L6mrWar0dgdRflV-M/view?usp=sharing)** — A walkthrough of Lock-in's features: AI explanations, notes, transcripts, and more.
+
 ## Academic Integrity And Responsible Use
 
 - "Lock-in does not provide answers intended to be submitted as assessment."
