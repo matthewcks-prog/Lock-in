@@ -38,6 +38,7 @@ const {
   startTranscriptJobReaper,
   stopTranscriptJobReaper,
 } = require('./services/transcripts/transcriptsService');
+const { ensureStorageBuckets } = require('./utils/ensureStorageBuckets');
 
 // =============================================================================
 // Application Startup
@@ -62,6 +63,9 @@ const server = app.listen(PORT, () => {
   }
 
   startTranscriptJobReaper();
+  ensureStorageBuckets(logger).catch((err) => {
+    logger.warn({ err }, 'Storage bucket check failed (non-fatal)');
+  });
 });
 
 // Handle server startup errors (e.g., EADDRINUSE)
